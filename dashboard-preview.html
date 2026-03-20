@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>정보사업본부 주간실적 대시보드 미리보기</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --panel: #fffdf9;
+      --panel-strong: #f7efe1;
+      --line: #d8cdbd;
+      --text: #1d1a16;
+      --muted: #786d61;
+      --accent: #9e5a2d;
+      --accent-soft: #ead7c5;
+      --green: #2f6b4f;
+      --red: #9f3c3c;
+      --blue: #2d587a;
+      --shadow: 0 18px 40px rgba(74, 55, 34, 0.09);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(158, 90, 45, 0.12), transparent 28%),
+        linear-gradient(180deg, #f8f4ee 0%, #efe7dc 100%);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      padding: 28px 20px;
+      background: rgba(255, 253, 249, 0.82);
+      border-right: 1px solid rgba(216, 205, 189, 0.8);
+      backdrop-filter: blur(10px);
+    }
+
+    .brand {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: linear-gradient(135deg, #fffaf3, #f4e6d3);
+      box-shadow: var(--shadow);
+    }
+
+    .brand small {
+      display: block;
+      color: var(--muted);
+      margin-bottom: 8px;
+      letter-spacing: 0.08em;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.25;
+    }
+
+    .menu {
+      margin-top: 28px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .menu a {
+      text-decoration: none;
+      color: var(--text);
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid transparent;
+      background: transparent;
+      display: block;
+    }
+
+    .menu a.active {
+      background: var(--panel-strong);
+      border-color: var(--line);
+      font-weight: 700;
+    }
+
+    .menu a span {
+      display: block;
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .content {
+      padding: 28px;
+    }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 26px 28px;
+      border-radius: 28px;
+      background: linear-gradient(135deg, rgba(255, 252, 246, 0.95), rgba(239, 222, 203, 0.9));
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .hero h2 {
+      margin: 0 0 8px;
+      font-size: 30px;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .chips {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-content: flex-start;
+    }
+
+    .chip {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .section {
+      margin-top: 22px;
+    }
+
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .section-title h3 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .section-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .grid-cards {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      background: rgba(255, 253, 249, 0.94);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .card .label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+    .card .value {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .card .sub {
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .positive {
+      color: var(--green);
+    }
+
+    .negative {
+      color: var(--red);
+    }
+
+    .grid-main {
+      display: grid;
+      grid-template-columns: 1.3fr 0.9fr;
+      gap: 16px;
+    }
+
+    .panel {
+      background: rgba(255, 253, 249, 0.94);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel h4 {
+      margin: 0 0 16px;
+      font-size: 17px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 11px 10px;
+      border-bottom: 1px solid rgba(216, 205, 189, 0.7);
+      text-align: left;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .stat-block {
+      padding: 16px;
+      border-radius: 18px;
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+    }
+
+    .stat-block strong {
+      display: block;
+      font-size: 23px;
+      margin-bottom: 6px;
+    }
+
+    .stat-block span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .validation-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .validation-item {
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: #fffaf5;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .tag {
+      min-width: 64px;
+      text-align: center;
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .tag.error {
+      background: var(--red);
+    }
+
+    .tag.warn {
+      background: #b17723;
+    }
+
+    .tag.ok {
+      background: var(--green);
+    }
+
+    .report-preview {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .pdf-box {
+      min-height: 260px;
+      border-radius: 22px;
+      border: 1px dashed #b7a48e;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.88), rgba(248,240,230,0.88)),
+        repeating-linear-gradient(
+          180deg,
+          transparent,
+          transparent 31px,
+          rgba(216,205,189,0.3) 31px,
+          rgba(216,205,189,0.3) 32px
+        );
+      padding: 20px;
+    }
+
+    .pdf-box h5 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    .pdf-box p {
+      margin: 8px 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    @media (max-width: 1280px) {
+      .grid-cards {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 960px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        border-right: 0;
+        border-bottom: 1px solid rgba(216, 205, 189, 0.8);
+      }
+
+      .grid-main,
+      .report-preview {
+        grid-template-columns: 1fr;
+      }
+
+      .grid-cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 640px) {
+      .content {
+        padding: 18px;
+      }
+
+      .hero {
+        padding: 20px;
+        flex-direction: column;
+      }
+
+      .grid-cards,
+      .mini-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <small>INFOMAX MARKETING HQ</small>
+        <h1>정보사업본부<br />주간실적 대시보드</h1>
+      </div>
+
+      <nav class="menu">
+        <a class="active" href="#">대시보드<span>이번 주 KPI와 검증 현황</span></a>
+        <a href="#">신규 계약 원장<span>계약 등록, 수정, 필터 조회</span></a>
+        <a href="#">주간 보고 입력<span>매출, 옵션, 해지, 목표 입력</span></a>
+        <a href="#">검증 센터<span>불일치와 누락 자동 점검</span></a>
+        <a href="#">보고서 / PDF<span>최종 보고서와 PDF 출력</span></a>
+        <a href="#">기준정보 관리<span>권유자, 업종, 옵션 코드 관리</span></a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <section class="hero">
+        <div>
+          <h2>2026년 12주차 주간실적 보고</h2>
+          <p>엑셀 수작업을 웹 입력, 자동 집계, 검증, PDF 출력으로 바꾸는 구조를 기준으로 만든 미리보기입니다. 현재 주차의 실적 현황과 보고 준비 상태를 한 화면에서 확인합니다.</p>
+        </div>
+        <div class="chips">
+          <div class="chip">기준일 2026-03-20</div>
+          <div class="chip">상태 Draft</div>
+          <div class="chip">검증 2건 필요</div>
+          <div class="chip">PDF 마지막 생성 10:40</div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h3>핵심 KPI</h3>
+          <p>주간 보고서 상단 요약 카드</p>
+        </div>
+        <div class="grid-cards">
+          <div class="card">
+            <div class="label">주간 순증 매출</div>
+            <div class="value">61.6M</div>
+            <div class="sub positive">전주 대비 +8.4M</div>
+          </div>
+          <div class="card">
+            <div class="label">연간 누적 매출</div>
+            <div class="value">38.2B</div>
+            <div class="sub">자동 계산 문구 생성</div>
+          </div>
+          <div class="card">
+            <div class="label">주간 신규 계약</div>
+            <div class="value">16대</div>
+            <div class="sub">원장 기준 자동 집계</div>
+          </div>
+          <div class="card">
+            <div class="label">주간 해지</div>
+            <div class="value">6대</div>
+            <div class="sub negative">사유별 검증 필요</div>
+          </div>
+          <div class="card">
+            <div class="label">누적 순증</div>
+            <div class="value">97대</div>
+            <div class="sub">목표 대비 -163대</div>
+          </div>
+          <div class="card">
+            <div class="label">총 계약 대수</div>
+            <div class="value">6,201</div>
+            <div class="sub">확정 보고 기준</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section grid-main">
+        <div class="panel">
+          <h4>신규 계약 원장 미리보기</h4>
+          <table>
+            <thead>
+              <tr>
+                <th>회사명</th>
+                <th>부서</th>
+                <th>ID</th>
+                <th>업종</th>
+                <th>계약월</th>
+                <th>권유자</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>한국투자증권</td>
+                <td>크레딧채권운용부</td>
+                <td>E250658</td>
+                <td>국내증권</td>
+                <td>2026-04</td>
+                <td>정진영</td>
+              </tr>
+              <tr>
+                <td>신한라이프생명보험</td>
+                <td>특별계정운용팀</td>
+                <td>E260001</td>
+                <td>보험사</td>
+                <td>2026-04</td>
+                <td>박혜리</td>
+              </tr>
+              <tr>
+                <td>영원무역</td>
+                <td>수출영업팀</td>
+                <td>E250674</td>
+                <td>일반기업</td>
+                <td>2026-04</td>
+                <td>이홍민</td>
+              </tr>
+              <tr>
+                <td>하나증권</td>
+                <td>글로벌마켓운용실</td>
+                <td>E250665</td>
+                <td>국내증권</td>
+                <td>2026-05</td>
+                <td>신무길</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <h4>입력 현황 요약</h4>
+          <div class="mini-grid">
+            <div class="stat-block">
+              <strong>7/7</strong>
+              <span>주간 보고 입력 탭 완료</span>
+            </div>
+            <div class="stat-block">
+              <strong>107건</strong>
+              <span>신규 계약 원장 누적 건수</span>
+            </div>
+            <div class="stat-block">
+              <strong>506건</strong>
+              <span>유료 옵션 총 건수</span>
+            </div>
+            <div class="stat-block">
+              <strong>3건</strong>
+              <span>추가 매출 등록 건수</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section grid-main">
+        <div class="panel">
+          <h4>검증 센터 미리보기</h4>
+          <div class="validation-list">
+            <div class="validation-item">
+              <div>
+                <strong>해지 사유 합계와 해지 총계가 일치합니다.</strong>
+                <div style="color: var(--muted); font-size: 13px; margin-top: 4px;">주간 해지 6대, 사유 합계 6대</div>
+              </div>
+              <span class="tag ok">PASS</span>
+            </div>
+            <div class="validation-item">
+              <div>
+                <strong>업종별 신규 합계와 원장 집계가 1건 차이납니다.</strong>
+                <div style="color: var(--muted); font-size: 13px; margin-top: 4px;">원장 178건, 보고 입력 177건</div>
+              </div>
+              <span class="tag error">FAIL</span>
+            </div>
+            <div class="validation-item">
+              <div>
+                <strong>계약서 회수 상태가 미입력인 계약 4건이 있습니다.</strong>
+                <div style="color: var(--muted); font-size: 13px; margin-top: 4px;">원장 화면에서 바로 수정 가능</div>
+              </div>
+              <span class="tag warn">WARN</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h4>권유자별 실적 요약</h4>
+          <table>
+            <thead>
+              <tr>
+                <th>권유자</th>
+                <th>건수</th>
+                <th>비중</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>신무길</td>
+                <td>31</td>
+                <td>29%</td>
+              </tr>
+              <tr>
+                <td>이상철</td>
+                <td>19</td>
+                <td>18%</td>
+              </tr>
+              <tr>
+                <td>박혜리</td>
+                <td>15</td>
+                <td>14%</td>
+              </tr>
+              <tr>
+                <td>정진영</td>
+                <td>10</td>
+                <td>9%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h3>보고서 / PDF 미리보기</h3>
+          <p>엑셀 전면 보고서가 웹 화면과 PDF로 재구성되는 영역</p>
+        </div>
+        <div class="report-preview">
+          <div class="pdf-box">
+            <h5>웹 보고서</h5>
+            <p>상단 KPI, 계약 리스트, 목표 실적, 옵션 현황, 해지 현황, 업종별 실적을 카드와 테이블로 구성합니다.</p>
+            <p>실무자는 여기서 최종 검토 후 PDF 생성 버튼을 누르게 됩니다.</p>
+            <p>검증 오류가 남아 있으면 생성 전 경고를 표시합니다.</p>
+          </div>
+          <div class="pdf-box">
+            <h5>PDF 출력본</h5>
+            <p>현재 엑셀 보고 양식의 익숙한 흐름은 유지하되, 데이터는 모두 DB에서 읽어 렌더링합니다.</p>
+            <p>생성 시점 데이터를 스냅샷으로 저장해 같은 주차의 과거 보고서를 다시 꺼낼 수 있습니다.</p>
+            <p>보고서 확정 후에는 잠금 상태로 전환할 수 있습니다.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
