@@ -1,0 +1,137 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #F3FAF8;
+  --foreground: #1F2A2A;
+  --card: #FFFFFF;
+  --card-foreground: #1F2A2A;
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2A2A;
+  --primary: #10B3A3;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F3FAF8;
+  --secondary-foreground: #1F2A2A;
+  --muted: #F3FAF8;
+  --muted-foreground: #7C8F8C;
+  --accent: #F3FAF8;
+  --accent-foreground: #1F2A2A;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #E0EEEB;
+  --input: #F3FAF8;
+  --ring: #10B3A3;
+  --chart-1: #10B3A3;
+  --chart-2: #0E9E90;
+  --chart-3: #7C8F8C;
+  --chart-4: #F3FAF8;
+  --chart-5: #E0EEEB;
+  --radius: 1.25rem;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1F2A2A;
+  --sidebar-primary: #10B3A3;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F3FAF8;
+  --sidebar-accent-foreground: #10B3A3;
+  --sidebar-border: #E0EEEB;
+  --sidebar-ring: #10B3A3;
+  
+  /* H4LAB Brand System */
+  --h4-primary: #10B3A3;
+  --h4-secondary: #0E9E90;
+  --h4-light-bg: #F3FAF8;
+  --h4-text: #1F2A2A;
+  --h4-muted: #7C8F8C;
+  --success: #22C55E;
+  --success-bg: #DCFCE7;
+  --warning: #F59E0B;
+  --warning-bg: #FEF3C7;
+}
+
+.dark {
+  --background: #0F1414;
+  --foreground: #F8FAFA;
+  --card: #1A2424;
+  --card-foreground: #F8FAFA;
+  --popover: #1A2424;
+  --popover-foreground: #F8FAFA;
+  --primary: #10B3A3;
+  --primary-foreground: #FFFFFF;
+  --secondary: #1A3330;
+  --secondary-foreground: #10B3A3;
+  --muted: #1A2424;
+  --muted-foreground: #8FA9A5;
+  --accent: #1A3330;
+  --accent-foreground: #10B3A3;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #2A3A38;
+  --input: #2A3A38;
+  --ring: #10B3A3;
+  --chart-1: #10B3A3;
+  --chart-2: #0E9E90;
+  --chart-3: #8FA9A5;
+  --chart-4: #1A3330;
+  --chart-5: #2A3A38;
+  --sidebar: #1A2424;
+  --sidebar-foreground: #F8FAFA;
+  --sidebar-primary: #10B3A3;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1A3330;
+  --sidebar-accent-foreground: #10B3A3;
+  --sidebar-border: #2A3A38;
+  --sidebar-ring: #10B3A3;
+}
+
+@theme inline {
+  --font-sans: 'Geist', 'Geist Fallback';
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

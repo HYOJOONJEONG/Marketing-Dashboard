@@ -1,0 +1,36 @@
+# v0 runtime files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+
+# Common ignores
+node_modules/
+.next/
+.env*.local
+.DS_Store
+.env
+*.log
+*.err
+*.out
+*.png
+*.zip
+*.tsbuildinfo
+.edge-headless/
+api-dashboard-response.json
+dashboard-preview.html
+preview-server.js
+tmp-dashboard-script.js
+pdf-shot.png
+edge-shot.png
+edge-shot2.png
+preview-out.log
+server-run.log
+server-out.log
+server-err.log
+server.out.log
+server.err.log
+.dev-server.log
+.dev-server.err
+.prototype-dev.log
+新주간실적보고 2026.xlsm
+~$*.xlsx
