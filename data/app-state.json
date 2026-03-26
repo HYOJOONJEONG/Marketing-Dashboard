@@ -322,7 +322,7 @@
       "industry": "국내은행",
       "contractMonth": "26년 5월",
       "documentStatus": "미회수",
-      "includedInWeekly": true,
+      "includedInWeekly": false,
       "recommender": "정효준",
       "replacementType": "신규",
       "note": ""
@@ -361,7 +361,7 @@
       "industry": "국내증권",
       "contractMonth": "26년 6월",
       "documentStatus": "미회수",
-      "includedInWeekly": false,
+      "includedInWeekly": true,
       "recommender": "신무길",
       "replacementType": "신규",
       "note": ""
@@ -374,7 +374,7 @@
       "industry": "외국계",
       "contractMonth": "26년 5월",
       "documentStatus": "미회수",
-      "includedInWeekly": false,
+      "includedInWeekly": true,
       "recommender": "정진영",
       "replacementType": "신규",
       "note": ""
@@ -1670,7 +1670,7 @@
   "collection": {
     "tab": "integrated",
     "yearFilter": 2026,
-    "statusFilter": "all",
+    "statusFilter": "회수",
     "integrated": [
       {
         "id": "m1",
@@ -1680,8 +1680,8 @@
         "idCode": "E250467",
         "industry": "기타금융",
         "claimMonth": "26년 1월",
-        "status": "회수",
-        "receiptDate": "2026.01.14",
+        "status": "미회수",
+        "receiptDate": "",
         "reportDate": "2026-03-26"
       },
       {
@@ -1704,8 +1704,8 @@
         "idCode": "E250436",
         "industry": "기타금융",
         "claimMonth": "26년 1월",
-        "status": "미회수",
-        "receiptDate": "",
+        "status": "회수",
+        "receiptDate": "2026.03.26",
         "reportDate": "2026-03-26"
       },
       {
@@ -1909,7 +1909,7 @@
         "industry": "기타금융",
         "claimMonth": "26년 1월",
         "status": "회수",
-        "receiptDate": "2026.02.09",
+        "receiptDate": "2026.02.0",
         "reportDate": "2026-03-26"
       },
       {
@@ -1920,8 +1920,8 @@
         "idCode": "E250489",
         "industry": "기타금융",
         "claimMonth": "26년 1월",
-        "status": "미회수",
-        "receiptDate": "",
+        "status": "회수",
+        "receiptDate": "2026.03.26",
         "reportDate": "2026-03-26"
       },
       {
@@ -2304,8 +2304,8 @@
         "idCode": "E250616",
         "industry": "일반기업",
         "claimMonth": "25년 12월",
-        "status": "미회수",
-        "receiptDate": "",
+        "status": "회수",
+        "receiptDate": "2026.03.26",
         "reportDate": "2026-03-26"
       },
       {
@@ -43310,8 +43310,8 @@
         "idCode": "E131161",
         "industry": "국내증권",
         "claimMonth": "2014.01",
-        "status": "미회수",
-        "receiptDate": "",
+        "status": "회수",
+        "receiptDate": "2026.03.26",
         "reportDate": ""
       },
       {
@@ -45309,7 +45309,7 @@
     ]
   },
   "termination": {
-    "currentSheetId": "sheet-260326",
+    "currentSheetId": "sheet-260402",
     "sheets": [
       {
         "id": "sheet-260402",

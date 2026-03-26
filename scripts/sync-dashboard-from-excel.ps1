@@ -101,6 +101,16 @@ function Format-MonthValue($value, [string]$text) {
   return $raw
 }
 
+function Test-TerminationSelected($ws, [int]$row) {
+  $flagText = Normalize-Whitespace (Get-CellText $ws $row 2)
+  if ([string]::IsNullOrWhiteSpace($flagText)) { return $true }
+  try {
+    $fontColor = [int]$ws.Range(("B{0}:J{0}" -f $row)).Font.Color
+    if ($fontColor -eq 255) { return $true }
+  } catch {}
+  return $false
+}
+
 function Extract-Status([string]$recovered, [string]$missing) {
   if (-not [string]::IsNullOrWhiteSpace($recovered)) { return $TXT_RECOVERED }
   if (-not [string]::IsNullOrWhiteSpace($missing)) { return $TXT_MISSING }
@@ -366,7 +376,7 @@ try {
       $items += [ordered]@{
         id = ("{0}-t{1}" -f ($sheetName -replace "\.", ""), $itemIndex)
         no = $itemIndex
-        selected = [string]::IsNullOrWhiteSpace((Get-CellText $ws $row 2))
+        selected = Test-TerminationSelected $ws $row
         receivedDate = Format-DateValue (Get-CellValue $ws $row 3) (Get-CellText $ws $row 3)
         manager = Normalize-Whitespace (Get-CellText $ws $row 4)
         customerId = $customerId

@@ -4,7 +4,7 @@ import "./globals.css"
 
 export const metadata: Metadata = {
   title: "정보사업본부 통합 대시보드",
-  description: "정보사업본부 실적 관리와 계약서, 해지 현황을 통합 관리하는 대시보드",
+  description: "실적 관리, 계약서통합관리, 해지 진행사항을 함께 보는 내부 운영 대시보드",
 }
 
 export default function RootLayout({
