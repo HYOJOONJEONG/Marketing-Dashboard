@@ -1,9 +1,11 @@
 $ErrorActionPreference = "Stop"
 
 $projectRoot = "C:\Users\infouser\Documents\New project\marketing dashboard\marketing dashboard"
-$weeklyPath = (Get-ChildItem -Path $projectRoot -Filter "*.xlsm" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+$weeklyLatestPath = Join-Path $projectRoot "data\source-latest.xlsm"
+$weeklyPath = if (Test-Path $weeklyLatestPath) { $weeklyLatestPath } else { (Get-ChildItem -Path $projectRoot -Filter "*.xlsm" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName }
 $terminationPath = Join-Path $projectRoot "data\terminal-termination-source.xlsx"
-$collectionPath = Join-Path $projectRoot "data\collection-missing-source.xlsx"
+$collectionLatestPath = Join-Path $projectRoot "data\collection-missing-source-latest.xlsx"
+$collectionPath = if (Test-Path $collectionLatestPath) { $collectionLatestPath } else { Join-Path $projectRoot "data\collection-missing-source.xlsx" }
 $statePath = Join-Path $projectRoot "data\app-state.json"
 
 function New-KoreanText([int[]]$codes) {
@@ -257,18 +259,23 @@ try {
   $blankContractRows = 0
   $contractIndex = 0
   for ($row = 5; $row -le 5000; $row++) {
+    $sheetNoText = Normalize-Whitespace (Get-CellText $contractsWs $row 2)
     $companyName = Normalize-Whitespace (Get-CellText $contractsWs $row 3)
     $departmentName = Normalize-Whitespace (Get-CellText $contractsWs $row 5)
     $idCode = Normalize-Whitespace (Get-CellText $contractsWs $row 7)
-    if ([string]::IsNullOrWhiteSpace($companyName) -and [string]::IsNullOrWhiteSpace($departmentName) -and [string]::IsNullOrWhiteSpace($idCode)) {
-      $blankContractRows++
-      if ($blankContractRows -ge 20) { break }
+    $hasContractRow = $sheetNoText -match '^\d+$'
+    if (-not $hasContractRow) {
+      if ([string]::IsNullOrWhiteSpace($companyName) -and [string]::IsNullOrWhiteSpace($departmentName) -and [string]::IsNullOrWhiteSpace($idCode)) {
+        $blankContractRows++
+        if ($blankContractRows -ge 20 -and $contractIndex -gt 0) { break }
+      }
       continue
     }
     $blankContractRows = 0
     $contractIndex++
     $contracts += [ordered]@{
       id = "c$contractIndex"
+      no = [int]$sheetNoText
       companyName = $companyName
       departmentName = $departmentName
       idCode = $idCode
@@ -451,7 +458,7 @@ try {
       industryStats = $industryStats
       additionalSales = $additionalSales
     }
-    contracts = @($contracts | Sort-Object { Month-SortKey $_.contractMonth }, companyName)
+    contracts = @($contracts | Sort-Object { [int]($_["no"]) })
     collection = [ordered]@{
       tab = "integrated"
       yearFilter = 2026

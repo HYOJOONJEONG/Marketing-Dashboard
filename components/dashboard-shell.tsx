@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 
 type ViewKey = "weekly-report" | "contracts" | "weekly-selection" | "manual-input" | "collection" | "termination"
 type CollectionTabKey = "integrated" | "long-term"
@@ -15,12 +15,21 @@ const viewTitles: Record<ViewKey, string> = {
   termination: "해지 진행사항",
 }
 
-const performanceViews: ViewKey[] = ["weekly-report", "contracts", "weekly-selection", "manual-input", "collection"]
-
-const cardClass = "rounded-[24px] border border-slate-200 bg-white shadow-sm"
+  const cardClass = "rounded-[24px] border border-slate-200 bg-white shadow-sm"
 const tableClass = "w-full text-[14px]"
 const thClass = "border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-[13px] font-semibold text-slate-600"
 const tdClass = "border-t border-slate-200 px-3 py-2.5 align-middle text-[14px] text-slate-800"
+const weeklyReportTableClass = "weekly-report-table w-full table-fixed text-[14px]"
+const weeklyThClass = "border-b border-slate-200 bg-slate-50 px-2.5 py-2 text-center text-[13px] font-semibold text-slate-700"
+const weeklyTdClass = "border-t border-slate-200 px-2.5 py-2 text-center align-middle text-[14px] text-slate-800"
+const manualTableInputClass =
+  "h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-center text-[13px] font-medium text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+const manualTableTextInputClass =
+  "h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-medium text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+const manualSectionTitleClass = "text-[15px] font-bold text-slate-900"
+const manualHeaderCellClass = "border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-[13px] font-semibold text-slate-700"
+const manualLabelCellClass = "w-[132px] bg-slate-50 px-3 py-2.5 text-center text-[13px] font-semibold text-slate-700"
+const manualTableTitleRowClass = "border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-[16px] font-bold text-slate-900"
 
 function toNumber(value: unknown) {
   const num = Number(String(value ?? "").replace(/,/g, ""))
@@ -33,6 +42,12 @@ function formatNumber(value: unknown) {
 
 function formatMoney(value: unknown) {
   return `${formatNumber(value)}원`
+}
+
+function formatNumericInputDisplay(value: unknown) {
+  const digits = String(value ?? "").replace(/[^\d]/g, "")
+  if (!digits) return ""
+  return Number(digits).toLocaleString("ko-KR")
 }
 
 function normalizeDate(value: unknown) {
@@ -52,6 +67,39 @@ function parseDateKey(value: unknown) {
   const digits = String(value ?? "").replace(/[^\d]/g, "")
   if (digits.length === 6) return Number(`20${digits}`)
   if (digits.length === 8) return Number(digits)
+  return 0
+}
+
+function parseContractMonthParts(value: unknown) {
+  const text = String(value ?? "").trim()
+  if (!text) return null
+
+  const yearMonthMatch = text.match(/(\d{2,4})\D+(\d{1,2})/)
+  if (yearMonthMatch) {
+    const rawYear = yearMonthMatch[1]
+    const rawMonth = yearMonthMatch[2]
+    const year = rawYear.length === 2 ? Number(`20${rawYear}`) : Number(rawYear)
+    const month = Number(rawMonth)
+    if (year && month >= 1 && month <= 12) return { year, month }
+  }
+
+  const digits = text.replace(/[^\d]/g, "")
+  if (digits.length === 6) {
+    const year = Number(digits.slice(0, 4))
+    const month = Number(digits.slice(4, 6))
+    if (year && month >= 1 && month <= 12) return { year, month }
+  }
+  if (digits.length === 4) {
+    const year = Number(`20${digits.slice(0, 2)}`)
+    const month = Number(digits.slice(2, 4))
+    if (year && month >= 1 && month <= 12) return { year, month }
+  }
+  return null
+}
+
+function parseContractMonthKey(value: unknown) {
+  const parts = parseContractMonthParts(value)
+  if (parts) return parts.year * 100 + parts.month
   return 0
 }
 
@@ -84,8 +132,273 @@ function sanitizeText(text: unknown, fallback: string) {
   return fallback
 }
 
+function sanitizeSummaryText(text: unknown, fallback: string) {
+  const value = String(text ?? "").trim()
+  if (!value) return fallback
+  if (/[가-힣]/.test(value)) return value
+  return fallback
+}
+
+function buildRevenueRows(rows: any[]) {
+  const fallbackLabels = ["매출순증", "위약금", "이전비", "합계"]
+  const fallbackKeys = ["sales", "penalty", "move", "total"]
+  return (Array.isArray(rows) ? rows : []).map((row, index) => ({
+    ...row,
+    key: row?.key || fallbackKeys[index] || `row-${index}`,
+    label: sanitizeSummaryText(row?.label, fallbackLabels[index] || `항목 ${index + 1}`),
+    months: Array.from({ length: 12 }, (_, monthIndex) => toNumber(row?.months?.[monthIndex])),
+  }))
+}
+
+const goalRowTemplate2026 = [
+  { month: "1월", netTarget: 45, targetContracts: 6149, quarterNetTarget: 105, monthlyActual: 47, quarterActual: 106, gap: 1 },
+  { month: "2월", netTarget: 30, targetContracts: 6179, quarterNetTarget: "", monthlyActual: 24, quarterActual: "", gap: "" },
+  { month: "3월", netTarget: 30, targetContracts: 6209, quarterNetTarget: "", monthlyActual: 35, quarterActual: "", gap: "" },
+  { month: "4월", netTarget: 30, targetContracts: 6239, quarterNetTarget: 70, monthlyActual: 7, quarterActual: 7, gap: "" },
+  { month: "5월", netTarget: 20, targetContracts: 6259, quarterNetTarget: "", monthlyActual: "", quarterActual: "", gap: "" },
+  { month: "6월", netTarget: 20, targetContracts: 6279, quarterNetTarget: "", monthlyActual: "", quarterActual: "", gap: "" },
+  { month: "7월", netTarget: 20, targetContracts: 6299, quarterNetTarget: 55, monthlyActual: "", quarterActual: "", gap: "" },
+  { month: "8월", netTarget: 20, targetContracts: 6319, quarterNetTarget: "", monthlyActual: "", quarterActual: "", gap: "" },
+  { month: "9월", netTarget: 15, targetContracts: 6334, quarterNetTarget: "", monthlyActual: "", quarterActual: "", gap: "" },
+  { month: "10월", netTarget: 15, targetContracts: 6349, quarterNetTarget: 30, monthlyActual: "", quarterActual: "", gap: "" },
+  { month: "11월", netTarget: 15, targetContracts: 6364, quarterNetTarget: "", monthlyActual: "", quarterActual: "", gap: "" },
+  { month: "12월", netTarget: 0, targetContracts: 6364, quarterNetTarget: "", monthlyActual: "", quarterActual: "", gap: "" },
+  { month: "합계", netTarget: 260, targetContracts: 6364, quarterNetTarget: 260, monthlyActual: 113, quarterActual: 113, gap: -147 },
+] as const
+
+function parseGoalMonthOrder(value: unknown) {
+  const text = String(value ?? "").trim()
+  if (!text) return null
+  if (text.includes("합")) return 13
+  const digits = text.replace(/[^\d]/g, "")
+  if (!digits) return null
+  const month = Number(digits.slice(-2).replace(/^0/, "") || digits.slice(-1) || digits)
+  if (month >= 1 && month <= 12) return month
+  return null
+}
+
+function buildGoalRows(rows: any[]) {
+  const mergedByMonth = new Map<number, any>()
+  ;(Array.isArray(rows) ? rows : []).forEach((row, index) => {
+    const parsedOrder = parseGoalMonthOrder(row?.month) ?? (index + 1 <= 12 ? index + 1 : 13)
+    mergedByMonth.set(parsedOrder, {
+      month: parsedOrder === 13 ? "합계" : `${parsedOrder}월`,
+      netTarget: row?.netTarget ?? row?.monthlyNetTarget ?? "",
+      targetContracts: row?.targetContracts ?? row?.contractTarget ?? "",
+      quarterNetTarget: row?.quarterNetTarget ?? row?.quarterTarget ?? "",
+      monthlyActual: row?.monthlyActual ?? row?.actual ?? "",
+      quarterActual: row?.quarterActual ?? row?.quarterlyActual ?? "",
+      gap: row?.gap ?? row?.achievementGap ?? "",
+    })
+  })
+
+  return goalRowTemplate2026.map((templateRow, index) => {
+    const order = index + 1 <= 12 ? index + 1 : 13
+    const savedRow = mergedByMonth.get(order)
+    return {
+      month: templateRow.month,
+      netTarget: savedRow?.netTarget === "" || savedRow?.netTarget == null ? templateRow.netTarget : savedRow.netTarget,
+      targetContracts:
+        savedRow?.targetContracts === "" || savedRow?.targetContracts == null
+          ? templateRow.targetContracts
+          : savedRow.targetContracts,
+      quarterNetTarget:
+        savedRow?.quarterNetTarget === "" || savedRow?.quarterNetTarget == null
+          ? templateRow.quarterNetTarget
+          : savedRow.quarterNetTarget,
+      monthlyActual:
+        savedRow?.monthlyActual === "" || savedRow?.monthlyActual == null
+          ? templateRow.monthlyActual
+          : savedRow.monthlyActual,
+      quarterActual:
+        savedRow?.quarterActual === "" || savedRow?.quarterActual == null
+          ? templateRow.quarterActual
+          : savedRow.quarterActual,
+      gap: savedRow?.gap === "" || savedRow?.gap == null ? templateRow.gap : savedRow.gap,
+    }
+  })
+}
+
+function buildIndustryStats(rows: any[]) {
+  const fallbackCategories = ["국내증권", "국내은행", "외국계", "자산운용", "보험사", "일반기업", "공사/정부", "연기금", "기타금융", "합계"]
+  return (Array.isArray(rows) ? rows : []).map((row, index) => ({
+    ...row,
+    category: sanitizeSummaryText(row?.category, fallbackCategories[index] || `업종 ${index + 1}`),
+    newCount: toNumber(row?.newCount),
+    netCount: toNumber(row?.netCount),
+  }))
+}
+
+function normalizeSummaryStatus(text: unknown, fallback: string) {
+  const value = String(text ?? "").trim()
+  if (!value) return fallback
+  if (/[가-힣]/.test(value)) return value
+  return fallback
+}
+
 function cloneData<T>(value: T): T {
   return JSON.parse(JSON.stringify(value))
+}
+
+function normalizeAdditionalSalesRows(rows: any[]) {
+  const list = Array.isArray(rows) ? rows : []
+  if (!list.length) return [{ label: "", amount: "", note: "" }]
+  return list.map((row) => ({
+    label: String(row?.label ?? ""),
+    amount: String(row?.amount ?? ""),
+    note: String(row?.note ?? ""),
+  }))
+}
+
+function buildAutoRevenueHeader(unitPrice: unknown, selectedCount: number, additionalContractCount: unknown) {
+  const baseUnitPrice = toNumber(unitPrice) || 6160000
+  const bonusRevenue = Math.max(0, toNumber(additionalContractCount))
+  const computedRevenue = Math.max(0, baseUnitPrice * Math.max(0, selectedCount)) + bonusRevenue
+  return `주간 순증 매출 (약 ${formatMoney(computedRevenue)})`
+}
+
+function normalizeRevenueHeaderText(value: unknown, fallback: string) {
+  const text = sanitizeText(value, fallback).trim()
+  const matched = text.match(/^주간\s*순증\s*매출\s*\(약\s*([\d,]+)\s*원?\)$/)
+  if (matched) {
+    return `주간 순증 매출 (약 ${matched[1]}원)`
+  }
+  return text
+}
+
+function sumRevenueRowTotals(rows: any[]) {
+  return buildRevenueRows(rows || []).reduce((sum, row) => {
+    const rowTotal = (row.months || []).reduce((rowSum: number, value: number) => rowSum + toNumber(value), 0)
+    return sum + rowTotal
+  }, 0)
+}
+
+function getRevenueTotalMillions(rows: any[]) {
+  const normalizedRows = buildRevenueRows(rows || [])
+  const totalRow =
+    normalizedRows.find((row) => String(row?.label || "").trim() === "합계") ||
+    normalizedRows[normalizedRows.length - 1]
+  return (totalRow?.months || []).reduce((sum: number, value: number) => sum + toNumber(value), 0)
+}
+
+function getRevenueRowMillionsByLabel(rows: any[], label: string) {
+  const normalizedRows = buildRevenueRows(rows || [])
+  const targetRow = normalizedRows.find((row) => String(row?.label || "").trim() === label)
+  return (targetRow?.months || []).reduce((sum: number, value: number) => sum + toNumber(value), 0)
+}
+
+function buildAnnualNetRevenueSubtitle(rows: any[], summary: any, unitPrice: unknown) {
+  const totalMillions = getRevenueTotalMillions(rows)
+  const salesMillions = getRevenueRowMillionsByLabel(rows, "매출순증")
+  const nonSalesRevenue = Math.max(0, totalMillions - salesMillions) * 1000000
+  const cumulativeNetUnits = Math.max(0, toNumber(summary?.cumulativeNetUnits))
+  const baseUnitPrice = toNumber(unitPrice) || 6160000
+  const cumulativeNetRevenue = cumulativeNetUnits * baseUnitPrice
+  return `26년 순증 매출 (약 ${formatMoney(nonSalesRevenue + cumulativeNetRevenue)})`
+}
+
+function buildAnnualCumulativeRevenueSubtitle(totalContracts: unknown, unitPrice: unknown) {
+  const contractCount = Math.max(0, toNumber(totalContracts))
+  const baseUnitPrice = toNumber(unitPrice) || 6160000
+  return `연간 누적 매출 (약 ${formatMoney(contractCount * baseUnitPrice)})`
+}
+
+function buildRevenueNoteText(baseDate: unknown, unitPrice: unknown) {
+  const normalized = normalizeDate(baseDate)
+  const mmdd = normalized && normalized.length >= 10 ? normalized.slice(5, 10).replace(".", "/") : ""
+  const baseUnitPrice = toNumber(unitPrice) || 6160000
+  const dateLabel = mmdd ? ` (${mmdd} 기준)` : ""
+  return `※대당 연 ${formatNumber(baseUnitPrice)}원으로 매출을 산정${dateLabel} / 위약금 및 이전비는 월 단위로 계산하되, 모든 금액 단위는 백만 원으로 표기.`
+}
+
+function buildRevenueDisplaySet(params: {
+  revenueHeaderText?: unknown
+  subtitleOne?: unknown
+  subtitleTwo?: unknown
+  revenueUnitPrice?: unknown
+  additionalContractCount?: unknown
+  manualSummary?: any
+  revenueRows?: any[]
+  fallbackSelectedCount?: number
+}) {
+  const selectedContractCount = Math.max(0, Number(params.fallbackSelectedCount || 0))
+  const computedHeader = buildAutoRevenueHeader(
+    params.revenueUnitPrice,
+    selectedContractCount,
+    params.additionalContractCount,
+  )
+  const computedSubtitleOne = buildAnnualNetRevenueSubtitle(
+    params.revenueRows || [],
+    params.manualSummary,
+    params.revenueUnitPrice,
+  )
+  const computedSubtitleTwo = buildAnnualCumulativeRevenueSubtitle(
+    params?.manualSummary?.totalContracts,
+    params.revenueUnitPrice,
+  )
+  return {
+    // Always use the current computed values so the weekly report behaves like
+    // a direct Excel-style cell reference to the manual input screen.
+    header: normalizeRevenueHeaderText(computedHeader, computedHeader),
+    subtitleOne: normalizeRevenueSubtitleOne(computedSubtitleOne),
+    subtitleTwo: sanitizeText(computedSubtitleTwo, "연간 누적 매출"),
+  }
+}
+
+function buildManualDraftFromWeekly(weekly: any, contracts: any[]) {
+  const safeWeekly = weekly || {}
+  const summary = safeWeekly.manualSummary || {}
+  const includedContractCount = (contracts || []).filter((row: any) => row.includedInWeekly).length
+  const revenueUnitPrice = toNumber(safeWeekly.revenueUnitPrice) || 6160000
+  const additionalContractCount = toNumber(safeWeekly.additionalContractCount)
+  const revenueDisplay = buildRevenueDisplaySet({
+    revenueHeaderText: safeWeekly.revenueHeaderText,
+    subtitleOne: safeWeekly.subtitleOne,
+    subtitleTwo: safeWeekly.subtitleTwo,
+    revenueUnitPrice,
+    additionalContractCount,
+    manualSummary: summary,
+    revenueRows: safeWeekly.revenueRows || [],
+    fallbackSelectedCount: includedContractCount,
+  })
+  const revenueNoteText = sanitizeText(
+    safeWeekly.revenueNoteText || buildRevenueNoteText(safeWeekly.baseDate, revenueUnitPrice),
+    buildRevenueNoteText(safeWeekly.baseDate, revenueUnitPrice),
+  )
+
+  return {
+    revenueHeaderText: revenueDisplay.header,
+    revenueUnitPrice: String(revenueUnitPrice),
+    additionalContractCount: String(additionalContractCount || 0),
+    subtitleOne: revenueDisplay.subtitleOne,
+    subtitleTwo: revenueDisplay.subtitleTwo,
+    manualSummary: { ...summary },
+    revenueNoteText,
+    revenueRows: cloneData(safeWeekly.revenueRows || []),
+    goalRows: cloneData(safeWeekly.goalRows || []),
+    industryStats: cloneData(safeWeekly.industryStats || []),
+    additionalSales: normalizeAdditionalSalesRows(cloneData(safeWeekly.additionalSales || [])),
+  }
+}
+
+function normalizeRevenueSubtitleOne(value: unknown) {
+  const text = sanitizeText(value, "26년 순증 매출")
+  return text
+    .replace(/^2025년\s*순증\s*매출/, "26년 순증 매출")
+    .replace(/^25년\s*순증\s*매출/, "26년 순증 매출")
+}
+
+function getWeeklyNetUnitsValue(summary: any, fallback: number) {
+  const value = toNumber(summary?.weeklyNetUnits)
+  return value > 0 ? value : fallback
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = []
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size))
+  }
+  return chunks
 }
 
 function renderChip(text: string, tone: "blue" | "green" | "red" | "gray" = "blue") {
@@ -98,6 +411,21 @@ function renderChip(text: string, tone: "blue" | "green" | "red" | "gray" = "blu
           ? "bg-slate-100 text-slate-600"
           : "bg-blue-50 text-blue-700"
   return <span className={`inline-flex items-center rounded-full px-3 py-1 text-[13px] font-semibold ${className}`}>{text}</span>
+}
+
+function renderStatusBadge(status: string) {
+  const normalized = status || "미정"
+  const className =
+    normalized === "회수"
+      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+      : normalized === "미회수"
+        ? "bg-rose-50 text-rose-700 border-rose-100"
+        : "bg-slate-100 text-slate-600 border-slate-200"
+  return (
+    <span className={`inline-flex min-w-[56px] justify-center rounded-full border px-3 py-1 text-[12px] font-semibold ${className}`}>
+      {normalized}
+    </span>
+  )
 }
 
 function summaryPairs(summary: any) {
@@ -131,17 +459,10 @@ export function DashboardShell({
     initialSheetId || initialData?.termination?.currentSheetId || initialData?.termination?.sheets?.[0]?.id,
   )
   const [isPending, startTransition] = useTransition()
-  const [manualDraft, setManualDraft] = useState<any>(() => {
-    const weekly = initialData?.weeklyReport || {}
-    const summary = weekly.manualSummary || {}
-    const headerFallback = `주간 순증 매출 (약 ${formatMoney(toNumber(summary?.weeklyNetUnits) * 6160000)})`
-    return {
-      revenueHeaderText: sanitizeText(weekly.revenueHeaderText, headerFallback),
-      subtitleOne: sanitizeText(weekly.subtitleOne, "2025년 순증 매출"),
-      subtitleTwo: sanitizeText(weekly.subtitleTwo, "연간 누적 매출"),
-      manualSummary: { ...summary },
-    }
-  })
+  const [manualDraft, setManualDraft] = useState<any>(() =>
+    buildManualDraftFromWeekly(initialData?.weeklyReport || {}, initialData?.contracts || []),
+  )
+  const [manualRevenueHeaderEdited, setManualRevenueHeaderEdited] = useState(false)
   const [contractDraft, setContractDraft] = useState<any>({
     companyName: "",
     departmentName: "",
@@ -205,6 +526,87 @@ export function DashboardShell({
     [termination.sheets, terminationSheetId],
   )
   const includedContracts = useMemo(() => contracts.filter((row: any) => row.includedInWeekly), [contracts])
+
+  useEffect(() => {
+    if (manualRevenueHeaderEdited) return
+    const nextHeader = buildAutoRevenueHeader(
+      manualDraft.revenueUnitPrice,
+      includedContracts.length,
+      manualDraft.additionalContractCount,
+    )
+    setManualDraft((prev: any) => (
+      prev.revenueHeaderText === nextHeader
+        ? prev
+        : { ...prev, revenueHeaderText: nextHeader }
+    ))
+  }, [includedContracts.length, manualDraft.additionalContractCount, manualDraft.revenueUnitPrice, manualRevenueHeaderEdited])
+
+  useEffect(() => {
+    const nextSubtitleOne = buildAnnualNetRevenueSubtitle(
+      manualDraft.revenueRows || [],
+      manualDraft.manualSummary,
+      manualDraft.revenueUnitPrice,
+    )
+    const nextSubtitleTwo = buildAnnualCumulativeRevenueSubtitle(
+      manualDraft?.manualSummary?.totalContracts,
+      manualDraft.revenueUnitPrice,
+    )
+    setManualDraft((prev: any) => {
+      if (prev.subtitleOne === nextSubtitleOne && prev.subtitleTwo === nextSubtitleTwo) return prev
+      return {
+        ...prev,
+        subtitleOne: nextSubtitleOne,
+        subtitleTwo: nextSubtitleTwo,
+      }
+    })
+  }, [manualDraft.revenueRows, manualDraft.manualSummary?.totalContracts, manualDraft.revenueUnitPrice])
+
+  useEffect(() => {
+    setManualDraft(buildManualDraftFromWeekly(weeklyReport, contracts))
+    setManualRevenueHeaderEdited(false)
+  }, [weeklyReport, contracts])
+
+  const contractMonthStats = useMemo(() => {
+    const currentYearNumber = Number(currentYear) || 2026
+    const monthCounts = new Map<number, number>()
+    const fallbackMap = new Map<string, number>()
+    contracts.forEach((row: any) => {
+      const month = String(row.contractMonth || "").trim() || "미입력"
+      const parsed = parseContractMonthParts(month)
+      if (parsed && parsed.year === currentYearNumber) {
+        monthCounts.set(parsed.month, (monthCounts.get(parsed.month) || 0) + 1)
+      } else {
+        fallbackMap.set(month, (fallbackMap.get(month) || 0) + 1)
+      }
+    })
+    const months = Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1
+      return {
+        label: `${String(currentYearNumber).slice(-2)}년 ${month}월`,
+        count: monthCounts.get(month) || 0,
+        sortKey: currentYearNumber * 100 + month,
+      }
+    })
+    const fallback = [...fallbackMap.entries()]
+      .map(([label, count]) => ({ label, count, sortKey: parseContractMonthKey(label) }))
+      .sort((a, b) => {
+        if (a.sortKey || b.sortKey) return a.sortKey - b.sortKey
+        return a.label.localeCompare(b.label, "ko")
+      })
+    return [...months, ...fallback.filter((row) => row.label !== "미입력")]
+  }, [contracts, currentYear])
+  const contractRecommenderStats = useMemo(() => {
+    const map = new Map<string, number>()
+    contracts.forEach((row: any) => {
+      const name = String(row.recommender || "").trim() || "미입력"
+      map.set(name, (map.get(name) || 0) + 1)
+    })
+    return [...map.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => (b.count - a.count) || a.label.localeCompare(b.label, "ko"))
+  }, [contracts])
+  const contractMonthRows = useMemo(() => chunkArray(contractMonthStats, 6), [contractMonthStats])
+  const contractRecommenderRows = useMemo(() => chunkArray(contractRecommenderStats, 4), [contractRecommenderStats])
   const collectionRows = useMemo(
     () => (collectionTab === "long-term" ? collection.longTerm || [] : collection.integrated || []),
     [collection, collectionTab],
@@ -216,6 +618,44 @@ export function DashboardShell({
       return yearOk && statusOk
     })
   }, [collectionRows, collectionStatusFilter, collectionYearFilter])
+  const collectionIndustrySummary = useMemo(() => {
+    const sourceRows = collectionRows.filter((row: any) => (
+      collectionYearFilter === "all" ? true : Number(row.year) === Number(collectionYearFilter)
+    ))
+    const order = ["국내증권", "국내은행", "외국계", "자산운용", "보험", "일반기업", "연기금", "정부기관", "공기업", "공제회", "기타"]
+    const map = new Map<string, { industry: string; total: number; recovered: number; missing: number }>()
+    sourceRows.forEach((row: any) => {
+      const industry = String(row.industry || "기타").trim() || "기타"
+      const bucket = map.get(industry) || { industry, total: 0, recovered: 0, missing: 0 }
+      bucket.total += 1
+      if (row.status === "회수") bucket.recovered += 1
+      if (row.status === "미회수") bucket.missing += 1
+      map.set(industry, bucket)
+    })
+    const rows = [...map.values()].sort((a, b) => {
+      const ai = order.indexOf(a.industry)
+      const bi = order.indexOf(b.industry)
+      if (ai >= 0 || bi >= 0) return (ai >= 0 ? ai : 999) - (bi >= 0 ? bi : 999)
+      return a.industry.localeCompare(b.industry, "ko")
+    })
+    const totals = rows.reduce(
+      (acc, row) => ({ total: acc.total + row.total, recovered: acc.recovered + row.recovered, missing: acc.missing + row.missing }),
+      { total: 0, recovered: 0, missing: 0 },
+    )
+    return [...rows, { industry: "합계", total: totals.total, recovered: totals.recovered, missing: totals.missing }]
+  }, [collectionRows, collectionYearFilter])
+  const collectionIndustryMatrix = useMemo(() => {
+    const rows = collectionIndustrySummary || []
+    const headers = rows.map((row: any) => row.industry)
+    return {
+      headers,
+      rows: [
+        { label: "계약수", values: rows.map((row: any) => row.total) },
+        { label: "회수", values: rows.map((row: any) => row.recovered) },
+        { label: "미회수", values: rows.map((row: any) => row.missing) },
+      ],
+    }
+  }, [collectionIndustrySummary])
   const terminationItems = useMemo(
     () => sortByKey(selectedSheet?.items || [], terminationSort.key, terminationSort.dir),
     [selectedSheet, terminationSort],
@@ -223,6 +663,18 @@ export function DashboardShell({
   const holdItems = useMemo(
     () => sortByKey(selectedSheet?.holdItems || [], holdSort.key, holdSort.dir),
     [selectedSheet, holdSort],
+  )
+  const selectedTerminationCount = useMemo(
+    () => (selectedSheet?.items || []).filter((row: any) => Boolean(row.selected)).length,
+    [selectedSheet],
+  )
+  const visibleWeeklyTerminationCount = useMemo(
+    () => Math.max(0, (selectedSheet?.items || []).length - selectedTerminationCount),
+    [selectedSheet, selectedTerminationCount],
+  )
+  const visibleWeeklyBillingHoldCount = useMemo(
+    () => (selectedSheet?.holdItems || []).length,
+    [selectedSheet],
   )
   const reasonSummary = useMemo(() => {
     const map = new Map<string, number>()
@@ -259,6 +711,18 @@ export function DashboardShell({
     })
   }
 
+  function handleWeeklyReportPrint() {
+    const previousTitle = document.title
+    const baseDateDigits = String(weeklyReport.baseDate || "")
+      .replace(/[^\d]/g, "")
+      .slice(2, 8)
+    document.title = `주간실적보고 ${baseDateDigits || "보고서"}`
+    window.print()
+    window.setTimeout(() => {
+      document.title = previousTitle
+    }, 300)
+  }
+
   function handleYearChange(nextYear: number) {
     setData((prev: any) => ({ ...prev, currentYear: nextYear }))
   }
@@ -288,6 +752,14 @@ export function DashboardShell({
   }
 
   function updateManualField(field: string, value: string) {
+    if (field === "revenueHeaderText") {
+      setManualRevenueHeaderEdited(true)
+    }
+    if (field === "revenueUnitPrice" || field === "additionalContractCount") {
+      const digitsOnly = String(value ?? "").replace(/[^\d]/g, "")
+      setManualDraft((prev: any) => ({ ...prev, [field]: digitsOnly }))
+      return
+    }
     setManualDraft((prev: any) => ({ ...prev, [field]: value }))
   }
 
@@ -319,6 +791,59 @@ export function DashboardShell({
     }))
   }
 
+  function updateManualRevenueCell(rowIndex: number, monthIndex: number, value: string) {
+    setManualDraft((prev: any) => {
+      const revenueRows = cloneData(prev.revenueRows || [])
+      if (!revenueRows[rowIndex]) return prev
+      if (!Array.isArray(revenueRows[rowIndex].months)) revenueRows[rowIndex].months = Array(12).fill(0)
+      revenueRows[rowIndex].months[monthIndex] = value
+      return { ...prev, revenueRows }
+    })
+  }
+
+  function updateManualGoalRow(rowIndex: number, field: string, value: string) {
+    setManualDraft((prev: any) => {
+      const goalRows = cloneData(prev.goalRows || [])
+      if (!goalRows[rowIndex]) return prev
+      goalRows[rowIndex][field] = value
+      return { ...prev, goalRows }
+    })
+  }
+
+  function updateManualIndustryRow(rowIndex: number, field: string, value: string) {
+    setManualDraft((prev: any) => {
+      const industryStats = cloneData(prev.industryStats || [])
+      if (!industryStats[rowIndex]) return prev
+      industryStats[rowIndex][field] = value
+      return { ...prev, industryStats }
+    })
+  }
+
+  function updateAdditionalSaleRow(rowIndex: number, field: string, value: string) {
+    setManualDraft((prev: any) => {
+      const additionalSales = normalizeAdditionalSalesRows(cloneData(prev.additionalSales || [])) as Array<Record<string, string>>
+      additionalSales[rowIndex][field] = value
+      return { ...prev, additionalSales }
+    })
+  }
+
+  function addAdditionalSaleRow() {
+    setManualDraft((prev: any) => ({
+      ...prev,
+      additionalSales: [
+        ...(prev.additionalSales || []),
+        { label: "", amount: "", note: "" },
+      ],
+    }))
+  }
+
+  function deleteAdditionalSaleRow(rowIndex: number) {
+    setManualDraft((prev: any) => ({
+      ...prev,
+      additionalSales: normalizeAdditionalSalesRows((prev.additionalSales || []).filter((_: any, index: number) => index !== rowIndex)),
+    }))
+  }
+
   function toggleWeeklySelection(contractId: string) {
     startTransition(async () => {
       const nextContracts = contracts.map((row: any) =>
@@ -328,15 +853,67 @@ export function DashboardShell({
     })
   }
 
+  function handleMoveWeeklySelectionToCollection() {
+    if (!includedContracts.length) {
+      window.alert("선택된 계약이 없습니다.")
+      return
+    }
+    if (!window.confirm("신규 계약 리스트에서 삭제가 됩니다.\n계약서통합관리로 이동할까요?")) return
+
+    startTransition(async () => {
+      const baseDate = normalizeDate(weeklyReport?.baseDate || new Date().toISOString().slice(0, 10))
+      const existingRows = collection.integrated || []
+      const existingKeys = new Set(
+        existingRows.map((row: any) => `${row.idCode || ""}|${row.claimMonth || ""}|${row.companyName || ""}`),
+      )
+
+      const movedRows = includedContracts
+        .filter((row: any) => !existingKeys.has(`${row.idCode || ""}|${row.contractMonth || ""}|${row.companyName || ""}`))
+        .map((row: any, index: number) => ({
+          id: `collection-${Date.now()}-${index}`,
+          year: currentYear,
+          companyName: row.companyName || "",
+          departmentName: row.departmentName || "",
+          idCode: row.idCode || "",
+          industry: row.industry || "",
+          claimMonth: row.contractMonth || "",
+          receiptDate: row.documentStatus === "회수" ? baseDate : "",
+          status: row.documentStatus || "미회수",
+        }))
+
+      const selectedIds = new Set(includedContracts.map((row: any) => row.id))
+      const nextContracts = contracts.filter((row: any) => !selectedIds.has(row.id))
+      const nextData = {
+        ...data,
+        contracts: nextContracts,
+        collection: {
+          ...collection,
+          integrated: [...movedRows, ...existingRows],
+          yearFilter: currentYear,
+          statusFilter: "all",
+        },
+      }
+
+      await persist(nextData)
+      setCollectionTab("integrated")
+      setCollectionYearFilter(currentYear)
+      setCollectionStatusFilter("all")
+      setView("collection")
+    })
+  }
+
   function handleContractCreate() {
     if (!contractDraft.companyName.trim() || !contractDraft.idCode.trim()) {
       window.alert("회사명과 아이디는 필수입니다.")
       return
     }
     startTransition(async () => {
+      const nextNo =
+        contracts.reduce((max: number, row: any) => Math.max(max, Number(row.no || 0)), 0) + 1
       const nextContracts = [
         {
           id: `c${Date.now()}`,
+          no: nextNo,
           companyName: contractDraft.companyName.trim(),
           departmentName: contractDraft.departmentName.trim(),
           idCode: contractDraft.idCode.trim(),
@@ -952,37 +1529,152 @@ export function DashboardShell({
     startTransition(async () => {
       const nextWeekly = {
         ...weeklyReport,
-        revenueHeaderText: manualDraft.revenueHeaderText,
-        subtitleOne: manualDraft.subtitleOne,
-        subtitleTwo: manualDraft.subtitleTwo,
+        // Persist the exact values currently shown in the manual input view so
+        // weekly report behaves like an Excel cell reference.
+        revenueHeaderText: manualRevenueHeaderText,
+        revenueUnitPrice: toNumber(manualDraft.revenueUnitPrice),
+        additionalContractCount: toNumber(manualDraft.additionalContractCount),
+        subtitleOne: manualRevenueSubtitleOne,
+        subtitleTwo: manualRevenueSubtitleTwo,
+        revenueNoteText: manualDraft.revenueNoteText,
         manualSummary: { ...manualDraft.manualSummary },
+        revenueRows: cloneData(manualDraft.revenueRows || []),
+        goalRows: cloneData(manualDraft.goalRows || []),
+        industryStats: cloneData(manualDraft.industryStats || []),
+        additionalSales: normalizeAdditionalSalesRows(cloneData(manualDraft.additionalSales || [])),
       }
       await persist({ ...data, weeklyReport: nextWeekly })
       setView("weekly-report")
     })
   }
 
-  const revenueHeaderText = sanitizeText(
-    weeklyReport.revenueHeaderText,
-    `주간 순증 매출 (약 ${formatMoney(toNumber(weeklyReport?.manualSummary?.weeklyNetUnits) * 6160000)})`,
+  const reportGoalRows = buildGoalRows(weeklyReport.goalRows || [])
+  const reportIndustryStats = buildIndustryStats(weeklyReport.industryStats || [])
+  const reportSummary = {
+    ...(weeklyReport.manualSummary || {}),
+    competitorStatus: normalizeSummaryStatus(
+      weeklyReport?.manualSummary?.competitorStatus,
+      "체크19대, 마켓포인트2대, 블룸버그0대, 로이터1대, 기타0대, 신규155대",
+    ),
+    holdStatus: normalizeSummaryStatus(
+      weeklyReport?.manualSummary?.holdStatus,
+      "방어불가 18대, 방어 진행 0대",
+    ),
+    competitorTerminationStatus: normalizeSummaryStatus(
+      weeklyReport?.manualSummary?.competitorTerminationStatus,
+      "체크0대, 마켓포인트0대, 블룸버그0대, 로이터0대, 기타0대",
+    ),
+  }
+  const manualRevenueDisplay = buildRevenueDisplaySet({
+    revenueHeaderText: manualDraft.revenueHeaderText,
+    subtitleOne: manualDraft.subtitleOne,
+    subtitleTwo: manualDraft.subtitleTwo,
+    revenueUnitPrice: manualDraft.revenueUnitPrice,
+    additionalContractCount: manualDraft.additionalContractCount,
+    manualSummary: manualDraft.manualSummary,
+    revenueRows: manualDraft.revenueRows || [],
+    fallbackSelectedCount: includedContracts.length,
+  })
+  const manualRevenueHeaderText = manualRevenueDisplay.header
+  const manualRevenueSubtitleOne = manualRevenueDisplay.subtitleOne
+  const manualRevenueSubtitleTwo = manualRevenueDisplay.subtitleTwo
+  const manualRevenueRows = buildRevenueRows(manualDraft.revenueRows || [])
+  const reportRevenueDisplay = buildRevenueDisplaySet({
+    revenueHeaderText: weeklyReport.revenueHeaderText,
+    subtitleOne: weeklyReport.subtitleOne,
+    subtitleTwo: weeklyReport.subtitleTwo,
+    revenueUnitPrice: weeklyReport.revenueUnitPrice,
+    additionalContractCount: weeklyReport.additionalContractCount,
+    manualSummary: weeklyReport.manualSummary || {},
+    revenueRows: weeklyReport.revenueRows || [],
+    fallbackSelectedCount: includedContracts.length,
+  })
+  // Weekly report should reference the persisted manual-input values, just like
+  // an Excel cell reference to saved cells.
+  const reportRevenueRows = buildRevenueRows(weeklyReport.revenueRows || [])
+  const revenueHeaderText = reportRevenueDisplay.header
+  const revenueSubtitleOne = reportRevenueDisplay.subtitleOne
+  const revenueSubtitleTwo = reportRevenueDisplay.subtitleTwo
+  const revenueNoteText = sanitizeText(
+    weeklyReport.revenueNoteText,
+    buildRevenueNoteText(weeklyReport?.baseDate, weeklyReport?.revenueUnitPrice),
   )
+  const manualGoalRows = buildGoalRows(manualDraft.goalRows || [])
+  const manualIndustryStats = buildIndustryStats(manualDraft.industryStats || [])
+  const manualSummary = manualDraft.manualSummary || {}
+  const monthLabels = Array.from({ length: 12 }, (_, index) => `${index + 1}월`)
+  const summaryMatrixRows = [
+    {
+      title: "단말기 순증 및 해지",
+      cells: [
+        ["주간순증 합계", "weeklyNetUnits"],
+        ["신규계약", "weeklyNewContracts"],
+        ["해지계약", "weeklyTerminationContracts"],
+        ["누적순증 합계", "cumulativeNetUnits"],
+        ["누적신규 계약", "cumulativeNewContracts"],
+        ["누적해지계약", "cumulativeTerminationContracts"],
+        ["총 계약대수", "totalContracts"],
+      ],
+    },
+    {
+      title: "경쟁사 단말기 교체 현황",
+      cells: [
+        ["신규계약 합계", "newContractTotal"],
+        ["타사교체", "competitorReplacement"],
+        ["신규계약", "newReplacement"],
+        ["단말 교체 현황", "competitorStatus"],
+      ],
+    },
+    {
+      title: "해지대기 및 청구보류",
+      cells: [
+        ["해지보류 합계", "holdTotal"],
+        ["해지대기", "holdPending"],
+        ["청구보류", "billingHold"],
+        ["해지 진행 현황", "holdStatus"],
+      ],
+    },
+    {
+      title: "단말기 해지 유형",
+      cells: [
+        ["단말해지 합계", "terminationTypeTotal"],
+        ["계약해지", "contractTermination"],
+        ["타사교체", "competitorTermination"],
+        ["타사 교체 현황", "competitorTerminationStatus"],
+      ],
+    },
+  ]
 
   return (
-    <div className="min-h-screen bg-[#f6f8fc] text-slate-900">
+    <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1720px]">
-        <aside className="w-[272px] border-r border-slate-200 bg-white px-4 py-4">
-          <div className="rounded-[28px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Marketing Division</div>
-            <div className="mt-3 text-[15px] font-extrabold leading-[1.45] tracking-[-0.04em] text-slate-900">
-              정보사업본부
-              <br />
-              통합 대시보드
+          <aside className="dashboard-sidebar w-[272px] border-r border-slate-200 bg-white px-4 py-4">
+            <div className="overflow-hidden rounded-[24px] border border-[#dbe7ff] bg-[linear-gradient(180deg,#ffffff_0%,#f5f9ff_100%)] px-5 py-4 shadow-[0_8px_20px_rgba(37,99,235,0.06)]">
+              <div className="flex items-center justify-start">
+                <img
+                  src="/yonhapinfomax-logo.png"
+                  alt="연합인포맥스"
+                  className="h-7 w-auto shrink-0 opacity-90"
+                />
+              </div>
+              <div
+                className="mt-2.5 text-[19px] font-black leading-[1.22] tracking-[-0.055em] text-[#1e3a8a]"
+                style={{ fontFamily: '"SUIT Variable","Pretendard Variable","Aptos","Noto Sans KR",sans-serif' }}
+              >
+                정보사업본부
+                <br />
+                통합 대시보드
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <div className="h-1.5 w-10 rounded-full bg-gradient-to-r from-[#2563eb] to-[#60a5fa]" />
+                <span
+                  className="text-[10px] font-medium tracking-[0.01em] text-[#8da0c2]"
+                  style={{ fontFamily: '"Aptos","SUIT Variable","Pretendard Variable","Noto Sans KR",sans-serif' }}
+                >
+                  Internal Dashboard
+                </span>
+              </div>
             </div>
-            <div className="mt-4 flex items-center gap-2">
-              <div className="h-1.5 w-11 rounded-full bg-blue-500" />
-              <span className="text-[11px] font-medium text-slate-400">Internal Dashboard</span>
-            </div>
-          </div>
 
           <div className="mt-8 space-y-5">
             <div>
@@ -990,26 +1682,59 @@ export function DashboardShell({
                 type="button"
                 onClick={() => setSections((prev) => ({ ...prev, performance: !prev.performance }))}
                 className="flex w-full items-center justify-between px-2 py-1 text-[15px] font-bold text-slate-900"
-              >
-                <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-blue-500" />실적 관리</span>
-                <span className="text-slate-400">{sections.performance ? "⌄" : "›"}</span>
-              </button>
-              {sections.performance && (
-                <div className="mt-2 space-y-1">
-                  {performanceViews.map((key) => (
+                >
+                  <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-blue-500" />실적 관리</span>
+                  <span className="text-slate-400">{sections.performance ? "⌄" : "›"}</span>
+                </button>
+                {sections.performance && (
+                  <div className="mt-2 space-y-1">
                     <button
-                      key={key}
                       type="button"
-                      onClick={() => setView(key)}
+                      onClick={() => setView("weekly-report")}
                       className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
-                        view === key ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                        view === "weekly-report" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
                       }`}
                     >
-                      {viewTitles[key]}
+                      {viewTitles["weekly-report"]}
                     </button>
-                  ))}
-                </div>
-              )}
+                    <button
+                      type="button"
+                      onClick={() => setView("manual-input")}
+                      className={`ml-4 flex h-10 w-[calc(100%-1rem)] items-center rounded-2xl px-4 text-left text-[14px] font-semibold ${
+                        view === "manual-input" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      수동 입력 리스트
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setView("contracts")}
+                      className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                        view === "contracts" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      {viewTitles.contracts}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setView("weekly-selection")}
+                      className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                        view === "weekly-selection" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      {viewTitles["weekly-selection"]}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setView("collection")}
+                      className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                        view === "collection" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      {viewTitles.collection}
+                    </button>
+                  </div>
+                )}
             </div>
 
             <div>
@@ -1039,12 +1764,21 @@ export function DashboardShell({
         </aside>
 
         <main className="flex-1 px-5 py-5">
-          <div className={`${cardClass} mb-5 flex items-start justify-between px-5 py-4`}>
+          <div className={`${cardClass} dashboard-header mb-5 flex items-start justify-between px-5 py-4`}>
             <div>
               <div className="text-[14px] text-slate-500">기준일 {weeklyReport.baseDate}</div>
               <h1 className="mt-2 text-[20px] font-black tracking-[-0.04em] text-slate-950">{viewTitles[view]}</h1>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="dashboard-header-actions flex items-center gap-3">
+              {view === "weekly-report" && (
+                <button
+                  type="button"
+                  onClick={handleWeeklyReportPrint}
+                  className="h-11 rounded-2xl bg-blue-600 px-4 text-[14px] font-semibold text-white transition hover:bg-blue-700"
+                >
+                  PDF 출력
+                </button>
+              )}
               <div className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-700">
                 {currentYear}년도
               </div>
@@ -1060,65 +1794,258 @@ export function DashboardShell({
           </div>
 
           {view === "weekly-report" && (
-            <div className="space-y-4">
-              <section className={`${cardClass} p-5`}>
-                <div className="mb-4 text-[18px] font-bold">계약 내역</div>
+            <div className="weekly-report-print space-y-4">
+              <section className="print-report-cover hidden print:block">
+                <div className="print-report-header-row">
+                  <div className="print-report-spacer" />
+                  <div className="print-report-date">기준일 {weeklyReport.baseDate}</div>
+                </div>
+                <div className="print-report-title">주간실적보고</div>
+              </section>
+
+              <section className={`${cardClass} p-5 print-report-sheet-section`}>
+                <div className="mb-3 text-[18px] font-bold print-report-section-title">계약 내역</div>
                 <div className="overflow-hidden rounded-2xl border border-slate-200">
-                  <table className={tableClass}>
-                    <thead><tr>{["회사명","부서","아이디","업종","계약월","계약서 회수","미회수"].map((head)=><th key={head} className={thClass}>{head}</th>)}</tr></thead>
+                  <table className={`${weeklyReportTableClass} print-contract-table`}>
+                    <thead><tr>{["회사명","부서","아이디","업종","계약월","계약서 회수","미회수"].map((head)=><th key={head} className={weeklyThClass}>{head}</th>)}</tr></thead>
                     <tbody>
                       {includedContracts.length ? includedContracts.map((row: any) => (
                         <tr key={row.id}>
-                          <td className={tdClass}>{row.companyName}</td>
-                          <td className={tdClass}>{row.departmentName}</td>
-                          <td className={tdClass}>{row.idCode}</td>
-                          <td className={tdClass}>{row.industry}</td>
-                          <td className={tdClass}>{row.contractMonth}</td>
-                          <td className={tdClass}>{row.documentStatus === "회수" ? "o" : ""}</td>
-                          <td className={tdClass}>{row.documentStatus === "미회수" ? "o" : ""}</td>
+                          <td className={`${weeklyTdClass} text-left`}>{row.companyName}</td>
+                          <td className={`${weeklyTdClass} text-left`}>{row.departmentName}</td>
+                          <td className={weeklyTdClass}>{row.idCode}</td>
+                          <td className={weeklyTdClass}>{row.industry}</td>
+                          <td className={weeklyTdClass}>{row.contractMonth}</td>
+                          <td className={weeklyTdClass}>{row.documentStatus === "회수" ? "o" : ""}</td>
+                          <td className={weeklyTdClass}>{row.documentStatus === "미회수" ? "o" : ""}</td>
                         </tr>
-                      )) : <tr><td className={tdClass} colSpan={7}>금주 반영 계약이 없습니다.</td></tr>}
+                      )) : <tr><td className={weeklyTdClass} colSpan={7}>금주 반영 계약이 없습니다.</td></tr>}
                     </tbody>
                   </table>
                 </div>
               </section>
 
-              <section className={`${cardClass} p-5`}>
+              <section className={`${cardClass} p-5 print-report-sheet-section`}>
+                <div className="mb-1.5 border border-slate-200 bg-slate-50/70 px-3 py-2 print-revenue-meta">
+                  <div className="print-revenue-strip">
+                    <div className="print-revenue-copy">
+                      <div className="print-revenue-main">{revenueHeaderText}</div>
+                      <div className="print-revenue-sub">{revenueSubtitleOne} <span className="print-revenue-sep">/</span> {revenueSubtitleTwo}</div>
+                    </div>
+                    <div className="print-revenue-note">{revenueNoteText}</div>
+                  </div>
+                </div>
                 <div className="overflow-hidden rounded-2xl border border-slate-200">
-                  <table className={tableClass}>
-                    <thead><tr>{["구분(월)","1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월","합계"].map((head)=><th key={head} className={thClass}>{head}</th>)}</tr></thead>
+                  <table className={`${weeklyReportTableClass} print-revenue-table`}>
+                    <thead><tr>{["구분(월)","1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월","합계"].map((head)=><th key={head} className={weeklyThClass}>{head}</th>)}</tr></thead>
                     <tbody>
-                      {(weeklyReport.revenueRows || []).map((row: any) => {
+                      {reportRevenueRows.map((row: any) => {
                         const total = (row.months || []).reduce((sum: number, value: number) => sum + toNumber(value), 0)
                         return (
                           <tr key={row.key}>
-                            <td className={`${tdClass} font-semibold`}>{row.label}</td>
-                            {(row.months || []).map((monthValue: number, index: number) => <td key={`${row.key}-${index}`} className={tdClass}>{formatNumber(monthValue)}</td>)}
-                            <td className={`${tdClass} font-semibold`}>{formatNumber(total)}</td>
+                            <td className={`${weeklyTdClass} font-semibold`}>{row.label}</td>
+                            {(row.months || []).map((monthValue: number, index: number) => <td key={`${row.key}-${index}`} className={weeklyTdClass}>{formatNumber(monthValue)}</td>)}
+                            <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(total)}</td>
                           </tr>
                         )
                       })}
                     </tbody>
                   </table>
                 </div>
-                <div className="mt-3 text-[13px] font-semibold text-slate-700">{revenueHeaderText}</div>
-                <div className="mt-1 text-[12px] text-slate-500">{sanitizeText(weeklyReport.subtitleOne, "2025년 순증 매출")} / {sanitizeText(weeklyReport.subtitleTwo, "연간 누적 매출")}</div>
               </section>
 
-              <section className={`${cardClass} p-5`}>
+              <section className={`${cardClass} p-5 print-report-sheet-section`}>
                 <div className="overflow-hidden rounded-2xl border border-slate-200">
-                  <table className={tableClass}>
-                    <thead><tr>{summaryPairs(weeklyReport.manualSummary).map(([label]) => <th key={label} className={thClass}>{label}</th>)}</tr></thead>
-                    <tbody><tr>{summaryPairs(weeklyReport.manualSummary).map(([label, value]) => <td key={label} className={`${tdClass} text-center font-semibold`}>{value}</td>)}</tr></tbody>
+                  <table className={`${weeklyReportTableClass} print-combined-summary-table`}>
+                    <colgroup>
+                      <col style={{ width: "18%" }} />
+                      <col style={{ width: "12%" }} />
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "14%" }} />
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "24%" }} />
+                    </colgroup>
+                    <tbody>
+                      <tr>
+                        <th className={`${weeklyThClass} font-bold`} rowSpan={2}>단말기 순증 및 해지</th>
+                        <th className={weeklyThClass}>주간순증 합계</th>
+                        <th className={weeklyThClass}>신규계약</th>
+                        <th className={weeklyThClass}>해지계약</th>
+                        <th className={weeklyThClass}>누적순증 합계</th>
+                        <th className={weeklyThClass}>신규계약</th>
+                        <th className={weeklyThClass}>계약해지</th>
+                        <th className={weeklyThClass}>총 계약대수</th>
+                      </tr>
+                      <tr>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.weeklyNetUnits)}대</td>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.weeklyNewContracts)}대</td>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.weeklyTerminationContracts)}대</td>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.cumulativeNetUnits)}대</td>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.cumulativeNewContracts)}대</td>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.cumulativeTerminationContracts)}대</td>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.totalContracts)}대</td>
+                      </tr>
+
+                      <tr>
+                        <th className={`${weeklyThClass} font-bold`} rowSpan={2}>경쟁사 단말기 교체 현황</th>
+                        <th className={weeklyThClass}>신규계약 합계</th>
+                        <th className={weeklyThClass}>타사교체</th>
+                        <th className={weeklyThClass}>신규계약</th>
+                        <th className={weeklyThClass} colSpan={4}>단말 교체 현황</th>
+                      </tr>
+                      <tr>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.newContractTotal)}대</td>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.competitorReplacement)}대</td>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.newReplacement)}대</td>
+                        <td className={`${weeklyTdClass} text-left print-summary-detail-cell`} colSpan={4}>{reportSummary?.competitorStatus || ""}</td>
+                      </tr>
+
+                      <tr>
+                        <th className={`${weeklyThClass} font-bold`} rowSpan={2}>해지대기 및 청구보류</th>
+                        <th className={weeklyThClass}>해지보류 합계</th>
+                        <th className={weeklyThClass}>해지대기</th>
+                        <th className={weeklyThClass}>청구보류</th>
+                        <th className={weeklyThClass} colSpan={4}>해지 진행 현황</th>
+                      </tr>
+                      <tr>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.holdTotal)}대</td>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.holdPending)}대</td>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.billingHold)}대</td>
+                        <td className={`${weeklyTdClass} text-left print-summary-detail-cell`} colSpan={4}>{reportSummary?.holdStatus || ""}</td>
+                      </tr>
+
+                      <tr>
+                        <th className={`${weeklyThClass} font-bold`} rowSpan={2}>단말기 해지 유형</th>
+                        <th className={weeklyThClass}>단말해지 합계</th>
+                        <th className={weeklyThClass}>계약해지</th>
+                        <th className={weeklyThClass}>타사교체</th>
+                        <th className={weeklyThClass} colSpan={4}>타사 교체 현황</th>
+                      </tr>
+                      <tr>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.terminationTypeTotal)}대</td>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.contractTermination)}대</td>
+                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.competitorTermination)}대</td>
+                        <td className={`${weeklyTdClass} text-left print-summary-detail-cell`} colSpan={4}>{reportSummary?.competitorTerminationStatus || ""}</td>
+                      </tr>
+                    </tbody>
                   </table>
                 </div>
               </section>
+
+              <section className={`${cardClass} p-5 space-y-3 print-report-sheet-section`}>
+                <div className="text-[18px] font-bold print-report-section-title">2026년 판매 목표</div>
+                <div className="overflow-hidden rounded-2xl border border-slate-200">
+                  <table className={`${weeklyReportTableClass} print-goal-table`}>
+                    <thead>
+                      <tr>{["구분(월)", "순증", "목표계약대수", "분기순증목표", "월간실적", "분기실적", "목표대비 달성현황"].map((head) => <th key={head} className={weeklyThClass}>{head}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {reportGoalRows.map((row: any, index: number) => (
+                        <tr key={`${row.month}-${index}`}>
+                          <td className={weeklyTdClass}>{row.month}</td>
+                          <td className={weeklyTdClass}>{formatNumber(row.netTarget)}</td>
+                          <td className={weeklyTdClass}>{formatNumber(row.targetContracts)}</td>
+                          <td className={weeklyTdClass}>{formatNumber(row.quarterNetTarget)}</td>
+                          <td className={weeklyTdClass}>{formatNumber(row.monthlyActual)}</td>
+                          <td className={weeklyTdClass}>{formatNumber(row.quarterActual)}</td>
+                          <td className={weeklyTdClass}>{formatNumber(row.gap)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className={`${cardClass} p-5 space-y-3 print-report-sheet-section`}>
+                <div className="text-[18px] font-bold print-report-section-title">정보사업본부 업종별 실적 현황</div>
+                <div className="overflow-hidden rounded-2xl border border-slate-200">
+                  <table className={`${weeklyReportTableClass} print-industry-table`}>
+                    <thead>
+                      <tr>{["구분", ...reportIndustryStats.map((row: any) => row.category)].map((head) => <th key={head} className={weeklyThClass}>{head}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className={`${weeklyTdClass} font-semibold`}>신규</td>
+                        {reportIndustryStats.map((row: any, index: number) => <td key={`new-${index}`} className={weeklyTdClass}>{formatNumber(row.newCount)}</td>)}
+                      </tr>
+                      <tr>
+                        <td className={`${weeklyTdClass} font-semibold`}>순증</td>
+                        {reportIndustryStats.map((row: any, index: number) => <td key={`net-${index}`} className={weeklyTdClass}>{formatNumber(row.netCount)}</td>)}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
             </div>
           )}
 
           {view === "contracts" && (
             <div className={`${cardClass} p-5`}>
               <div className="mb-3 flex items-center justify-between"><div className="text-[18px] font-bold">신규계약 리스트</div><div className="text-[13px] text-slate-500">총 {formatNumber(contracts.length)}건</div></div>
+              <div className="mb-4 grid gap-3 xl:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2.5">
+                  <div className="mb-1.5 text-[13px] font-bold text-slate-900">월별 실적 통계</div>
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <table className="w-full text-[13px]">
+                      {contractMonthRows.map((chunk, rowIndex) => (
+                        <tbody key={`contract-month-block-${rowIndex}`}>
+                          <tr>
+                            {chunk.map((row) => (
+                              <th key={`contract-month-label-${row.label}`} className="border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-[12px] font-semibold text-slate-600">
+                                {row.label.replace(/^\d{2}년\s*/, "")}
+                              </th>
+                            ))}
+                          </tr>
+                          <tr>
+                            {chunk.map((row) => (
+                              <td key={`contract-month-value-${row.label}`} className="border-b border-slate-200 px-2 py-1.5 text-center text-[14px] font-bold text-slate-900">
+                                {formatNumber(row.count)}
+                              </td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      ))}
+                    </table>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2.5">
+                  <div className="mb-1.5 text-[13px] font-bold text-slate-900">권유자별 실적 통계</div>
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <table className="w-full text-[13px]">
+                      <tbody>
+                        {contractRecommenderRows.map((chunk, rowIndex) => (
+                          <tr key={`contract-recommender-row-${rowIndex}`}>
+                            {chunk.map((row) => (
+                              [
+                                <th key={`contract-recommender-label-${row.label}`} className="border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-[12px] font-semibold text-slate-600">
+                                  {row.label}
+                                </th>,
+                                <td key={`contract-recommender-value-${row.label}`} className="border-b border-slate-200 px-2 py-1.5 text-center text-[14px] font-bold text-slate-900">
+                                  {formatNumber(row.count)}
+                                </td>,
+                              ]
+                            ))}
+                            {chunk.length < 4 &&
+                              Array.from({ length: 4 - chunk.length }).map((_, index) => (
+                                [
+                                  <th key={`contract-recommender-empty-h-${rowIndex}-${index}`} className="border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-[12px] font-semibold text-slate-300">
+                                    -
+                                  </th>,
+                                  <td key={`contract-recommender-empty-v-${rowIndex}-${index}`} className="border-b border-slate-200 px-2 py-1.5 text-center text-[14px] font-bold text-slate-300">
+                                    0
+                                  </td>,
+                                ]
+                              ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
               <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="mb-3 text-[14px] font-bold text-slate-800">신규계약 입력</div>
                 <div className="grid grid-cols-7 gap-3">
@@ -1145,12 +2072,13 @@ export function DashboardShell({
               </div>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className={tableClass}>
-                  <thead><tr>{["회사명","부서","아이디","업종","계약월","권유자","계약서 상태","작업"].map((head)=><th key={head} className={thClass}>{head}</th>)}</tr></thead>
+                  <thead><tr>{["No.","회사명","부서","아이디","업종","계약월","권유자","계약서 상태","작업"].map((head)=><th key={head} className={head === "No." ? `${thClass} text-center` : thClass}>{head}</th>)}</tr></thead>
                   <tbody>
-                    {contracts.map((row: any) => {
+                    {contracts.map((row: any, index: number) => {
                       const editing = editingContractId === row.id
                       return (
                         <tr key={row.id}>
+                          <td className={`${tdClass} w-16 text-center`}>{row.no || index + 1}</td>
                           <td className={`${tdClass} min-w-[180px]`}>
                             {editing ? <input className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingContractDraft.companyName || ""} onChange={(e)=>updateEditingContractDraft("companyName", e.target.value)} /> : row.companyName}
                           </td>
@@ -1203,7 +2131,20 @@ export function DashboardShell({
 
           {view === "weekly-selection" && (
             <div className={`${cardClass} p-5`}>
-              <div className="mb-3 flex items-center justify-between"><div className="text-[18px] font-bold">주간 반영 리스트</div><div className="text-[13px] text-slate-500">현재 {formatNumber(contracts.length)}건 / 선택 {formatNumber(includedContracts.length)}건</div></div>
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <div className="text-[18px] font-bold">주간 반영 리스트</div>
+                <div className="flex items-center gap-3">
+                  <div className="text-[13px] text-slate-500">현재 {formatNumber(contracts.length)}건 / 선택 {formatNumber(includedContracts.length)}건</div>
+                  <button
+                    type="button"
+                    onClick={handleMoveWeeklySelectionToCollection}
+                    disabled={!includedContracts.length || isPending}
+                    className="rounded-xl bg-blue-600 px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    계약서 통합관리로 이동
+                  </button>
+                </div>
+              </div>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className={tableClass}>
                   <thead><tr>{["선택","No.","회사명","부서명","ID","업종","계약월","권유자","계약서 상태"].map((head)=><th key={head} className={thClass}>{head}</th>)}</tr></thead>
@@ -1235,31 +2176,239 @@ export function DashboardShell({
 
           {view === "manual-input" && (
             <div className={`${cardClass} space-y-4 p-5`}>
-              <div className="flex items-center justify-between"><div className="text-[18px] font-bold">수동 입력 리스트</div><div className="text-[12px] font-semibold text-slate-400">핵심 지표</div></div>
-              <div className="grid grid-cols-3 gap-3">
-                <label className="space-y-2"><div className="text-[12px] font-semibold text-slate-500">매출 헤더</div><input className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-[14px]" value={manualDraft.revenueHeaderText} onChange={(e)=>updateManualField("revenueHeaderText", e.target.value)} /></label>
-                <label className="space-y-2"><div className="text-[12px] font-semibold text-slate-500">매출 부제 1</div><input className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-[14px]" value={manualDraft.subtitleOne} onChange={(e)=>updateManualField("subtitleOne", e.target.value)} /></label>
-                <label className="space-y-2"><div className="text-[12px] font-semibold text-slate-500">매출 부제 2</div><input className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-[14px]" value={manualDraft.subtitleTwo} onChange={(e)=>updateManualField("subtitleTwo", e.target.value)} /></label>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-[18px] font-bold text-slate-900">수동 입력 리스트</div>
+                  <div className="mt-1 text-[12px] font-semibold text-amber-600">(음영처리된 부분은 자동계산 반영)</div>
+                </div>
+                <button type="button" onClick={handleManualUpdate} className="h-10 shrink-0 rounded-2xl bg-blue-600 px-5 text-[14px] font-semibold text-white">
+                  {isPending ? "업데이트 중..." : "업데이트"}
+                </button>
               </div>
-              <div className="grid grid-cols-7 gap-3">
-                {[
-                  ["weeklyNetUnits", "주간순증 합계"],
-                  ["weeklyNewContracts", "신규계약"],
-                  ["weeklyTerminationContracts", "해지계약"],
-                  ["cumulativeNetUnits", "누적순증 합계"],
-                  ["cumulativeNewContracts", "누적신규 계약"],
-                  ["cumulativeTerminationContracts", "누적해지계약"],
-                  ["totalContracts", "총 계약대수"],
-                ].map(([field, label]) => (
-                  <label key={field} className="space-y-2">
-                    <div className="text-[12px] font-semibold text-slate-500">{label}</div>
-                    <input className="h-10 w-full rounded-2xl border border-slate-200 px-4 text-[14px]" value={String(manualDraft.manualSummary?.[field] ?? "")} onChange={(e)=>updateManualSummaryField(field, e.target.value)} />
+
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className={manualSectionTitleClass}>매출 자동계산 설정</div>
+                    <div className="text-[11px] font-medium text-slate-500">(주간반영 선택계약수 × 단가) + 추가계약 금액</div>
+                  </div>
+                </div>
+                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_180px_220px]">
+                  <label className="space-y-1.5">
+                    <div className="text-[12px] font-semibold text-slate-500">
+                      매출 헤더 <span className="text-amber-600">(자동계산)</span>
+                    </div>
+                    <input
+                      className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
+                      value={manualRevenueHeaderText}
+                      readOnly
+                    />
                   </label>
+                  <label className="space-y-1.5">
+                    <div className="text-[12px] font-semibold text-slate-500">
+                      단가 <span className="text-amber-600">(자동계산 반영)</span>
+                    </div>
+                    <input
+                      className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
+                      inputMode="numeric"
+                      value={formatNumericInputDisplay(manualDraft.revenueUnitPrice)}
+                      onChange={(e) => updateManualField("revenueUnitPrice", e.target.value)}
+                    />
+                  </label>
+                  <label className="space-y-1.5">
+                    <div className="text-[12px] font-semibold text-slate-500">
+                      추가 계약 금액
+                    </div>
+                    <input
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[14px]"
+                      inputMode="numeric"
+                      placeholder="예: 1,000,000"
+                      value={formatNumericInputDisplay(manualDraft.additionalContractCount)}
+                      onChange={(e) => updateManualField("additionalContractCount", e.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-3 xl:grid-cols-2">
+                  <label className="space-y-1.5">
+                    <div className="text-[12px] font-semibold text-slate-500">
+                      연간 순증 매출 <span className="text-amber-600">(자동계산)</span>
+                    </div>
+                    <input
+                      className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
+                      value={manualRevenueSubtitleOne}
+                      readOnly
+                    />
+                  </label>
+                  <label className="space-y-1.5">
+                    <div className="text-[12px] font-semibold text-slate-500">
+                      연간 누적 매출 <span className="text-amber-600">(자동계산)</span>
+                    </div>
+                    <input
+                      className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
+                      value={manualRevenueSubtitleTwo}
+                      readOnly
+                    />
+                  </label>
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-slate-200">
+                  <table className={tableClass}>
+                    <thead>
+                      <tr>
+                        <th className={manualHeaderCellClass}>구분(월)</th>
+                        {monthLabels.map((label) => (
+                          <th key={label} className={manualHeaderCellClass}>{label}</th>
+                        ))}
+                        <th className={manualHeaderCellClass}>합계</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {manualRevenueRows.map((row, rowIndex) => {
+                        const total = (row.months || []).reduce((sum: number, value: number) => sum + toNumber(value), 0)
+                        return (
+                          <tr key={row.key || rowIndex}>
+                            <td className={manualLabelCellClass}>{row.label}</td>
+                            {(row.months || []).map((monthValue: number, monthIndex: number) => (
+                              <td key={`${row.key}-${monthIndex}`} className={`${tdClass} p-1`}>
+                                <input
+                                  className={manualTableInputClass}
+                                  value={String(monthValue ?? "")}
+                                  onChange={(e) => updateManualRevenueCell(rowIndex, monthIndex, e.target.value)}
+                                />
+                              </td>
+                            ))}
+                            <td className={`${tdClass} w-[96px] text-center font-semibold`}>{formatNumber(total)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {summaryMatrixRows.map((section) => (
+                  <div key={section.title} className="overflow-hidden rounded-2xl border border-slate-200">
+                    <table className={tableClass}>
+                      <tbody>
+                        <tr>
+                          <th className={`${manualHeaderCellClass} w-[220px] text-[15px] font-bold`}>{section.title}</th>
+                          {section.cells.map(([label]) => (
+                            <th key={`${section.title}-${label}`} className={manualHeaderCellClass}>{label}</th>
+                          ))}
+                        </tr>
+                        <tr>
+                          <td className={`${tdClass} bg-white`} />
+                          {section.cells.map(([label, field]) => (
+                            <td key={`${section.title}-${field}`} className={`${tdClass} p-1`}>
+                              <input
+                                className={manualTableInputClass}
+                                value={String(manualSummary?.[field] ?? "")}
+                                onChange={(e) => updateManualSummaryField(field, e.target.value)}
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 ))}
               </div>
-              <div className="flex justify-end">
-                <button type="button" onClick={handleManualUpdate} className="h-11 rounded-2xl bg-blue-600 px-5 text-[14px] font-semibold text-white">{isPending ? "업데이트 중..." : "업데이트"}</button>
+
+              <div className="overflow-hidden rounded-2xl border border-slate-200">
+                <table className={tableClass}>
+                  <thead>
+                    <tr>
+                      <th colSpan={7} className={manualTableTitleRowClass}>
+                        2026년 판매 목표
+                      </th>
+                    </tr>
+                    <tr>
+                      {["구분(월)", "순증", "목표계약대수", "분기순증목표", "월간실적", "분기실적", "목표대비 달성현황"].map((head) => (
+                        <th key={head} className={manualHeaderCellClass}>{head}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manualGoalRows.map((row: any, rowIndex: number) => (
+                      <tr key={`${row.month}-${rowIndex}`}>
+                        <td className={manualLabelCellClass}>{row.month}</td>
+                        {["netTarget", "targetContracts", "quarterNetTarget", "monthlyActual", "quarterActual", "gap"].map((field) => (
+                          <td key={field} className={`${tdClass} p-1`}>
+                            <input
+                              className={manualTableInputClass}
+                              value={String(row[field] ?? "")}
+                              onChange={(e) => updateManualGoalRow(rowIndex, field, e.target.value)}
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
+
+              <div className="overflow-hidden rounded-2xl border border-slate-200">
+                <table className={tableClass}>
+                  <thead>
+                    <tr>
+                      <th colSpan={4} className={manualTableTitleRowClass}>
+                        업종별 실적 입력
+                      </th>
+                    </tr>
+                    <tr>
+                      {["구분", "업종", "신규", "순증"].map((head) => (
+                        <th key={head} className={manualHeaderCellClass}>{head}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manualIndustryStats.map((row: any, rowIndex: number) => (
+                      <tr key={`${row.category}-${rowIndex}`}>
+                        <td className={`${tdClass} text-center`}>{rowIndex + 1}</td>
+                        <td className={`${tdClass} p-1`}>
+                          <input
+                            className={manualTableTextInputClass}
+                            value={String(row.category ?? "")}
+                            onChange={(e) => updateManualIndustryRow(rowIndex, "category", e.target.value)}
+                          />
+                        </td>
+                        <td className={`${tdClass} p-1`}>
+                          <input
+                            className={manualTableInputClass}
+                            value={String(row.newCount ?? "")}
+                            onChange={(e) => updateManualIndustryRow(rowIndex, "newCount", e.target.value)}
+                          />
+                        </td>
+                        <td className={`${tdClass} p-1`}>
+                          <input
+                            className={manualTableInputClass}
+                            value={String(row.netCount ?? "")}
+                            onChange={(e) => updateManualIndustryRow(rowIndex, "netCount", e.target.value)}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="space-y-3 rounded-2xl border border-slate-200 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-[15px] font-bold text-slate-900">추가 매출</div>
+                  <button type="button" onClick={addAdditionalSaleRow} className="rounded-xl border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700">행 추가</button>
+                </div>
+                <div className="space-y-2">
+                  {normalizeAdditionalSalesRows(manualDraft.additionalSales || []).map((row: any, rowIndex: number) => (
+                    <div key={`manual-additional-${rowIndex}`} className="grid grid-cols-[1.3fr_1fr_1.5fr_auto] gap-2">
+                      <input className={manualTableTextInputClass} placeholder="항목" value={String(row.label ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "label", e.target.value)} />
+                      <input className={manualTableInputClass} placeholder="금액" value={String(row.amount ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "amount", e.target.value)} />
+                      <input className={manualTableTextInputClass} placeholder="비고" value={String(row.note ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "note", e.target.value)} />
+                      <button type="button" onClick={() => deleteAdditionalSaleRow(rowIndex)} className="rounded-xl border border-rose-200 px-3 py-1.5 text-[12px] font-semibold text-rose-600">삭제</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -1295,6 +2444,34 @@ export function DashboardShell({
                   ].map(([value, label]) => (
                     <button key={value} type="button" onClick={() => setCollectionStatusFilter(value)} className={`rounded-2xl px-3 py-2 text-[13px] font-semibold ${collectionStatusFilter === value ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>{label}</button>
                   ))}
+                </div>
+              </div>
+              <div className={`${cardClass} p-3`}>
+                <div className="mb-2 text-[15px] font-bold text-slate-900">업종별 현황</div>
+                <div className="overflow-hidden rounded-xl border border-slate-200">
+                  <table className={tableClass}>
+                    <thead>
+                      <tr>
+                        {["구분", ...collectionIndustryMatrix.headers].map((head) => (
+                          <th key={head} className={`${thClass} text-center`}>
+                            {head}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {collectionIndustryMatrix.rows.map((row) => (
+                        <tr key={`industry-summary-row-${row.label}`}>
+                          <td className={`${tdClass} text-center font-medium`}>{row.label}</td>
+                          {row.values.map((value: number, index: number) => (
+                            <td key={`${row.label}-${index}`} className={`${tdClass} text-center`}>
+                              {formatNumber(value)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
               <div className={`${cardClass} p-5`}>
@@ -1339,26 +2516,16 @@ export function DashboardShell({
                             </td>
                             <td className={tdClass}>
                               {editing ? (
-                                <span
-                                  className={`inline-flex rounded-full px-3 py-1 text-[12px] font-semibold ${
-                                    row.status === "회수"
-                                      ? "bg-emerald-50 text-emerald-700"
-                                      : row.status === "미회수"
-                                        ? "bg-rose-50 text-rose-700"
-                                        : "bg-slate-100 text-slate-600"
-                                  }`}
-                                >
-                                  {row.status || "미정"}
-                                </span>
+                                renderStatusBadge(row.status)
                               ) : (
-                                <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1">
+                                <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 p-0.5">
                                   <button
                                     type="button"
                                     onClick={() => handleCollectionStatusToggle(row.id, "회수")}
-                                    className={`rounded-lg px-3 py-1 text-[12px] font-semibold leading-none transition ${
+                                    className={`min-w-[42px] rounded-[6px] px-2 py-1 text-[11px] font-semibold leading-none transition ${
                                       row.status === "회수"
-                                        ? "bg-emerald-50 text-emerald-700"
-                                        : "text-slate-500 hover:bg-white"
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : "bg-transparent text-slate-500 hover:bg-white"
                                     }`}
                                   >
                                     회수
@@ -1366,10 +2533,10 @@ export function DashboardShell({
                                   <button
                                     type="button"
                                     onClick={() => handleCollectionStatusToggle(row.id, "미회수")}
-                                    className={`rounded-lg px-3 py-1 text-[12px] font-semibold leading-none transition ${
+                                    className={`min-w-[48px] rounded-[6px] px-2 py-1 text-[11px] font-semibold leading-none transition ${
                                       row.status === "미회수"
-                                        ? "bg-rose-50 text-rose-700"
-                                        : "text-slate-500 hover:bg-white"
+                                        ? "bg-rose-100 text-rose-800"
+                                        : "bg-transparent text-slate-500 hover:bg-white"
                                     }`}
                                   >
                                     미회수
@@ -1435,8 +2602,8 @@ export function DashboardShell({
                     <div className="mt-1 space-y-1 text-[13px] text-slate-600">{(selectedSheet.guidelines || []).map((line: string) => <div key={line}>{line}</div>)}</div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"><div className="text-[12px] text-slate-500">금주 해지 건수</div><div className="mt-1 text-[20px] font-extrabold">{formatNumber(selectedSheet.weeklyTerminationCount)}건</div></div>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"><div className="text-[12px] text-slate-500">금주 청구보류 건수</div><div className="mt-1 text-[20px] font-extrabold">{formatNumber(selectedSheet.weeklyBillingHoldCount)}건</div></div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"><div className="text-[12px] text-slate-500">금주 해지 건수</div><div className="mt-1 text-[20px] font-extrabold">{formatNumber(visibleWeeklyTerminationCount)}건</div></div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"><div className="text-[12px] text-slate-500">금주 청구보류 건수</div><div className="mt-1 text-[20px] font-extrabold">{formatNumber(visibleWeeklyBillingHoldCount)}건</div></div>
                   </div>
                 </div>
                 <div className="mb-4 flex flex-wrap items-center gap-2">
