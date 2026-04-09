@@ -136,6 +136,78 @@
   }
 }
 
+.print-revenue-meta {
+  padding: 8px 12px;
+  border-bottom: 1px solid #d8e2f0;
+  background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
+}
+
+.print-revenue-strip {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.print-revenue-copy {
+  min-width: 0;
+  flex: 1 1 62%;
+}
+
+.print-revenue-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.print-revenue-kpi {
+  min-width: 0;
+  border: 1px solid #dbe7f5;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 8px 12px;
+}
+
+.print-revenue-kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #64748b;
+}
+
+.print-revenue-kpi-value {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.print-revenue-note {
+  flex: 0 0 34%;
+  max-width: 34%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #64748b;
+  word-break: keep-all;
+}
+
+.print-revenue-note-block + .print-revenue-note-block {
+  margin-top: 6px;
+}
+
+.print-revenue-note-value {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #475569;
+  text-align: right;
+}
+
 @media print {
   @page {
     size: A4 portrait;
@@ -338,54 +410,89 @@
   }
 
   .weekly-report-print .print-revenue-meta {
-    padding: 3px 6px !important;
-    border-bottom: 1px solid #d7e1ee !important;
-    background: #f8fbff !important;
+    padding: 4px 6px !important;
+    border: 1px solid #d7e1ee !important;
+    border-bottom: 0 !important;
+    background: #fbfdff !important;
   }
 
   .weekly-report-print .print-revenue-strip {
-    display: flex !important;
-    align-items: flex-start !important;
-    justify-content: space-between !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 63%) minmax(0, 37%) !important;
+    align-items: start !important;
     gap: 8px !important;
   }
 
   .weekly-report-print .print-revenue-copy {
     min-width: 0 !important;
-    flex: 1 1 60% !important;
   }
 
-  .weekly-report-print .print-revenue-main {
-    font-size: 11px !important;
+  .weekly-report-print .print-revenue-kpis {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 2px !important;
+  }
+
+  .weekly-report-print .print-revenue-kpi {
+    display: flex !important;
+    align-items: baseline !important;
+    justify-content: flex-start !important;
+    gap: 6px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  .weekly-report-print .print-revenue-kpi-label {
+    font-size: 8px !important;
+    font-weight: 700 !important;
+    line-height: 1.15 !important;
+    color: #64748b !important;
+    white-space: nowrap !important;
+  }
+
+  .weekly-report-print .print-revenue-kpi-value {
+    margin-top: 0 !important;
+    font-size: 10px !important;
     font-weight: 800 !important;
-    line-height: 1.2 !important;
+    line-height: 1.18 !important;
     color: #0f172a !important;
     white-space: nowrap !important;
   }
 
-  .weekly-report-print .print-revenue-sub {
-    margin-top: 1px !important;
-    font-size: 9.2px !important;
-    line-height: 1.2 !important;
-    color: #475569 !important;
-    white-space: nowrap !important;
-  }
-
-  .weekly-report-print .print-revenue-sep {
-    padding: 0 4px !important;
-    color: #94a3b8 !important;
-  }
-
   .weekly-report-print .print-revenue-note {
-    flex: 0 0 36% !important;
-    max-width: 36% !important;
-    font-size: 7.5px !important;
-    line-height: 1.2 !important;
-    text-align: right !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+    font-size: 7.2px !important;
+    line-height: 1.22 !important;
     color: #64748b !important;
     white-space: normal !important;
     word-break: keep-all !important;
     overflow-wrap: break-word !important;
+  }
+
+  .weekly-report-print .print-revenue-note-block + .print-revenue-note-block {
+    margin-top: 2px !important;
+  }
+
+  .weekly-report-print .print-revenue-note-value {
+    max-width: 100% !important;
+    font-size: 7.2px !important;
+    line-height: 1.22 !important;
+    color: #64748b !important;
+    text-align: right !important;
+    white-space: normal !important;
+    word-break: keep-all !important;
+    overflow-wrap: break-word !important;
+  }
+
+  .weekly-report-print .print-contract-table td:nth-child(1),
+  .weekly-report-print .print-contract-table td:nth-child(2) {
+    text-align: center !important;
   }
 
   .weekly-report-print .print-goal-table th,
@@ -467,8 +574,4 @@
     text-align: center !important;
   }
 
-  .weekly-report-print .print-revenue-main,
-  .weekly-report-print .print-revenue-sub {
-    text-align: left !important;
-  }
 }

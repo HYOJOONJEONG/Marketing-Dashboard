@@ -6,7 +6,7 @@ const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
 
 export async function GET() {
   const content = await fs.readFile(DATA_PATH, "utf8")
-  return NextResponse.json(JSON.parse(content))
+  return NextResponse.json(JSON.parse(content.replace(/^\uFEFF/, "")))
 }
 
 export async function PUT(request: Request) {

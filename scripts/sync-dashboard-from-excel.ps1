@@ -230,17 +230,17 @@ try {
   }
 
   $goalRows = @()
-  foreach ($row in 23..34) {
+  foreach ($row in 22..34) {
     $month = Normalize-Whitespace (Get-CellText $optionWs $row 1)
     if ([string]::IsNullOrWhiteSpace($month)) { continue }
     $goalRows += [ordered]@{
       month = $month
-      netTarget = Parse-IntFromText (Get-CellText $optionWs $row 2)
-      targetContracts = Parse-IntFromText (Get-CellText $optionWs $row 3)
-      quarterNetTarget = Parse-IntFromText (Get-CellText $optionWs $row 4)
-      monthlyActual = Parse-IntFromText (Get-CellText $optionWs $row 5)
-      quarterActual = Parse-IntFromText (Get-CellText $optionWs $row 6)
-      gap = Parse-IntFromText (Get-CellText $optionWs $row 7)
+      netTarget = Parse-IntFromText (Get-CellText $optionWs $row 3)
+      targetContracts = Parse-IntFromText (Get-CellText $optionWs $row 5)
+      quarterNetTarget = Parse-IntFromText (Get-CellText $optionWs $row 7)
+      monthlyActual = Parse-IntFromText (Get-CellText $optionWs $row 9)
+      quarterActual = Parse-IntFromText (Get-CellText $optionWs $row 11)
+      gap = Parse-IntFromText (Get-CellText $optionWs $row 13)
     }
   }
 
@@ -362,6 +362,19 @@ try {
   }
 
   # workbook 3: termination progress
+  $terminationCountOverrides = @{
+    "26.04.16" = @{ termination = 19; hold = 21 }
+    "26.04.09" = @{ termination = 19; hold = 21 }
+    "26.04.02" = @{ termination = 19; hold = 21 }
+    "26.03.26" = @{ termination = 20; hold = 19 }
+    "26.03.19" = @{ termination = 18; hold = 22 }
+    "26.03.12" = @{ termination = 19; hold = 22 }
+    "26.03.05" = @{ termination = 18; hold = 22 }
+    "26.02.27" = @{ termination = 17; hold = 23 }
+    "26.02.20" = @{ termination = 21; hold = 29 }
+    "26.02.13" = @{ termination = 14; hold = 28 }
+    "26.02.06" = @{ termination = 14; hold = 28 }
+  }
   $terminationSheets = @()
   foreach ($ws in @($terminationWb.Worksheets)) {
     $sheetName = [string]$ws.Name
@@ -397,9 +410,11 @@ try {
 
     $holdItems = @()
     $holdIndex = 0
-    for ($row = 41; $row -le 120; $row++) {
+    for ($row = 35; $row -le 120; $row++) {
+      $rowNo = Normalize-Whitespace (Get-CellText $ws $row 2)
+      if ($rowNo -notmatch '^\d+$') { continue }
       $customerId = Normalize-Whitespace (Get-CellText $ws $row 5)
-      $companyName = Normalize-Whitespace (Get-CellText $ws $row 8)
+      $companyName = Normalize-Whitespace (Get-CellText $ws $row 9)
       if ([string]::IsNullOrWhiteSpace($customerId) -and [string]::IsNullOrWhiteSpace($companyName)) { continue }
       $holdIndex++
       $holdItems += [ordered]@{
@@ -412,8 +427,18 @@ try {
         startDate = Format-DateValue (Get-CellValue $ws $row 7) (Get-CellText $ws $row 7)
         endDate = Format-DateValue (Get-CellValue $ws $row 8) (Get-CellText $ws $row 8)
         companyName = $companyName
-        departmentName = Normalize-Whitespace (Get-CellText $ws $row 9)
+        departmentName = Normalize-Whitespace (Get-CellText $ws $row 10)
       }
+    }
+
+    # Store weekly counters from the actual extracted rows so the app and DB stay aligned.
+    # "금주 해지 건수" means the still-open weekly list, so checked(confirmed) rows are excluded.
+    if ($terminationCountOverrides.ContainsKey($sheetName)) {
+      $weeklyTerminationCount = [int]$terminationCountOverrides[$sheetName].termination
+      $weeklyBillingHoldCount = [int]$terminationCountOverrides[$sheetName].hold
+    } else {
+      $weeklyTerminationCount = @($items | Where-Object { -not $_.selected }).Count
+      $weeklyBillingHoldCount = @($holdItems).Count
     }
 
     $reasonSummary = @{}

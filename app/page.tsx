@@ -8,18 +8,17 @@ const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
 export default async function Page({
   searchParams,
 }: {
-  searchParams?: Promise<{ view?: string; sheet?: string; tab?: string }>
+  searchParams?: Promise<{ view?: string; tab?: string }>
 }) {
   const params = (await searchParams) || {}
   const content = await fs.readFile(DATA_PATH, "utf8")
-  const data = JSON.parse(content)
+  const data = JSON.parse(content.replace(/^\uFEFF/, ""))
 
   return (
     <DashboardShell
       initialData={data}
       initialView={(params.view as any) || "weekly-report"}
       initialCollectionTab={(params.tab as any) || "integrated"}
-      initialSheetId={params.sheet}
     />
   )
 }
