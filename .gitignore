@@ -13,6 +13,7 @@ node_modules/
 *.err
 *.out
 *.png
+!public/yonhapinfomax-logo.png
 *.zip
 *.tsbuildinfo
 .edge-headless/
