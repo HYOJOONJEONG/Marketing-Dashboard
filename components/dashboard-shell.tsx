@@ -2088,7 +2088,7 @@ export function DashboardShell({
                 <img
                   src="/yonhapinfomax-logo.png"
                   alt="연합인포맥스"
-                  className="h-7 w-auto shrink-0 opacity-90"
+                  className="h-8 w-auto shrink-0 object-contain"
                 />
               </div>
               <div
