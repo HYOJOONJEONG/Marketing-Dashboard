@@ -285,20 +285,6 @@
   },
   "contracts": [
     {
-      "id": "c1",
-      "no": 1,
-      "companyName": "하나증권",
-      "departmentName": "글로벌마켓운용실",
-      "idCode": "E250665",
-      "industry": "국내증권",
-      "contractMonth": "26년 5월",
-      "documentStatus": "미회수",
-      "includedInWeekly": false,
-      "recommender": "신무길",
-      "replacementType": "신규",
-      "note": ""
-    },
-    {
       "id": "c2",
       "no": 2,
       "companyName": "흥국증권",
@@ -1559,7 +1545,7 @@
         "industry": "국내증권",
         "claimMonth": "26년 1월",
         "status": "회수",
-        "receiptDate": "2026.01.14",
+        "receiptDate": "2026.04.09",
         "reportDate": "2026-04-09"
       },
       {
@@ -45118,6 +45104,48 @@
         ],
         "items": [
           {
+            "id": "260416-t12",
+            "no": 12,
+            "selected": false,
+            "receivedDate": "2026.03.27",
+            "manager": "신무길",
+            "customerId": "E230083",
+            "reason": "계약만료",
+            "terminationDate": "2026.04.30",
+            "companyName": "엘에스증권",
+            "departmentName": "채권운용팀",
+            "penalty": 0,
+            "reflectedDate": "2026.04.09"
+          },
+          {
+            "id": "260416-t15",
+            "no": 15,
+            "selected": false,
+            "receivedDate": "2026.03.30",
+            "manager": "조홍희",
+            "customerId": "E240060",
+            "reason": "계약만료",
+            "terminationDate": "2026.03.31",
+            "companyName": "디비자산운용",
+            "departmentName": "LDI1본부 Fixed Income운용팀",
+            "penalty": 0,
+            "reflectedDate": "2026.04.09"
+          },
+          {
+            "id": "260416-t14",
+            "no": 14,
+            "selected": false,
+            "receivedDate": "2026.03.30",
+            "manager": "이상철",
+            "customerId": "E240111",
+            "reason": "계약만료",
+            "terminationDate": "2026.04.30",
+            "companyName": "리딩투자증권",
+            "departmentName": "채권금융팀",
+            "penalty": 0,
+            "reflectedDate": "2026.04.09"
+          },
+          {
             "id": "260416-t1",
             "no": 1,
             "selected": false,
@@ -45261,19 +45289,6 @@
             "penalty": 0
           },
           {
-            "id": "260416-t12",
-            "no": 12,
-            "selected": false,
-            "receivedDate": "2026.03.27",
-            "manager": "신무길",
-            "customerId": "E230083",
-            "reason": "계약만료",
-            "terminationDate": "2026.04.30",
-            "companyName": "엘에스증권",
-            "departmentName": "채권운용팀",
-            "penalty": 0
-          },
-          {
             "id": "260416-t13",
             "no": 13,
             "selected": false,
@@ -45284,32 +45299,6 @@
             "terminationDate": "2026.04.30",
             "companyName": "한국주택금융공사",
             "departmentName": "재무회계부",
-            "penalty": 0
-          },
-          {
-            "id": "260416-t14",
-            "no": 14,
-            "selected": false,
-            "receivedDate": "2026.03.30",
-            "manager": "이상철",
-            "customerId": "E240111",
-            "reason": "계약만료",
-            "terminationDate": "2026.04.30",
-            "companyName": "리딩투자증권",
-            "departmentName": "채권금융팀",
-            "penalty": 0
-          },
-          {
-            "id": "260416-t15",
-            "no": 15,
-            "selected": false,
-            "receivedDate": "2026.03.30",
-            "manager": "조홍희",
-            "customerId": "E240060",
-            "reason": "계약만료",
-            "terminationDate": "2026.03.31",
-            "companyName": "디비자산운용",
-            "departmentName": "LDI1본부 Fixed Income운용팀",
             "penalty": 0
           },
           {
@@ -45379,6 +45368,19 @@
           }
         ],
         "holdItems": [
+          {
+            "id": "260416-h16",
+            "no": 16,
+            "receivedDate": "2026.03.25",
+            "manager": "조홍희",
+            "customerId": "E140902",
+            "reason": "해외출장",
+            "startDate": "26년 04월",
+            "endDate": "26년 05월",
+            "companyName": "국민연금공단",
+            "departmentName": "해외주식실",
+            "reflectedDate": "2026.04.09"
+          },
           {
             "id": "260416-h1",
             "no": 1,
@@ -45560,18 +45562,6 @@
             "departmentName": "트레이딩팀"
           },
           {
-            "id": "260416-h16",
-            "no": 16,
-            "receivedDate": "2026.03.25",
-            "manager": "조홍희",
-            "customerId": "E140902",
-            "reason": "해외출장",
-            "startDate": "26년 04월",
-            "endDate": "26년 05월",
-            "companyName": "국민연금공단",
-            "departmentName": "해외주식실"
-          },
-          {
             "id": "260416-h17",
             "no": 17,
             "receivedDate": "2026.03.25",
@@ -45602,7 +45592,8 @@
           "사용자퇴사": 4,
           "계약만료": 14
         },
-        "confirmedItems": []
+        "confirmedItems": [],
+        "releasedHoldItems": []
       }
     ]
   }

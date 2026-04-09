@@ -827,6 +827,7 @@ export function DashboardShell({
     companyName: "",
     departmentName: "",
     reason: "사용자퇴사",
+    reasonDetail: "",
     startDate: "",
     endDate: "",
   })
@@ -843,6 +844,8 @@ export function DashboardShell({
   const [editingHoldId, setEditingHoldId] = useState<string | null>(null)
   const [editingHoldDraft, setEditingHoldDraft] = useState<any>({})
   const [showTerminationArchive, setShowTerminationArchive] = useState(false)
+  const [selectedConfirmedIds, setSelectedConfirmedIds] = useState<string[]>([])
+  const [selectedReleasedIds, setSelectedReleasedIds] = useState<string[]>([])
 
   const weeklyReport = data.weeklyReport || {}
   const contracts = data.contracts || []
@@ -959,6 +962,10 @@ export function DashboardShell({
         }),
       )
   }, [contracts, currentYear])
+  const currentMonthKey = useMemo(() => {
+    const now = new Date()
+    return now.getFullYear() * 100 + (now.getMonth() + 1)
+  }, [])
   const contractRecommenderStats = useMemo(() => {
     const map = new Map<string, number>()
     contracts.forEach((row: any) => {
@@ -1045,6 +1052,13 @@ export function DashboardShell({
     () => sortByKey(selectedSheet?.releasedHoldItems || [], holdSort.key, holdSort.dir),
     [selectedSheet, holdSort],
   )
+  useEffect(() => {
+    setSelectedConfirmedIds((prev) => prev.filter((id) => confirmedTerminationItems.some((row: any) => row.id === id)))
+  }, [confirmedTerminationItems])
+
+  useEffect(() => {
+    setSelectedReleasedIds((prev) => prev.filter((id) => releasedHoldItems.some((row: any) => row.id === id)))
+  }, [releasedHoldItems])
   const visibleWeeklyTerminationCount = useMemo(
     () => (selectedSheet?.items || []).length,
     [selectedSheet],
@@ -1709,6 +1723,7 @@ export function DashboardShell({
       companyName: "",
       departmentName: "",
       reason: "사용자퇴사",
+      reasonDetail: "",
       startDate: "",
       endDate: "",
     })
@@ -1764,7 +1779,9 @@ export function DashboardShell({
       customerId: holdDraft.customerId.trim(),
       companyName: holdDraft.companyName.trim(),
       departmentName: holdDraft.departmentName.trim(),
-      reason: holdDraft.reason,
+      reason: holdDraft.reason === "기타" && holdDraft.reasonDetail?.trim()
+        ? `기타(${holdDraft.reasonDetail.trim()})`
+        : holdDraft.reason,
       startDate: normalizeMonth(holdDraft.startDate),
       endDate: normalizeMonth(holdDraft.endDate),
     }
@@ -1797,6 +1814,62 @@ export function DashboardShell({
         ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
         : { key, dir: "desc" },
     )
+  }
+
+  function toggleSelectAllConfirmed(checked: boolean) {
+    if (checked) {
+      setSelectedConfirmedIds(confirmedTerminationItems.map((row: any) => row.id))
+      return
+    }
+    setSelectedConfirmedIds([])
+  }
+
+  function toggleSelectAllReleased(checked: boolean) {
+    if (checked) {
+      setSelectedReleasedIds(releasedHoldItems.map((row: any) => row.id))
+      return
+    }
+    setSelectedReleasedIds([])
+  }
+
+  function handleBulkRestoreConfirmed() {
+    if (!selectedSheet || selectedConfirmedIds.length === 0) return
+    const confirmedItems = selectedSheet.confirmedItems || []
+    const restoreTargets = confirmedItems.filter((row: any) => selectedConfirmedIds.includes(row.id))
+    if (!restoreTargets.length) return
+    startTransition(async () => {
+      const nextSheets = (termination.sheets || []).map((sheet: any) =>
+        sheet.id === selectedSheet.id
+          ? {
+              ...sheet,
+              items: [...restoreTargets.map((row: any) => ({ ...row, selected: false })), ...(sheet.items || [])],
+              confirmedItems: (sheet.confirmedItems || []).filter((row: any) => !selectedConfirmedIds.includes(row.id)),
+            }
+          : sheet,
+      )
+      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
+      setSelectedConfirmedIds([])
+    })
+  }
+
+  function handleBulkRestoreReleased() {
+    if (!selectedSheet || selectedReleasedIds.length === 0) return
+    const releasedItems = selectedSheet.releasedHoldItems || []
+    const restoreTargets = releasedItems.filter((row: any) => selectedReleasedIds.includes(row.id))
+    if (!restoreTargets.length) return
+    startTransition(async () => {
+      const nextSheets = (termination.sheets || []).map((sheet: any) =>
+        sheet.id === selectedSheet.id
+          ? {
+              ...sheet,
+              holdItems: [...restoreTargets, ...(sheet.holdItems || [])],
+              releasedHoldItems: (sheet.releasedHoldItems || []).filter((row: any) => !selectedReleasedIds.includes(row.id)),
+            }
+          : sheet,
+      )
+      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
+      setSelectedReleasedIds([])
+    })
   }
 
   function startTerminationEdit(row: any) {
@@ -1874,6 +1947,10 @@ export function DashboardShell({
   }
 
   function startHoldEdit(row: any) {
+    const reasonText = String(row.reason || "")
+    const parsedReasonDetail = reasonText.startsWith("기타(")
+      ? reasonText.replace(/^기타\((.*)\)$/, "$1")
+      : ""
     setEditingHoldId(row.id)
     setEditingHoldDraft({
       receivedDate: toInputDate(row.receivedDate),
@@ -1881,7 +1958,8 @@ export function DashboardShell({
       customerId: row.customerId || "",
       companyName: row.companyName || "",
       departmentName: row.departmentName || "",
-      reason: row.reason || "사용자퇴사",
+      reason: reasonText.startsWith("기타(") ? "기타" : (row.reason || "사용자퇴사"),
+      reasonDetail: parsedReasonDetail,
       startDate: toInputMonth(row.startDate),
       endDate: toInputMonth(row.endDate),
     })
@@ -1907,7 +1985,9 @@ export function DashboardShell({
                       customerId: editingHoldDraft.customerId?.trim() || "",
                       companyName: editingHoldDraft.companyName?.trim() || "",
                       departmentName: editingHoldDraft.departmentName?.trim() || "",
-                      reason: editingHoldDraft.reason,
+                      reason: editingHoldDraft.reason === "기타" && editingHoldDraft.reasonDetail?.trim()
+                        ? `기타(${editingHoldDraft.reasonDetail.trim()})`
+                        : editingHoldDraft.reason,
                       startDate: normalizeMonth(editingHoldDraft.startDate),
                       endDate: normalizeMonth(editingHoldDraft.endDate),
                     }
@@ -2316,7 +2396,7 @@ export function DashboardShell({
         <main className="flex-1 px-5 py-5">
           <div className={`${cardClass} dashboard-header mb-5 flex items-start justify-between px-5 py-4`}>
             <div>
-              <div className="text-[14px] text-slate-500">다가올 목요일 기준일 {displayBaseDate}</div>
+              <div className="text-[14px] text-slate-500">기준일 : {displayBaseDate}</div>
               <h1 className="mt-2 text-[20px] font-black tracking-[-0.04em] text-slate-950">{viewTitles[view]}</h1>
             </div>
             <div className="dashboard-header-actions flex items-center gap-3">
@@ -2346,10 +2426,9 @@ export function DashboardShell({
           {view === "weekly-report" && (
             <div className="weekly-report-print space-y-4">
               <section className="print-report-cover hidden print:block">
-                <div className="print-report-header-row">
-                  <div className="print-report-spacer" />
-                  <div className="print-report-date">다가올 목요일 기준일 {displayBaseDate}</div>
-                </div>
+              <div className="print-report-header-row">
+                <div className="print-report-spacer" />
+              </div>
                 <div className="print-report-title">주간실적보고</div>
               </section>
 
@@ -2559,7 +2638,7 @@ export function DashboardShell({
               <section className={`${cardClass} p-5 space-y-3 print-report-sheet-section`}>
                 <div className="text-[18px] font-bold print-report-section-title">유료 옵션 정보</div>
                 <div className="overflow-hidden rounded-2xl border border-slate-200">
-                  <table className={`${weeklyReportTableClass} print-industry-table`}>
+                  <table className={`${weeklyReportTableClass} print-industry-table print-paid-option-table`}>
                     <thead>
                       <tr>
                         {paidOptionColumns.map((column) => (
@@ -2584,13 +2663,7 @@ export function DashboardShell({
 
               <section className={`${cardClass} p-5 space-y-3 print-report-sheet-section`}>
                 <div className="overflow-hidden rounded-2xl border border-slate-200">
-                  <table className={`${weeklyReportTableClass} print-industry-table`}>
-                    <colgroup>
-                      <col style={{ width: "88px" }} />
-                      {reportTerminationColumns.map((column) => (
-                        <col key={`report-termination-col-${column}`} />
-                      ))}
-                    </colgroup>
+                  <table className={`${weeklyReportTableClass} print-industry-table print-termination-table`}>
                     <thead>
                       <tr>
                         <th colSpan={reportTerminationColumns.length + 1} className={`${weeklyThClass} bg-white px-4 text-left text-[18px] font-bold text-slate-900`}>
@@ -2621,13 +2694,7 @@ export function DashboardShell({
 
               <section className={`${cardClass} p-5 space-y-3 print-report-sheet-section`}>
                 <div className="overflow-hidden rounded-2xl border border-slate-200">
-                  <table className={`${weeklyReportTableClass} print-industry-table`}>
-                    <colgroup>
-                      <col style={{ width: "88px" }} />
-                      {reportIndustryColumns.map((column) => (
-                        <col key={`report-industry-col-${column}`} />
-                      ))}
-                    </colgroup>
+                  <table className={`${weeklyReportTableClass} print-industry-table print-industry-summary-table`}>
                     <thead>
                       <tr>
                         <th colSpan={reportIndustryColumns.length + 1} className={`${weeklyThClass} bg-white px-4 text-left text-[18px] font-bold text-slate-900`}>
@@ -2661,7 +2728,16 @@ export function DashboardShell({
 
           {view === "contracts" && (
             <div className={`${cardClass} p-5`}>
-              <div className="mb-3 flex items-center justify-between"><div className="text-[18px] font-bold">신규계약 리스트</div><div className="text-[13px] text-slate-500">총 {formatNumber(contracts.length)}건</div></div>
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-[18px] font-bold">신규계약 리스트</div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3.5 py-1.5 text-[13px] font-semibold text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
+                  <span>총</span>
+                  <span className="text-[16px] font-extrabold text-blue-600">
+                    {formatNumber(contracts.length)}
+                  </span>
+                  <span>건</span>
+                </div>
+              </div>
               <div className="mb-4 grid items-stretch gap-3 xl:grid-cols-2">
                 <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-slate-50 p-2.5">
                   <div className="mb-1.5 text-[13px] font-bold text-slate-900">월별 실적 통계</div>
@@ -2670,11 +2746,19 @@ export function DashboardShell({
                       {contractMonthRows.map((chunk, rowIndex) => (
                         <tbody key={`contract-month-block-${rowIndex}`}>
                           <tr>
-                            {chunk.map((row) => (
-                              <th key={`contract-month-label-${row.label}`} className="border-b border-slate-200 bg-slate-50 px-2 py-2 text-center text-[12px] font-semibold text-slate-600">
-                                {row.label}
-                              </th>
-                            ))}
+                            {chunk.map((row) => {
+                              const isCurrent = row.sortKey === currentMonthKey
+                              return (
+                                <th
+                                  key={`contract-month-label-${row.label}`}
+                                  className={`border-b border-slate-200 px-2 py-2 text-center text-[12px] font-semibold ${
+                                    isCurrent ? "bg-blue-50 text-blue-700" : "bg-slate-50 text-slate-600"
+                                  }`}
+                                >
+                                  {row.label}
+                                </th>
+                              )
+                            })}
                             {chunk.length < contractMonthColumns &&
                               Array.from({ length: contractMonthColumns - chunk.length }).map((_, index) => (
                                 <th
@@ -2686,11 +2770,19 @@ export function DashboardShell({
                               ))}
                           </tr>
                           <tr>
-                            {chunk.map((row) => (
-                              <td key={`contract-month-value-${row.label}`} className="border-b border-slate-200 px-2 py-2 text-center text-[14px] font-bold text-slate-900">
-                                {formatNumber(row.count)}
-                              </td>
-                            ))}
+                            {chunk.map((row) => {
+                              const isCurrent = row.sortKey === currentMonthKey
+                              return (
+                                <td
+                                  key={`contract-month-value-${row.label}`}
+                                  className={`border-b border-slate-200 px-2 py-2 text-center text-[14px] font-bold ${
+                                    isCurrent ? "bg-blue-50 text-blue-900" : "text-slate-900"
+                                  }`}
+                                >
+                                  {formatNumber(row.count)}
+                                </td>
+                              )
+                            })}
                             {chunk.length < contractMonthColumns &&
                               Array.from({ length: contractMonthColumns - chunk.length }).map((_, index) => (
                                 <td
@@ -3644,6 +3736,17 @@ export function DashboardShell({
                           {["사용자퇴사","사용자이동","계약만료","비용절감","휴직/장기출장","기타"].map((item) => <option key={item} value={item}>{item}</option>)}
                         </select>
                       </label>
+                      {holdDraft.reason === "기타" && (
+                        <label className="space-y-1">
+                          <div className="text-[12px] font-medium text-slate-600">기타 사유</div>
+                          <input
+                            className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]"
+                            placeholder="기타 사유"
+                            value={holdDraft.reasonDetail}
+                            onChange={(e)=>updateHoldDraft("reasonDetail", e.target.value)}
+                          />
+                        </label>
+                      )}
                       <label className="space-y-1">
                         <div className="text-[12px] font-medium text-slate-600">시작일</div>
                         <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" type="month" value={holdDraft.startDate} onChange={(e)=>updateHoldDraft("startDate", e.target.value)} />
@@ -3750,11 +3853,32 @@ export function DashboardShell({
                   </div>
                 </div>
                 <div className={`${cardClass} overflow-hidden p-0 ${showTerminationArchive ? "" : "hidden"}`}>
-                  <div className="border-b border-slate-200 px-4 py-3 text-[17px] font-bold text-slate-900">해지확정 리스트</div>
+                  <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                    <div className="text-[17px] font-bold text-slate-900">해지확정 리스트</div>
+                    <button
+                      type="button"
+                      onClick={handleBulkRestoreConfirmed}
+                      disabled={selectedConfirmedIds.length === 0}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
+                        selectedConfirmedIds.length === 0
+                          ? "border border-slate-200 bg-slate-100 text-slate-400"
+                          : "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                      }`}
+                    >
+                      선택 복구
+                    </button>
+                  </div>
                   <div className="overflow-x-auto">
                   <table className={`${tableClass} min-w-full`}>
                     <thead>
                       <tr>
+                        <th className={`${thClass} text-center`}>
+                          <input
+                            type="checkbox"
+                            checked={confirmedTerminationItems.length > 0 && selectedConfirmedIds.length === confirmedTerminationItems.length}
+                            onChange={(e) => toggleSelectAllConfirmed(e.target.checked)}
+                          />
+                        </th>
                         <th className={`${thClass} text-center`}>No.</th>
                         <th className={thClass}>접수일</th>
                         <th className={thClass}>담당자</th>
@@ -3771,13 +3895,25 @@ export function DashboardShell({
                     <tbody>
                       {confirmedTerminationItems.length === 0 ? (
                         <tr>
-                          <td className={`${tdClass} text-center text-slate-400`} colSpan={11}>
+                          <td className={`${tdClass} text-center text-slate-400`} colSpan={12}>
                             확정된 항목이 없습니다.
                           </td>
                         </tr>
                       ) : (
                         confirmedTerminationItems.map((row: any, index: number) => (
                           <tr key={row.id} className="bg-rose-50">
+                            <td className={`${tdClass} text-center`}>
+                              <input
+                                type="checkbox"
+                                checked={selectedConfirmedIds.includes(row.id)}
+                                onChange={(e) => {
+                                  const checked = e.target.checked
+                                  setSelectedConfirmedIds((prev) =>
+                                    checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
+                                  )
+                                }}
+                              />
+                            </td>
                             <td className={`${tdClass} text-center tabular-nums`}>{index + 1}</td>
                             <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.receivedDate)}</td>
                             <td className={tdClass}>{row.manager}</td>
@@ -3839,7 +3975,27 @@ export function DashboardShell({
                           <td className={tdClass}>{editing ? <input className="h-9 w-full min-w-[110px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.customerId || ""} onChange={(e)=>updateEditingHoldDraft("customerId", e.target.value)} /> : row.customerId}</td>
                           <td className={`${tdClass} whitespace-nowrap`}>{editing ? <input className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.companyName || ""} onChange={(e)=>updateEditingHoldDraft("companyName", e.target.value)} /> : row.companyName}</td>
                           <td className={`${tdClass} whitespace-nowrap`}>{editing ? <input className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.departmentName || ""} onChange={(e)=>updateEditingHoldDraft("departmentName", e.target.value)} /> : row.departmentName}</td>
-                          <td className={tdClass}>{editing ? <select className="h-9 w-full min-w-[120px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.reason || "사용자퇴사"} onChange={(e)=>updateEditingHoldDraft("reason", e.target.value)}>{["사용자퇴사","사용자이동","계약만료","비용절감","휴직/장기출장","기타"].map((item) => <option key={item} value={item}>{item}</option>)}</select> : row.reason}</td>
+                          <td className={tdClass}>
+                            {editing ? (
+                              <div className="space-y-2">
+                                <select
+                                  className="h-9 w-full min-w-[120px] rounded-xl border border-slate-200 px-3 text-[13px]"
+                                  value={editingHoldDraft.reason || "사용자퇴사"}
+                                  onChange={(e)=>updateEditingHoldDraft("reason", e.target.value)}
+                                >
+                                  {["사용자퇴사","사용자이동","계약만료","비용절감","휴직/장기출장","기타"].map((item) => <option key={item} value={item}>{item}</option>)}
+                                </select>
+                                {editingHoldDraft.reason === "기타" && (
+                                  <input
+                                    className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]"
+                                    value={editingHoldDraft.reasonDetail || ""}
+                                    onChange={(e)=>updateEditingHoldDraft("reasonDetail", e.target.value)}
+                                    placeholder="기타 사유"
+                                  />
+                                )}
+                              </div>
+                            ) : row.reason}
+                          </td>
                               <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="month" className="h-9 w-32 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.startDate || ""} onChange={(e)=>updateEditingHoldDraft("startDate", e.target.value)} /> : formatMonthLabel(row.startDate)}</td>
                               <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="month" className="h-9 w-32 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.endDate || ""} onChange={(e)=>updateEditingHoldDraft("endDate", e.target.value)} /> : formatMonthLabel(row.endDate)}</td>
                           <td className={`${tdClass} text-center`}>
@@ -3877,11 +4033,32 @@ export function DashboardShell({
                   </div>
                 </div>
                 <div className={`${cardClass} overflow-hidden p-0 ${showTerminationArchive ? "" : "hidden"}`}>
-                  <div className="border-b border-slate-200 px-4 py-3 text-[17px] font-bold text-slate-900">청구보류 해제 리스트</div>
+                  <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                    <div className="text-[17px] font-bold text-slate-900">청구보류 해제 리스트</div>
+                    <button
+                      type="button"
+                      onClick={handleBulkRestoreReleased}
+                      disabled={selectedReleasedIds.length === 0}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
+                        selectedReleasedIds.length === 0
+                          ? "border border-slate-200 bg-slate-100 text-slate-400"
+                          : "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                      }`}
+                    >
+                      선택 복구
+                    </button>
+                  </div>
                   <div className="overflow-x-auto">
                   <table className={`${tableClass} min-w-full`}>
                     <thead>
                       <tr>
+                        <th className={`${thClass} text-center`}>
+                          <input
+                            type="checkbox"
+                            checked={releasedHoldItems.length > 0 && selectedReleasedIds.length === releasedHoldItems.length}
+                            onChange={(e) => toggleSelectAllReleased(e.target.checked)}
+                          />
+                        </th>
                         <th className={`${thClass} text-center`}>No.</th>
                         <th className={thClass}>접수일</th>
                         <th className={thClass}>담당자</th>
@@ -3898,13 +4075,25 @@ export function DashboardShell({
                     <tbody>
                       {releasedHoldItems.length === 0 ? (
                         <tr>
-                          <td className={`${tdClass} text-center text-slate-400`} colSpan={11}>
+                          <td className={`${tdClass} text-center text-slate-400`} colSpan={12}>
                             해제된 항목이 없습니다.
                           </td>
                         </tr>
                       ) : (
                         releasedHoldItems.map((row: any, index: number) => (
                           <tr key={row.id} className="bg-amber-50">
+                            <td className={`${tdClass} text-center`}>
+                              <input
+                                type="checkbox"
+                                checked={selectedReleasedIds.includes(row.id)}
+                                onChange={(e) => {
+                                  const checked = e.target.checked
+                                  setSelectedReleasedIds((prev) =>
+                                    checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
+                                  )
+                                }}
+                              />
+                            </td>
                             <td className={`${tdClass} text-center tabular-nums`}>{index + 1}</td>
                             <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.receivedDate)}</td>
                             <td className={tdClass}>{row.manager}</td>
