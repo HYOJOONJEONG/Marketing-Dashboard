@@ -6,6 +6,8 @@ type ViewKey = "weekly-report" | "contracts" | "weekly-selection" | "manual-inpu
 type CollectionTabKey = "integrated" | "long-term"
 type SectionKey = "performance" | "termination"
 
+const LOCAL_STORAGE_KEY = "infobiz-dashboard-state-v1"
+
 const viewTitles: Record<ViewKey, string> = {
   "weekly-report": "주간실적보고",
   contracts: "신규계약 리스트",
@@ -792,6 +794,7 @@ export function DashboardShell({
     recommender: "",
     note: "",
     documentStatus: "미회수",
+    replacementType: "신규",
   })
   const [editingContractId, setEditingContractId] = useState<string | null>(null)
   const [editingContractDraft, setEditingContractDraft] = useState<any>({})
@@ -800,6 +803,11 @@ export function DashboardShell({
   const [collectionYearFilter, setCollectionYearFilter] = useState<number | "all">(initialData?.collection?.yearFilter || 2026)
   const [collectionStatusFilter, setCollectionStatusFilter] = useState<string>(initialData?.collection?.statusFilter || "all")
   const [historyStack, setHistoryStack] = useState<any[]>([])
+  const pendingSaveRef = useRef<number | null>(null)
+  const pendingPayloadRef = useRef<string | null>(null)
+  const pendingDataRef = useRef<any | null>(null)
+  const lastHistoryAtRef = useRef<number>(0)
+  const flushPendingSave = useRef<() => void>(() => {})
   const [terminationEntryMode, setTerminationEntryMode] = useState<"termination" | "hold">("termination")
   const [terminationDraft, setTerminationDraft] = useState<any>({
     receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
@@ -1053,15 +1061,95 @@ export function DashboardShell({
     return [...map.entries()]
   }, [terminationItems])
 
-  async function persist(nextData: any) {
-    setHistoryStack((prev) => [cloneData(data), ...prev].slice(0, 20))
+  function persist(nextData: any) {
+    const now = Date.now()
     setData(nextData)
-    await fetch("/api/dashboard", {
+    pendingDataRef.current = nextData
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(nextData))
+      }
+    } catch {}
+    if (pendingSaveRef.current) {
+      window.clearTimeout(pendingSaveRef.current)
+    }
+    pendingSaveRef.current = window.setTimeout(() => {
+      const body = pendingPayloadRef.current || (pendingDataRef.current ? JSON.stringify(pendingDataRef.current) : null)
+      if (!pendingPayloadRef.current && pendingDataRef.current) {
+        pendingPayloadRef.current = body
+      }
+      pendingPayloadRef.current = null
+      pendingSaveRef.current = null
+      if (!body) return
+      const send = () => fetch("/api/dashboard", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body,
+      }).catch(() => {})
+      if ("requestIdleCallback" in window) {
+        ;(window as any).requestIdleCallback(send, { timeout: 300 })
+      } else {
+        void send()
+      }
+    }, 30)
+    if (now - lastHistoryAtRef.current > 500) {
+      const snapshot = () => {
+        setHistoryStack((prev) => [cloneData(data), ...prev].slice(0, 20))
+      }
+      lastHistoryAtRef.current = now
+      if ("requestIdleCallback" in window) {
+        ;(window as any).requestIdleCallback(snapshot, { timeout: 800 })
+      } else {
+        snapshot()
+      }
+    }
+  }
+
+  flushPendingSave.current = () => {
+    const body = pendingPayloadRef.current || (pendingDataRef.current ? JSON.stringify(pendingDataRef.current) : null)
+    pendingPayloadRef.current = null
+    if (!body) return
+    if ("sendBeacon" in navigator) {
+      const blob = new Blob([body], { type: "application/json" })
+      ;(navigator as any).sendBeacon("/api/dashboard", blob)
+      return
+    }
+    void fetch("/api/dashboard", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(nextData),
-    })
+      body,
+      keepalive: true,
+    }).catch(() => {})
   }
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      flushPendingSave.current()
+    }
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        flushPendingSave.current()
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    document.addEventListener("visibilitychange", handleVisibility)
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+      document.removeEventListener("visibilitychange", handleVisibility)
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw)
+      setData(saved)
+      setCollectionTab(saved?.collection?.tab || "integrated")
+      setCollectionYearFilter(saved?.collection?.yearFilter || 2026)
+      setCollectionStatusFilter(saved?.collection?.statusFilter || "all")
+    } catch {}
+  }, [])
 
   function handleUndoLastAction() {
     if (!historyStack.length) {
@@ -1147,6 +1235,7 @@ export function DashboardShell({
       recommender: row.recommender || "",
       note: row.note || "",
       documentStatus: row.documentStatus || "미회수",
+      replacementType: row.replacementType || "신규",
     })
   }
 
@@ -1344,6 +1433,7 @@ export function DashboardShell({
       return
     }
     startTransition(async () => {
+      console.debug("[contracts] create start", contractDraft)
       const nextNo =
         contracts.reduce((max: number, row: any) => Math.max(max, Number(row.no || 0)), 0) + 1
       const nextContracts = [
@@ -1356,6 +1446,7 @@ export function DashboardShell({
           industry: contractDraft.industry,
           contractMonth: contractDraft.contractMonth.trim(),
           documentStatus: contractDraft.documentStatus,
+          replacementType: contractDraft.replacementType || "신규",
           includedInWeekly: false,
           recommender: contractDraft.recommender.trim(),
           note: contractDraft.note.trim(),
@@ -1364,6 +1455,7 @@ export function DashboardShell({
         ...contracts,
       ]
       await persist({ ...data, contracts: nextContracts })
+      console.debug("[contracts] create done", nextContracts[0])
       setContractDraft({
         companyName: "",
         departmentName: "",
@@ -1373,6 +1465,7 @@ export function DashboardShell({
         recommender: "",
         note: "",
         documentStatus: "미회수",
+        replacementType: "신규",
       })
     })
   }
@@ -1395,6 +1488,7 @@ export function DashboardShell({
               recommender: editingContractDraft.recommender.trim(),
               note: editingContractDraft.note.trim(),
               documentStatus: editingContractDraft.documentStatus,
+              replacementType: editingContractDraft.replacementType || "신규",
             }
           : row,
       )
@@ -1484,29 +1578,27 @@ export function DashboardShell({
   }
 
   function handleCollectionStatusToggle(rowId: string, nextStatus: string) {
-    startTransition(async () => {
-      const key = collectionTab === "long-term" ? "longTerm" : "integrated"
-      const nextCollectionRows = (collection[key] || []).map((row: any) =>
-        row.id === rowId
-          ? {
-              ...row,
-              status: nextStatus,
-              receiptDate:
-                nextStatus === "회수"
-                  ? row.receiptDate || normalizeDate(new Date().toISOString().slice(0, 10))
-                  : "",
-            }
-          : row,
-      )
-      await persist({
-        ...data,
-        collection: {
-          ...collection,
-          [key]: nextCollectionRows,
-          yearFilter: collectionYearFilter,
-          statusFilter: collectionStatusFilter,
-        },
-      })
+    const key = collectionTab === "long-term" ? "longTerm" : "integrated"
+    const nextCollectionRows = (collection[key] || []).map((row: any) =>
+      row.id === rowId
+        ? {
+            ...row,
+            status: nextStatus,
+            receiptDate:
+              nextStatus === "회수"
+                ? row.receiptDate || normalizeDate(new Date().toISOString().slice(0, 10))
+                : "",
+          }
+        : row,
+    )
+    void persist({
+      ...data,
+      collection: {
+        ...collection,
+        [key]: nextCollectionRows,
+        yearFilter: collectionYearFilter,
+        statusFilter: collectionStatusFilter,
+      },
     })
   }
 
@@ -2685,6 +2777,11 @@ export function DashboardShell({
                       onChange={(e)=>updateContractDraft("contractMonth", fromContractMonthInputValue(e.target.value))}
                     />
                     <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" placeholder="권유자" value={contractDraft.recommender} onChange={(e)=>updateContractDraft("recommender", e.target.value)} />
+                    <select className="h-10 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" value={contractDraft.replacementType} onChange={(e)=>updateContractDraft("replacementType", e.target.value)}>
+                      {["신규","체크","레피니티브","블룸버그","기타"].map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
+                    </select>
                     <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" placeholder="비고" value={contractDraft.note} onChange={(e)=>updateContractDraft("note", e.target.value)} />
                     <div className="grid h-10 grid-cols-[minmax(0,1fr)_auto] gap-2">
                       <select className="h-10 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" value={contractDraft.documentStatus} onChange={(e)=>updateContractDraft("documentStatus", e.target.value)}>
@@ -2700,13 +2797,13 @@ export function DashboardShell({
               </div>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed text-[12px]">
-                  <thead><tr>{["No.","회사명","부서","아이디","업종","계약월","권유자","계약서 상태","비고","작업"].map((head)=><th key={head} className={head === "No." ? `${thClass} w-[52px] px-2 py-2 text-center text-[12px]` : `${thClass} px-2 py-2 text-[12px]`}>{head}</th>)}</tr></thead>
+                  <thead><tr>{["No.","회사명","부서","아이디","업종","계약월","권유자","계약서 상태","대체여부","비고","작업"].map((head)=><th key={head} className={head === "No." ? `${thClass} w-[52px] px-2 py-2 text-center text-[12px]` : `${thClass} px-2 py-2 text-[12px]`}>{head}</th>)}</tr></thead>
                   <tbody>
                     {contracts.map((row: any, index: number) => {
                       const editing = editingContractId === row.id
                       return (
                         <tr key={row.id}>
-                          <td className={`${tdClass} w-[52px] px-2 py-2 text-center text-[12px]`}>{row.no || index + 1}</td>
+                          <td className={`${tdClass} w-[52px] px-2 py-2 text-center text-[12px]`}>{index + 1}</td>
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
                             {editing ? <input className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]" value={editingContractDraft.companyName || ""} onChange={(e)=>updateEditingContractDraft("companyName", e.target.value)} /> : <span className="block truncate">{row.companyName}</span>}
                           </td>
@@ -2743,6 +2840,13 @@ export function DashboardShell({
                                 <option value="회수">회수</option>
                               </select>
                             ) : <span className="block truncate">{row.documentStatus}</span>}
+                          </td>
+                          <td className={`${tdClass} px-2 py-2 text-[12px]`}>
+                            {editing ? (
+                              <select className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]" value={editingContractDraft.replacementType || row.replacementType || "신규"} onChange={(e)=>updateEditingContractDraft("replacementType", e.target.value)}>
+                                {["신규","체크","레피니티브","블룸버그","기타"].map((item) => <option key={item} value={item}>{item}</option>)}
+                              </select>
+                            ) : <span className="block truncate">{row.replacementType || "신규"}</span>}
                           </td>
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
                             {editing ? <input className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]" value={editingContractDraft.note || ""} onChange={(e)=>updateEditingContractDraft("note", e.target.value)} /> : <span className="block truncate">{row.note || ""}</span>}
@@ -2787,7 +2891,7 @@ export function DashboardShell({
               </div>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className={tableClass}>
-                  <thead><tr>{["선택","No.","회사명","부서명","ID","업종","계약월","권유자","계약서 상태"].map((head)=><th key={head} className={thClass}>{head}</th>)}</tr></thead>
+                  <thead><tr>{["선택","No.","회사명","부서명","ID","업종","계약월","권유자","계약서 상태","대체여부"].map((head)=><th key={head} className={thClass}>{head}</th>)}</tr></thead>
                   <tbody>
                     {contracts.map((row: any, index: number) => (
                       <tr key={row.id} className={row.includedInWeekly ? "bg-blue-50" : ""}>
@@ -2806,6 +2910,7 @@ export function DashboardShell({
                         <td className={tdClass}>{row.contractMonth}</td>
                         <td className={tdClass}>{row.recommender}</td>
                         <td className={tdClass}>{row.documentStatus}</td>
+                        <td className={tdClass}>{row.replacementType || "신규"}</td>
                       </tr>
                     ))}
                   </tbody>
