@@ -22,8 +22,8 @@
   ],
   "weeklyReport": {
     "baseDate": "2026-04-09",
-    "revenueHeaderText": "주간 순증 매출 (약 55,440,000)",
-    "subtitleOne": "2025년 순증 매출 (약 679,890,000원)",
+    "revenueHeaderText": "주간 순증 매출 (약 12,320,000원)",
+    "subtitleOne": "26년 순증 매출 (약 659,890,000원)",
     "subtitleTwo": "연간 누적 매출 (약 38,253,600,000원)",
     "manualSummary": {
       "weeklyNetUnits": 9,
@@ -55,11 +55,11 @@
           147.8,
           215.6,
           0,
+          "",
           0,
           0,
           0,
-          0,
-          0,
+          "20",
           0,
           0,
           0
@@ -75,7 +75,7 @@
           0,
           0,
           0,
-          0,
+          "",
           0,
           0,
           0,
@@ -281,9 +281,338 @@
         "netCount": 0
       }
     ],
-    "additionalSales": []
+    "additionalSales": [
+      {
+        "label": "",
+        "amount": "",
+        "note": ""
+      }
+    ],
+    "revenueUnitPrice": 6160000,
+    "additionalContractCount": 0,
+    "revenueNoteText": "※대당 연 6,160,000원으로 매출을 산정 (04/16 기준) / 위약금 및 이전비는 월 단위로 계산하되, 모든 금액 단위는 백만 원으로 표기.",
+    "paidOptionInfoColumns": [
+      {
+        "id": "paid-option-0",
+        "title": "해외채권",
+        "total": "122건",
+        "rows": [
+          [
+            "국내은행",
+            "14건"
+          ],
+          [
+            "국내증권",
+            "43건"
+          ],
+          [
+            "보험사",
+            "33건"
+          ],
+          [
+            "자산운용",
+            "8건"
+          ],
+          [
+            "중개사",
+            "3건"
+          ],
+          [
+            "공제회",
+            "3건"
+          ],
+          [
+            "연기금/공사",
+            "11건"
+          ],
+          [
+            "평가사",
+            "2건"
+          ],
+          [
+            "외국계은행",
+            "1건"
+          ],
+          [
+            "일반기업",
+            "1건"
+          ],
+          [
+            "기타금융",
+            "3건"
+          ]
+        ]
+      },
+      {
+        "id": "paid-option-1",
+        "title": "해외지수",
+        "total": "153건",
+        "rows": [
+          [
+            "국내은행",
+            "19건"
+          ],
+          [
+            "국내증권",
+            "47건"
+          ],
+          [
+            "보험사",
+            "16건"
+          ],
+          [
+            "자산운용",
+            "23건"
+          ],
+          [
+            "연기금/공사",
+            "2건"
+          ],
+          [
+            "외국계은행",
+            "30건"
+          ],
+          [
+            "선물중개사",
+            "6건"
+          ],
+          [
+            "일반기업",
+            "6건"
+          ],
+          [
+            "공제회",
+            "4건"
+          ]
+        ]
+      },
+      {
+        "id": "paid-option-2",
+        "title": "해외종목",
+        "total": "10건",
+        "rows": [
+          [
+            "국내은행",
+            "2건"
+          ],
+          [
+            "자산운용",
+            "3건"
+          ],
+          [
+            "일반기업",
+            "2건"
+          ],
+          [
+            "보험사",
+            "3건"
+          ]
+        ]
+      },
+      {
+        "id": "paid-option-3",
+        "title": "LME",
+        "total": "26건",
+        "rows": [
+          [
+            "국내은행",
+            "1건"
+          ],
+          [
+            "외국계은행",
+            "6건"
+          ],
+          [
+            "일반기업",
+            "19건"
+          ]
+        ]
+      },
+      {
+        "id": "paid-option-4",
+        "title": "전광판",
+        "total": "15건",
+        "rows": [
+          [
+            "국내은행",
+            "8건"
+          ],
+          [
+            "국내증권",
+            "1건"
+          ],
+          [
+            "일반기업",
+            "3건"
+          ],
+          [
+            "기타금융",
+            "1건"
+          ],
+          [
+            "연기금/공사",
+            "1건"
+          ],
+          [
+            "정부기관",
+            "1건"
+          ]
+        ]
+      },
+      {
+        "id": "paid-option-5",
+        "title": "API",
+        "total": "8건",
+        "rows": [
+          [
+            "국내증권",
+            "6건"
+          ],
+          [
+            "일반기업",
+            "2건"
+          ]
+        ]
+      },
+      {
+        "id": "paid-option-6",
+        "title": "SOFR",
+        "total": "171건",
+        "rows": [
+          [
+            "국내은행",
+            "37건"
+          ],
+          [
+            "국내증권",
+            "4건"
+          ],
+          [
+            "기타금융",
+            "2건"
+          ],
+          [
+            "외국계은행",
+            "22건"
+          ],
+          [
+            "일반기업",
+            "91건"
+          ],
+          [
+            "공사",
+            "7건"
+          ],
+          [
+            "보험",
+            "6건"
+          ],
+          [
+            "연기금",
+            "1건"
+          ],
+          [
+            "자산운용",
+            "1건"
+          ]
+        ]
+      }
+    ],
+    "terminationOverviewRows": [
+      {
+        "label": "주간",
+        "values": [
+          "3",
+          "1",
+          "3",
+          "",
+          "1",
+          "1",
+          "",
+          "",
+          "1",
+          "9"
+        ]
+      },
+      {
+        "label": "누적",
+        "values": [
+          "40",
+          "5",
+          "36",
+          "6",
+          "1",
+          "1",
+          "5",
+          "",
+          "1",
+          "95"
+        ]
+      },
+      {
+        "label": "비율",
+        "values": [
+          "42%",
+          "5%",
+          "38%",
+          "6%",
+          "1%",
+          "1%",
+          "5%",
+          "0%",
+          "1%",
+          "100%"
+        ]
+      }
+    ],
+    "weeklyIndustryOverviewRows": [
+      {
+        "label": "신규",
+        "values": [
+          "88",
+          "7",
+          "6",
+          "32",
+          "9",
+          "24",
+          "6",
+          "6",
+          "30",
+          "208"
+        ]
+      },
+      {
+        "label": "순증",
+        "values": [
+          "37",
+          "5",
+          "1",
+          "25",
+          "2",
+          "9",
+          "5",
+          "5",
+          "24",
+          "113"
+        ]
+      }
+    ]
   },
   "contracts": [
+    {
+      "id": "c1",
+      "no": 1,
+      "companyName": "하나증권",
+      "departmentName": "글로벌마켓운용실",
+      "idCode": "E250665",
+      "industry": "국내증권",
+      "contractMonth": "26년 5월",
+      "documentStatus": "미회수",
+      "includedInWeekly": false,
+      "recommender": "신무길",
+      "replacementType": "신규",
+      "note": ""
+    },
     {
       "id": "c2",
       "no": 2,
@@ -377,7 +706,7 @@
       "industry": "국내증권",
       "contractMonth": "26년 5월",
       "documentStatus": "미회수",
-      "includedInWeekly": false,
+      "includedInWeekly": true,
       "recommender": "신무길",
       "replacementType": "신규",
       "note": ""
@@ -391,7 +720,7 @@
       "industry": "보험",
       "contractMonth": "26년 5월",
       "documentStatus": "회수",
-      "includedInWeekly": false,
+      "includedInWeekly": true,
       "recommender": "박혜리",
       "replacementType": "신규",
       "note": ""
@@ -1461,7 +1790,7 @@
         "industry": "기타금융",
         "claimMonth": "26년 1월",
         "status": "회수",
-        "receiptDate": "2026.04.09",
+        "receiptDate": "2026.01.14",
         "reportDate": "2026-04-09"
       },
       {
@@ -1545,7 +1874,7 @@
         "industry": "국내증권",
         "claimMonth": "26년 1월",
         "status": "회수",
-        "receiptDate": "2026.04.09",
+        "receiptDate": "2026.01.14",
         "reportDate": "2026-04-09"
       },
       {
@@ -45095,7 +45424,7 @@
         "id": "sheet-260416",
         "name": "26.04.16",
         "title": "단말기 해지 진행사항(2026.04.09)",
-        "weeklyTerminationCount": 19,
+        "weeklyTerminationCount": 18,
         "weeklyBillingHoldCount": 21,
         "teamLabel": "정보사업본부 정보사업1팀",
         "guidelines": [
@@ -45103,6 +45432,34 @@
           "2. CRM 및 해지 리스트 등록"
         ],
         "items": [
+          {
+            "id": "260416-t10",
+            "no": 10,
+            "selected": false,
+            "receivedDate": "2026.03.26",
+            "manager": "정효준",
+            "customerId": "E030065",
+            "reason": "계약만료",
+            "terminationDate": "2026.03.31",
+            "companyName": "케이비금융지주",
+            "departmentName": "IR부",
+            "penalty": 0,
+            "reflectedDate": "2026.04.10"
+          },
+          {
+            "id": "260416-t11",
+            "no": 11,
+            "selected": false,
+            "receivedDate": "2026.03.26",
+            "manager": "신무길",
+            "customerId": "E140036",
+            "reason": "계약만료",
+            "terminationDate": "2026.04.30",
+            "companyName": "한국투자증권",
+            "departmentName": "채권상품부",
+            "penalty": 0,
+            "reflectedDate": "2026.04.10"
+          },
           {
             "id": "260416-t12",
             "no": 12,
@@ -45115,21 +45472,20 @@
             "companyName": "엘에스증권",
             "departmentName": "채권운용팀",
             "penalty": 0,
-            "reflectedDate": "2026.04.09"
+            "reflectedDate": "2026.04.10"
           },
           {
-            "id": "260416-t15",
-            "no": 15,
+            "id": "260416-t13",
+            "no": 13,
             "selected": false,
-            "receivedDate": "2026.03.30",
-            "manager": "조홍희",
-            "customerId": "E240060",
+            "receivedDate": "2026.03.27",
+            "manager": "정효준",
+            "customerId": "E160123",
             "reason": "계약만료",
-            "terminationDate": "2026.03.31",
-            "companyName": "디비자산운용",
-            "departmentName": "LDI1본부 Fixed Income운용팀",
-            "penalty": 0,
-            "reflectedDate": "2026.04.09"
+            "terminationDate": "2026.04.30",
+            "companyName": "한국주택금융공사",
+            "departmentName": "재무회계부",
+            "penalty": 0
           },
           {
             "id": "260416-t14",
@@ -45142,8 +45498,20 @@
             "terminationDate": "2026.04.30",
             "companyName": "리딩투자증권",
             "departmentName": "채권금융팀",
-            "penalty": 0,
-            "reflectedDate": "2026.04.09"
+            "penalty": 0
+          },
+          {
+            "id": "260416-t15",
+            "no": 15,
+            "selected": false,
+            "receivedDate": "2026.03.30",
+            "manager": "조홍희",
+            "customerId": "E240060",
+            "reason": "계약만료",
+            "terminationDate": "2026.03.31",
+            "companyName": "디비자산운용",
+            "departmentName": "LDI1본부 Fixed Income운용팀",
+            "penalty": 0
           },
           {
             "id": "260416-t1",
@@ -45263,45 +45631,6 @@
             "penalty": 0
           },
           {
-            "id": "260416-t10",
-            "no": 10,
-            "selected": false,
-            "receivedDate": "2026.03.26",
-            "manager": "정효준",
-            "customerId": "E030065",
-            "reason": "계약만료",
-            "terminationDate": "2026.03.31",
-            "companyName": "케이비금융지주",
-            "departmentName": "IR부",
-            "penalty": 0
-          },
-          {
-            "id": "260416-t11",
-            "no": 11,
-            "selected": false,
-            "receivedDate": "2026.03.26",
-            "manager": "신무길",
-            "customerId": "E140036",
-            "reason": "계약만료",
-            "terminationDate": "2026.04.30",
-            "companyName": "한국투자증권",
-            "departmentName": "채권상품부",
-            "penalty": 0
-          },
-          {
-            "id": "260416-t13",
-            "no": 13,
-            "selected": false,
-            "receivedDate": "2026.03.27",
-            "manager": "정효준",
-            "customerId": "E160123",
-            "reason": "계약만료",
-            "terminationDate": "2026.04.30",
-            "companyName": "한국주택금융공사",
-            "departmentName": "재무회계부",
-            "penalty": 0
-          },
-          {
             "id": "260416-t16",
             "no": 16,
             "selected": false,
@@ -45352,19 +45681,6 @@
             "companyName": "흥국생명보험",
             "departmentName": "임원실",
             "penalty": 0
-          },
-          {
-            "id": "260416-t20",
-            "no": 20,
-            "selected": false,
-            "receivedDate": "접수일",
-            "manager": "담당자",
-            "customerId": "고객번호",
-            "reason": "보류 사유",
-            "terminationDate": "시작일",
-            "companyName": "종료일",
-            "departmentName": "고객사",
-            "penalty": 0
           }
         ],
         "holdItems": [
@@ -45379,7 +45695,7 @@
             "endDate": "26년 05월",
             "companyName": "국민연금공단",
             "departmentName": "해외주식실",
-            "reflectedDate": "2026.04.09"
+            "reflectedDate": "2026.04.13"
           },
           {
             "id": "260416-h1",
@@ -45592,7 +45908,1282 @@
           "사용자퇴사": 4,
           "계약만료": 14
         },
-        "confirmedItems": [],
+        "confirmedItems": [
+          {
+            "id": "confirmed-0",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E100256",
+            "companyName": "한국산업은행",
+            "departmentName": "KDB ESG센터",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-1",
+            "receivedDate": "2026.02.05",
+            "manager": "",
+            "customerId": "E120099",
+            "companyName": "수협은행",
+            "departmentName": "자금부 자금기획팀",
+            "reason": "활용도 저조",
+            "terminationDate": "2026.02.05",
+            "penalty": 0,
+            "reflectedDate": "2026.02.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-2",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E210606",
+            "companyName": "신한투자증권",
+            "departmentName": "본사업무혁신부",
+            "reason": "활용도 저조",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-3",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E200483",
+            "companyName": "한국투자증권",
+            "departmentName": "운용전략부",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-4",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E240266",
+            "companyName": "상상인증권",
+            "departmentName": "FICC금융팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-5",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E220634",
+            "companyName": "코리아에셋투자증권",
+            "departmentName": "채권영업본부",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-6",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E230643",
+            "companyName": "코리아에셋투자증권",
+            "departmentName": "채권영업본부",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-7",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E150301",
+            "companyName": "코리아에셋투자증권",
+            "departmentName": "채권영업본부",
+            "reason": "합병매각",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-8",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E210185",
+            "companyName": "엔에이치투자증권",
+            "departmentName": "인프라투자2부",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-9",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E240303",
+            "companyName": "케이비증권",
+            "departmentName": "MS부",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-10",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E190729",
+            "companyName": "케이비증권",
+            "departmentName": "FICC파생영업부",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-11",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E230634",
+            "companyName": "엔에이치투자증권",
+            "departmentName": "Syndication2부",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-12",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E240567",
+            "companyName": "한화투자증권",
+            "departmentName": "FICC파생운용팀",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-13",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E100116",
+            "companyName": "삼성증권",
+            "departmentName": "상품개발팀",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-14",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E230080",
+            "companyName": "디에스투자증권",
+            "departmentName": "파생주식본부 파생상품운용팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-15",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E190787",
+            "companyName": "엔에이치투자증권",
+            "departmentName": "FICC리서치부",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-16",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E190788",
+            "companyName": "엔에이치투자증권",
+            "departmentName": "FICC리서치부",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-17",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E170695",
+            "companyName": "삼성증권",
+            "departmentName": "법인컨설팅팀",
+            "reason": "활용도 저조",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-18",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E240553",
+            "companyName": "리딩투자증권",
+            "departmentName": "델타솔루션팀",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-19",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E200466",
+            "companyName": "교보증권",
+            "departmentName": "채권운용부",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-20",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E220431",
+            "companyName": "한국투자증권",
+            "departmentName": "운용전략부",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-21",
+            "receivedDate": "2026.01.15",
+            "manager": "",
+            "customerId": "E150465",
+            "companyName": "한양증권",
+            "departmentName": "채권금융센터 채권금융부",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.15",
+            "penalty": 0,
+            "reflectedDate": "2026.01.15",
+            "selected": false
+          },
+          {
+            "id": "confirmed-22",
+            "receivedDate": "2026.01.15",
+            "manager": "",
+            "customerId": "E240775",
+            "companyName": "유안타증권",
+            "departmentName": "채권영업팀",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.15",
+            "penalty": 0,
+            "reflectedDate": "2026.01.15",
+            "selected": false
+          },
+          {
+            "id": "confirmed-23",
+            "receivedDate": "2026.01.15",
+            "manager": "",
+            "customerId": "E140609",
+            "companyName": "한국투자증권",
+            "departmentName": "랩상품부",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.15",
+            "penalty": 0,
+            "reflectedDate": "2026.01.15",
+            "selected": false
+          },
+          {
+            "id": "confirmed-24",
+            "receivedDate": "2026.01.15",
+            "manager": "",
+            "customerId": "E210569",
+            "companyName": "한양증권",
+            "departmentName": "파생운용부",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.15",
+            "penalty": 0,
+            "reflectedDate": "2026.01.15",
+            "selected": false
+          },
+          {
+            "id": "confirmed-25",
+            "receivedDate": "2026.01.15",
+            "manager": "",
+            "customerId": "E200592",
+            "companyName": "현대차증권",
+            "departmentName": "CM팀",
+            "reason": "조직개편",
+            "terminationDate": "2026.01.15",
+            "penalty": 0,
+            "reflectedDate": "2026.01.15",
+            "selected": false
+          },
+          {
+            "id": "confirmed-26",
+            "receivedDate": "2026.01.22",
+            "manager": "",
+            "customerId": "  E240773",
+            "companyName": "유안타증권",
+            "departmentName": "채권영업팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.22",
+            "penalty": 0,
+            "reflectedDate": "2026.01.22",
+            "selected": false
+          },
+          {
+            "id": "confirmed-27",
+            "receivedDate": "2026.01.22",
+            "manager": "",
+            "customerId": "  E240774",
+            "companyName": "유안타증권",
+            "departmentName": "채권영업팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.22",
+            "penalty": 0,
+            "reflectedDate": "2026.01.22",
+            "selected": false
+          },
+          {
+            "id": "confirmed-28",
+            "receivedDate": "2026.01.22",
+            "manager": "",
+            "customerId": " E210343",
+            "companyName": "케이비증권",
+            "departmentName": "퀀트파생운용본부",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.22",
+            "penalty": 0,
+            "reflectedDate": "2026.01.22",
+            "selected": false
+          },
+          {
+            "id": "confirmed-29",
+            "receivedDate": "2026.01.22",
+            "manager": "",
+            "customerId": "E190417",
+            "companyName": "현대차증권",
+            "departmentName": "CM팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.22",
+            "penalty": 0,
+            "reflectedDate": "2026.01.22",
+            "selected": false
+          },
+          {
+            "id": "confirmed-30",
+            "receivedDate": "2026.01.22",
+            "manager": "",
+            "customerId": " E200484",
+            "companyName": "디에스투자증권",
+            "departmentName": "파생주식본부 주식운용팀",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.22",
+            "penalty": 0,
+            "reflectedDate": "2026.01.22",
+            "selected": false
+          },
+          {
+            "id": "confirmed-31",
+            "receivedDate": "2026.01.22",
+            "manager": "",
+            "customerId": "E230489",
+            "companyName": "디에스투자증권",
+            "departmentName": "파생주식본부 주식운용팀",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.22",
+            "penalty": 0,
+            "reflectedDate": "2026.01.22",
+            "selected": false
+          },
+          {
+            "id": "confirmed-32",
+            "receivedDate": "2026.01.29",
+            "manager": "",
+            "customerId": " E190634",
+            "companyName": "비엔케이투자증권",
+            "departmentName": "채권금융부",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.29",
+            "penalty": 0,
+            "reflectedDate": "2026.01.29",
+            "selected": false
+          },
+          {
+            "id": "confirmed-33",
+            "receivedDate": "2026.01.29",
+            "manager": "",
+            "customerId": "E180220",
+            "companyName": "비엔케이투자증권",
+            "departmentName": "채권금융부",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.29",
+            "penalty": 0,
+            "reflectedDate": "2026.01.29",
+            "selected": false
+          },
+          {
+            "id": "confirmed-34",
+            "receivedDate": "2026.02.05",
+            "manager": "",
+            "customerId": "E230058",
+            "companyName": "상상인증권",
+            "departmentName": "리스크관리팀",
+            "reason": "비용절감",
+            "terminationDate": "2026.02.05",
+            "penalty": 0,
+            "reflectedDate": "2026.02.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-35",
+            "receivedDate": "2026.02.05",
+            "manager": "",
+            "customerId": "E151020",
+            "companyName": "아이엠증권",
+            "departmentName": "채권투자부",
+            "reason": "계약만료",
+            "terminationDate": "2026.02.05",
+            "penalty": 0,
+            "reflectedDate": "2026.02.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-36",
+            "receivedDate": "2026.02.05",
+            "manager": "",
+            "customerId": "E240403",
+            "companyName": "코리아에셋투자증권",
+            "departmentName": "FICC본부",
+            "reason": "활용도 저조",
+            "terminationDate": "2026.02.05",
+            "penalty": 0,
+            "reflectedDate": "2026.02.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-37",
+            "receivedDate": "2026.02.05",
+            "manager": "",
+            "customerId": "E140730",
+            "companyName": "한국투자증권",
+            "departmentName": "신탁부",
+            "reason": "퇴사",
+            "terminationDate": "2026.02.05",
+            "penalty": 0,
+            "reflectedDate": "2026.02.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-38",
+            "receivedDate": "2026.02.05",
+            "manager": "",
+            "customerId": "E200639",
+            "companyName": "케이프투자증권",
+            "departmentName": "채권투자센터 FICC팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.02.05",
+            "penalty": 0,
+            "reflectedDate": "2026.02.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-39",
+            "receivedDate": "2026.03.05",
+            "manager": "",
+            "customerId": "E220017",
+            "companyName": "흥국증권",
+            "departmentName": "채권금융1팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.03.05",
+            "penalty": 0,
+            "reflectedDate": "2026.03.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-40",
+            "receivedDate": "2026.03.05",
+            "manager": "",
+            "customerId": "E240034",
+            "companyName": "한국투자증권",
+            "departmentName": "사모펀드운용부",
+            "reason": "계약만료",
+            "terminationDate": "2026.03.05",
+            "penalty": 0,
+            "reflectedDate": "2026.03.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-41",
+            "receivedDate": "2026.03.12",
+            "manager": "",
+            "customerId": "E220640",
+            "companyName": "한국투자증권",
+            "departmentName": "채권상품부",
+            "reason": "계약만료",
+            "terminationDate": "2026.03.12",
+            "penalty": 0,
+            "reflectedDate": "2026.03.12",
+            "selected": false
+          },
+          {
+            "id": "confirmed-42",
+            "receivedDate": "2026.03.19",
+            "manager": "",
+            "customerId": "E180689",
+            "companyName": "엔에이치투자증권",
+            "departmentName": "채권운용부",
+            "reason": "퇴사",
+            "terminationDate": "2026.03.19",
+            "penalty": 2500000,
+            "reflectedDate": "2026.03.19",
+            "selected": false
+          },
+          {
+            "id": "confirmed-43",
+            "receivedDate": "2026.03.19",
+            "manager": "",
+            "customerId": "E230229",
+            "companyName": "신한투자증권",
+            "departmentName": "파생구조화부",
+            "reason": "퇴사",
+            "terminationDate": "2026.03.19",
+            "penalty": 0,
+            "reflectedDate": "2026.03.19",
+            "selected": false
+          },
+          {
+            "id": "confirmed-44",
+            "receivedDate": "2026.03.19",
+            "manager": "",
+            "customerId": "E200231",
+            "companyName": "현대차증권",
+            "departmentName": "CM팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.03.19",
+            "penalty": 0,
+            "reflectedDate": "2026.03.19",
+            "selected": false
+          },
+          {
+            "id": "confirmed-45",
+            "receivedDate": "2026.03.26",
+            "manager": "",
+            "customerId": "E210453",
+            "companyName": "현대차증권",
+            "departmentName": "채권금융1팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.03.26",
+            "penalty": 0,
+            "reflectedDate": "2026.03.26",
+            "selected": false
+          },
+          {
+            "id": "confirmed-46",
+            "receivedDate": "2026.03.26",
+            "manager": "",
+            "customerId": "E200510",
+            "companyName": "현대차증권",
+            "departmentName": "채권금융1팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.03.26",
+            "penalty": 0,
+            "reflectedDate": "2026.03.26",
+            "selected": false
+          },
+          {
+            "id": "confirmed-47",
+            "receivedDate": "2026.02.27",
+            "manager": "",
+            "customerId": "E190076",
+            "companyName": "삼성증권",
+            "departmentName": "기업금융지점",
+            "reason": "비용절감",
+            "terminationDate": "2026.02.27",
+            "penalty": 0,
+            "reflectedDate": "2026.02.27",
+            "selected": false
+          },
+          {
+            "id": "confirmed-48",
+            "receivedDate": "2026.04.02",
+            "manager": "",
+            "customerId": "E250027",
+            "companyName": "한양증권",
+            "departmentName": "SF사업1부",
+            "reason": "계약만료",
+            "terminationDate": "2026.04.02",
+            "penalty": 0,
+            "reflectedDate": "2026.04.02",
+            "selected": false
+          },
+          {
+            "id": "confirmed-49",
+            "receivedDate": "2026.04.02",
+            "manager": "",
+            "customerId": "E250705",
+            "companyName": "코리아에셋투자증권",
+            "departmentName": "FICC본부",
+            "reason": "비용절감",
+            "terminationDate": "2026.04.02",
+            "penalty": 0,
+            "reflectedDate": "2026.04.02",
+            "selected": false
+          },
+          {
+            "id": "confirmed-50",
+            "receivedDate": "2026.04.02",
+            "manager": "",
+            "customerId": "E240010",
+            "companyName": "리딩투자증권",
+            "departmentName": "채권금융실",
+            "reason": "퇴사",
+            "terminationDate": "2026.04.02",
+            "penalty": 0,
+            "reflectedDate": "2026.04.02",
+            "selected": false
+          },
+          {
+            "id": "confirmed-51",
+            "receivedDate": "2026.04.02",
+            "manager": "",
+            "customerId": "E230002",
+            "companyName": "에스케이증권",
+            "departmentName": "트레이딩팀",
+            "reason": "계약만료",
+            "terminationDate": "2026.04.02",
+            "penalty": 0,
+            "reflectedDate": "2026.04.02",
+            "selected": false
+          },
+          {
+            "id": "confirmed-52",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E151115",
+            "companyName": "한국씨티은행",
+            "departmentName": "C&R센터",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-53",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E200260",
+            "companyName": "한국씨티은행",
+            "departmentName": "C&R센터",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-54",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E150165",
+            "companyName": "다이와증권캐피탈마켓 서울지점",
+            "departmentName": "FICC부",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-55",
+            "receivedDate": "2026.01.22",
+            "manager": "",
+            "customerId": "E060235",
+            "companyName": "비엔피파리바은행",
+            "departmentName": "금융시장본부",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.22",
+            "penalty": 0,
+            "reflectedDate": "2026.01.22",
+            "selected": false
+          },
+          {
+            "id": "confirmed-56",
+            "receivedDate": "2026.03.26",
+            "manager": "",
+            "customerId": "E040056",
+            "companyName": "대화은행 서울지점",
+            "departmentName": "Global Market",
+            "reason": "계약만료",
+            "terminationDate": "2026.03.26",
+            "penalty": 0,
+            "reflectedDate": "2026.03.26",
+            "selected": false
+          },
+          {
+            "id": "confirmed-57",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E040353",
+            "companyName": "한화자산운용",
+            "departmentName": "국내채권운용팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-58",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E210428",
+            "companyName": "디비자산운용",
+            "departmentName": "LDI본부 대체투자2팀",
+            "reason": "조직개편",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-59",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E220175",
+            "companyName": "헤리티지자산운용",
+            "departmentName": "멀티솔루션",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.08",
+            "penalty": 1500000,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-60",
+            "receivedDate": "2026.02.05",
+            "manager": "",
+            "customerId": "E250001",
+            "companyName": "퀀트인자산운용",
+            "departmentName": "투자운용본부",
+            "reason": "퇴사",
+            "terminationDate": "2026.02.05",
+            "penalty": 500000,
+            "reflectedDate": "2026.02.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-61",
+            "receivedDate": "2026.03.19",
+            "manager": "",
+            "customerId": "E200013",
+            "companyName": "유진자산운용",
+            "departmentName": "증권운용본부",
+            "reason": "퇴사",
+            "terminationDate": "2026.03.19",
+            "penalty": 0,
+            "reflectedDate": "2026.03.19",
+            "selected": false
+          },
+          {
+            "id": "confirmed-62",
+            "receivedDate": "2026.03.26",
+            "manager": "",
+            "customerId": "E180147",
+            "companyName": "슈로더투자신탁운용",
+            "departmentName": "해외투자운용부",
+            "reason": "계약만료",
+            "terminationDate": "2026.03.26",
+            "penalty": 0,
+            "reflectedDate": "2026.03.26",
+            "selected": false
+          },
+          {
+            "id": "confirmed-63",
+            "receivedDate": "2026.03.26",
+            "manager": "",
+            "customerId": "E080082",
+            "companyName": "슈로더투자신탁운용",
+            "departmentName": "해외투자운용부",
+            "reason": "계약만료",
+            "terminationDate": "2026.03.26",
+            "penalty": 0,
+            "reflectedDate": "2026.03.26",
+            "selected": false
+          },
+          {
+            "id": "confirmed-64",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E140021",
+            "companyName": "동양생명보험",
+            "departmentName": "연금운용팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-65",
+            "receivedDate": "2026.01.15",
+            "manager": "",
+            "customerId": "E200356",
+            "companyName": "하나생명보험",
+            "departmentName": "특별계정부",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.15",
+            "penalty": 0,
+            "reflectedDate": "2026.01.15",
+            "selected": false
+          },
+          {
+            "id": "confirmed-66",
+            "receivedDate": "2026.01.22",
+            "manager": "",
+            "customerId": "E180635",
+            "companyName": "동양생명보험",
+            "departmentName": "투자팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.22",
+            "penalty": 0,
+            "reflectedDate": "2026.01.22",
+            "selected": false
+          },
+          {
+            "id": "confirmed-67",
+            "receivedDate": "2026.03.19",
+            "manager": "",
+            "customerId": "E230024",
+            "companyName": "아이엠라이프생명보험",
+            "departmentName": "임원실",
+            "reason": "비용절감",
+            "terminationDate": "2026.03.19",
+            "penalty": 0,
+            "reflectedDate": "2026.03.19",
+            "selected": false
+          },
+          {
+            "id": "confirmed-68",
+            "receivedDate": "2026.03.19",
+            "manager": "",
+            "customerId": "E130120",
+            "companyName": "삼성화재해상보험",
+            "departmentName": "특별계정운용파트",
+            "reason": "비용절감",
+            "terminationDate": "2026.03.19",
+            "penalty": 0,
+            "reflectedDate": "2026.03.19",
+            "selected": false
+          },
+          {
+            "id": "confirmed-69",
+            "receivedDate": "2026.04.02",
+            "manager": "",
+            "customerId": "E170381",
+            "companyName": "동양생명보험",
+            "departmentName": "투자팀",
+            "reason": "휴직/장기출장",
+            "terminationDate": "2026.04.02",
+            "penalty": 0,
+            "reflectedDate": "2026.04.02",
+            "selected": false
+          },
+          {
+            "id": "confirmed-70",
+            "receivedDate": "2026.04.02",
+            "manager": "",
+            "customerId": "E240162",
+            "companyName": "동양생명보험",
+            "departmentName": "투자팀",
+            "reason": "합병매각",
+            "terminationDate": "2026.04.02",
+            "penalty": 0,
+            "reflectedDate": "2026.04.02",
+            "selected": false
+          },
+          {
+            "id": "confirmed-71",
+            "receivedDate": "2026.04.09",
+            "manager": "",
+            "customerId": "E160035",
+            "companyName": "아이엠라이프생명보험",
+            "departmentName": "변액운용부",
+            "reason": "비용절감",
+            "terminationDate": "2026.04.09",
+            "penalty": 0,
+            "reflectedDate": "2026.04.09",
+            "selected": false
+          },
+          {
+            "id": "confirmed-72",
+            "receivedDate": "2026.04.09",
+            "manager": "",
+            "customerId": "E140538",
+            "companyName": "동양생명보험",
+            "departmentName": "투자팀",
+            "reason": "합병매각",
+            "terminationDate": "2026.04.09",
+            "penalty": 0,
+            "reflectedDate": "2026.04.09",
+            "selected": false
+          },
+          {
+            "id": "confirmed-73",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E210439",
+            "companyName": "트래디션코리아외국환중개",
+            "departmentName": "FICC Team",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-74",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E210440",
+            "companyName": "트래디션코리아외국환중개",
+            "departmentName": "FICC데스크",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-75",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E200482",
+            "companyName": "새마을금고중앙회",
+            "departmentName": "투자전략부",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-76",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E151202",
+            "companyName": "비지시캐피탈마켓외국환중개",
+            "departmentName": "채권팀",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-77",
+            "receivedDate": "2026.01.22",
+            "manager": "",
+            "customerId": " E060084",
+            "companyName": "서울외국환중개",
+            "departmentName": "외환매매팀",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.22",
+            "penalty": 0,
+            "reflectedDate": "2026.01.22",
+            "selected": false
+          },
+          {
+            "id": "confirmed-78",
+            "receivedDate": "2026.04.02",
+            "manager": "",
+            "customerId": "E240099",
+            "companyName": "다이몬아시아캐피탈싱가폴",
+            "departmentName": "캐피탈",
+            "reason": "계약만료",
+            "terminationDate": "2026.04.02",
+            "penalty": 0,
+            "reflectedDate": "2026.04.02",
+            "selected": false
+          },
+          {
+            "id": "confirmed-79",
+            "receivedDate": "2026.01.22",
+            "manager": "",
+            "customerId": "E150503",
+            "companyName": "공무원연금공단",
+            "departmentName": "자금운용단 채권운용팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.22",
+            "penalty": 0,
+            "reflectedDate": "2026.01.22",
+            "selected": false
+          },
+          {
+            "id": "confirmed-80",
+            "receivedDate": "2026.01.29",
+            "manager": "",
+            "customerId": "E170549",
+            "companyName": "국민경제자문회의지원단",
+            "departmentName": "기획총괄팀(TV연결)",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.29",
+            "penalty": 0,
+            "reflectedDate": "2026.01.29",
+            "selected": false
+          },
+          {
+            "id": "confirmed-81",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E210507",
+            "companyName": "해성디에스",
+            "departmentName": "대표실",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-82",
+            "receivedDate": "2026.01.08",
+            "manager": "",
+            "customerId": "E220189",
+            "companyName": "삼성에스디아이",
+            "departmentName": "구매팀",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.08",
+            "penalty": 0,
+            "reflectedDate": "2026.01.08",
+            "selected": false
+          },
+          {
+            "id": "confirmed-83",
+            "receivedDate": "2026.01.15",
+            "manager": "",
+            "customerId": "E131312",
+            "companyName": "엘지생활건강",
+            "departmentName": "홍보팀",
+            "reason": "계약만료",
+            "terminationDate": "2026.01.15",
+            "penalty": 0,
+            "reflectedDate": "2026.01.15",
+            "selected": false
+          },
+          {
+            "id": "confirmed-84",
+            "receivedDate": "2026.01.22",
+            "manager": "",
+            "customerId": "E130452",
+            "companyName": "인터플렉스",
+            "departmentName": "자금팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.01.22",
+            "penalty": 0,
+            "reflectedDate": "2026.01.22",
+            "selected": false
+          },
+          {
+            "id": "confirmed-85",
+            "receivedDate": "2026.02.05",
+            "manager": "",
+            "customerId": "E130034",
+            "companyName": "엘지생활건강",
+            "departmentName": "홍보팀",
+            "reason": "계약만료",
+            "terminationDate": "2026.02.05",
+            "penalty": 0,
+            "reflectedDate": "2026.02.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-86",
+            "receivedDate": "2026.02.05",
+            "manager": "",
+            "customerId": "E210574",
+            "companyName": "아이피나우",
+            "departmentName": "대표이사실",
+            "reason": "계약만료",
+            "terminationDate": "2026.02.05",
+            "penalty": 0,
+            "reflectedDate": "2026.02.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-87",
+            "receivedDate": "2026.02.05",
+            "manager": "",
+            "customerId": "E080286",
+            "companyName": "삼성물산",
+            "departmentName": "임원실",
+            "reason": "퇴사",
+            "terminationDate": "2026.02.05",
+            "penalty": 1000000,
+            "reflectedDate": "2026.02.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-88",
+            "receivedDate": "2026.02.05",
+            "manager": "",
+            "customerId": "E240353",
+            "companyName": "삼우종합건축사사무소",
+            "departmentName": "임원실",
+            "reason": "조직개편",
+            "terminationDate": "2026.02.05",
+            "penalty": 1925000,
+            "reflectedDate": "2026.02.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-89",
+            "receivedDate": "2026.02.12",
+            "manager": "",
+            "customerId": "E180264",
+            "companyName": "씨제이이엔엠",
+            "departmentName": "자금팀",
+            "reason": "조직개편",
+            "terminationDate": "2026.02.12",
+            "penalty": 765000,
+            "reflectedDate": "2026.02.12",
+            "selected": false
+          },
+          {
+            "id": "confirmed-90",
+            "receivedDate": "2026.02.12",
+            "manager": "",
+            "customerId": "E020578",
+            "companyName": "엘엑스인터내셔널",
+            "departmentName": "경영기획팀",
+            "reason": "활용도 저조",
+            "terminationDate": "2026.02.12",
+            "penalty": 1500000,
+            "reflectedDate": "2026.02.12",
+            "selected": false
+          },
+          {
+            "id": "confirmed-91",
+            "receivedDate": "2026.02.12",
+            "manager": "",
+            "customerId": "E131263",
+            "companyName": "에스케이에코플랜트",
+            "departmentName": "재무담당",
+            "reason": "퇴사",
+            "terminationDate": "2026.02.12",
+            "penalty": 2750000,
+            "reflectedDate": "2026.02.12",
+            "selected": false
+          },
+          {
+            "id": "confirmed-92",
+            "receivedDate": "2026.02.12",
+            "manager": "",
+            "customerId": "E131340",
+            "companyName": "에스케이에코플랜트",
+            "departmentName": "재무담당",
+            "reason": "퇴사",
+            "terminationDate": "2026.02.12",
+            "penalty": 2750000,
+            "reflectedDate": "2026.02.12",
+            "selected": false
+          },
+          {
+            "id": "confirmed-93",
+            "receivedDate": "2026.03.05",
+            "manager": "",
+            "customerId": "E151214",
+            "companyName": "부산대학교산학협력단",
+            "departmentName": "경제통상연구원",
+            "reason": "활용도 저조",
+            "terminationDate": "2026.03.05",
+            "penalty": 0,
+            "reflectedDate": "2026.03.05",
+            "selected": false
+          },
+          {
+            "id": "confirmed-94",
+            "receivedDate": "2026.04.02",
+            "manager": "",
+            "customerId": "E100336",
+            "companyName": "두산",
+            "departmentName": "임원실",
+            "reason": "퇴사",
+            "terminationDate": "2026.04.02",
+            "penalty": 750000,
+            "reflectedDate": "2026.04.02",
+            "selected": false
+          },
+          {
+            "id": "confirmed-95",
+            "receivedDate": "2026.04.02",
+            "manager": "",
+            "customerId": "E240133",
+            "companyName": "유진투자증권",
+            "departmentName": "CM3팀",
+            "reason": "퇴사",
+            "terminationDate": "2026.04.02",
+            "penalty": 500000,
+            "reflectedDate": "2026.04.02",
+            "selected": false
+          },
+          {
+            "id": "confirmed-96",
+            "receivedDate": "2026.04.02",
+            "manager": "",
+            "customerId": "E190587",
+            "companyName": "에스티엑스마린서비스",
+            "departmentName": "경영관리본부",
+            "reason": "비용절감",
+            "terminationDate": "2026.04.02",
+            "penalty": 0,
+            "reflectedDate": "2026.04.02",
+            "selected": false
+          },
+          {
+            "id": "confirmed-97",
+            "receivedDate": "2026.04.09",
+            "manager": "",
+            "customerId": "E250081",
+            "companyName": "셀트리온제약",
+            "departmentName": "경영관리실",
+            "reason": "계약만료",
+            "terminationDate": "2026.04.09",
+            "penalty": 0,
+            "reflectedDate": "2026.04.09",
+            "selected": false
+          }
+        ],
         "releasedHoldItems": []
       }
     ]

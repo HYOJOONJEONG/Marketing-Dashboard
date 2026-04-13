@@ -22,7 +22,7 @@ const tableClass = "w-full text-[14px]"
 const thClass = "border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-[13px] font-semibold text-slate-600"
 const tdClass = "border-t border-slate-200 px-3 py-2.5 align-middle text-[14px] text-slate-800"
 const weeklyReportTableClass = "weekly-report-table w-full table-fixed text-[14px]"
-const weeklyThClass = "border-b border-slate-200 bg-slate-50 px-2.5 py-2 text-center text-[13px] font-semibold text-slate-700"
+const weeklyThClass = "border-b border-slate-200 bg-slate-100 px-2.5 py-2 text-center text-[13px] font-semibold text-slate-700"
 const weeklyTdClass = "border-t border-slate-200 px-2.5 py-2 text-center align-middle text-[14px] text-slate-800"
 const manualTableInputClass =
   "h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-center text-[13px] font-medium text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
@@ -352,8 +352,69 @@ function buildWeeklyIndustryOverviewRows(rows: any[]) {
   }))
 }
 
-const reportTerminationColumnsStatic = ["계약만료", "비용절감", "퇴사", "조직개편", "휴직,장기출장", "합병매각", "활용지조", "타사대체", "비용미납", "합계"] as const
+const reportTerminationColumnsStatic = ["계약만료", "비용절감", "퇴사", "조직개편", "휴직,장기출장", "합병매각", "활용도 저조", "타사대체", "비용미납", "합계"] as const
 const reportIndustryColumnsStatic = ["국내증권", "국내은행", "외국계", "자산운용", "보험사", "일반기업", "공사/정부", "연기금", "기타금융", "합계"] as const
+
+const terminationReasonAlias: Record<string, string> = {
+  "휴직/장기출장": "휴직,장기출장",
+  "휴직·장기출장": "휴직,장기출장",
+  "휴직,장기출장": "휴직,장기출장",
+  "활용지조": "활용도 저조",
+  "활용저조": "활용도 저조",
+  "활용저하": "활용도 저조",
+  "타사교체": "타사대체",
+  "타사대체": "타사대체",
+  "타사 대체": "타사대체",
+}
+
+function parseLooseNumber(value: unknown) {
+  const cleaned = String(value ?? "").replace(/[^\d.-]/g, "")
+  if (!cleaned) return 0
+  const num = Number(cleaned)
+  return Number.isNaN(num) ? 0 : num
+}
+
+function normalizeTerminationReason(reason: unknown) {
+  const raw = String(reason ?? "").trim()
+  if (!raw) return ""
+  const withoutDetail = raw.replace(/^기타\((.+)\)$/g, "기타")
+  const compact = withoutDetail.replace(/\s+/g, "").replace(/\//g, ",")
+  if (terminationReasonAlias[compact]) return terminationReasonAlias[compact]
+  if ((reportTerminationColumnsStatic as readonly string[]).includes(compact as any)) return compact
+  if (compact.includes("휴직") && compact.includes("장기출장")) return "휴직,장기출장"
+  if (compact.includes("타사")) return "타사대체"
+  if (compact.includes("활용")) return "활용도 저조"
+  return ""
+}
+
+function buildTerminationWeeklyCounts(items: any[]) {
+  const columns = reportTerminationColumnsStatic.slice(0, -1)
+  const indexMap = new Map(columns.map((column, index) => [column, index]))
+  const counts = Array.from({ length: columns.length }, () => 0)
+  ;(items || []).forEach((item: any) => {
+    const reason = normalizeTerminationReason(item?.reason)
+    const index = reason ? indexMap.get(reason) : undefined
+    if (index == null) return
+    counts[index] += 1
+  })
+  const total = counts.reduce((sum, value) => sum + value, 0)
+  return [...counts.map((value) => String(value)), String(total)]
+}
+
+function computeTerminationRowTotal(values: any[]) {
+  const hasValue = values.some((value) => String(value ?? "").trim() !== "")
+  if (!hasValue) return ""
+  const hasPercent = values.some((value) => String(value ?? "").includes("%"))
+  const sum = values.reduce((total, value) => total + parseLooseNumber(value), 0)
+  return hasPercent ? `${formatNumber(sum)}%` : formatNumber(sum)
+}
+
+function computeIndustryRowTotal(values: any[]) {
+  const hasValue = values.some((value) => String(value ?? "").trim() !== "")
+  if (!hasValue) return ""
+  const sum = values.reduce((total, value) => total + parseLooseNumber(value), 0)
+  return formatNumber(sum)
+}
 
 function parseGoalMonthOrder(value: unknown) {
   const text = String(value ?? "").trim()
@@ -625,8 +686,10 @@ function splitRevenueMetric(text: string, fallbackLabel: string) {
   const safeText = sanitizeText(text, "")
   const matched = safeText.match(/^(.*?)\s*(\(.+\))$/)
   if (matched) {
+    const rawLabel = matched[1].trim()
+    const label = fallbackLabel.includes("추정") ? fallbackLabel : (rawLabel || fallbackLabel)
     return {
-      label: matched[1].trim() || fallbackLabel,
+      label,
       value: matched[2].trim().replace(/^\((.*)\)$/, "$1"),
     }
   }
@@ -798,6 +861,26 @@ export function DashboardShell({
   })
   const [editingContractId, setEditingContractId] = useState<string | null>(null)
   const [editingContractDraft, setEditingContractDraft] = useState<any>({})
+  const [contractQuery, setContractQuery] = useState("")
+  const [contractStatusFilter, setContractStatusFilter] = useState("all")
+  const [contractReplacementFilter, setContractReplacementFilter] = useState("all")
+  const [contractMonthFilter, setContractMonthFilter] = useState("all")
+  const [contractSort, setContractSort] = useState<{
+    key:
+      | "companyName"
+      | "departmentName"
+      | "idCode"
+      | "industry"
+      | "contractMonth"
+      | "recommender"
+      | "documentStatus"
+      | "replacementType"
+      | "note"
+    dir: "asc" | "desc"
+  }>({
+    key: "contractMonth",
+    dir: "desc",
+  })
   const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null)
   const [editingCollectionDraft, setEditingCollectionDraft] = useState<any>({})
   const [collectionYearFilter, setCollectionYearFilter] = useState<number | "all">(initialData?.collection?.yearFilter || 2026)
@@ -831,10 +914,24 @@ export function DashboardShell({
     startDate: "",
     endDate: "",
   })
-  const [terminationSort, setTerminationSort] = useState<{ key: "receivedDate" | "terminationDate"; dir: "asc" | "desc" }>({
-    key: "receivedDate",
+  const [terminationSort, setTerminationSort] = useState<{
+    key:
+      | "receivedDate"
+      | "terminationDate"
+      | "manager"
+      | "customerId"
+      | "companyName"
+      | "departmentName"
+      | "reason"
+      | "penalty"
+    dir: "asc" | "desc"
+  }>({
+    key: "terminationDate",
     dir: "desc",
   })
+  const [terminationQuery, setTerminationQuery] = useState("")
+  const [terminationReasonFilter, setTerminationReasonFilter] = useState("all")
+  const [terminationDateFilter, setTerminationDateFilter] = useState("all")
   const [holdSort, setHoldSort] = useState<{ key: "receivedDate" | "startDate" | "endDate"; dir: "asc" | "desc" }>({
     key: "receivedDate",
     dir: "desc",
@@ -846,6 +943,9 @@ export function DashboardShell({
   const [showTerminationArchive, setShowTerminationArchive] = useState(false)
   const [selectedConfirmedIds, setSelectedConfirmedIds] = useState<string[]>([])
   const [selectedReleasedIds, setSelectedReleasedIds] = useState<string[]>([])
+  const [holdReceivedDateFilter, setHoldReceivedDateFilter] = useState("all")
+  const [holdEndDateFilter, setHoldEndDateFilter] = useState("all")
+  const [holdQuery, setHoldQuery] = useState("")
 
   const weeklyReport = data.weeklyReport || {}
   const contracts = data.contracts || []
@@ -895,6 +995,51 @@ export function DashboardShell({
     })
   }, [data, termination, startTransition])
   const includedContracts = useMemo(() => contracts.filter((row: any) => row.includedInWeekly), [contracts])
+  const contractStatusOptions = useMemo(() => {
+    const values = new Set<string>()
+    contracts.forEach((row: any) => {
+      if (row?.documentStatus) values.add(String(row.documentStatus))
+    })
+    return ["all", ...Array.from(values)]
+  }, [contracts])
+  const contractReplacementOptions = useMemo(() => {
+    const values = new Set<string>()
+    contracts.forEach((row: any) => {
+      if (row?.replacementType) values.add(String(row.replacementType))
+    })
+    return ["all", ...Array.from(values)]
+  }, [contracts])
+  const contractMonthOptions = useMemo(() => {
+    const values = new Set<string>()
+    contracts.forEach((row: any) => {
+      if (row?.contractMonth) values.add(String(row.contractMonth))
+    })
+    return ["all", ...Array.from(values)]
+  }, [contracts])
+  const filteredContracts = useMemo(() => {
+    const query = contractQuery.trim().toLowerCase()
+    return contracts.filter((row: any) => {
+      if (contractStatusFilter !== "all" && row.documentStatus !== contractStatusFilter) return false
+      if (contractReplacementFilter !== "all" && (row.replacementType || "신규") !== contractReplacementFilter) return false
+      if (contractMonthFilter !== "all" && row.contractMonth !== contractMonthFilter) return false
+      if (!query) return true
+      return [
+        row.companyName,
+        row.departmentName,
+        row.idCode,
+        row.industry,
+        row.contractMonth,
+        row.recommender,
+        row.note,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query))
+    })
+  }, [contracts, contractQuery, contractStatusFilter, contractReplacementFilter, contractMonthFilter])
+  const sortedContracts = useMemo(
+    () => sortByKey(filteredContracts, contractSort.key, contractSort.dir),
+    [filteredContracts, contractSort],
+  )
 
   useEffect(() => {
     if (manualRevenueHeaderEdited) return
@@ -972,9 +1117,26 @@ export function DashboardShell({
       const name = String(row.recommender || "").trim() || "미입력"
       map.set(name, (map.get(name) || 0) + 1)
     })
+    const preferredOrder = [
+      "이상철",
+      "신무길",
+      "이홍민",
+      "정효준",
+      "조홍희",
+      "정진영",
+      "박혜리",
+      "기타",
+    ]
     return [...map.entries()]
       .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => (b.count - a.count) || a.label.localeCompare(b.label, "ko"))
+      .sort((a, b) => {
+        const ai = preferredOrder.indexOf(a.label)
+        const bi = preferredOrder.indexOf(b.label)
+        if (ai >= 0 || bi >= 0) {
+          return (ai >= 0 ? ai : 999) - (bi >= 0 ? bi : 999)
+        }
+        return a.label.localeCompare(b.label, "ko")
+      })
   }, [contracts])
   const contractStatsRowCount = useMemo(() => (contractMonthStats.length > 12 ? 3 : 2), [contractMonthStats.length])
   const contractMonthColumns = contractStatsRowCount === 3 ? 8 : 6
@@ -1036,14 +1198,77 @@ export function DashboardShell({
       ],
     }
   }, [collectionIndustrySummary])
+  const filteredTerminationItemsBase = useMemo(() => {
+    const query = terminationQuery.trim().toLowerCase()
+    const rows = selectedSheet?.items || []
+    return rows.filter((row: any) => {
+      if (terminationSort.key === "terminationDate" && !String(row.terminationDate || "").trim()) {
+        return false
+      }
+      if (terminationDateFilter !== "all" && normalizeDate(row.terminationDate) !== terminationDateFilter) {
+        return false
+      }
+      if (terminationReasonFilter !== "all") {
+        if (terminationReasonFilter === "기타") {
+          if (!String(row.reason || "").includes("기타")) return false
+        } else {
+          const normalized = normalizeTerminationReason(row.reason)
+          if (normalized !== terminationReasonFilter) return false
+        }
+      }
+      if (!query) return true
+      return [row.companyName, row.departmentName, row.customerId, row.manager, row.reason]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query))
+    })
+  }, [selectedSheet, terminationQuery, terminationReasonFilter, terminationDateFilter, terminationSort.key])
+  const terminationReasonOptions = useMemo(() => {
+    const base = reportTerminationColumnsStatic.slice(0, -1)
+    return ["all", ...base, "기타"]
+  }, [])
+  const terminationDateOptions = useMemo(() => {
+    const dates = new Set<string>()
+    ;(selectedSheet?.items || []).forEach((row: any) => {
+      const value = normalizeDate(row.terminationDate)
+      if (value) dates.add(value)
+    })
+    return ["all", ...Array.from(dates).sort().reverse()]
+  }, [selectedSheet])
   const terminationItems = useMemo(
-    () => sortByKey(selectedSheet?.items || [], terminationSort.key, terminationSort.dir),
-    [selectedSheet, terminationSort],
+    () => sortByKey(filteredTerminationItemsBase, terminationSort.key, terminationSort.dir),
+    [filteredTerminationItemsBase, terminationSort],
   )
   const holdItems = useMemo(
     () => sortByKey(selectedSheet?.holdItems || [], holdSort.key, holdSort.dir),
     [selectedSheet, holdSort],
   )
+  const filteredHoldItems = useMemo(() => {
+    const query = holdQuery.trim().toLowerCase()
+    return holdItems.filter((row: any) => {
+      if (holdReceivedDateFilter !== "all" && normalizeDate(row.receivedDate) !== holdReceivedDateFilter) return false
+      if (holdEndDateFilter !== "all" && normalizeDate(row.endDate) !== holdEndDateFilter) return false
+      if (!query) return true
+      return [row.companyName, row.departmentName, row.customerId, row.manager, row.reason]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query))
+    })
+  }, [holdItems, holdReceivedDateFilter, holdEndDateFilter, holdQuery])
+  const holdReceivedDateOptions = useMemo(() => {
+    const dates = new Set<string>()
+    holdItems.forEach((row: any) => {
+      const value = normalizeDate(row.receivedDate)
+      if (value) dates.add(value)
+    })
+    return ["all", ...Array.from(dates).sort().reverse()]
+  }, [holdItems])
+  const holdEndDateOptions = useMemo(() => {
+    const dates = new Set<string>()
+    holdItems.forEach((row: any) => {
+      const value = normalizeDate(row.endDate)
+      if (value) dates.add(value)
+    })
+    return ["all", ...Array.from(dates).sort().reverse()]
+  }, [holdItems])
   const confirmedTerminationItems = useMemo(
     () => sortByKey(selectedSheet?.confirmedItems || [], terminationSort.key, terminationSort.dir),
     [selectedSheet, terminationSort],
@@ -1069,11 +1294,11 @@ export function DashboardShell({
   )
   const reasonSummary = useMemo(() => {
     const map = new Map<string, number>()
-    terminationItems.forEach((row: any) => {
+    ;(selectedSheet?.items || []).forEach((row: any) => {
       map.set(row.reason || "기타", (map.get(row.reason || "기타") || 0) + 1)
     })
     return [...map.entries()]
-  }, [terminationItems])
+  }, [selectedSheet])
 
   function persist(nextData: any) {
     const now = Date.now()
@@ -1158,12 +1383,40 @@ export function DashboardShell({
       const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY)
       if (!raw) return
       const saved = JSON.parse(raw)
+      const initialConfirmed =
+        Array.isArray(data?.termination?.sheets) && data.termination.sheets[0]
+          ? data.termination.sheets[0].confirmedItems || []
+          : []
+      if (!Array.isArray(saved?.termination?.sheets) || !saved.termination.sheets[0]) {
+        saved.termination = data.termination
+      } else {
+        const savedConfirmed = saved.termination.sheets[0].confirmedItems
+        if (
+          (!Array.isArray(savedConfirmed) || savedConfirmed.length === 0) &&
+          Array.isArray(initialConfirmed) &&
+          initialConfirmed.length > 0
+        ) {
+          saved.termination.sheets[0].confirmedItems = initialConfirmed
+        }
+      }
       setData(saved)
       setCollectionTab(saved?.collection?.tab || "integrated")
       setCollectionYearFilter(saved?.collection?.yearFilter || 2026)
       setCollectionStatusFilter(saved?.collection?.statusFilter || "all")
     } catch {}
   }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const url = new URL(window.location.href)
+    url.searchParams.set("view", view)
+    if (view === "collection") {
+      url.searchParams.set("tab", collectionTab)
+    } else {
+      url.searchParams.delete("tab")
+    }
+    window.history.replaceState({}, "", url.toString())
+  }, [view, collectionTab])
 
   function handleUndoLastAction() {
     if (!historyStack.length) {
@@ -1338,6 +1591,36 @@ export function DashboardShell({
     }))
   }
 
+  function loadTerminationOverviewFromWeeklyList() {
+    const confirmedItems = Array.isArray(selectedSheet?.confirmedItems) ? selectedSheet.confirmedItems : []
+    const weeklySelected = Array.isArray(selectedSheet?.items)
+      ? selectedSheet.items.filter((row: any) => row?.selected)
+      : []
+    const weeklyValues = buildTerminationWeeklyCounts(weeklySelected)
+    const confirmedValues = buildTerminationWeeklyCounts(confirmedItems)
+    const combineValues = (base: string[], extra: string[]) => {
+      const totalIndex = base.length - 1
+      const combined = base.map((value, index) =>
+        index === totalIndex ? "0" : String(parseLooseNumber(value) + parseLooseNumber(extra[index])),
+      )
+      const total = combined
+        .slice(0, totalIndex)
+        .reduce((sum, value) => sum + parseLooseNumber(value), 0)
+      combined[totalIndex] = String(total)
+      return combined
+    }
+    const cumulativeValues = combineValues(confirmedValues, weeklyValues)
+    setManualDraft((prev: any) => {
+      const terminationOverviewRows = cloneData(prev.terminationOverviewRows || [])
+      const weeklyIndex = terminationOverviewRows.findIndex((row: any) => row.label === "주간")
+      const cumulativeIndex = terminationOverviewRows.findIndex((row: any) => row.label === "누적")
+      if (weeklyIndex === -1 && cumulativeIndex === -1) return prev
+      if (weeklyIndex !== -1) terminationOverviewRows[weeklyIndex].values = weeklyValues
+      if (cumulativeIndex !== -1) terminationOverviewRows[cumulativeIndex].values = cumulativeValues
+      return { ...prev, terminationOverviewRows }
+    })
+  }
+
   function updateManualTerminationOverviewCell(rowIndex: number, valueIndex: number, value: string) {
     setManualDraft((prev: any) => {
       const terminationOverviewRows = cloneData(prev.terminationOverviewRows || [])
@@ -1384,12 +1667,10 @@ export function DashboardShell({
   }
 
   function toggleWeeklySelection(contractId: string) {
-    startTransition(async () => {
-      const nextContracts = contracts.map((row: any) =>
-        row.id === contractId ? { ...row, includedInWeekly: !row.includedInWeekly } : row,
-      )
-      await persist({ ...data, contracts: nextContracts })
-    })
+    const nextContracts = contracts.map((row: any) =>
+      row.id === contractId ? { ...row, includedInWeekly: !row.includedInWeekly } : row,
+    )
+    persist({ ...data, contracts: nextContracts })
   }
 
   function handleMoveWeeklySelectionToCollection() {
@@ -1653,18 +1934,35 @@ export function DashboardShell({
 
   function toggleTerminationSelected(itemId: string) {
     if (!selectedSheet) return
-    const activeItems = selectedSheet.items || []
-    const confirmedItems = selectedSheet.confirmedItems || []
-    const targetItem = activeItems.find((row: any) => row.id === itemId)
-    if (!targetItem) return
     startTransition(async () => {
       const nextSheets = (termination.sheets || []).map((sheet: any) =>
         sheet.id === selectedSheet.id
           ? {
               ...sheet,
-              items: (sheet.items || []).filter((row: any) => row.id !== itemId),
+              items: (sheet.items || []).map((row: any) =>
+                row.id === itemId ? { ...row, selected: !row.selected } : row,
+              ),
+            }
+          : sheet,
+      )
+      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
+    })
+  }
+
+  function handleConfirmSelectedTerminations() {
+    if (!selectedSheet) return
+    const activeItems = selectedSheet.items || []
+    const selectedItems = activeItems.filter((row: any) => row.selected)
+    if (!selectedItems.length) return
+    const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
+    startTransition(async () => {
+      const nextSheets = (termination.sheets || []).map((sheet: any) =>
+        sheet.id === selectedSheet.id
+          ? {
+              ...sheet,
+              items: (sheet.items || []).filter((row: any) => !row.selected),
               confirmedItems: [
-                { ...targetItem, selected: true, reflectedDate: normalizeDate(new Date().toISOString().slice(0, 10)) },
+                ...selectedItems.map((row: any) => ({ ...row, reflectedDate })),
                 ...(sheet.confirmedItems || []),
               ],
             }
@@ -1800,8 +2098,37 @@ export function DashboardShell({
     })
   }
 
-  function toggleTerminationSort(key: "receivedDate" | "terminationDate") {
+  function toggleTerminationSort(
+    key:
+      | "receivedDate"
+      | "terminationDate"
+      | "manager"
+      | "customerId"
+      | "companyName"
+      | "departmentName"
+      | "reason"
+      | "penalty",
+  ) {
     setTerminationSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "desc" },
+    )
+  }
+
+  function toggleContractSort(
+    key:
+      | "companyName"
+      | "departmentName"
+      | "idCode"
+      | "industry"
+      | "contractMonth"
+      | "recommender"
+      | "documentStatus"
+      | "replacementType"
+      | "note",
+  ) {
+    setContractSort((prev) =>
       prev.key === key
         ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
         : { key, dir: "desc" },
@@ -2198,7 +2525,7 @@ export function DashboardShell({
   const revenueNoteText = buildRevenueNoteText(displayBaseDate, weeklyReport?.revenueUnitPrice)
   const revenueHeaderMetric = splitRevenueMetric(revenueHeaderText, "주간 순증 매출")
   const revenueSubtitleMetricOne = splitRevenueMetric(revenueSubtitleOne, "26년 순증 매출")
-  const revenueSubtitleMetricTwo = splitRevenueMetric(revenueSubtitleTwo, "연간 누적 매출")
+  const revenueSubtitleMetricTwo = splitRevenueMetric(revenueSubtitleTwo, "연간 누적 매출 (추정)")
   const revenueNoteParts = splitRevenueNoteText(revenueNoteText)
   const manualGoalRows = buildGoalRows(manualDraft.goalRows || [])
   const manualSummary = manualDraft.manualSummary || {}
@@ -2394,9 +2721,8 @@ export function DashboardShell({
         </aside>
 
         <main className="flex-1 px-5 py-5">
-          <div className={`${cardClass} dashboard-header mb-5 flex items-start justify-between px-5 py-4`}>
+            <div className={`${cardClass} dashboard-header mb-5 flex items-start justify-between px-5 py-4`}>
             <div>
-              <div className="text-[14px] text-slate-500">기준일 : {displayBaseDate}</div>
               <h1 className="mt-2 text-[20px] font-black tracking-[-0.04em] text-slate-950">{viewTitles[view]}</h1>
             </div>
             <div className="dashboard-header-actions flex items-center gap-3">
@@ -2426,31 +2752,15 @@ export function DashboardShell({
           {view === "weekly-report" && (
             <div className="weekly-report-print space-y-4">
               <section className="print-report-cover hidden print:block">
-              <div className="print-report-header-row">
-                <div className="print-report-spacer" />
-              </div>
-                <div className="print-report-title">주간실적보고</div>
-              </section>
-
-              <section className={`${cardClass} p-5 print-report-sheet-section`}>
-                <div className="mb-3 text-[18px] font-bold print-report-section-title">계약 내역</div>
-                <div className="overflow-hidden rounded-2xl border border-slate-200">
-                  <table className={`${weeklyReportTableClass} print-contract-table`}>
-                    <thead><tr>{["회사명","부서","아이디","업종","계약월","계약서 회수","미회수"].map((head)=><th key={head} className={weeklyThClass}>{head}</th>)}</tr></thead>
-                    <tbody>
-                      {includedContracts.length ? includedContracts.map((row: any) => (
-                        <tr key={row.id}>
-                          <td className={`${weeklyTdClass} text-left`}>{row.companyName}</td>
-                          <td className={`${weeklyTdClass} text-left`}>{row.departmentName}</td>
-                          <td className={weeklyTdClass}>{row.idCode}</td>
-                          <td className={weeklyTdClass}>{row.industry}</td>
-                          <td className={weeklyTdClass}>{row.contractMonth}</td>
-                          <td className={weeklyTdClass}>{row.documentStatus === "회수" ? "o" : ""}</td>
-                          <td className={weeklyTdClass}>{row.documentStatus === "미회수" ? "o" : ""}</td>
-                        </tr>
-                      )) : <tr><td className={weeklyTdClass} colSpan={7}>금주 반영 계약이 없습니다.</td></tr>}
-                    </tbody>
-                  </table>
+                <div className="print-report-header-row">
+                  <div className="print-report-spacer" />
+                </div>
+                <div className="print-report-title-row">
+                  <div className="print-report-title">주간실적보고</div>
+                  <div className="print-report-meta">
+                    <div>인포Biz본부</div>
+                    <div>{displayBaseDate}</div>
+                  </div>
                 </div>
               </section>
 
@@ -2473,16 +2783,34 @@ export function DashboardShell({
                         </div>
                       </div>
                     </div>
-                    <div className="print-revenue-note">
-                      <div className="print-revenue-note-block">
-                        <div className="print-revenue-note-value">{revenueNoteParts.primary}</div>
+                  </div>
+                  <div className="print-revenue-note">
+                    <div className="print-revenue-note-block">
+                      <div className="print-revenue-note-value">
+                        {[revenueNoteParts.primary, revenueNoteParts.secondary].filter(Boolean).join(" / ")}
                       </div>
-                      {revenueNoteParts.secondary ? (
-                        <div className="print-revenue-note-block">
-                          <div className="print-revenue-note-value">{revenueNoteParts.secondary}</div>
-                        </div>
-                      ) : null}
                     </div>
+                  </div>
+                </div>
+                <div className="contract-section-wrap mt-4 mb-4">
+                  <div className="mb-3 text-[18px] font-bold report-section-title">계약 내역</div>
+                  <div className="overflow-hidden rounded-2xl border border-slate-200">
+                    <table className={`${weeklyReportTableClass} print-contract-table`}>
+                      <thead><tr>{["회사명","부서","아이디","업종","계약월","계약서 회수","미회수"].map((head)=><th key={head} className={weeklyThClass}>{head}</th>)}</tr></thead>
+                      <tbody>
+                        {includedContracts.length ? includedContracts.map((row: any) => (
+                          <tr key={row.id}>
+                          <td className={weeklyTdClass}>{row.companyName}</td>
+                          <td className={weeklyTdClass}>{row.departmentName}</td>
+                            <td className={weeklyTdClass}>{row.idCode}</td>
+                            <td className={weeklyTdClass}>{row.industry}</td>
+                            <td className={weeklyTdClass}>{row.contractMonth}</td>
+                            <td className={weeklyTdClass}>{row.documentStatus === "회수" ? "o" : ""}</td>
+                            <td className={weeklyTdClass}>{row.documentStatus === "미회수" ? "o" : ""}</td>
+                          </tr>
+                        )) : <tr><td className={weeklyTdClass} colSpan={7}>금주 반영 계약이 없습니다.</td></tr>}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
                 <div className="overflow-hidden rounded-2xl border border-slate-200">
@@ -2504,7 +2832,7 @@ export function DashboardShell({
                 </div>
               </section>
 
-              <section className={`${cardClass} p-5 print-report-sheet-section`}>
+              <section className={`${cardClass} p-5 print-report-sheet-section print-gap-after`}>
                 <div className="overflow-hidden rounded-2xl border border-slate-200">
                   <table className={`${weeklyReportTableClass} print-combined-summary-table`}>
                     <colgroup>
@@ -2584,8 +2912,8 @@ export function DashboardShell({
                 </div>
               </section>
 
-              <section className={`${cardClass} p-5 space-y-3 print-report-sheet-section`}>
-                <div className="text-[18px] font-bold print-report-section-title">{currentYear}년 판매 목표 (단말기 목표 6,364대, 순증 260대)</div>
+              <section className={`${cardClass} p-5 space-y-3 print-report-sheet-section print-tight print-gap-after`}>
+                <div className="text-[18px] font-bold report-section-title">{currentYear}년 판매 목표 (단말기 목표 6,364대, 순증 260대)</div>
                 <div className="overflow-hidden rounded-2xl border border-slate-200">
                   <table className={`${weeklyReportTableClass} print-goal-table`}>
                     <thead>
@@ -2635,8 +2963,8 @@ export function DashboardShell({
                 </div>
               </section>
 
-              <section className={`${cardClass} p-5 space-y-3 print-report-sheet-section`}>
-                <div className="text-[18px] font-bold print-report-section-title">유료 옵션 정보</div>
+              <section className={`${cardClass} p-5 space-y-3 print-report-sheet-section print-tight`}>
+                <div className="text-[18px] font-bold report-section-title">유료 옵션 정보</div>
                 <div className="overflow-hidden rounded-2xl border border-slate-200">
                   <table className={`${weeklyReportTableClass} print-industry-table print-paid-option-table`}>
                     <thead>
@@ -2660,7 +2988,6 @@ export function DashboardShell({
                   </table>
                 </div>
               </section>
-
               <section className={`${cardClass} p-5 space-y-3 print-report-sheet-section`}>
                 <div className="overflow-hidden rounded-2xl border border-slate-200">
                   <table className={`${weeklyReportTableClass} print-industry-table print-termination-table`}>
@@ -2680,11 +3007,18 @@ export function DashboardShell({
                       {reportTerminationRows.map((row) => (
                         <tr key={row.label}>
                           <td className={`${weeklyTdClass} whitespace-nowrap text-center font-bold`}>{row.label}</td>
-                          {row.values.map((value, index) => (
-                            <td key={`${row.label}-${reportTerminationColumns[index]}`} className={`${weeklyTdClass} ${row.label === "비율" ? "font-semibold" : ""}`}>
-                              {value}
-                            </td>
-                          ))}
+                          {row.values.map((value, index) => {
+                            const column = reportTerminationColumns[index]
+                            const isTotalColumn = column === "합계"
+                            const totalValue = isTotalColumn
+                              ? computeTerminationRowTotal((row.values || []).slice(0, reportTerminationColumns.length - 1))
+                              : value
+                            return (
+                              <td key={`${row.label}-${column}`} className={`${weeklyTdClass} ${row.label === "비율" ? "font-semibold" : ""}`}>
+                                {totalValue}
+                              </td>
+                            )
+                          })}
                         </tr>
                       ))}
                     </tbody>
@@ -2711,11 +3045,18 @@ export function DashboardShell({
                       {reportIndustryRows.map((row) => (
                         <tr key={row.label}>
                           <td className={`${weeklyTdClass} whitespace-nowrap text-center font-bold`}>{row.label}</td>
-                          {row.values.map((value, index) => (
-                            <td key={`${row.label}-${reportIndustryColumns[index]}`} className={weeklyTdClass}>
-                              {value}
-                            </td>
-                          ))}
+                          {row.values.map((value, index) => {
+                            const column = reportIndustryColumns[index]
+                            const isTotalColumn = column === "합계"
+                            const totalValue = isTotalColumn
+                              ? computeIndustryRowTotal((row.values || []).slice(0, reportIndustryColumns.length - 1))
+                              : value
+                            return (
+                              <td key={`${row.label}-${column}`} className={weeklyTdClass}>
+                                {totalValue}
+                              </td>
+                            )
+                          })}
                         </tr>
                       ))}
                     </tbody>
@@ -2887,11 +3228,102 @@ export function DashboardShell({
                   </div>
                 </div>
               </div>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <input
+                  className="h-9 w-64 rounded-xl border border-slate-200 bg-white px-3 text-[13px]"
+                  placeholder="회사명/부서/아이디/권유자 검색"
+                  value={contractQuery}
+                  onChange={(e) => setContractQuery(e.target.value)}
+                />
+                <select
+                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-[13px]"
+                  value={contractStatusFilter}
+                  onChange={(e) => setContractStatusFilter(e.target.value)}
+                >
+                  {contractStatusOptions.map((option) => (
+                    <option key={`contract-status-${option}`} value={option}>
+                      {option === "all" ? "계약서 상태 전체" : option}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-[13px]"
+                  value={contractReplacementFilter}
+                  onChange={(e) => setContractReplacementFilter(e.target.value)}
+                >
+                  {contractReplacementOptions.map((option) => (
+                    <option key={`contract-replacement-${option}`} value={option}>
+                      {option === "all" ? "대체여부 전체" : option}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-[13px]"
+                  value={contractMonthFilter}
+                  onChange={(e) => setContractMonthFilter(e.target.value)}
+                >
+                  {contractMonthOptions.map((option) => (
+                    <option key={`contract-month-${option}`} value={option}>
+                      {option === "all" ? "계약월 전체" : option}
+                    </option>
+                  ))}
+                </select>
+                {(contractQuery ||
+                  contractStatusFilter !== "all" ||
+                  contractReplacementFilter !== "all" ||
+                  contractMonthFilter !== "all") && (
+                  <button
+                    type="button"
+                    className="h-9 rounded-xl border border-slate-200 px-3 text-[12px] font-semibold text-slate-600"
+                    onClick={() => {
+                      setContractQuery("")
+                      setContractStatusFilter("all")
+                      setContractReplacementFilter("all")
+                      setContractMonthFilter("all")
+                    }}
+                  >
+                    필터 초기화
+                  </button>
+                )}
+                <div className="ml-auto text-[12px] text-slate-500">표시 {formatNumber(sortedContracts.length)}건</div>
+              </div>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed text-[12px]">
-                  <thead><tr>{["No.","회사명","부서","아이디","업종","계약월","권유자","계약서 상태","대체여부","비고","작업"].map((head)=><th key={head} className={head === "No." ? `${thClass} w-[52px] px-2 py-2 text-center text-[12px]` : `${thClass} px-2 py-2 text-[12px]`}>{head}</th>)}</tr></thead>
+                  <thead>
+                    <tr>
+                      <th className={`${thClass} w-[52px] px-2 py-2 text-center text-[12px]`}>No.</th>
+                      <th className={`${thClass} px-2 py-2 text-[12px]`}>
+                        {renderSortLabel("회사명", contractSort.key === "companyName", contractSort.dir, () => toggleContractSort("companyName"))}
+                      </th>
+                      <th className={`${thClass} px-2 py-2 text-[12px]`}>
+                        {renderSortLabel("부서", contractSort.key === "departmentName", contractSort.dir, () => toggleContractSort("departmentName"))}
+                      </th>
+                      <th className={`${thClass} px-2 py-2 text-[12px]`}>
+                        {renderSortLabel("아이디", contractSort.key === "idCode", contractSort.dir, () => toggleContractSort("idCode"))}
+                      </th>
+                      <th className={`${thClass} px-2 py-2 text-[12px]`}>
+                        {renderSortLabel("업종", contractSort.key === "industry", contractSort.dir, () => toggleContractSort("industry"))}
+                      </th>
+                      <th className={`${thClass} px-2 py-2 text-[12px]`}>
+                        {renderSortLabel("계약월", contractSort.key === "contractMonth", contractSort.dir, () => toggleContractSort("contractMonth"))}
+                      </th>
+                      <th className={`${thClass} px-2 py-2 text-[12px]`}>
+                        {renderSortLabel("권유자", contractSort.key === "recommender", contractSort.dir, () => toggleContractSort("recommender"))}
+                      </th>
+                      <th className={`${thClass} px-2 py-2 text-[12px]`}>
+                        {renderSortLabel("계약서 상태", contractSort.key === "documentStatus", contractSort.dir, () => toggleContractSort("documentStatus"))}
+                      </th>
+                      <th className={`${thClass} px-2 py-2 text-[12px]`}>
+                        {renderSortLabel("대체여부", contractSort.key === "replacementType", contractSort.dir, () => toggleContractSort("replacementType"))}
+                      </th>
+                      <th className={`${thClass} px-2 py-2 text-[12px]`}>
+                        {renderSortLabel("비고", contractSort.key === "note", contractSort.dir, () => toggleContractSort("note"))}
+                      </th>
+                      <th className={`${thClass} px-2 py-2 text-[12px]`}>작업</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    {contracts.map((row: any, index: number) => {
+                    {sortedContracts.map((row: any, index: number) => {
                       const editing = editingContractId === row.id
                       return (
                         <tr key={row.id}>
@@ -3102,24 +3534,36 @@ export function DashboardShell({
                       </tr>
                     </thead>
                     <tbody>
-                      {manualRevenueRows.map((row, rowIndex) => {
-                        const total = (row.months || []).reduce((sum: number, value: number) => sum + toNumber(value), 0)
+                      {(() => {
+                        const baseRows = manualRevenueRows.filter((row) => row.label !== "합계")
+                        const revenueTotalMonths = monthLabels.map((_, monthIndex) =>
+                          baseRows.reduce((sum: number, row) => sum + toNumber(row.months?.[monthIndex]), 0),
+                        )
+                        return manualRevenueRows.map((row, rowIndex) => {
+                          const isTotalRow = row.label === "합계"
+                          const displayMonths = isTotalRow ? revenueTotalMonths : (row.months || [])
+                          const total = (displayMonths || []).reduce((sum: number, value: number) => sum + toNumber(value), 0)
                         return (
                           <tr key={row.key || rowIndex}>
                             <td className={manualLabelCellClass}>{row.label}</td>
-                            {(row.months || []).map((monthValue: number, monthIndex: number) => (
+                            {(displayMonths || []).map((monthValue: number, monthIndex: number) => (
                               <td key={`${row.key}-${monthIndex}`} className={`${tdClass} p-1`}>
                                 <input
-                                  className={manualTableInputClass}
+                                  className={`${manualTableInputClass} ${isTotalRow ? "font-semibold text-slate-900" : ""}`}
+                                  style={isTotalRow ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
                                   value={String(monthValue ?? "")}
                                   onChange={(e) => updateManualRevenueCell(rowIndex, monthIndex, e.target.value)}
+                                  readOnly={isTotalRow}
                                 />
                               </td>
                             ))}
-                            <td className={`${tdClass} w-[96px] text-center font-semibold`}>{formatNumber(total)}</td>
+                            <td className={`${tdClass} w-[96px] text-center font-semibold bg-amber-50 text-slate-900`}>
+                              {formatNumber(total)}
+                            </td>
                           </tr>
                         )
-                      })}
+                        })
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -3324,7 +3768,18 @@ export function DashboardShell({
                   <thead>
                     <tr>
                       <th colSpan={reportTerminationColumnsStatic.length + 1} className={manualTableTitleRowClass}>
-                        {currentYear}년 해지 현황 ({String(displayBaseDate || "").replace(/^\d{4}-(\d{2})-(\d{2})$/, "$1/$2")} 기준)
+                        <div className="flex items-center justify-between gap-3">
+                          <span>
+                            {currentYear}년 해지 현황 ({String(displayBaseDate || "").replace(/^\d{4}-(\d{2})-(\d{2})$/, "$1/$2")} 기준)
+                          </span>
+                          <button
+                            type="button"
+                            className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[12px] font-semibold tracking-[-0.01em] text-amber-700 transition hover:border-amber-300 hover:bg-amber-100"
+                            onClick={loadTerminationOverviewFromWeeklyList}
+                          >
+                            해지확정현황 불러오기
+                          </button>
+                        </div>
                       </th>
                     </tr>
                     <tr>
@@ -3337,15 +3792,27 @@ export function DashboardShell({
                     {(manualDraft.terminationOverviewRows || []).map((row: any, rowIndex: number) => (
                       <tr key={`manual-termination-overview-${row.label}`}>
                         <td className={`${tdClass} whitespace-nowrap text-center font-semibold`}>{row.label}</td>
-                        {reportTerminationColumnsStatic.map((column, valueIndex) => (
-                          <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
-                            <input
-                              className={manualTableInputClass}
-                              value={String(row.values?.[valueIndex] ?? "")}
-                              onChange={(e) => updateManualTerminationOverviewCell(rowIndex, valueIndex, e.target.value)}
-                            />
-                          </td>
-                        ))}
+                        {reportTerminationColumnsStatic.map((column, valueIndex) => {
+                          const isTotalColumn = column === "합계"
+                          const totalValue = isTotalColumn
+                            ? computeTerminationRowTotal((row.values || []).slice(0, reportTerminationColumnsStatic.length - 1))
+                            : null
+                          return (
+                            <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
+                              <input
+                                className={manualTableInputClass}
+                                style={
+                                  isTotalColumn
+                                    ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" }
+                                    : undefined
+                                }
+                                value={isTotalColumn ? String(totalValue ?? "") : String(row.values?.[valueIndex] ?? "")}
+                                onChange={(e) => updateManualTerminationOverviewCell(rowIndex, valueIndex, e.target.value)}
+                                readOnly={isTotalColumn}
+                              />
+                            </td>
+                          )
+                        })}
                       </tr>
                     ))}
                   </tbody>
@@ -3376,15 +3843,27 @@ export function DashboardShell({
                     {(manualDraft.weeklyIndustryOverviewRows || []).map((row: any, rowIndex: number) => (
                       <tr key={`manual-weekly-industry-${row.label}`}>
                         <td className={`${tdClass} whitespace-nowrap text-center font-semibold`}>{row.label}</td>
-                        {reportIndustryColumnsStatic.map((column, valueIndex) => (
-                          <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
-                            <input
-                              className={manualTableInputClass}
-                              value={String(row.values?.[valueIndex] ?? "")}
-                              onChange={(e) => updateManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, e.target.value)}
-                            />
-                          </td>
-                        ))}
+                        {reportIndustryColumnsStatic.map((column, valueIndex) => {
+                          const isTotalColumn = column === "합계"
+                          const totalValue = isTotalColumn
+                            ? computeIndustryRowTotal((row.values || []).slice(0, reportIndustryColumnsStatic.length - 1))
+                            : null
+                          return (
+                            <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
+                              <input
+                                className={manualTableInputClass}
+                                style={
+                                  isTotalColumn
+                                    ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" }
+                                    : undefined
+                                }
+                                value={isTotalColumn ? String(totalValue ?? "") : String(row.values?.[valueIndex] ?? "")}
+                                onChange={(e) => updateManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, e.target.value)}
+                                readOnly={isTotalColumn}
+                              />
+                            </td>
+                          )
+                        })}
                       </tr>
                     ))}
                   </tbody>
@@ -3480,34 +3959,45 @@ export function DashboardShell({
                 </div>
               </div>
               <div className={`${cardClass} p-5`}>
-                <div className="overflow-hidden rounded-2xl border border-slate-200">
-                  <table className={tableClass}>
-                    <thead><tr>{["No.","연도","회사명","부서명","ID","업종","청구월","회수일","상태","작업"].map((head)=><th key={head} className={thClass}>{head}</th>)}</tr></thead>
+                <div className={`overflow-auto rounded-2xl border border-slate-200 ${collectionYearFilter === "all" ? "max-h-[560px]" : ""}`}>
+                  <table className={`${tableClass} ${collectionYearFilter === "all" ? "text-[12px]" : ""}`}>
+                    <thead>
+                      <tr>
+                        {["No.","연도","회사명","부서명","ID","업종","청구월","회수일","상태","작업"].map((head) => (
+                          <th
+                            key={head}
+                            className={`${thClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""} sticky top-0 z-10`}
+                          >
+                            {head}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
                     <tbody>
                       {filteredCollectionRows.map((row: any, index: number) => {
                         const editing = editingCollectionId === row.id
                         return (
                           <tr key={row.id}>
-                            <td className={tdClass}>{index + 1}</td>
-                            <td className={tdClass}>
+                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>{index + 1}</td>
+                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
                               {editing ? <input className="h-9 w-20 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.year || ""} onChange={(e)=>updateEditingCollectionDraft("year", e.target.value)} /> : row.year}
                             </td>
-                            <td className={`${tdClass} whitespace-nowrap`}>
+                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""} whitespace-nowrap`}>
                               {editing ? <input className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.companyName || ""} onChange={(e)=>updateEditingCollectionDraft("companyName", e.target.value)} /> : row.companyName}
                             </td>
-                            <td className={`${tdClass} whitespace-nowrap`}>
+                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""} whitespace-nowrap`}>
                               {editing ? <input className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.departmentName || ""} onChange={(e)=>updateEditingCollectionDraft("departmentName", e.target.value)} /> : row.departmentName}
                             </td>
-                            <td className={tdClass}>
+                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
                               {editing ? <input className="h-9 w-full min-w-[100px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.idCode || ""} onChange={(e)=>updateEditingCollectionDraft("idCode", e.target.value)} /> : row.idCode}
                             </td>
-                            <td className={tdClass}>
+                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
                               {editing ? <input className="h-9 w-full min-w-[100px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.industry || ""} onChange={(e)=>updateEditingCollectionDraft("industry", e.target.value)} /> : row.industry}
                             </td>
-                            <td className={tdClass}>
+                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
                               {editing ? <input className="h-9 w-full min-w-[90px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.claimMonth || ""} onChange={(e)=>updateEditingCollectionDraft("claimMonth", e.target.value)} /> : row.claimMonth}
                             </td>
-                            <td className={tdClass}>
+                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
                               {editing ? (
                                 <input
                                   value={editingCollectionDraft.receiptDate || ""}
@@ -3519,7 +4009,7 @@ export function DashboardShell({
                                 row.receiptDate || ""
                               )}
                             </td>
-                            <td className={tdClass}>
+                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
                               {editing ? (
                                 renderStatusBadge(row.status)
                               ) : (
@@ -3549,7 +4039,7 @@ export function DashboardShell({
                                 </div>
                               )}
                             </td>
-                            <td className={tdClass}>
+                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
                               {editing ? (
                                 <div className="flex items-center gap-2 whitespace-nowrap">
                                   <button
@@ -3680,16 +4170,8 @@ export function DashboardShell({
                       <label className="space-y-1">
                         <div className="text-[12px] font-medium text-slate-600">해지 사유</div>
                         <select className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" value={terminationDraft.reason} onChange={(e)=>updateTerminationDraft("reason", e.target.value)}>
-                          {["계약만료","비용절감","사용자퇴사","폐업","합병매각","휴직/장기출장","기타"].map((item) => <option key={item} value={item}>{item}</option>)}
+                          {["계약만료","비용절감","활용도 저조","사용자퇴사","타사대체","조직개편","비용미납","폐업","합병매각","휴직/장기출장","기타"].map((item) => <option key={item} value={item}>{item}</option>)}
                         </select>
-                      </label>
-                      <label className="space-y-1">
-                        <div className="text-[12px] font-medium text-slate-600">해지일</div>
-                        <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" type="date" value={terminationDraft.terminationDate} onChange={(e)=>updateTerminationDraft("terminationDate", e.target.value)} />
-                      </label>
-                      <label className="space-y-1">
-                        <div className="text-[12px] font-medium text-slate-600">위약금</div>
-                        <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" placeholder="위약금" value={terminationDraft.penalty} onChange={(e)=>updateTerminationDraft("penalty", e.target.value)} />
                       </label>
                       {terminationDraft.reason === "기타" && (
                         <label className="space-y-1">
@@ -3702,6 +4184,14 @@ export function DashboardShell({
                           />
                         </label>
                       )}
+                      <label className="space-y-1">
+                        <div className="text-[12px] font-medium text-slate-600">해지일</div>
+                        <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" type="date" value={terminationDraft.terminationDate} onChange={(e)=>updateTerminationDraft("terminationDate", e.target.value)} />
+                      </label>
+                      <label className="space-y-1">
+                        <div className="text-[12px] font-medium text-slate-600">위약금</div>
+                        <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" placeholder="위약금" value={terminationDraft.penalty} onChange={(e)=>updateTerminationDraft("penalty", e.target.value)} />
+                      </label>
                       <div className="col-span-4 flex justify-end pt-1">
                         <button type="button" onClick={handleTerminationCreate} className="h-10 rounded-2xl bg-blue-600 px-4 text-[14px] font-semibold text-white">
                           {isPending ? "등록 중..." : "등록"}
@@ -3769,13 +4259,73 @@ export function DashboardShell({
                   <button
                     type="button"
                     onClick={() => setShowTerminationArchive((prev) => !prev)}
-                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50"
+                    className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
-                    {showTerminationArchive ? "접수 리스트 보기" : "해지확정/청구보류 해제 보기"}
+                    {showTerminationArchive ? (
+                      <>
+                        <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4 text-slate-500">
+                          <path d="M8 6.5L4 10L8 13.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M5 10H11.5C14 10 16 11.8 16 14.2V15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        접수 리스트 보기
+                        <span className="ml-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                          확정 {formatNumber(confirmedTerminationItems.length)}건
+                        </span>
+                      </>
+                    ) : (
+                      "해지확정/청구보류 해제 보기"
+                    )}
                   </button>
                 </div>
                 <div className={`${cardClass} overflow-hidden p-0 ${showTerminationArchive ? "hidden" : ""}`}>
-                  <div className="border-b border-slate-200 px-4 py-3 text-[17px] font-bold text-slate-900">해지 리스트</div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="text-[17px] font-bold text-slate-900">해지 리스트</div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        className="h-9 w-56 rounded-xl border border-slate-200 bg-white px-3 text-[13px]"
+                        placeholder="고객사/담당자/고객번호 검색"
+                        value={terminationQuery}
+                        onChange={(e) => setTerminationQuery(e.target.value)}
+                      />
+                      <select
+                        className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-[13px]"
+                        value={terminationDateFilter}
+                        onChange={(e) => setTerminationDateFilter(e.target.value)}
+                      >
+                        {terminationDateOptions.map((option) => (
+                          <option key={`termination-date-${option}`} value={option}>
+                            {option === "all" ? "해지일 전체" : option}
+                          </option>
+                        ))}
+                      </select>
+                      {(terminationQuery || terminationDateFilter !== "all") && (
+                        <button
+                          type="button"
+                          className="h-9 rounded-xl border border-slate-200 px-3 text-[12px] font-semibold text-slate-600"
+                          onClick={() => {
+                            setTerminationQuery("")
+                            setTerminationDateFilter("all")
+                          }}
+                        >
+                          필터 초기화
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleConfirmSelectedTerminations}
+                        disabled={!terminationItems.some((row: any) => row.selected)}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
+                          terminationItems.some((row: any) => row.selected)
+                            ? "bg-rose-500 text-white hover:bg-rose-600"
+                            : "border border-slate-200 bg-slate-100 text-slate-400"
+                        }`}
+                      >
+                        해지확정
+                      </button>
+                    </div>
+                  </div>
                   <div className="overflow-x-auto">
                   <table className={`${tableClass} min-w-full`}>
                     <thead>
@@ -3785,15 +4335,27 @@ export function DashboardShell({
                         <th className={thClass}>
                           {renderSortLabel("접수일", terminationSort.key === "receivedDate", terminationSort.dir, () => toggleTerminationSort("receivedDate"))}
                         </th>
-                        <th className={thClass}>담당자</th>
-                        <th className={thClass}>고객번호</th>
-                        <th className={thClass}>고객사</th>
-                        <th className={thClass}>고객 부서</th>
-                        <th className={thClass}>해지 사유</th>
+                        <th className={thClass}>
+                          {renderSortLabel("담당자", terminationSort.key === "manager", terminationSort.dir, () => toggleTerminationSort("manager"))}
+                        </th>
+                        <th className={thClass}>
+                          {renderSortLabel("고객번호", terminationSort.key === "customerId", terminationSort.dir, () => toggleTerminationSort("customerId"))}
+                        </th>
+                        <th className={thClass}>
+                          {renderSortLabel("고객사", terminationSort.key === "companyName", terminationSort.dir, () => toggleTerminationSort("companyName"))}
+                        </th>
+                        <th className={thClass}>
+                          {renderSortLabel("고객 부서", terminationSort.key === "departmentName", terminationSort.dir, () => toggleTerminationSort("departmentName"))}
+                        </th>
+                        <th className={thClass}>
+                          {renderSortLabel("해지 사유", terminationSort.key === "reason", terminationSort.dir, () => toggleTerminationSort("reason"))}
+                        </th>
                         <th className={thClass}>
                           {renderSortLabel("해지일", terminationSort.key === "terminationDate", terminationSort.dir, () => toggleTerminationSort("terminationDate"))}
                         </th>
-                        <th className={`${thClass} text-right`}>위약금</th>
+                        <th className={`${thClass} text-right`}>
+                          {renderSortLabel("위약금", terminationSort.key === "penalty", terminationSort.dir, () => toggleTerminationSort("penalty"))}
+                        </th>
                         <th className={`${thClass} text-center`}>작업</th>
                       </tr>
                     </thead>
@@ -3819,7 +4381,7 @@ export function DashboardShell({
                             {editing ? (
                               <div className="space-y-2">
                                 <select className="h-9 w-full min-w-[120px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.reason || "계약만료"} onChange={(e)=>updateEditingTerminationDraft("reason", e.target.value)}>
-                                  {["계약만료","비용절감","사용자퇴사","폐업","합병매각","휴직/장기출장","기타"].map((item) => <option key={item} value={item}>{item}</option>)}
+                                  {["계약만료","비용절감","활용도 저조","사용자퇴사","타사대체","조직개편","비용미납","폐업","합병매각","휴직/장기출장","기타"].map((item) => <option key={item} value={item}>{item}</option>)}
                                 </select>
                                 {editingTerminationDraft.reason === "기타" && (
                                   <input className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.reasonDetail || ""} onChange={(e)=>updateEditingTerminationDraft("reasonDetail", e.target.value)} placeholder="기타 사유" />
@@ -3880,13 +4442,17 @@ export function DashboardShell({
                           />
                         </th>
                         <th className={`${thClass} text-center`}>No.</th>
-                        <th className={thClass}>접수일</th>
+                        <th className={thClass}>
+                          {renderSortLabel("접수일", terminationSort.key === "receivedDate", terminationSort.dir, () => toggleTerminationSort("receivedDate"))}
+                        </th>
                         <th className={thClass}>담당자</th>
                         <th className={thClass}>고객번호</th>
                         <th className={thClass}>고객사</th>
                         <th className={thClass}>고객 부서</th>
                         <th className={thClass}>해지 사유</th>
-                        <th className={thClass}>해지일</th>
+                        <th className={thClass}>
+                          {renderSortLabel("해지일", terminationSort.key === "terminationDate", terminationSort.dir, () => toggleTerminationSort("terminationDate"))}
+                        </th>
                         <th className={thClass}>반영일</th>
                         <th className={`${thClass} text-right`}>위약금</th>
                         <th className={`${thClass} text-center`}>작업</th>
@@ -3941,7 +4507,52 @@ export function DashboardShell({
                   </div>
                 </div>
                 <div className={`${cardClass} overflow-hidden p-0 ${showTerminationArchive ? "hidden" : ""}`}>
-                  <div className="border-b border-slate-200 px-4 py-3 text-[17px] font-bold text-slate-900">청구보류 리스트</div>
+                  <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                    <div className="text-[17px] font-bold text-slate-900">청구보류 리스트</div>
+                    <div className="flex flex-wrap items-center gap-2 text-[12px] text-slate-600">
+                      <input
+                        className="h-9 w-56 rounded-xl border border-slate-200 bg-white px-3 text-[12px]"
+                        placeholder="고객사/담당자/고객번호 검색"
+                        value={holdQuery}
+                        onChange={(e) => setHoldQuery(e.target.value)}
+                      />
+                      <select
+                        className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-[12px]"
+                        value={holdReceivedDateFilter}
+                        onChange={(e) => setHoldReceivedDateFilter(e.target.value)}
+                      >
+                        {holdReceivedDateOptions.map((option) => (
+                          <option key={`hold-received-${option}`} value={option}>
+                            {option === "all" ? "접수일 전체" : option}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-[12px]"
+                        value={holdEndDateFilter}
+                        onChange={(e) => setHoldEndDateFilter(e.target.value)}
+                      >
+                        {holdEndDateOptions.map((option) => (
+                          <option key={`hold-end-${option}`} value={option}>
+                            {option === "all" ? "종료일 전체" : option}
+                          </option>
+                        ))}
+                      </select>
+                      {(holdQuery || holdReceivedDateFilter !== "all" || holdEndDateFilter !== "all") && (
+                        <button
+                          type="button"
+                          className="h-9 rounded-xl border border-slate-200 px-3 text-[11px] font-semibold text-slate-600"
+                          onClick={() => {
+                            setHoldQuery("")
+                            setHoldReceivedDateFilter("all")
+                            setHoldEndDateFilter("all")
+                          }}
+                        >
+                          필터 초기화
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   <div className="overflow-x-auto">
                   <table className={`${tableClass} min-w-full`}>
                     <thead>
@@ -3965,7 +4576,7 @@ export function DashboardShell({
                       </tr>
                     </thead>
                     <tbody>
-                      {holdItems.map((row: any, index: number) => {
+                      {filteredHoldItems.map((row: any, index: number) => {
                         const editing = editingHoldId === row.id
                         return (
                         <tr key={row.id}>
@@ -4060,14 +4671,20 @@ export function DashboardShell({
                           />
                         </th>
                         <th className={`${thClass} text-center`}>No.</th>
-                        <th className={thClass}>접수일</th>
+                        <th className={thClass}>
+                          {renderSortLabel("접수일", holdSort.key === "receivedDate", holdSort.dir, () => toggleHoldSort("receivedDate"))}
+                        </th>
                         <th className={thClass}>담당자</th>
                         <th className={thClass}>고객번호</th>
                         <th className={thClass}>고객사</th>
                         <th className={thClass}>고객 부서</th>
                         <th className={thClass}>보류 사유</th>
-                        <th className={thClass}>시작일</th>
-                        <th className={thClass}>종료일</th>
+                        <th className={thClass}>
+                          {renderSortLabel("시작일", holdSort.key === "startDate", holdSort.dir, () => toggleHoldSort("startDate"))}
+                        </th>
+                        <th className={thClass}>
+                          {renderSortLabel("종료일", holdSort.key === "endDate", holdSort.dir, () => toggleHoldSort("endDate"))}
+                        </th>
                         <th className={thClass}>반영일</th>
                         <th className={`${thClass} text-center`}>작업</th>
                       </tr>

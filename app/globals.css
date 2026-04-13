@@ -137,47 +137,49 @@
 }
 
 .print-revenue-meta {
-  padding: 6px 10px;
-  border-bottom: 1px solid #d8e2f0;
-  background: #f8fbff;
+  padding: 10px 12px;
+  border: 1px solid #c5d5ee;
+  border-radius: 12px;
+  background: transparent;
 }
 
 .print-revenue-strip {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .print-revenue-copy {
   min-width: 0;
-  flex: 1 1 62%;
 }
 
 .print-revenue-kpis {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 .print-revenue-kpi {
   min-width: 0;
-  border: 1px solid #dbe7f5;
-  border-radius: 10px;
-  background: #ffffff;
-  padding: 6px 10px;
+  border: 1px solid #9fb6de;
+  border-radius: 8px;
+  background: #f3f7ff;
+  padding: 8px 10px;
+  text-align: center;
 }
 
 .print-revenue-kpi-label {
-  font-size: 10px;
+  display: block;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
-  color: #64748b;
+  color: #1f3b6f;
 }
 
 .print-revenue-kpi-value {
-  margin-top: 2px;
-  font-size: 13px;
+  margin-top: 4px;
+  font-size: 16px;
   font-weight: 800;
   line-height: 1.2;
   color: #0f172a;
@@ -185,27 +187,36 @@
 }
 
 .print-revenue-note {
-  flex: 0 0 260px;
-  max-width: 260px;
+  margin-top: 6px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: center;
+  justify-content: flex-end;
   font-size: 10px;
   line-height: 1.35;
   color: #64748b;
+  white-space: nowrap;
   word-break: keep-all;
 }
 
-.print-revenue-note-block + .print-revenue-note-block {
-  margin-top: 4px;
+.print-revenue-note-value {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #334155;
+  text-align: right;
+  white-space: nowrap;
 }
 
-.print-revenue-note-value {
-  font-size: 10px;
-  line-height: 1.35;
-  color: #475569;
-  text-align: right;
+.report-section-title {
+  display: block;
+  background: #e9f1ff;
+  color: #111827;
+  font-weight: 800;
+  padding: 6px 10px;
+  border-radius: 0;
+  border: 0;
+  text-align: center;
 }
 
 @media print {
@@ -217,6 +228,8 @@
   html,
   body {
     background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .dashboard-sidebar,
@@ -226,6 +239,10 @@
 
   .dashboard-shell {
     background: #ffffff !important;
+  }
+
+  .weekly-report-print {
+    padding-top: 2mm !important;
   }
 
   .dashboard-shell > div {
@@ -260,14 +277,14 @@
 
   .print-report-cover {
     display: block !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 2px !important;
   }
 
   .print-report-header-row {
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
-    margin-bottom: 4px !important;
+    margin-bottom: 0 !important;
     font-size: 9.5px !important;
     color: #475569 !important;
   }
@@ -289,13 +306,37 @@
     font-weight: 700 !important;
     letter-spacing: 0.12em !important;
     color: #0f172a !important;
+    border-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    width: 100% !important;
+  }
+
+  .print-report-title-row {
+    position: relative !important;
+    display: flex !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+    gap: 12px !important;
+    margin-top: 0 !important;
+    margin-bottom: 2px !important;
+  }
+
+  .print-report-meta {
+    position: absolute !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    text-align: right !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    color: #334155 !important;
+    white-space: nowrap !important;
   }
 
   .weekly-report-print > section {
     border: 0 !important;
     box-shadow: none !important;
     padding: 0 !important;
-    margin-bottom: 4px !important;
+    margin-bottom: 0 !important;
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -329,7 +370,7 @@
   }
 
   .weekly-report-print .weekly-report-table th {
-    background: #eef4fb !important;
+    background: #f1f5f9 !important;
     color: #334155 !important;
     font-size: 9.6px !important;
     font-weight: 700 !important;
@@ -413,17 +454,17 @@
   }
 
   .weekly-report-print .print-revenue-meta {
-    padding: 4px 6px !important;
-    border: 1px solid #d7e1ee !important;
-    border-bottom: 0 !important;
-    background: #fbfdff !important;
+    padding: 6px 8px !important;
+    border: 0 !important;
+    background: transparent !important;
+    border-radius: 0 !important;
   }
 
   .weekly-report-print .print-revenue-strip {
     display: grid !important;
-    grid-template-columns: minmax(0, 63%) minmax(0, 37%) !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     align-items: start !important;
-    gap: 8px !important;
+    gap: 6px !important;
   }
 
   .weekly-report-print .print-revenue-copy {
@@ -432,32 +473,31 @@
 
   .weekly-report-print .print-revenue-kpis {
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) !important;
-    gap: 2px !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 4px !important;
   }
 
   .weekly-report-print .print-revenue-kpi {
-    display: flex !important;
-    align-items: baseline !important;
-    justify-content: flex-start !important;
-    gap: 6px !important;
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    padding: 0 !important;
+    display: block !important;
+    border: 1px solid #9fb6de !important;
+    border-radius: 6px !important;
+    background: #f3f7ff !important;
+    padding: 3px 5px !important;
+    text-align: center !important;
   }
 
   .weekly-report-print .print-revenue-kpi-label {
-    font-size: 8px !important;
+    display: block !important;
+    font-size: 7px !important;
     font-weight: 700 !important;
     line-height: 1.15 !important;
-    color: #64748b !important;
+    color: #1f3b6f !important;
     white-space: nowrap !important;
   }
 
   .weekly-report-print .print-revenue-kpi-value {
-    margin-top: 0 !important;
-    font-size: 10px !important;
+    margin-top: 2px !important;
+    font-size: 9px !important;
     font-weight: 800 !important;
     line-height: 1.18 !important;
     color: #0f172a !important;
@@ -465,21 +505,19 @@
   }
 
   .weekly-report-print .print-revenue-note {
+    margin-top: 4px !important;
+    width: 100% !important;
     min-width: 0 !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: flex-end !important;
-    justify-content: center !important;
-    font-size: 7.2px !important;
-    line-height: 1.22 !important;
-    color: #64748b !important;
-    white-space: normal !important;
+    justify-content: flex-end !important;
+    font-size: 6.8px !important;
+    line-height: 1.2 !important;
+    color: #475569 !important;
+    white-space: nowrap !important;
     word-break: keep-all !important;
-    overflow-wrap: break-word !important;
-  }
-
-  .weekly-report-print .print-revenue-note-block + .print-revenue-note-block {
-    margin-top: 2px !important;
+    overflow-wrap: normal !important;
   }
 
   .weekly-report-print .print-revenue-note-value {
@@ -488,15 +526,11 @@
     line-height: 1.22 !important;
     color: #64748b !important;
     text-align: right !important;
-    white-space: normal !important;
+    white-space: nowrap !important;
     word-break: keep-all !important;
-    overflow-wrap: break-word !important;
+    overflow-wrap: normal !important;
   }
 
-  .weekly-report-print .print-contract-table td:nth-child(1),
-  .weekly-report-print .print-contract-table td:nth-child(2) {
-    text-align: center !important;
-  }
 
   .weekly-report-print .print-goal-table th,
   .weekly-report-print .print-goal-table td,
@@ -595,6 +629,18 @@
     margin-bottom: 0 !important;
   }
 
+  .weekly-report-print .space-y-3,
+  .weekly-report-print .space-y-4 {
+    --tw-space-y-reverse: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  .weekly-report-print .space-y-3 > :not([hidden]) ~ :not([hidden]),
+  .weekly-report-print .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 4px !important;
+  }
+
   .weekly-report-print .overflow-hidden {
     overflow: visible !important;
     border: 0 !important;
@@ -608,12 +654,54 @@
     background: #fff !important;
   }
 
+  .weekly-report-print .contract-section-wrap {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  .weekly-report-print .report-section-title {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  .weekly-report-print .print-tight > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0 !important;
+  }
+
+  .weekly-report-print .print-gap-after {
+    margin-bottom: 6px !important;
+  }
+
+  .weekly-report-print .header-base-date {
+    display: none !important;
+  }
+
+  .weekly-report-print .print-report-sheet-section:first-of-type {
+    border: 0 !important;
+  }
+
   .print-report-section-title {
-    margin-bottom: 2px !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
     font-size: 11px !important;
     font-weight: 800 !important;
-    color: #0f172a !important;
+    color: #111827 !important;
     text-align: center !important;
+    background: #e9f1ff !important;
+    padding: 4px 6px !important;
+    border-bottom: 0 !important;
+    border: 0 !important;
+  }
+
+  .weekly-report-print .report-section-title {
+    background: #e9f1ff !important;
+    color: #111827 !important;
+    padding: 4px 6px !important;
+    border-bottom: 0 !important;
+    border: 0 !important;
+    text-align: center !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .weekly-report-print .text-\[18px\] {
