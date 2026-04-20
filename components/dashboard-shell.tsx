@@ -1,9 +1,10 @@
 ﻿"use client"
 
 import React, { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
 
-type ViewKey = "weekly-report" | "contracts" | "weekly-selection" | "manual-input" | "collection" | "termination"
-type CollectionTabKey = "integrated" | "long-term"
+type ViewKey = "weekly-report" | "contracts" | "weekly-selection" | "manual-input" | "collection" | "option-dashboard" | "termination"
+type CollectionTabKey = "integrated" | "long-term" | "delivery"
 type SectionKey = "performance" | "termination"
 
 const LOCAL_STORAGE_KEY = "infobiz-dashboard-state-v1"
@@ -14,13 +15,14 @@ const viewTitles: Record<ViewKey, string> = {
   "weekly-selection": "주간 반영 리스트",
   "manual-input": "수동 입력 리스트",
   collection: "계약서통합관리",
+  "option-dashboard": "유료 옵션 정보 현황",
   termination: "해지 진행사항",
 }
 
   const cardClass = "rounded-[24px] border border-slate-200 bg-white shadow-sm"
 const tableClass = "w-full text-[14px]"
-const thClass = "border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-[13px] font-semibold text-slate-600"
-const tdClass = "border-t border-slate-200 px-3 py-2.5 align-middle text-[14px] text-slate-800"
+const thClass = "border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-[13px] font-semibold text-slate-600"
+const tdClass = "border-t border-slate-200 px-3 py-2.5 align-middle text-center text-[14px] text-slate-800"
 const weeklyReportTableClass = "weekly-report-table w-full table-fixed text-[14px]"
 const weeklyThClass = "border-b border-slate-200 bg-slate-100 px-2.5 py-2 text-center text-[13px] font-semibold text-slate-700"
 const weeklyTdClass = "border-t border-slate-200 px-2.5 py-2 text-center align-middle text-[14px] text-slate-800"
@@ -54,6 +56,35 @@ function replaceDivisionName(text: unknown) {
 
 function sanitizeTerminationTitle(text: unknown) {
   return String(text ?? "").replace(/\(새시트\)/g, "").trim()
+}
+
+function isBrokenKoreanText(text: unknown) {
+  const value = String(text ?? "")
+  if (!value.trim()) return false
+  return value.includes("�") || value.includes("?") || /[ÃÂÌÍÑÕØ]/.test(value)
+}
+
+function getSafeTerminationTeamLabel(value: unknown) {
+  return isBrokenKoreanText(value) ? "인포Biz본부 인포Biz1팀" : String(value ?? "")
+}
+
+function getSafeTerminationGuidelines(value: unknown) {
+  const fallback = ["1. 해지 발생 시 본부장님 보고 진행", "2. CRM 및 해지 리스트 등록"]
+  if (!Array.isArray(value) || value.length === 0) return fallback
+  const mapped = value
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean)
+    .map((item, idx) => (isBrokenKoreanText(item) ? fallback[idx] || fallback[fallback.length - 1] : item))
+  return mapped.length ? mapped : fallback
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
 }
 
 function formatNumericInputDisplay(value: unknown) {
@@ -283,14 +314,6 @@ const paidOptionInfoColumns = [
     ],
   },
   {
-    title: "API",
-    total: "8건",
-    rows: [
-      ["국내증권", "6건"],
-      ["일반기업", "2건"],
-    ],
-  },
-  {
     title: "SOFR",
     total: "171건",
     rows: [
@@ -307,6 +330,17 @@ const paidOptionInfoColumns = [
   },
 ] as const
 
+const paidOptionOrderedTitles = ["해외채권", "해외지수", "해외종목", "LME", "전광판", "SOFR"] as const
+const paidOptionTitleByCode: Record<string, string> = {
+  BOND: "해외채권",
+  INDEX: "해외지수",
+  STOCK: "해외종목",
+  LME: "LME",
+  SIGNAGE: "전광판",
+  API: "API",
+  SOFR: "SOFR",
+}
+
 const weeklyTerminationOverviewRows = [
   { label: "주간", values: ["3", "1", "3", "", "1", "1", "", "", "1", "9"] },
   { label: "누적", values: ["40", "5", "36", "6", "1", "1", "5", "", "1", "95"] },
@@ -319,18 +353,66 @@ const weeklyIndustryOverviewRows = [
 ] as const
 
 function buildPaidOptionInfoColumns(columns: any[]) {
-  return (Array.isArray(columns) && columns.length ? columns : paidOptionInfoColumns).map((column: any, index: number) => ({
-    id: column?.id || `paid-option-${index}`,
-    title: sanitizeSummaryText(column?.title, paidOptionInfoColumns[index]?.title || `항목 ${index + 1}`),
-    total: sanitizeSummaryText(column?.total, paidOptionInfoColumns[index]?.total || "0건"),
-    rows: Array.isArray(column?.rows)
-      ? column.rows.map((row: any) => [
-          sanitizeSummaryText(Array.isArray(row) ? row[0] : row?.[0], ""),
-          sanitizeSummaryText(Array.isArray(row) ? row[1] : row?.[1], ""),
-        ])
-      : Array.isArray((paidOptionInfoColumns as any)[index]?.rows)
-        ? [...(paidOptionInfoColumns as any)[index].rows]
-        : [],
+  const source = Array.isArray(columns) && columns.length ? columns : paidOptionInfoColumns
+  const baseByTitle = new Map<string, any>(
+    paidOptionInfoColumns
+      .filter((column) => column.title !== "API")
+      .map((column) => [column.title, column]),
+  )
+  const sourceByTitle = new Map<string, any>()
+  source.forEach((column: any, idx: number) => {
+    const code = String(column?.category_code || "").trim()
+    const fallbackByCode = paidOptionTitleByCode[code] || ""
+    const fallbackByIndex = sanitizeSummaryText(paidOptionInfoColumns[idx]?.title, "")
+    const title = sanitizeSummaryText(column?.title, fallbackByCode || fallbackByIndex)
+    if (!paidOptionOrderedTitles.includes(title as any)) return
+    sourceByTitle.set(title, column)
+  })
+
+  return paidOptionOrderedTitles.map((title, index) => {
+    const fromSource = sourceByTitle.get(title) || {}
+    const fromBase = baseByTitle.get(title) || {}
+    return {
+      id: fromSource?.id || fromBase?.id || `paid-option-${index}`,
+      title,
+      total: sanitizeSummaryText(fromSource?.total, fromBase?.total || "0건"),
+      rows: Array.isArray(fromSource?.rows)
+        ? fromSource.rows.map((row: any) => [
+            sanitizeSummaryText(Array.isArray(row) ? row[0] : row?.[0], ""),
+            sanitizeSummaryText(Array.isArray(row) ? row[1] : row?.[1], ""),
+          ])
+        : Array.isArray(fromBase?.rows)
+          ? [...fromBase.rows]
+          : [],
+    }
+  })
+}
+
+function formatCountToKoreanUnit(value: unknown, fallback = "0건") {
+  const text = String(value ?? "").trim()
+  if (!text) return fallback
+  if (text.endsWith("건")) return text
+  const parsed = parseLooseNumber(text)
+  if (!Number.isFinite(parsed)) return fallback
+  return `${parsed}건`
+}
+
+function applySeedTotalsToPaidOptionColumns(columns: any[], cards: any[]) {
+  const normalizedColumns = buildPaidOptionInfoColumns(columns)
+  const titleByCode = new Map<string, string>(
+    Object.entries(paidOptionTitleByCode).map(([code, title]) => [String(code).trim(), String(title).trim()]),
+  )
+  const countByTitle = new Map<string, string>()
+  ;(Array.isArray(cards) ? cards : []).forEach((card: any) => {
+    const code = String(card?.category_code || "").trim()
+    if (code === "API") return
+    const title = titleByCode.get(code) || sanitizeSummaryText(card?.category_name_ko, "")
+    if (!title) return
+    countByTitle.set(title, formatCountToKoreanUnit(card?.count_value))
+  })
+  return normalizedColumns.map((column: any) => ({
+    ...column,
+    total: countByTitle.get(column.title) || formatCountToKoreanUnit(column.total, "0건"),
   }))
 }
 
@@ -885,6 +967,11 @@ export function DashboardShell({
   const [editingCollectionDraft, setEditingCollectionDraft] = useState<any>({})
   const [collectionYearFilter, setCollectionYearFilter] = useState<number | "all">(initialData?.collection?.yearFilter || 2026)
   const [collectionStatusFilter, setCollectionStatusFilter] = useState<string>(initialData?.collection?.statusFilter || "all")
+  const [collectionSort, setCollectionSort] = useState<{
+    key: "year" | "companyName" | "departmentName" | "idCode" | "industry" | "claimMonth" | "receiptDate" | "reflectedDate" | "status"
+    dir: "asc" | "desc"
+  }>(initialData?.collection?.sort || { key: "year", dir: "desc" })
+  const [selectedDeliveryHistoryDate, setSelectedDeliveryHistoryDate] = useState<string>("")
   const [historyStack, setHistoryStack] = useState<any[]>([])
   const pendingSaveRef = useRef<number | null>(null)
   const pendingPayloadRef = useRef<string | null>(null)
@@ -1150,9 +1237,85 @@ export function DashboardShell({
     [contractRecommenderStats, contractStatsRowCount, contractRecommenderColumns],
   )
   const collectionRows = useMemo(
-    () => (collectionTab === "long-term" ? collection.longTerm || [] : collection.integrated || []),
+    () => (collectionTab === "long-term" ? collection.longTerm || [] : collectionTab === "delivery" ? [] : collection.integrated || []),
     [collection, collectionTab],
   )
+  const collectionDelivery = useMemo(() => {
+    const raw = collection?.delivery || {}
+    const normalizeDeliveryRow = (row: any, index: number, prefix = "delivery-row-seed") => ({
+      id: row?.id || `${prefix}-${index + 1}`,
+      companyName: String(row?.companyName || ""),
+      departmentName: String(row?.departmentName || ""),
+      idCode: String(row?.idCode || ""),
+      recommender: String(row?.recommender || ""),
+      contractMonth: String(row?.contractMonth || ""),
+      recoveredCount: String(row?.recoveredCount || ""),
+      note: String(row?.note || ""),
+    })
+    const rows = Array.isArray(raw.rows) ? raw.rows : []
+    const normalizedRows = rows.map((row: any, index: number) => normalizeDeliveryRow(row, index))
+    const rawHistory = Array.isArray(raw.history) ? raw.history : []
+    const normalizedHistory = rawHistory
+      .map((entry: any, entryIndex: number) => {
+        const historyRows = Array.isArray(entry?.rows) ? entry.rows : []
+        const deliveredDate = normalizeDate(entry?.deliveredDate || entry?.date || "")
+        return {
+          id: String(entry?.id || `delivery-history-${entryIndex + 1}`),
+          deliveredDate,
+          title: String(entry?.title || raw?.title || `${currentYear}년 고객업무팀 계약서 전달 리스트`),
+          managerConfirm: String(entry?.managerConfirm || ""),
+          senderConfirm: String(entry?.senderConfirm || ""),
+          savedAt: String(entry?.savedAt || entry?.updatedAt || ""),
+          rows: historyRows.map((row: any, rowIndex: number) =>
+            normalizeDeliveryRow(row, rowIndex, `delivery-history-${entryIndex + 1}-row`),
+          ),
+        }
+      })
+      .filter((entry: any) => Boolean(entry.deliveredDate))
+      .sort((a: any, b: any) => {
+        const dateDiff = parseDateKey(b.deliveredDate) - parseDateKey(a.deliveredDate)
+        if (dateDiff !== 0) return dateDiff
+        return String(b.savedAt || "").localeCompare(String(a.savedAt || ""), "ko")
+      })
+    const fallbackDate = normalizeDate(weeklyReport?.baseDate || new Date().toISOString().slice(0, 10))
+    return {
+      title: String(raw.title || `${currentYear}년 고객업무팀 계약서 전달 리스트`),
+      deliveredDate: String(raw.deliveredDate || fallbackDate),
+      managerConfirm: String(raw.managerConfirm || ""),
+      senderConfirm: String(raw.senderConfirm || ""),
+      rows: normalizedRows,
+      history: normalizedHistory,
+    }
+  }, [collection?.delivery, currentYear, weeklyReport?.baseDate])
+  const deliveryHistoryOptions = useMemo(() => {
+    const byDate = new Map<string, any>()
+    ;(collectionDelivery.history || []).forEach((entry: any) => {
+      const dateKey = normalizeDate(entry.deliveredDate)
+      if (!dateKey) return
+      const existing = byDate.get(dateKey)
+      if (!existing) {
+        byDate.set(dateKey, entry)
+        return
+      }
+      const existingSavedAt = String(existing.savedAt || "")
+      const nextSavedAt = String(entry.savedAt || "")
+      if (nextSavedAt.localeCompare(existingSavedAt, "ko") > 0) byDate.set(dateKey, entry)
+    })
+    return [...byDate.entries()]
+      .sort((a, b) => parseDateKey(b[0]) - parseDateKey(a[0]))
+      .map(([date, entry]) => ({ value: date, label: `${date} 주차`, entry }))
+  }, [collectionDelivery.history])
+  useEffect(() => {
+    if (!deliveryHistoryOptions.length) {
+      setSelectedDeliveryHistoryDate("")
+      return
+    }
+    setSelectedDeliveryHistoryDate((prev) =>
+      prev && deliveryHistoryOptions.some((item) => item.value === prev)
+        ? prev
+        : deliveryHistoryOptions[0].value,
+    )
+  }, [deliveryHistoryOptions])
   const filteredCollectionRows = useMemo(() => {
     return collectionRows.filter((row: any) => {
       const yearOk = collectionYearFilter === "all" ? true : Number(row.year) === Number(collectionYearFilter)
@@ -1160,6 +1323,10 @@ export function DashboardShell({
       return yearOk && statusOk
     })
   }, [collectionRows, collectionStatusFilter, collectionYearFilter])
+  const sortedCollectionRows = useMemo(
+    () => sortByKey(filteredCollectionRows, collectionSort.key, collectionSort.dir),
+    [filteredCollectionRows, collectionSort],
+  )
   const collectionIndustrySummary = useMemo(() => {
     const sourceRows = collectionRows.filter((row: any) => (
       collectionYearFilter === "all" ? true : Number(row.year) === Number(collectionYearFilter)
@@ -1198,6 +1365,25 @@ export function DashboardShell({
       ],
     }
   }, [collectionIndustrySummary])
+  const collectionTableColumns = [
+    { label: "No." },
+    { label: "연도", key: "year" as const },
+    { label: "회사명", key: "companyName" as const },
+    { label: "부서명", key: "departmentName" as const },
+    { label: "ID", key: "idCode" as const },
+    { label: "업종", key: "industry" as const },
+    { label: "청구월", key: "claimMonth" as const },
+    { label: "회수일", key: "receiptDate" as const },
+    { label: "반영일", key: "reflectedDate" as const },
+    { label: "상태", key: "status" as const },
+    { label: "작업" },
+  ]
+  const getCollectionSortMark = (
+    key: "year" | "companyName" | "departmentName" | "idCode" | "industry" | "claimMonth" | "receiptDate" | "reflectedDate" | "status",
+  ) => {
+    if (collectionSort.key !== key) return ""
+    return collectionSort.dir === "asc" ? " ▲" : " ▼"
+  }
   const filteredTerminationItemsBase = useMemo(() => {
     const query = terminationQuery.trim().toLowerCase()
     const rows = selectedSheet?.items || []
@@ -1379,31 +1565,88 @@ export function DashboardShell({
   }, [])
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY)
-      if (!raw) return
-      const saved = JSON.parse(raw)
-      const initialConfirmed =
-        Array.isArray(data?.termination?.sheets) && data.termination.sheets[0]
-          ? data.termination.sheets[0].confirmedItems || []
-          : []
-      if (!Array.isArray(saved?.termination?.sheets) || !saved.termination.sheets[0]) {
-        saved.termination = data.termination
-      } else {
-        const savedConfirmed = saved.termination.sheets[0].confirmedItems
-        if (
-          (!Array.isArray(savedConfirmed) || savedConfirmed.length === 0) &&
-          Array.isArray(initialConfirmed) &&
-          initialConfirmed.length > 0
-        ) {
-          saved.termination.sheets[0].confirmedItems = initialConfirmed
+      try {
+        const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY)
+        if (!raw) return
+        const saved = JSON.parse(raw)
+
+        const serverContracts = Array.isArray(data?.contracts) ? data.contracts : []
+        const savedContracts = Array.isArray(saved?.contracts) ? saved.contracts : []
+        const serverCollection = data?.collection || {}
+        const savedCollection = saved?.collection || {}
+        const serverIntegrated = Array.isArray(serverCollection.integrated) ? serverCollection.integrated : []
+        const savedIntegrated = Array.isArray(savedCollection.integrated) ? savedCollection.integrated : []
+        const serverLongTerm = Array.isArray(serverCollection.longTerm) ? serverCollection.longTerm : []
+        const savedLongTerm = Array.isArray(savedCollection.longTerm) ? savedCollection.longTerm : []
+        const serverSheet = Array.isArray(data?.termination?.sheets) ? data.termination.sheets[0] : null
+        const savedSheet = Array.isArray(saved?.termination?.sheets) ? saved.termination.sheets[0] : null
+        const serverItems = Array.isArray(serverSheet?.items) ? serverSheet.items : []
+        const savedItems = Array.isArray(savedSheet?.items) ? savedSheet.items : []
+        const serverHoldItems = Array.isArray(serverSheet?.holdItems) ? serverSheet.holdItems : []
+        const savedHoldItems = Array.isArray(savedSheet?.holdItems) ? savedSheet.holdItems : []
+        const serverConfirmed = Array.isArray(serverSheet?.confirmedItems) ? serverSheet.confirmedItems : []
+        const savedConfirmed = Array.isArray(savedSheet?.confirmedItems) ? savedSheet.confirmedItems : []
+
+        const isStale =
+          savedContracts.length < serverContracts.length ||
+          savedIntegrated.length < serverIntegrated.length ||
+          savedLongTerm.length < serverLongTerm.length ||
+          savedItems.length < serverItems.length ||
+          savedHoldItems.length < serverHoldItems.length ||
+          savedConfirmed.length < serverConfirmed.length
+
+        if (isStale) {
+          setData(data)
+          setCollectionTab(serverCollection?.tab || "integrated")
+          setCollectionYearFilter(serverCollection?.yearFilter || 2026)
+          setCollectionStatusFilter(serverCollection?.statusFilter || "all")
+          setCollectionSort(serverCollection?.sort || { key: "year", dir: "desc" })
+          try {
+            window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data))
+          } catch {}
+          return
         }
-      }
-      setData(saved)
-      setCollectionTab(saved?.collection?.tab || "integrated")
-      setCollectionYearFilter(saved?.collection?.yearFilter || 2026)
-      setCollectionStatusFilter(saved?.collection?.statusFilter || "all")
-    } catch {}
+
+        if (!Array.isArray(saved?.contracts) || saved.contracts.length === 0) {
+          saved.contracts = data.contracts
+        }
+
+        if (!saved?.collection) {
+          saved.collection = data.collection
+        } else {
+          if (!Array.isArray(saved.collection.integrated) || saved.collection.integrated.length === 0) {
+            saved.collection.integrated = data.collection?.integrated || []
+          }
+          if (!Array.isArray(saved.collection.longTerm) || saved.collection.longTerm.length === 0) {
+            saved.collection.longTerm = data.collection?.longTerm || []
+          }
+        }
+
+        const initialSheet = Array.isArray(data?.termination?.sheets) ? data.termination.sheets[0] : null
+        if (!Array.isArray(saved?.termination?.sheets) || !saved.termination.sheets[0]) {
+          saved.termination = data.termination
+        } else if (initialSheet) {
+          const savedSheet = saved.termination.sheets[0]
+          savedSheet.title = initialSheet.title
+          savedSheet.teamLabel = initialSheet.teamLabel
+          savedSheet.guidelines = initialSheet.guidelines
+          if (!Array.isArray(savedSheet.items) || savedSheet.items.length === 0) {
+            savedSheet.items = initialSheet.items || []
+          }
+          if (!Array.isArray(savedSheet.holdItems) || savedSheet.holdItems.length === 0) {
+            savedSheet.holdItems = initialSheet.holdItems || []
+          }
+          if (!Array.isArray(savedSheet.confirmedItems) || savedSheet.confirmedItems.length === 0) {
+            savedSheet.confirmedItems = initialSheet.confirmedItems || []
+          }
+        }
+
+        setData(saved)
+        setCollectionTab(saved?.collection?.tab || "integrated")
+        setCollectionYearFilter(saved?.collection?.yearFilter || 2026)
+        setCollectionStatusFilter(saved?.collection?.statusFilter || "all")
+        setCollectionSort(saved?.collection?.sort || { key: "year", dir: "desc" })
+      } catch {}
   }, [])
 
   useEffect(() => {
@@ -1584,11 +1827,25 @@ export function DashboardShell({
     })
   }
 
-  function reloadPaidOptionInfo() {
-    setManualDraft((prev: any) => ({
-      ...prev,
-      paidOptionInfoColumns: cloneData(paidOptionSourceColumns),
-    }))
+  async function reloadPaidOptionInfo() {
+    try {
+      const response = await fetch("/api/options?basis=seed&category=all&activeOnly=1", {
+        cache: "no-store",
+      })
+      if (!response.ok) {
+        throw new Error(`옵션정보 API 오류 (${response.status})`)
+      }
+      const payload = await response.json()
+      const nextColumns = applySeedTotalsToPaidOptionColumns(paidOptionSourceColumns, Array.isArray(payload?.cards) ? payload.cards : [])
+      setManualDraft((prev: any) => ({
+        ...prev,
+        paidOptionInfoColumns: cloneData(nextColumns),
+      }))
+      window.alert("옵션정보를 불러왔습니다.")
+    } catch (error: any) {
+      const message = String(error?.message || "옵션정보를 불러오지 못했습니다.")
+      window.alert(message)
+    }
   }
 
   function loadTerminationOverviewFromWeeklyList() {
@@ -1682,6 +1939,7 @@ export function DashboardShell({
 
     startTransition(async () => {
       const baseDate = normalizeDate(weeklyReport?.baseDate || new Date().toISOString().slice(0, 10))
+      const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
       const existingRows = collection.integrated || []
       const existingKeys = new Set(
         existingRows.map((row: any) => `${row.idCode || ""}|${row.claimMonth || ""}|${row.companyName || ""}`),
@@ -1698,6 +1956,7 @@ export function DashboardShell({
           industry: row.industry || "",
           claimMonth: row.contractMonth || "",
           receiptDate: row.documentStatus === "회수" ? baseDate : "",
+          reflectedDate,
           status: row.documentStatus || "미회수",
         }))
 
@@ -1711,6 +1970,7 @@ export function DashboardShell({
           integrated: [...movedRows, ...existingRows],
           yearFilter: currentYear,
           statusFilter: "all",
+          sort: collectionSort,
         },
       }
 
@@ -1817,6 +2077,7 @@ export function DashboardShell({
           [key]: nextCollectionRows,
           yearFilter: collectionYearFilter,
           statusFilter: collectionStatusFilter,
+          sort: collectionSort,
         },
       })
     })
@@ -1832,6 +2093,7 @@ export function DashboardShell({
       industry: row.industry || "",
       claimMonth: row.claimMonth || "",
       receiptDate: row.receiptDate || "",
+      reflectedDate: row.reflectedDate || "",
       status: row.status || "미정",
     })
   }
@@ -1854,6 +2116,7 @@ export function DashboardShell({
               industry: editingCollectionDraft.industry,
               claimMonth: editingCollectionDraft.claimMonth,
               receiptDate: editingCollectionDraft.receiptDate,
+              reflectedDate: editingCollectionDraft.reflectedDate,
               status: editingCollectionDraft.status,
             }
           : row,
@@ -1865,6 +2128,7 @@ export function DashboardShell({
           [key]: nextCollectionRows,
           yearFilter: collectionYearFilter,
           statusFilter: collectionStatusFilter,
+          sort: collectionSort,
         },
       })
       setEditingCollectionId(null)
@@ -1893,6 +2157,7 @@ export function DashboardShell({
         [key]: nextCollectionRows,
         yearFilter: collectionYearFilter,
         statusFilter: collectionStatusFilter,
+        sort: collectionSort,
       },
     })
   }
@@ -1915,9 +2180,345 @@ export function DashboardShell({
           [key]: nextCollectionRows,
           yearFilter: collectionYearFilter,
           statusFilter: collectionStatusFilter,
+          sort: collectionSort,
         },
       })
     })
+  }
+
+  function handleCollectionSortChange(
+    nextKey: "year" | "companyName" | "departmentName" | "idCode" | "industry" | "claimMonth" | "receiptDate" | "reflectedDate" | "status",
+  ) {
+    setCollectionSort((prev) =>
+      prev.key === nextKey
+        ? { key: nextKey, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key: nextKey, dir: "asc" },
+    )
+  }
+
+  function persistCollectionDelivery(nextDelivery: any) {
+    persist({
+      ...data,
+      collection: {
+        ...collection,
+        delivery: nextDelivery,
+        tab: collectionTab,
+        yearFilter: collectionYearFilter,
+        statusFilter: collectionStatusFilter,
+        sort: collectionSort,
+      },
+    })
+  }
+
+  function buildCollectionDeliverySnapshot() {
+    const deliveredDate = normalizeDate(collectionDelivery.deliveredDate)
+    if (!deliveredDate) return null
+    return {
+      id: `delivery-history-${Date.now()}`,
+      deliveredDate,
+      title: collectionDelivery.title,
+      managerConfirm: collectionDelivery.managerConfirm,
+      senderConfirm: collectionDelivery.senderConfirm,
+      savedAt: new Date().toISOString(),
+      rows: collectionDelivery.rows.map((row: any, index: number) => ({
+        id: row?.id || `delivery-history-row-${index + 1}`,
+        companyName: String(row?.companyName || ""),
+        departmentName: String(row?.departmentName || ""),
+        idCode: String(row?.idCode || ""),
+        recommender: String(row?.recommender || ""),
+        contractMonth: String(row?.contractMonth || ""),
+        recoveredCount: String(row?.recoveredCount || ""),
+        note: String(row?.note || ""),
+      })),
+    }
+  }
+
+  function handleCollectionDeliverySaveHistory() {
+    const snapshot = buildCollectionDeliverySnapshot()
+    if (!snapshot) {
+      window.alert("전달 일자를 먼저 입력해 주세요.")
+      return
+    }
+    const nextHistory = [
+      snapshot,
+      ...(collectionDelivery.history || []).filter(
+        (entry: any) => normalizeDate(entry.deliveredDate) !== snapshot.deliveredDate,
+      ),
+    ]
+    persistCollectionDelivery({
+      ...collectionDelivery,
+      deliveredDate: snapshot.deliveredDate,
+      history: nextHistory,
+    })
+    setSelectedDeliveryHistoryDate(snapshot.deliveredDate)
+    window.alert(`${snapshot.deliveredDate} 주차 리스트로 저장되었습니다.`)
+  }
+
+  function applyCollectionDeliveryHistory(target: any, selectedDate: string) {
+    persistCollectionDelivery({
+      ...collectionDelivery,
+      title: String(target.title || collectionDelivery.title),
+      deliveredDate: normalizeDate(target.deliveredDate || selectedDate),
+      managerConfirm: String(target.managerConfirm || ""),
+      senderConfirm: String(target.senderConfirm || ""),
+      rows: (target.rows || []).map((row: any, index: number) => ({
+        id: row?.id || `delivery-row-loaded-${Date.now()}-${index + 1}`,
+        companyName: String(row?.companyName || ""),
+        departmentName: String(row?.departmentName || ""),
+        idCode: String(row?.idCode || ""),
+        recommender: String(row?.recommender || ""),
+        contractMonth: String(row?.contractMonth || ""),
+        recoveredCount: String(row?.recoveredCount || ""),
+        note: String(row?.note || ""),
+      })),
+      history: collectionDelivery.history || [],
+    })
+  }
+
+  function handleCollectionDeliveryLoadHistory(dateKey?: string, skipConfirm = false) {
+    const selectedDate = normalizeDate(dateKey || selectedDeliveryHistoryDate)
+    if (!selectedDate) {
+      window.alert("불러올 전달일자 히스토리를 선택해 주세요.")
+      return
+    }
+    const target = (collectionDelivery.history || []).find(
+      (entry: any) => normalizeDate(entry.deliveredDate) === selectedDate,
+    )
+    if (!target) {
+      window.alert("선택한 전달일자 히스토리를 찾을 수 없습니다.")
+      return
+    }
+    if (!skipConfirm && !window.confirm(`${selectedDate} 주차 리스트를 불러올까요?`)) return
+    applyCollectionDeliveryHistory(target, selectedDate)
+  }
+
+  function handleCollectionDeliveryHistorySelect(nextDate: string) {
+    setSelectedDeliveryHistoryDate(nextDate)
+    if (!nextDate) return
+    const currentDate = normalizeDate(collectionDelivery.deliveredDate)
+    if (currentDate === normalizeDate(nextDate)) return
+    handleCollectionDeliveryLoadHistory(nextDate, true)
+  }
+
+  function handleCollectionDeliveryMetaChange(field: "title" | "deliveredDate" | "managerConfirm" | "senderConfirm", value: string) {
+    persistCollectionDelivery({
+      ...collectionDelivery,
+      [field]: field === "deliveredDate" ? normalizeDate(value) : value,
+    })
+  }
+
+  function handleCollectionDeliveryRowChange(
+    rowId: string,
+    field: "companyName" | "departmentName" | "idCode" | "recommender" | "contractMonth" | "recoveredCount" | "note",
+    value: string,
+  ) {
+    const nextRows = collectionDelivery.rows.map((row: any) =>
+      row.id === rowId
+        ? { ...row, [field]: value }
+        : row,
+    )
+    persistCollectionDelivery({
+      ...collectionDelivery,
+      rows: nextRows,
+    })
+  }
+
+  function handleCollectionDeliveryAddRow() {
+    persistCollectionDelivery({
+      ...collectionDelivery,
+      rows: [
+        ...collectionDelivery.rows,
+        {
+          id: `delivery-row-${Date.now()}`,
+          companyName: "",
+          departmentName: "",
+          idCode: "",
+          recommender: "",
+          contractMonth: "",
+          recoveredCount: "",
+          note: "",
+        },
+      ],
+    })
+  }
+
+  function handleCollectionDeliveryDeleteRow(rowId: string) {
+    if (!window.confirm("이 전달 항목을 삭제할까요?")) return
+    persistCollectionDelivery({
+      ...collectionDelivery,
+      rows: collectionDelivery.rows.filter((row: any) => row.id !== rowId),
+    })
+  }
+
+  function handleCollectionDeliveryPrint() {
+    const popup = window.open("", "_blank", "width=980,height=1200")
+    if (!popup) {
+      window.alert("팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.")
+      return
+    }
+    const rowsHtml = collectionDelivery.rows
+      .map((row: any, index: number) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(row.companyName)}</td>
+          <td>${escapeHtml(row.departmentName)}</td>
+          <td>${escapeHtml(row.idCode)}</td>
+          <td>${escapeHtml(row.recommender)}</td>
+          <td>${escapeHtml(row.contractMonth)}</td>
+          <td>${escapeHtml(row.recoveredCount)}</td>
+          <td>${escapeHtml(row.note)}</td>
+        </tr>
+      `)
+      .join("")
+    popup.document.open()
+    popup.document.write(`
+      <!doctype html>
+      <html lang="ko">
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(collectionDelivery.title)}</title>
+        <style>
+          @page { size: A4 portrait; margin: 12mm 10mm; }
+          html, body {
+            margin: 0;
+            padding: 0;
+            font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+            color: #0b1f44;
+            background: #ffffff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .wrapper { padding: 1mm 0; }
+          .sheet {
+            border: 1px solid #d6e0ea;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #ffffff;
+          }
+          .header {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 270px;
+            align-items: start;
+            gap: 10px;
+            padding: 8px 10px;
+            border-bottom: 1px solid #d8e2ef;
+            background: #ffffff;
+          }
+          .title-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+          }
+          .title {
+            font-size: 17px;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.1px;
+            word-break: keep-all;
+            line-break: strict;
+            white-space: nowrap;
+          }
+          .subtitle { font-size: 10px; color: #526683; }
+          .meta {
+            min-width: 270px;
+            width: 270px;
+            font-size: 11px;
+            color: #0b1f44;
+            border: 1px solid #d5dfeb;
+            border-radius: 9px;
+            background: #ffffff;
+            padding: 7px 9px;
+            box-sizing: border-box;
+          }
+          .meta-row {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            align-items: center;
+            column-gap: 6px;
+            margin-bottom: 4px;
+          }
+          .meta-row:last-child { margin-bottom: 0; }
+          .meta-label { white-space: nowrap; font-weight: 700; }
+          .meta-value { text-align: right; font-weight: 600; }
+          .meta-sign-line {
+            min-width: 0;
+            width: 100%;
+            height: 20px;
+            border-bottom: 1px solid #213a63;
+            padding: 0 4px;
+            text-align: left;
+            font-weight: 600;
+            box-sizing: border-box;
+            display: block;
+          }
+          .table-wrap { padding: 0 8px 8px; }
+          table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; color: #0b1f44; }
+          th, td { border: 1px solid #c3cfdf; padding: 4px 6px; vertical-align: middle; text-align: center; word-break: break-word; }
+          thead th {
+            background: #f6ddd1;
+            color: #0b1f44;
+            font-weight: 800;
+          }
+          tbody td { background: #ffffff; }
+          td:nth-child(2), td:nth-child(3), td:nth-child(8) { text-align: left; }
+          .footer-note {
+            padding: 0 10px 8px;
+            font-size: 10px;
+            color: #5f7492;
+            text-align: right;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="wrapper">
+          <div class="sheet">
+            <div class="header">
+              <div class="title-wrap">
+                <h1 class="title">${escapeHtml(collectionDelivery.title)}</h1>
+                <div class="subtitle">계약서 전달 확인용 문서</div>
+              </div>
+              <div class="meta">
+                <div class="meta-row">
+                  <span class="meta-label">전달 일자 :</span>
+                  <span class="meta-value">${escapeHtml(collectionDelivery.deliveredDate)}</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-label">담당자 확인 :</span>
+                  <span class="meta-sign-line">${escapeHtml(collectionDelivery.managerConfirm)}</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-label">전달자 확인 :</span>
+                  <span class="meta-sign-line">${escapeHtml(collectionDelivery.senderConfirm)}</span>
+                </div>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:6%">구분</th>
+                    <th style="width:24%">회사명</th>
+                    <th style="width:14%">부서명</th>
+                    <th style="width:10%">ID</th>
+                    <th style="width:7%">권유</th>
+                    <th style="width:8%">계약월</th>
+                    <th style="width:7%">회수</th>
+                    <th>비고</th>
+                  </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+              </table>
+            </div>
+            <div class="footer-note">인포Biz본부 계약서 전달 기록</div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `)
+    popup.document.close()
+    popup.focus()
+    popup.print()
   }
 
 
@@ -1926,6 +2527,8 @@ export function DashboardShell({
     if (nextTab === "long-term") {
       setCollectionYearFilter("all")
       setCollectionStatusFilter("미회수")
+    } else if (nextTab === "delivery") {
+      setCollectionStatusFilter("all")
     } else {
       setCollectionYearFilter(2026)
       setCollectionStatusFilter("all")
@@ -2669,15 +3272,24 @@ export function DashboardShell({
                     >
                       {viewTitles["weekly-selection"]}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setView("collection")}
-                      className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
-                        view === "collection" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
-                      }`}
-                    >
-                      {viewTitles.collection}
-                    </button>
+                <button
+                  type="button"
+                  onClick={() => setView("collection")}
+                  className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                    view === "collection" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {viewTitles.collection}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("option-dashboard")}
+                  className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                    view === "option-dashboard" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {viewTitles["option-dashboard"]}
+                </button>
                   </div>
                 )}
             </div>
@@ -3898,15 +4510,158 @@ export function DashboardShell({
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={() => handleCollectionTabChange("integrated")} className={`rounded-2xl px-4 py-2 text-[13px] font-semibold ${collectionTab === "integrated" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>통합관리</button>
                     <button type="button" onClick={() => handleCollectionTabChange("long-term")} className={`rounded-2xl px-4 py-2 text-[13px] font-semibold ${collectionTab === "long-term" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>장기미회수</button>
+                    <button type="button" onClick={() => handleCollectionTabChange("delivery")} className={`rounded-2xl px-4 py-2 text-[13px] font-semibold ${collectionTab === "delivery" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>전달 리스트</button>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {renderChip(`전체 ${formatNumber(filteredCollectionRows.length)}건`, "blue")}
-                  {renderChip(`회수 ${formatNumber(filteredCollectionRows.filter((row: any) => row.status === "회수").length)}건`, "green")}
-                  {renderChip(`미회수 ${formatNumber(filteredCollectionRows.filter((row: any) => row.status === "미회수").length)}건`, "red")}
-                  {renderChip(`미정 ${formatNumber(filteredCollectionRows.filter((row: any) => !row.status || row.status === "미정").length)}건`, "gray")}
-                </div>
+                {collectionTab === "delivery" ? (
+                  <div className="flex flex-wrap gap-2">
+                    {renderChip(`전달 항목 ${formatNumber(collectionDelivery.rows.length)}건`, "blue")}
+                    {renderChip(`전달 일자 ${collectionDelivery.deliveredDate || "-"}`, "gray")}
+                    {renderChip(`저장 주차 ${formatNumber(deliveryHistoryOptions.length)}건`, "gray")}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {renderChip(`전체 ${formatNumber(filteredCollectionRows.length)}건`, "blue")}
+                    {renderChip(`회수 ${formatNumber(filteredCollectionRows.filter((row: any) => row.status === "회수").length)}건`, "green")}
+                    {renderChip(`미회수 ${formatNumber(filteredCollectionRows.filter((row: any) => row.status === "미회수").length)}건`, "red")}
+                    {renderChip(`미정 ${formatNumber(filteredCollectionRows.filter((row: any) => !row.status || row.status === "미정").length)}건`, "gray")}
+                  </div>
+                )}
               </div>
+              {collectionTab === "delivery" ? (
+                <div className={`${cardClass} p-5`}>
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="break-keep text-[18px] font-bold text-slate-900">{collectionDelivery.title}</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        className="h-9 min-w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-700"
+                        value={selectedDeliveryHistoryDate}
+                        onChange={(e) => handleCollectionDeliveryHistorySelect(e.target.value)}
+                        disabled={deliveryHistoryOptions.length === 0}
+                      >
+                        {deliveryHistoryOptions.length === 0 ? (
+                          <option value="">저장된 주차 없음</option>
+                        ) : (
+                          deliveryHistoryOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleCollectionDeliverySaveHistory}
+                        className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700"
+                      >
+                        리스트 저장
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCollectionDeliveryAddRow}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
+                      >
+                        행 추가
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCollectionDeliveryPrint}
+                        className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white"
+                      >
+                        PDF 출력
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mb-4 grid grid-cols-3 gap-3">
+                    <label className="space-y-1">
+                      <div className="text-[12px] font-medium text-slate-600">전달 일자</div>
+                      <input
+                        className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]"
+                        value={collectionDelivery.deliveredDate}
+                        onChange={(e) => handleCollectionDeliveryMetaChange("deliveredDate", e.target.value)}
+                        placeholder="YYYY.MM.DD"
+                      />
+                    </label>
+                    <label className="space-y-1">
+                      <div className="text-[12px] font-medium text-slate-600">담당자 확인</div>
+                      <input
+                        className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]"
+                        value={collectionDelivery.managerConfirm}
+                        onChange={(e) => handleCollectionDeliveryMetaChange("managerConfirm", e.target.value)}
+                      />
+                    </label>
+                    <label className="space-y-1">
+                      <div className="text-[12px] font-medium text-slate-600">전달자 확인</div>
+                      <input
+                        className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]"
+                        value={collectionDelivery.senderConfirm}
+                        onChange={(e) => handleCollectionDeliveryMetaChange("senderConfirm", e.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="overflow-auto rounded-2xl border border-slate-200">
+                    <table className={tableClass}>
+                      <thead>
+                        <tr>
+                          {["구분", "회사명", "부서명", "ID", "권유", "계약월", "회수", "비고", "작업"].map((label) => (
+                            <th key={label} className={thClass}>
+                              {label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {collectionDelivery.rows.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className={`${tdClass} py-8 text-slate-500`}>
+                              전달 리스트 항목이 없습니다. 행 추가를 눌러 입력해 주세요.
+                            </td>
+                          </tr>
+                        ) : (
+                          collectionDelivery.rows.map((row: any, index: number) => (
+                            <tr key={row.id}>
+                              <td className={tdClass}>{index + 1}</td>
+                              <td className={tdClass}>
+                                <input className="h-9 w-full min-w-[150px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.companyName} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "companyName", e.target.value)} />
+                              </td>
+                              <td className={tdClass}>
+                                <input className="h-9 w-full min-w-[130px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.departmentName} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "departmentName", e.target.value)} />
+                              </td>
+                              <td className={tdClass}>
+                                <input className="h-9 w-full min-w-[95px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.idCode} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "idCode", e.target.value)} />
+                              </td>
+                              <td className={tdClass}>
+                                <input className="h-9 w-full min-w-[72px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.recommender} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "recommender", e.target.value)} />
+                              </td>
+                              <td className={tdClass}>
+                                <input className="h-9 w-full min-w-[88px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.contractMonth} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "contractMonth", e.target.value)} placeholder="26년 4월" />
+                              </td>
+                              <td className={tdClass}>
+                                <input className="h-9 w-full min-w-[56px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.recoveredCount} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "recoveredCount", e.target.value)} />
+                              </td>
+                              <td className={tdClass}>
+                                <input className="h-9 w-full min-w-[180px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.note} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "note", e.target.value)} />
+                              </td>
+                              <td className={tdClass}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCollectionDeliveryDeleteRow(row.id)}
+                                  className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700"
+                                >
+                                  삭제
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <>
               <div className={`${cardClass} p-4`}>
                 <div className="flex flex-wrap items-center gap-2">
                   <button type="button" onClick={() => setCollectionYearFilter("all")} className={`rounded-2xl px-3 py-2 text-[13px] font-semibold ${collectionYearFilter === "all" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>전체</button>
@@ -3963,18 +4718,29 @@ export function DashboardShell({
                   <table className={`${tableClass} ${collectionYearFilter === "all" ? "text-[12px]" : ""}`}>
                     <thead>
                       <tr>
-                        {["No.","연도","회사명","부서명","ID","업종","청구월","회수일","상태","작업"].map((head) => (
+                        {collectionTableColumns.map((column) => (
                           <th
-                            key={head}
+                            key={column.label}
                             className={`${thClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""} sticky top-0 z-10`}
                           >
-                            {head}
+                            {column.key ? (
+                              <button
+                                type="button"
+                                onClick={() => handleCollectionSortChange(column.key)}
+                                className="inline-flex items-center justify-center gap-1 font-semibold text-slate-700 transition hover:text-blue-700"
+                              >
+                                {column.label}
+                                <span className="text-[11px] text-slate-500">{getCollectionSortMark(column.key)}</span>
+                              </button>
+                            ) : (
+                              column.label
+                            )}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredCollectionRows.map((row: any, index: number) => {
+                      {sortedCollectionRows.map((row: any, index: number) => {
                         const editing = editingCollectionId === row.id
                         return (
                           <tr key={row.id}>
@@ -4007,6 +4773,18 @@ export function DashboardShell({
                                 />
                               ) : (
                                 row.receiptDate || ""
+                              )}
+                            </td>
+                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
+                              {editing ? (
+                                <input
+                                  value={editingCollectionDraft.reflectedDate || ""}
+                                  onChange={(e) => updateEditingCollectionDraft("reflectedDate", e.target.value)}
+                                  placeholder="YYYY.MM.DD"
+                                  className="h-9 w-28 rounded-xl border border-slate-200 px-3 text-[12px] font-medium text-slate-700 outline-none focus:border-blue-400"
+                                />
+                              ) : (
+                                row.reflectedDate || ""
                               )}
                             </td>
                             <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
@@ -4084,6 +4862,8 @@ export function DashboardShell({
                   </table>
                 </div>
               </div>
+                </>
+              )}
             </div>
           )}
 
@@ -4091,10 +4871,10 @@ export function DashboardShell({
             <div className="space-y-4">
               <div className={`${cardClass} p-5`}>
                 <div className="mb-4 flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-[18px] font-bold">{sanitizeTerminationTitle(selectedSheet.title || "단말기 해지 진행사항")}</div>
-                    <div className="mt-2 text-[13px] text-slate-500">{selectedSheet.teamLabel}</div>
-                    <div className="mt-1 space-y-1 text-[13px] text-slate-600">{(selectedSheet.guidelines || []).map((line: string) => <div key={line}>{line}</div>)}</div>
+                    <div>
+                    <div className="text-[18px] font-bold">단말기 해지 진행사항</div>
+                    <div className="mt-2 text-[13px] text-slate-500">{getSafeTerminationTeamLabel(selectedSheet.teamLabel)}</div>
+                    <div className="mt-1 space-y-1 text-[13px] text-slate-600">{getSafeTerminationGuidelines(selectedSheet.guidelines).map((line: string) => <div key={line}>{line}</div>)}</div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"><div className="text-[12px] text-slate-500">금주 해지 건수</div><div className="mt-1 text-[20px] font-extrabold">{formatNumber(visibleWeeklyTerminationCount)}건</div></div>
@@ -4272,9 +5052,7 @@ export function DashboardShell({
                           확정 {formatNumber(confirmedTerminationItems.length)}건
                         </span>
                       </>
-                    ) : (
-                      "해지확정/청구보류 해제 보기"
-                    )}
+                    ) : "해지확정 리스트 보기"}
                   </button>
                 </div>
                 <div className={`${cardClass} overflow-hidden p-0 ${showTerminationArchive ? "hidden" : ""}`}>
@@ -4643,7 +5421,7 @@ export function DashboardShell({
                   </table>
                   </div>
                 </div>
-                <div className={`${cardClass} overflow-hidden p-0 ${showTerminationArchive ? "" : "hidden"}`}>
+                <div className={`${cardClass} overflow-hidden p-0 hidden`}>
                   <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                     <div className="text-[17px] font-bold text-slate-900">청구보류 해제 리스트</div>
                     <button
@@ -4737,7 +5515,13 @@ export function DashboardShell({
                   </table>
                   </div>
                 </div>
-              </div>
+                </div>
+            </div>
+          )}
+
+          {view === "option-dashboard" && (
+            <div className="space-y-4">
+              <OptionDashboardPage />
             </div>
           )}
         </main>

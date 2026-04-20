@@ -182,9 +182,23 @@ try {
   $excel.Visible = $false
   $excel.DisplayAlerts = $false
 
-  $weeklyWb = $excel.Workbooks.Open($weeklyPath, 0, $true)
-  $terminationWb = $excel.Workbooks.Open($terminationPath, 0, $true)
-  $collectionWb = $excel.Workbooks.Open($collectionPath, 0, $true)
+  function Open-WorkbookSafe {
+    param(
+      [Parameter(Mandatory = $true)] $ExcelApp,
+      [Parameter(Mandatory = $true)] [string] $Path
+    )
+
+    try {
+      return $ExcelApp.Workbooks.Open($Path, 0, $true)
+    } catch {
+      # 일부 xlsm 파일은 구형 Excel COM 환경에서 Open 호출이 실패할 수 있어 OpenXML로 폴백
+      return $ExcelApp.Workbooks.OpenXML($Path)
+    }
+  }
+
+  $weeklyWb = Open-WorkbookSafe -ExcelApp $excel -Path $weeklyPath
+  $terminationWb = Open-WorkbookSafe -ExcelApp $excel -Path $terminationPath
+  $collectionWb = Open-WorkbookSafe -ExcelApp $excel -Path $collectionPath
 
   # workbook 1: weekly report
   $reportWs = $weeklyWb.Worksheets.Item(1)
@@ -362,19 +376,6 @@ try {
   }
 
   # workbook 3: termination progress
-  $terminationCountOverrides = @{
-    "26.04.16" = @{ termination = 19; hold = 21 }
-    "26.04.09" = @{ termination = 19; hold = 21 }
-    "26.04.02" = @{ termination = 19; hold = 21 }
-    "26.03.26" = @{ termination = 20; hold = 19 }
-    "26.03.19" = @{ termination = 18; hold = 22 }
-    "26.03.12" = @{ termination = 19; hold = 22 }
-    "26.03.05" = @{ termination = 18; hold = 22 }
-    "26.02.27" = @{ termination = 17; hold = 23 }
-    "26.02.20" = @{ termination = 21; hold = 29 }
-    "26.02.13" = @{ termination = 14; hold = 28 }
-    "26.02.06" = @{ termination = 14; hold = 28 }
-  }
   $terminationSheets = @()
   foreach ($ws in @($terminationWb.Worksheets)) {
     $sheetName = [string]$ws.Name
@@ -431,18 +432,46 @@ try {
       }
     }
 
-    # Store weekly counters from the actual extracted rows so the app and DB stay aligned.
-    # "금주 해지 건수" means the still-open weekly list, so checked(confirmed) rows are excluded.
-    if ($terminationCountOverrides.ContainsKey($sheetName)) {
-      $weeklyTerminationCount = [int]$terminationCountOverrides[$sheetName].termination
-      $weeklyBillingHoldCount = [int]$terminationCountOverrides[$sheetName].hold
-    } else {
-      $weeklyTerminationCount = @($items | Where-Object { -not $_.selected }).Count
-      $weeklyBillingHoldCount = @($holdItems).Count
+    $openItems = @()
+    $confirmedItems = @()
+    $reflectedDate = Format-DateValue $null $sheetName
+    foreach ($item in $items) {
+      if ($item.selected) {
+        $confirmedItems += [ordered]@{
+          id = $item.id
+          no = $item.no
+          selected = $true
+          receivedDate = $item.receivedDate
+          manager = $item.manager
+          customerId = $item.customerId
+          reason = $item.reason
+          terminationDate = $item.terminationDate
+          companyName = $item.companyName
+          departmentName = $item.departmentName
+          penalty = $item.penalty
+          reflectedDate = $reflectedDate
+        }
+      } else {
+        $openItems += [ordered]@{
+          id = $item.id
+          no = $item.no
+          selected = $false
+          receivedDate = $item.receivedDate
+          manager = $item.manager
+          customerId = $item.customerId
+          reason = $item.reason
+          terminationDate = $item.terminationDate
+          companyName = $item.companyName
+          departmentName = $item.departmentName
+          penalty = $item.penalty
+        }
+      }
     }
+    $weeklyTerminationCount = @($openItems).Count
+    $weeklyBillingHoldCount = @($holdItems).Count
 
     $reasonSummary = @{}
-    foreach ($item in $items) {
+    foreach ($item in $openItems) {
       $reasonKey = if ([string]::IsNullOrWhiteSpace($item.reason)) { $TXT_UNKNOWN } else { $item.reason }
       if (-not $reasonSummary.ContainsKey($reasonKey)) { $reasonSummary[$reasonKey] = 0 }
       $reasonSummary[$reasonKey]++
@@ -456,8 +485,10 @@ try {
       weeklyBillingHoldCount = $weeklyBillingHoldCount
       teamLabel = $teamLabel
       guidelines = $guidelines
-      items = $items
+      items = $openItems
       holdItems = $holdItems
+      confirmedItems = $confirmedItems
+      releasedHoldItems = @()
       reasonSummary = $reasonSummary
     }
   }
@@ -465,6 +496,42 @@ try {
   $terminationSheets = @($terminationSheets | Sort-Object { Sheet-DateKey $_.name } -Descending)
   $currentSheet = $terminationSheets | Where-Object { $_.name -eq $baseSheetName } | Select-Object -First 1
   if (-not $currentSheet -and $terminationSheets.Count -gt 0) { $currentSheet = $terminationSheets[0] }
+  if ($currentSheet) {
+    $mergedConfirmed = @()
+    $seenConfirmed = @{}
+    foreach ($sheet in $terminationSheets) {
+      foreach ($item in @($sheet.confirmedItems)) {
+        $dedupeKey = "{0}|{1}|{2}|{3}" -f (Normalize-Whitespace $item.customerId), (Normalize-Whitespace $item.companyName), (Normalize-Whitespace $item.receivedDate), (Normalize-Whitespace $item.terminationDate)
+        if ([string]::IsNullOrWhiteSpace($dedupeKey)) { continue }
+        if ($seenConfirmed.ContainsKey($dedupeKey)) { continue }
+        $seenConfirmed[$dedupeKey] = $true
+        $mergedConfirmed += $item
+      }
+    }
+
+    $currentReasonSummary = @{}
+    foreach ($item in @($currentSheet.items)) {
+      $reasonKey = if ([string]::IsNullOrWhiteSpace($item.reason)) { $TXT_UNKNOWN } else { $item.reason }
+      if (-not $currentReasonSummary.ContainsKey($reasonKey)) { $currentReasonSummary[$reasonKey] = 0 }
+      $currentReasonSummary[$reasonKey]++
+    }
+
+    $currentSheet = [ordered]@{
+      id = $currentSheet.id
+      name = $currentSheet.name
+      title = $currentSheet.title
+      weeklyTerminationCount = @($currentSheet.items).Count
+      weeklyBillingHoldCount = @($currentSheet.holdItems).Count
+      teamLabel = $currentSheet.teamLabel
+      guidelines = $currentSheet.guidelines
+      items = @($currentSheet.items)
+      holdItems = @($currentSheet.holdItems)
+      confirmedItems = @($mergedConfirmed)
+      releasedHoldItems = @()
+      reasonSummary = $currentReasonSummary
+    }
+    $terminationSheets = @($currentSheet)
+  }
 
   $yearsList = @((@($years) + 2026) | Sort-Object -Descending -Unique)
 
