@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { Sparkles, Globe, Wallet, Rss } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -59,8 +59,8 @@ export function BottomTabs({ activeTab, onTabChange }: BottomTabsProps) {
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
             className={cn(
-              "flex flex-col items-center gap-0.5 rounded-xl transition-all",
-              isCenter ? "px-3 py-1" : "px-2 py-1",
+              "flex min-w-0 flex-col items-center gap-0.5 rounded-xl transition-all",
+              isCenter ? "px-2.5 py-1" : "px-2 py-1",
               isActive ? "text-[#10B3A3]" : "text-[#7C8F8C] hover:text-[#1F2A2A]"
             )}
           >
