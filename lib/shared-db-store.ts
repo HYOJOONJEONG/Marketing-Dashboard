@@ -43,9 +43,9 @@ type StoreShape = {
 
 let writeQueue: Promise<void> = Promise.resolve()
 
-function ensureCentralConfigured() {
-  if (SHARED_DB_REQUIRE_CENTRAL && !CENTRAL_DB_API_URL && !KV_REST_API_URL) {
-    throw new Error("SHARED_DB_REQUIRE_CENTRAL is enabled but no central DB is configured.")
+function ensureWritableStoreConfigured() {
+  if (SHARED_DB_REQUIRE_CENTRAL && !CENTRAL_DB_API_URL && !kvConfigured()) {
+    throw new Error("Persistent DB is not configured for writes. Configure KV_REST_API_URL and KV_REST_API_TOKEN.")
   }
 }
 
@@ -126,8 +126,6 @@ function defaultChangeLabelByKey(key: SharedKey) {
 }
 
 async function readRawValue(key: SharedKey) {
-  ensureCentralConfigured()
-
   if (kvConfigured() && !CENTRAL_DB_API_URL) {
     const value = await kvCommand<string | null>(["GET", kvValueKey(key)])
     return value == null ? null : String(value)
@@ -166,7 +164,7 @@ async function readRawValue(key: SharedKey) {
 }
 
 async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta) {
-  ensureCentralConfigured()
+  ensureWritableStoreConfigured()
   const menuLabel = String(meta?.menuLabel || defaultMenuLabelByKey(key))
   const changeLabel = String(meta?.changeLabel || defaultChangeLabelByKey(key))
 
