@@ -66,7 +66,6 @@ export async function redisCommand<T = RespValue>(redisUrl: string, parts: Array
         : net.connect({ host, port })
 
     let buffer = Buffer.alloc(0)
-    let responses = 0
     const expectedResponses = commands.length
 
     const timer = setTimeout(() => {
@@ -83,12 +82,11 @@ export async function redisCommand<T = RespValue>(redisUrl: string, parts: Array
         buffer = Buffer.concat([buffer, chunk])
         let current = 0
         let value: RespValue = null
-        while (responses < expectedResponses) {
+        for (let responses = 0; responses < expectedResponses; responses += 1) {
           const parsed = parseResp(buffer, current)
           if (!parsed) return
           value = parsed.value
           current = parsed.offset
-          responses += 1
         }
         clearTimeout(timer)
         socket.destroy()
