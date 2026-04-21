@@ -1,41 +1,50 @@
-import { promises as fs } from "fs"
 import path from "path"
 import { NextResponse } from "next/server"
+import { readDashboardState, writeDashboardState } from "@/lib/shared-db-store"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
 const FALLBACK_PATH = path.join(process.cwd(), "api-dashboard-response.json")
 
+const EMPTY_DASHBOARD = { ui: {}, contracts: [], termination: {} }
+
 export async function GET() {
-  const content = await fs.readFile(DATA_PATH, "utf8")
   try {
-    return NextResponse.json(JSON.parse(content.replace(/^\uFEFF/, "")))
+    const data = await readDashboardState<any>(DATA_PATH)
+    if (data) return NextResponse.json(data)
+
+    const fallbackData = await readDashboardState<any>(FALLBACK_PATH)
+    return NextResponse.json(fallbackData || EMPTY_DASHBOARD)
   } catch (error) {
-    try {
-      const fallback = await fs.readFile(FALLBACK_PATH, "utf8")
-      const data = JSON.parse(fallback.replace(/^\uFEFF/, ""))
-      await fs.writeFile(DATA_PATH, JSON.stringify(data, null, 2), "utf8")
-      return NextResponse.json(data)
-    } catch (fallbackError) {
-      console.error("Failed to parse app-state.json and fallback.", error, fallbackError)
-      return NextResponse.json({ ui: {}, contracts: [], termination: {} })
-    }
+    console.error("Failed to read dashboard state.", error)
+    return NextResponse.json(EMPTY_DASHBOARD)
   }
 }
 
 export async function PUT(request: Request) {
   const raw = await request.text()
   let body: any
+
   try {
     body = JSON.parse(raw)
+  } catch {
+    return NextResponse.json({ ok: false, error: "Invalid JSON payload" }, { status: 400 })
+  }
+
+  try {
+    await writeDashboardState(body, {
+      menuLabel: "Dashboard",
+      changeLabel: "Save dashboard state",
+    })
+    return NextResponse.json({ ok: true })
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to save dashboard state"
+    const isReadOnly = message.toLowerCase().includes("read-only")
     return NextResponse.json(
-      { ok: false, error: "Invalid JSON payload" },
-      { status: 400 },
+      { ok: false, error: message },
+      { status: isReadOnly ? 403 : 500 },
     )
   }
-  await fs.mkdir(path.dirname(DATA_PATH), { recursive: true })
-  const tempPath = `${DATA_PATH}.tmp`
-  await fs.writeFile(tempPath, JSON.stringify(body, null, 2), "utf8")
-  await fs.rename(tempPath, DATA_PATH)
-  return NextResponse.json({ ok: true })
 }

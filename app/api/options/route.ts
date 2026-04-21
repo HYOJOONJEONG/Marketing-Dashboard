@@ -1,6 +1,6 @@
-import fs from "fs/promises"
 import path from "path"
 import { NextResponse } from "next/server"
+import { readDashboardState, readOptionsMock, writeOptionsMock } from "@/lib/shared-db-store"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -20,9 +20,6 @@ const APP_STATE_PATH = path.join(process.cwd(), "data", "app-state.json")
 
 const GET_CACHE_TTL_MS = 12 * 1000
 const getResponseCache = new Map<string, { expiresAt: number; payload: any }>()
-
-let mockCache: { mtimeMs: number; payload: any } | null = null
-let appStateIndustryCache: { mtimeMs: number; map: Map<string, string> } | null = null
 
 function normalizeCategoryCode(value: unknown) {
   return String(value ?? "").trim()
@@ -177,25 +174,19 @@ function buildCompanyIndustryMap(records: any[]) {
 }
 
 async function loadMock() {
-  const stat = await fs.stat(MOCK_PATH)
-  if (mockCache && mockCache.mtimeMs === stat.mtimeMs) {
-    return mockCache.payload
+  const payload = await readOptionsMock<any>(MOCK_PATH)
+  if (payload) return payload
+  return {
+    categories: [],
+    optionRecords: [],
+    seedCounts: [],
+    historyCounts: [],
   }
-  const mockRaw = await fs.readFile(MOCK_PATH, "utf8")
-  const payload = JSON.parse(mockRaw.replace(/^\uFEFF/, ""))
-  mockCache = { mtimeMs: stat.mtimeMs, payload }
-  return payload
 }
 
 async function loadAppStateIndustryMap() {
   try {
-    const stat = await fs.stat(APP_STATE_PATH)
-    if (appStateIndustryCache && appStateIndustryCache.mtimeMs === stat.mtimeMs) {
-      return new Map(appStateIndustryCache.map)
-    }
-
-    const appStateRaw = await fs.readFile(APP_STATE_PATH, "utf8")
-    const appState = JSON.parse(appStateRaw.replace(/^\uFEFF/, ""))
+    const appState = (await readDashboardState<any>(APP_STATE_PATH)) || {}
     const map = new Map<string, string>()
     const put = (company: unknown, industry: unknown) => {
       const companyName = normalizeCompanyKey(company)
@@ -209,7 +200,6 @@ async function loadAppStateIndustryMap() {
     for (const row of integrated) put(row?.companyName, row?.industry)
     const longTerm = Array.isArray(appState?.collection?.longTerm) ? appState.collection.longTerm : []
     for (const row of longTerm) put(row?.companyName, row?.industry)
-    appStateIndustryCache = { mtimeMs: stat.mtimeMs, map }
     return new Map(map)
   } catch {
     return new Map<string, string>()
@@ -217,10 +207,7 @@ async function loadAppStateIndustryMap() {
 }
 
 async function saveMock(payload: any) {
-  const nextJson = JSON.stringify(payload, null, 2)
-  await fs.writeFile(MOCK_PATH, nextJson, "utf8")
-  const stat = await fs.stat(MOCK_PATH)
-  mockCache = { mtimeMs: stat.mtimeMs, payload }
+  await writeOptionsMock(payload)
   getResponseCache.clear()
 }
 
@@ -421,7 +408,11 @@ export async function POST(req: Request) {
       seedCounts,
       historyCounts,
     }
-    await saveMock(nextMock)
+    await writeOptionsMock(nextMock, {
+      menuLabel: "유료 옵션 정보 현황",
+      changeLabel: action === "delete" ? "옵션 행 삭제" : "옵션 행 저장",
+    })
+    getResponseCache.clear()
     return NextResponse.json({ ok: true })
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error?.message || "저장에 실패했습니다." }, { status: 500 })
