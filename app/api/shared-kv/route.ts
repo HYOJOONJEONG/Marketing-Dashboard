@@ -102,6 +102,15 @@ function safeErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "shared-kv internal error"
 }
 
+function isJsonObjectString(value: string) {
+  try {
+    const parsed = JSON.parse(value.replace(/^\uFEFF/, ""))
+    return Boolean(parsed && typeof parsed === "object" && !Array.isArray(parsed))
+  } catch {
+    return false
+  }
+}
+
 async function loadStore(): Promise<StoreShape> {
   await fs.mkdir(path.dirname(STORE_PATH), { recursive: true })
   try {
@@ -286,6 +295,12 @@ export async function POST(request: Request) {
     const value = body?.value
     if (!key || typeof value !== "string") {
       return NextResponse.json({ ok: false, error: "invalid payload" }, { status: 400 })
+    }
+    if ((key === "dashboard_state" || key === "options_mock") && !isJsonObjectString(value)) {
+      return NextResponse.json(
+        { ok: false, error: `${key} must be a JSON object string` },
+        { status: 400 },
+      )
     }
 
     const menuLabel = String(body?.menuLabel || "System")

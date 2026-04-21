@@ -131,6 +131,17 @@ function defaultChangeLabelByKey(key: SharedKey) {
   return "Save data"
 }
 
+function parseJsonObject<T>(raw: string | null): T | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw.replace(/^\uFEFF/, "")) as T
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 async function readRawValue(key: SharedKey) {
   if (kvConfigured() && !CENTRAL_DB_API_URL) {
     const value = await kvCommand<string | null>(["GET", kvValueKey(key)])
@@ -240,14 +251,16 @@ async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta)
 
 async function seedFromFileIfMissing<T>(key: SharedKey, filePath: string): Promise<T | null> {
   const existing = await readRawValue(key)
-  if (existing) return JSON.parse(existing.replace(/^\uFEFF/, "")) as T
+  const parsedExisting = parseJsonObject<T>(existing)
+  if (parsedExisting) return parsedExisting
   if (!SHARED_DB_ALLOW_SEED) return null
 
   try {
     const raw = (await fs.readFile(filePath, "utf8")).replace(/^\uFEFF/, "")
-    JSON.parse(raw)
+    const parsed = parseJsonObject<T>(raw)
+    if (!parsed) return null
     await writeRawValue(key, raw)
-    return JSON.parse(raw) as T
+    return parsed
   } catch {
     return null
   }
@@ -255,22 +268,30 @@ async function seedFromFileIfMissing<T>(key: SharedKey, filePath: string): Promi
 
 export async function readDashboardState<T>(fallbackFilePath?: string): Promise<T | null> {
   const raw = await readRawValue(STORE_KEYS.dashboard)
-  if (raw) return JSON.parse(raw.replace(/^\uFEFF/, "")) as T
+  const parsed = parseJsonObject<T>(raw)
+  if (parsed) return parsed
   if (!fallbackFilePath) return null
   return seedFromFileIfMissing<T>(STORE_KEYS.dashboard, fallbackFilePath)
 }
 
 export async function writeDashboardState(value: unknown, meta?: WriteAuditMeta) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Dashboard state must be a JSON object.")
+  }
   await writeRawValue(STORE_KEYS.dashboard, JSON.stringify(value, null, 2), meta)
 }
 
 export async function readOptionsMock<T>(fallbackFilePath?: string): Promise<T | null> {
   const raw = await readRawValue(STORE_KEYS.options)
-  if (raw) return JSON.parse(raw.replace(/^\uFEFF/, "")) as T
+  const parsed = parseJsonObject<T>(raw)
+  if (parsed) return parsed
   if (!fallbackFilePath) return null
   return seedFromFileIfMissing<T>(STORE_KEYS.options, fallbackFilePath)
 }
 
 export async function writeOptionsMock(value: unknown, meta?: WriteAuditMeta) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Options data must be a JSON object.")
+  }
   await writeRawValue(STORE_KEYS.options, JSON.stringify(value, null, 2), meta)
 }

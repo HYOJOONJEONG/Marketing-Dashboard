@@ -32,6 +32,9 @@ export async function PUT(request: Request) {
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON payload" }, { status: 400 })
   }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ ok: false, error: "Dashboard state must be a JSON object" }, { status: 400 })
+  }
 
   try {
     await writeDashboardState(body, {
