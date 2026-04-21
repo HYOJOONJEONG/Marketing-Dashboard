@@ -488,7 +488,8 @@ function computeTerminationRowTotal(values: any[]) {
   if (!hasValue) return ""
   const hasPercent = values.some((value) => String(value ?? "").includes("%"))
   const sum = values.reduce((total, value) => total + parseLooseNumber(value), 0)
-  return hasPercent ? `${formatNumber(sum)}%` : formatNumber(sum)
+  const percentTotal = hasPercent && sum > 0 && Math.abs(sum - 100) <= 1 ? 100 : sum
+  return hasPercent ? `${formatNumber(percentTotal)}%` : formatNumber(sum)
 }
 
 function computeIndustryRowTotal(values: any[]) {
