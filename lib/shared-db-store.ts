@@ -1,6 +1,7 @@
 import crypto from "crypto"
 import fs from "fs/promises"
 import path from "path"
+import { redisCommand } from "@/lib/redis-client"
 
 const DEFAULT_STORE_PATH = path.join(process.cwd(), "data", "shared-kv-store.json")
 const CENTRAL_DB_API_URL = process.env.CENTRAL_DB_API_URL?.trim() || ""
@@ -8,6 +9,7 @@ const CENTRAL_DB_API_TOKEN = process.env.CENTRAL_DB_API_TOKEN?.trim() || ""
 const CENTRAL_DB_SOURCE = process.env.CENTRAL_DB_SOURCE?.trim() || "unknown-client"
 const KV_REST_API_URL = process.env.KV_REST_API_URL?.trim() || ""
 const KV_REST_API_TOKEN = process.env.KV_REST_API_TOKEN?.trim() || ""
+const REDIS_URL = process.env.REDIS_URL?.trim() || ""
 const SHARED_DB_READ_ONLY = process.env.SHARED_DB_READ_ONLY === "1"
 const SHARED_DB_REQUIRE_CENTRAL = process.env.SHARED_DB_REQUIRE_CENTRAL === "1" || process.env.VERCEL === "1"
 const SHARED_DB_ALLOW_SEED = process.env.SHARED_DB_ALLOW_SEED !== "0"
@@ -44,13 +46,17 @@ type StoreShape = {
 let writeQueue: Promise<void> = Promise.resolve()
 
 function ensureWritableStoreConfigured() {
-  if (SHARED_DB_REQUIRE_CENTRAL && !CENTRAL_DB_API_URL && !kvConfigured()) {
-    throw new Error("Persistent DB is not configured for writes. Configure KV_REST_API_URL and KV_REST_API_TOKEN.")
+  if (SHARED_DB_REQUIRE_CENTRAL && !CENTRAL_DB_API_URL && !kvConfigured() && !redisConfigured()) {
+    throw new Error("Persistent DB is not configured for writes. Configure Redis or KV environment variables.")
   }
 }
 
 function kvConfigured() {
   return Boolean(KV_REST_API_URL && KV_REST_API_TOKEN)
+}
+
+function redisConfigured() {
+  return Boolean(REDIS_URL)
 }
 
 async function kvCommand<T = unknown>(command: unknown[]) {
@@ -131,6 +137,11 @@ async function readRawValue(key: SharedKey) {
     return value == null ? null : String(value)
   }
 
+  if (redisConfigured() && !CENTRAL_DB_API_URL) {
+    const value = await redisCommand<string | null>(REDIS_URL, ["GET", kvValueKey(key)])
+    return value == null ? null : String(value)
+  }
+
   if (CENTRAL_DB_API_URL) {
     const baseUrl = CENTRAL_DB_API_URL.replace(/\/$/, "")
     const sharedUrl = `${baseUrl}/api/shared-kv?key=${encodeURIComponent(key)}`
@@ -174,6 +185,11 @@ async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta)
 
   if (kvConfigured() && !CENTRAL_DB_API_URL) {
     await kvCommand(["SET", kvValueKey(key), raw])
+    return
+  }
+
+  if (redisConfigured() && !CENTRAL_DB_API_URL) {
+    await redisCommand(REDIS_URL, ["SET", kvValueKey(key), raw])
     return
   }
 

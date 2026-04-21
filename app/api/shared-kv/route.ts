@@ -2,6 +2,7 @@ import crypto from "crypto"
 import fs from "fs/promises"
 import path from "path"
 import { NextResponse } from "next/server"
+import { redisCommand } from "@/lib/redis-client"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic"
 const CENTRAL_DB_API_TOKEN = process.env.CENTRAL_DB_API_TOKEN?.trim() || ""
 const KV_REST_API_URL = process.env.KV_REST_API_URL?.trim() || ""
 const KV_REST_API_TOKEN = process.env.KV_REST_API_TOKEN?.trim() || ""
+const REDIS_URL = process.env.REDIS_URL?.trim() || ""
 const STORE_PATH = path.join(process.cwd(), "data", "shared-kv-store.json")
 
 type KvRecord = {
@@ -39,6 +41,14 @@ let writeQueue: Promise<void> = Promise.resolve()
 
 function kvConfigured() {
   return Boolean(KV_REST_API_URL && KV_REST_API_TOKEN)
+}
+
+function redisConfigured() {
+  return Boolean(REDIS_URL)
+}
+
+function persistentStoreConfigured() {
+  return kvConfigured() || redisConfigured()
 }
 
 async function kvCommand<T = unknown>(command: unknown[]) {
@@ -136,8 +146,10 @@ export async function GET(request: Request) {
       const limitRaw = Number(searchParams.get("limit") || 100)
       const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, Math.floor(limitRaw))) : 100
 
-      if (kvConfigured()) {
-        const values = await kvCommand<string[]>(["LRANGE", KV_AUDIT_LIST_KEY, 0, limit * 3])
+      if (persistentStoreConfigured()) {
+        const values = kvConfigured()
+          ? await kvCommand<string[]>(["LRANGE", KV_AUDIT_LIST_KEY, 0, limit * 3])
+          : await redisCommand<string[]>(REDIS_URL, ["LRANGE", KV_AUDIT_LIST_KEY, 0, limit * 3])
         const rows = (values || [])
           .map((value) => {
             try {
@@ -163,15 +175,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: false, error: "key is required" }, { status: 400 })
     }
 
-    if (kvConfigured()) {
-      const value = await kvCommand<string | null>(["GET", kvValueKey(key)])
+    if (persistentStoreConfigured()) {
+      const value = kvConfigured()
+        ? await kvCommand<string | null>(["GET", kvValueKey(key)])
+        : await redisCommand<string | null>(REDIS_URL, ["GET", kvValueKey(key)])
       if (value == null) return NextResponse.json({ ok: true, value: null })
       return NextResponse.json({ ok: true, value })
     }
 
     if (process.env.VERCEL === "1") {
       return NextResponse.json(
-        { ok: false, error: "KV storage is not configured for production." },
+        { ok: false, error: "Persistent storage is not configured for production." },
         { status: 500 },
       )
     }
@@ -196,16 +210,16 @@ export async function POST(request: Request) {
     const key = String(body?.key || "").trim()
     const actor = String(body?.actor || "unknown-client")
 
-    if (process.env.VERCEL === "1" && !kvConfigured()) {
+    if (process.env.VERCEL === "1" && !persistentStoreConfigured()) {
       return NextResponse.json(
-        { ok: false, error: "KV storage is not configured for production." },
+        { ok: false, error: "Persistent storage is not configured for production." },
         { status: 500 },
       )
     }
 
-    if (kvConfigured() && action !== "upsert") {
+    if (persistentStoreConfigured() && action !== "upsert") {
       return NextResponse.json(
-        { ok: false, error: `${action} is not supported by KV storage yet` },
+        { ok: false, error: `${action} is not supported by persistent storage yet` },
         { status: 400 },
       )
     }
@@ -277,9 +291,13 @@ export async function POST(request: Request) {
     const menuLabel = String(body?.menuLabel || "System")
     const changeLabel = String(body?.changeLabel || "Save data")
 
-    if (kvConfigured()) {
+    if (persistentStoreConfigured()) {
       const now = new Date().toISOString()
-      const id = Number(await kvCommand<number>(["INCR", KV_AUDIT_ID_KEY]))
+      const id = Number(
+        kvConfigured()
+          ? await kvCommand<number>(["INCR", KV_AUDIT_ID_KEY])
+          : await redisCommand<number>(REDIS_URL, ["INCR", KV_AUDIT_ID_KEY]),
+      )
       const rowHash = buildHash("", key, actor, "upsert", value.length, now)
       const auditRow: AuditRecord = {
         id,
@@ -294,11 +312,17 @@ export async function POST(request: Request) {
         row_hash: rowHash,
         created_at: now,
       }
-      await kvPipeline([
-        ["SET", kvValueKey(key), value],
-        ["LPUSH", KV_AUDIT_LIST_KEY, JSON.stringify(auditRow)],
-        ["LTRIM", KV_AUDIT_LIST_KEY, 0, 499],
-      ])
+      if (kvConfigured()) {
+        await kvPipeline([
+          ["SET", kvValueKey(key), value],
+          ["LPUSH", KV_AUDIT_LIST_KEY, JSON.stringify(auditRow)],
+          ["LTRIM", KV_AUDIT_LIST_KEY, 0, 499],
+        ])
+      } else {
+        await redisCommand(REDIS_URL, ["SET", kvValueKey(key), value])
+        await redisCommand(REDIS_URL, ["LPUSH", KV_AUDIT_LIST_KEY, JSON.stringify(auditRow)])
+        await redisCommand(REDIS_URL, ["LTRIM", KV_AUDIT_LIST_KEY, 0, 499])
+      }
       return NextResponse.json({ ok: true })
     }
 
