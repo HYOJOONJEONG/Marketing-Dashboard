@@ -1565,88 +1565,14 @@ export function DashboardShell({
   }, [])
 
   useEffect(() => {
-      try {
-        const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY)
-        if (!raw) return
-        const saved = JSON.parse(raw)
-
-        const serverContracts = Array.isArray(data?.contracts) ? data.contracts : []
-        const savedContracts = Array.isArray(saved?.contracts) ? saved.contracts : []
-        const serverCollection = data?.collection || {}
-        const savedCollection = saved?.collection || {}
-        const serverIntegrated = Array.isArray(serverCollection.integrated) ? serverCollection.integrated : []
-        const savedIntegrated = Array.isArray(savedCollection.integrated) ? savedCollection.integrated : []
-        const serverLongTerm = Array.isArray(serverCollection.longTerm) ? serverCollection.longTerm : []
-        const savedLongTerm = Array.isArray(savedCollection.longTerm) ? savedCollection.longTerm : []
-        const serverSheet = Array.isArray(data?.termination?.sheets) ? data.termination.sheets[0] : null
-        const savedSheet = Array.isArray(saved?.termination?.sheets) ? saved.termination.sheets[0] : null
-        const serverItems = Array.isArray(serverSheet?.items) ? serverSheet.items : []
-        const savedItems = Array.isArray(savedSheet?.items) ? savedSheet.items : []
-        const serverHoldItems = Array.isArray(serverSheet?.holdItems) ? serverSheet.holdItems : []
-        const savedHoldItems = Array.isArray(savedSheet?.holdItems) ? savedSheet.holdItems : []
-        const serverConfirmed = Array.isArray(serverSheet?.confirmedItems) ? serverSheet.confirmedItems : []
-        const savedConfirmed = Array.isArray(savedSheet?.confirmedItems) ? savedSheet.confirmedItems : []
-
-        const isStale =
-          savedContracts.length < serverContracts.length ||
-          savedIntegrated.length < serverIntegrated.length ||
-          savedLongTerm.length < serverLongTerm.length ||
-          savedItems.length < serverItems.length ||
-          savedHoldItems.length < serverHoldItems.length ||
-          savedConfirmed.length < serverConfirmed.length
-
-        if (isStale) {
-          setData(data)
-          setCollectionTab(serverCollection?.tab || "integrated")
-          setCollectionYearFilter(serverCollection?.yearFilter || 2026)
-          setCollectionStatusFilter(serverCollection?.statusFilter || "all")
-          setCollectionSort(serverCollection?.sort || { key: "year", dir: "desc" })
-          try {
-            window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data))
-          } catch {}
-          return
-        }
-
-        if (!Array.isArray(saved?.contracts) || saved.contracts.length === 0) {
-          saved.contracts = data.contracts
-        }
-
-        if (!saved?.collection) {
-          saved.collection = data.collection
-        } else {
-          if (!Array.isArray(saved.collection.integrated) || saved.collection.integrated.length === 0) {
-            saved.collection.integrated = data.collection?.integrated || []
-          }
-          if (!Array.isArray(saved.collection.longTerm) || saved.collection.longTerm.length === 0) {
-            saved.collection.longTerm = data.collection?.longTerm || []
-          }
-        }
-
-        const initialSheet = Array.isArray(data?.termination?.sheets) ? data.termination.sheets[0] : null
-        if (!Array.isArray(saved?.termination?.sheets) || !saved.termination.sheets[0]) {
-          saved.termination = data.termination
-        } else if (initialSheet) {
-          const savedSheet = saved.termination.sheets[0]
-          savedSheet.title = initialSheet.title
-          savedSheet.teamLabel = initialSheet.teamLabel
-          savedSheet.guidelines = initialSheet.guidelines
-          if (!Array.isArray(savedSheet.items) || savedSheet.items.length === 0) {
-            savedSheet.items = initialSheet.items || []
-          }
-          if (!Array.isArray(savedSheet.holdItems) || savedSheet.holdItems.length === 0) {
-            savedSheet.holdItems = initialSheet.holdItems || []
-          }
-          if (!Array.isArray(savedSheet.confirmedItems) || savedSheet.confirmedItems.length === 0) {
-            savedSheet.confirmedItems = initialSheet.confirmedItems || []
-          }
-        }
-
-        setData(saved)
-        setCollectionTab(saved?.collection?.tab || "integrated")
-        setCollectionYearFilter(saved?.collection?.yearFilter || 2026)
-        setCollectionStatusFilter(saved?.collection?.statusFilter || "all")
-        setCollectionSort(saved?.collection?.sort || { key: "year", dir: "desc" })
-      } catch {}
+    const serverCollection = data?.collection || {}
+    setCollectionTab(serverCollection?.tab || "integrated")
+    setCollectionYearFilter(serverCollection?.yearFilter || 2026)
+    setCollectionStatusFilter(serverCollection?.statusFilter || "all")
+    setCollectionSort(serverCollection?.sort || { key: "year", dir: "desc" })
+    try {
+      window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data))
+    } catch {}
   }, [])
 
   useEffect(() => {
