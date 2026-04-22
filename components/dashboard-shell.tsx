@@ -1041,6 +1041,23 @@ export function DashboardShell({
     key: "contractMonth",
     dir: "desc",
   })
+  const [weeklySelectionSort, setWeeklySelectionSort] = useState<{
+    key:
+      | "includedInWeekly"
+      | "no"
+      | "companyName"
+      | "departmentName"
+      | "idCode"
+      | "industry"
+      | "contractMonth"
+      | "recommender"
+      | "documentStatus"
+      | "replacementType"
+    dir: "asc" | "desc"
+  }>({
+    key: "no",
+    dir: "asc",
+  })
   const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null)
   const [editingCollectionDraft, setEditingCollectionDraft] = useState<any>({})
   const [collectionYearFilter, setCollectionYearFilter] = useState<number | "all">(initialData?.collection?.yearFilter || 2026)
@@ -1217,6 +1234,10 @@ export function DashboardShell({
   const sortedContracts = useMemo(
     () => sortByKey(filteredContracts, contractSort.key, contractSort.dir),
     [filteredContracts, contractSort],
+  )
+  const sortedWeeklySelectionContracts = useMemo(
+    () => sortByKey(contracts, weeklySelectionSort.key, weeklySelectionSort.dir),
+    [contracts, weeklySelectionSort],
   )
 
   useEffect(() => {
@@ -2832,6 +2853,26 @@ export function DashboardShell({
     )
   }
 
+  function toggleWeeklySelectionSort(
+    key:
+      | "includedInWeekly"
+      | "no"
+      | "companyName"
+      | "departmentName"
+      | "idCode"
+      | "industry"
+      | "contractMonth"
+      | "recommender"
+      | "documentStatus"
+      | "replacementType",
+  ) {
+    setWeeklySelectionSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "desc" },
+    )
+  }
+
   function toggleHoldSort(key: "receivedDate" | "startDate" | "endDate") {
     setHoldSort((prev) =>
       prev.key === key
@@ -4238,9 +4279,42 @@ export function DashboardShell({
               </div>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className={tableClass}>
-                  <thead><tr>{["선택","No.","회사명","부서명","ID","업종","계약월","권유자","계약서 상태","대체여부"].map((head)=><th key={head} className={thClass}>{head}</th>)}</tr></thead>
+                  <thead>
+                    <tr>
+                      <th className={thClass}>
+                        {renderSortLabel("선택", weeklySelectionSort.key === "includedInWeekly", weeklySelectionSort.dir, () => toggleWeeklySelectionSort("includedInWeekly"))}
+                      </th>
+                      <th className={thClass}>
+                        {renderSortLabel("No.", weeklySelectionSort.key === "no", weeklySelectionSort.dir, () => toggleWeeklySelectionSort("no"))}
+                      </th>
+                      <th className={thClass}>
+                        {renderSortLabel("회사명", weeklySelectionSort.key === "companyName", weeklySelectionSort.dir, () => toggleWeeklySelectionSort("companyName"))}
+                      </th>
+                      <th className={thClass}>
+                        {renderSortLabel("부서명", weeklySelectionSort.key === "departmentName", weeklySelectionSort.dir, () => toggleWeeklySelectionSort("departmentName"))}
+                      </th>
+                      <th className={thClass}>
+                        {renderSortLabel("ID", weeklySelectionSort.key === "idCode", weeklySelectionSort.dir, () => toggleWeeklySelectionSort("idCode"))}
+                      </th>
+                      <th className={thClass}>
+                        {renderSortLabel("업종", weeklySelectionSort.key === "industry", weeklySelectionSort.dir, () => toggleWeeklySelectionSort("industry"))}
+                      </th>
+                      <th className={thClass}>
+                        {renderSortLabel("계약월", weeklySelectionSort.key === "contractMonth", weeklySelectionSort.dir, () => toggleWeeklySelectionSort("contractMonth"))}
+                      </th>
+                      <th className={thClass}>
+                        {renderSortLabel("권유자", weeklySelectionSort.key === "recommender", weeklySelectionSort.dir, () => toggleWeeklySelectionSort("recommender"))}
+                      </th>
+                      <th className={thClass}>
+                        {renderSortLabel("계약서 상태", weeklySelectionSort.key === "documentStatus", weeklySelectionSort.dir, () => toggleWeeklySelectionSort("documentStatus"))}
+                      </th>
+                      <th className={thClass}>
+                        {renderSortLabel("대체여부", weeklySelectionSort.key === "replacementType", weeklySelectionSort.dir, () => toggleWeeklySelectionSort("replacementType"))}
+                      </th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    {contracts.map((row: any, index: number) => (
+                    {sortedWeeklySelectionContracts.map((row: any, index: number) => (
                       <tr key={row.id} className={row.includedInWeekly ? "bg-blue-50" : ""}>
                         <td className={`${tdClass} text-center`}>
                           <input
@@ -4249,7 +4323,7 @@ export function DashboardShell({
                             onChange={() => toggleWeeklySelection(row.id)}
                           />
                         </td>
-                        <td className={tdClass}>{index + 1}</td>
+                        <td className={tdClass}>{row.no || index + 1}</td>
                         <td className={`${tdClass} whitespace-nowrap`}>{row.companyName}</td>
                         <td className={`${tdClass} whitespace-nowrap`}>{row.departmentName}</td>
                         <td className={tdClass}>{row.idCode}</td>
