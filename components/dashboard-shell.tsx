@@ -956,8 +956,8 @@ function renderStatusBadge(status: string) {
 function SaveIcon({ className = "h-5 w-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-      <path d="M5 4.75A1.75 1.75 0 0 1 6.75 3h9.05c.46 0 .9.18 1.24.51l1.45 1.45c.33.33.51.78.51 1.24v11.05A1.75 1.75 0 0 1 17.25 19H6.75A1.75 1.75 0 0 1 5 17.25V4.75Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M8 3v5.25h7.5V3.5M8.25 19v-5.25h7.5V19" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.75 20.25h10.5A2.25 2.25 0 0 0 19.5 18V9.2a2.25 2.25 0 0 0-.66-1.59l-2.45-2.45a2.25 2.25 0 0 0-1.59-.66H6.75A2.25 2.25 0 0 0 4.5 6.75V18a2.25 2.25 0 0 0 2.25 2.25Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M8 4.5v5h7.25M8.25 16.25l2.25 2.25 5.25-5.75" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -965,9 +965,10 @@ function SaveIcon({ className = "h-5 w-5" }: { className?: string }) {
 function PdfIcon({ className = "h-5 w-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-      <path d="M7 3.75h6.2L18 8.55v11.7H7a1.75 1.75 0 0 1-1.75-1.75v-13A1.75 1.75 0 0 1 7 3.75Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M7 3.75h6.1L18 8.65v11.6H7A1.75 1.75 0 0 1 5.25 18.5v-13A1.75 1.75 0 0 1 7 3.75Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
       <path d="M13 4v4.75h4.75" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M8.25 15.75h7.5M8.25 12.75h7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M8 13.25h8v4.5H8v-4.5Z" fill="currentColor" />
+      <path d="M9.05 16.65v-2.3h.9c.58 0 .96.32.96.82 0 .51-.38.84-.96.84h-.32v.64h-.58Zm.58-1.1h.25c.27 0 .42-.14.42-.37 0-.22-.15-.35-.42-.35h-.25v.72Zm1.62 1.1v-2.3h.84c.7 0 1.16.45 1.16 1.15 0 .7-.46 1.15-1.16 1.15h-.84Zm.58-.49h.2c.38 0 .62-.25.62-.66 0-.4-.24-.66-.62-.66h-.2v1.32Zm1.77.49v-2.3h1.6v.49h-1.02v.48h.9v.49h-.9v.84h-.58Z" fill="white" />
     </svg>
   )
 }
@@ -3520,13 +3521,14 @@ export function DashboardShell({
                 disabled={!hasUnsavedChanges || isPending}
                 title="저장"
                 aria-label="저장"
-                className={`flex h-11 w-11 items-center justify-center rounded-2xl transition ${
+                className={`inline-flex h-11 items-center gap-2 rounded-2xl px-4 text-[14px] font-bold transition ${
                   hasUnsavedChanges && !isPending
-                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    ? "bg-blue-600 text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)] hover:bg-blue-700"
                     : "border border-slate-200 bg-slate-100 text-slate-400"
                 }`}
               >
                 <SaveIcon className={isPending && hasUnsavedChanges ? "h-5 w-5 animate-pulse" : "h-5 w-5"} />
+                <span>저장</span>
               </button>
               {view === "weekly-report" && (
                 <button
@@ -3534,9 +3536,10 @@ export function DashboardShell({
                   onClick={handleWeeklyReportPrint}
                   title="PDF 출력"
                   aria-label="PDF 출력"
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white transition hover:bg-blue-700"
+                  className="inline-flex h-11 items-center gap-2 rounded-2xl border border-rose-100 bg-white px-4 text-[14px] font-bold text-rose-600 shadow-sm transition hover:border-rose-200 hover:bg-rose-50"
                 >
-                  <PdfIcon />
+                  <PdfIcon className="h-5 w-5" />
+                  <span>PDF</span>
                 </button>
               )}
               <div className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-700">
@@ -4260,13 +4263,14 @@ export function DashboardShell({
                   disabled={!currentViewDirty || isPending}
                   title="저장"
                   aria-label="저장"
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+                  className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-2xl px-4 text-[13px] font-bold ${
                     currentViewDirty && !isPending
-                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                      ? "bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] hover:bg-blue-700"
                       : "border border-slate-200 bg-slate-100 text-slate-400"
                   }`}
                 >
                   <SaveIcon className={isPending && currentViewDirty ? "h-[18px] w-[18px] animate-pulse" : "h-[18px] w-[18px]"} />
+                  <span>저장</span>
                 </button>
               </div>
 
@@ -4771,9 +4775,10 @@ export function DashboardShell({
                         onClick={handleCollectionDeliveryPrint}
                         title="PDF 출력"
                         aria-label="PDF 출력"
-                        className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-rose-100 bg-white px-2.5 text-[11px] font-bold text-rose-600 shadow-sm hover:bg-rose-50"
                       >
                         <PdfIcon className="h-4 w-4" />
+                        <span>PDF</span>
                       </button>
                     </div>
                   </div>
