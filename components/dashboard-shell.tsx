@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
+import terminationManagerLookup from "@/data/termination-manager-lookup.json"
 
 type ViewKey =
   | "weekly-report"
@@ -41,6 +42,7 @@ const manualSectionTitleClass = "text-[15px] font-bold text-slate-900"
 const manualHeaderCellClass = "border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-[13px] font-semibold text-slate-700"
 const manualLabelCellClass = "w-[132px] bg-slate-50 px-3 py-2.5 text-center text-[13px] font-semibold text-slate-700"
 const manualTableTitleRowClass = "border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[16px] font-bold text-slate-900"
+const terminationManagerMap = terminationManagerLookup as Record<string, string>
 
 function toNumber(value: unknown) {
   const num = Number(String(value ?? "").replace(/,/g, ""))
@@ -67,6 +69,39 @@ function formatLastUpdated(value: unknown) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date)
+}
+
+function getTerminationManagerFallback(row: any) {
+  const manager = String(row?.manager || "").trim()
+  if (manager) return manager
+  const customerId = String(row?.customerId || "").trim()
+  return customerId ? String(terminationManagerMap[customerId] || "").trim() : ""
+}
+
+function backfillTerminationManagerRows(rows: any[] = []) {
+  let changed = false
+  const nextRows = rows.map((row) => {
+    const manager = getTerminationManagerFallback(row)
+    if (!manager || String(row?.manager || "").trim() === manager) return row
+    changed = true
+    return { ...row, manager }
+  })
+  return { rows: changed ? nextRows : rows, changed }
+}
+
+function backfillTerminationSheetManagers(sheet: any) {
+  const nextSheet = { ...sheet }
+  let changed = false
+
+  ;(["items", "holdItems", "confirmedItems", "releasedHoldItems"] as const).forEach((key) => {
+    const result = backfillTerminationManagerRows(nextSheet[key] || [])
+    if (result.changed) {
+      nextSheet[key] = result.rows
+      changed = true
+    }
+  })
+
+  return { sheet: changed ? nextSheet : sheet, changed }
 }
 
 function replaceDivisionName(text: unknown) {
@@ -1081,25 +1116,35 @@ export function DashboardShell({
     const selectedItems = (activeSheet.items || []).filter((row: any) => row.selected)
     const needsPrune = termination.sheets.length > 1
     const needsMove = selectedItems.length > 0
-    if (!needsPrune && !needsMove) return
+    let needsManagerBackfill = false
+    const normalizedSheets = (termination.sheets || []).map((sheet: any, index: number) => {
+      const sourceSheet =
+        index === 0
+          ? {
+              ...sheet,
+              items: needsMove ? (sheet.items || []).filter((row: any) => !row.selected) : sheet.items || [],
+              confirmedItems: needsMove
+                ? [
+                    ...selectedItems.map((row: any) => ({ ...row, selected: true })),
+                    ...(sheet.confirmedItems || []),
+                  ]
+                : sheet.confirmedItems || [],
+            }
+          : sheet
+      const result = backfillTerminationSheetManagers(sourceSheet)
+      if (result.changed) needsManagerBackfill = true
+      return result.sheet
+    })
+    if (!needsPrune && !needsMove && !needsManagerBackfill) return
     normalizedTerminationOnceRef.current = true
-    const nextActiveSheet = {
-      ...activeSheet,
-      items: needsMove ? (activeSheet.items || []).filter((row: any) => !row.selected) : activeSheet.items || [],
-      confirmedItems: needsMove
-        ? [
-            ...selectedItems.map((row: any) => ({ ...row, selected: true })),
-            ...(activeSheet.confirmedItems || []),
-          ]
-        : activeSheet.confirmedItems || [],
-    }
+    const nextActiveSheet = normalizedSheets[0]
     startTransition(async () => {
       await persist({
         ...data,
         termination: {
           ...termination,
           currentSheetId: nextActiveSheet.id,
-          sheets: [nextActiveSheet],
+          sheets: needsPrune ? [nextActiveSheet] : normalizedSheets,
         },
       })
     })
@@ -2536,7 +2581,13 @@ export function DashboardShell({
   function handleConfirmSelectedTerminations() {
     if (!selectedSheet) return
     const activeItems = selectedSheet.items || []
-    const selectedItems = activeItems.filter((row: any) => row.selected).map((row: any) => mergeEditingTerminationRow(row))
+    const selectedItems = activeItems
+      .filter((row: any) => row.selected)
+      .map((row: any) => {
+        const mergedRow = mergeEditingTerminationRow(row)
+        const manager = getTerminationManagerFallback(mergedRow)
+        return manager ? { ...mergedRow, manager } : mergedRow
+      })
     if (!selectedItems.length) return
     const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
     startTransition(async () => {
@@ -5316,7 +5367,7 @@ export function DashboardShell({
                             </td>
                             <td className={`${tdClass} text-center tabular-nums`}>{index + 1}</td>
                             <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.receivedDate)}</td>
-                            <td className={tdClass}>{row.manager}</td>
+                            <td className={tdClass}>{getTerminationManagerFallback(row) || "-"}</td>
                             <td className={tdClass}>{row.customerId}</td>
                             <td className={`${tdClass} whitespace-nowrap`}>{row.companyName}</td>
                             <td className={`${tdClass} whitespace-nowrap`}>{row.departmentName}</td>
