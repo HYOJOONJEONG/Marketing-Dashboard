@@ -5,6 +5,7 @@ $sofrFile = $null
 $optionsFile = $null
 
 $preferredOptionsFile = "$env:USERPROFILE\Desktop\2025년 옵션정보 리스트 현황.xlsx"
+$preferredIndexListFile = "$env:USERPROFILE\Desktop\list.xlsx"
 if (Test-Path -LiteralPath $preferredOptionsFile) {
   $optionsFile = $preferredOptionsFile
 }
@@ -183,9 +184,13 @@ try {
   $wbOptions = $excel.Workbooks.Open($optionsFile)
   $wbOptions.Activate() | Out-Null
 # Sheet index 1: 해외지수
-$wsIndex = $wbOptions.Worksheets.Item(1)
+$wbIndex = $wbOptions
+if (Test-Path -LiteralPath $preferredIndexListFile) {
+  $wbIndex = $excel.Workbooks.Open($preferredIndexListFile)
+}
+$wsIndex = $wbIndex.Worksheets.Item(1)
 if ($null -eq $wsIndex) {
-  $wsIndex = ($wbOptions.Worksheets | Where-Object { $_.Name -match "해외지수" } | Select-Object -First 1)
+  $wsIndex = ($wbIndex.Worksheets | Where-Object { $_.Name -match "해외지수|Sheet1" } | Select-Object -First 1)
 }
 if ($null -eq $wsIndex) { throw "INDEX sheet not found." }
   $indexRows = Get-LastRow -Sheet $wsIndex -Col 4
@@ -193,6 +198,9 @@ if ($null -eq $wsIndex) { throw "INDEX sheet not found." }
   $indexGroupAllow = @("기업","은행","증권","보험","자산운용","공제회","외국계","선물","정부기관","공기관","공사","연기금/공공기관","연기금","공공기관")
     $indexAdded = 0
     for ($r = 4; $r -le $indexRows; $r++) {
+      $col1 = (Get-CellText -Sheet $wsIndex -Row $r -Col 1).Trim()
+      if ($col1 -and ($indexGroupAllow -contains $col1)) { $indexGroup = $col1 }
+
       $col2 = (Get-CellText -Sheet $wsIndex -Row $r -Col 2).Trim()
       if ($col2 -and ($indexGroupAllow -contains $col2)) { $indexGroup = $col2 }
 
@@ -224,7 +232,7 @@ if ($null -eq $wsIndex) { throw "INDEX sheet not found." }
         $billingMonth = (Get-CellText -Sheet $wsIndex -Row $r -Col 7)
         $agreement = (Get-CellText -Sheet $wsIndex -Row $r -Col 8)
         $note = (Get-CellText -Sheet $wsIndex -Row $r -Col 9)
-        $subType = ""
+        $subType = $indexGroup
       } else {
         $userId = $col4
         $company = $col3
@@ -423,6 +431,9 @@ if ($null -eq $wsIndex) { throw "INDEX sheet not found." }
     }
   }
 
+  if ($wbIndex -ne $wbOptions) {
+    $wbIndex.Close($false)
+  }
   $wbOptions.Close($false)
 
   if ($sofrFile -and (Test-Path -LiteralPath $sofrFile)) {

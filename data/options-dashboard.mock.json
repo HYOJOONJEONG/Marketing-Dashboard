@@ -36,7 +36,7 @@
                        },
                        {
                            "category_code":  "INDEX",
-                           "count_value":  153
+                           "count_value":  152
                        },
                        {
                            "category_code":  "STOCK",
@@ -68,7 +68,7 @@
                           {
                               "snapshot_date":  "2026-04-20",
                               "category_code":  "INDEX",
-                              "count_value":  153
+                              "count_value":  152
                           },
                           {
                               "snapshot_date":  "2026-04-20",
@@ -4646,7 +4646,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "b6923c9c-0fa5-42ca-8998-d86e5e66b55e",
@@ -4673,7 +4673,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "2ddf5060-6bb1-4331-8b50-7400e7de805f",
@@ -4700,7 +4700,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "25e918a2-720d-40a4-bd6a-eed51a66bd33",
@@ -4727,7 +4727,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "c6cb0bdd-a502-47f3-a43f-676d633329ae",
@@ -4754,7 +4754,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "f0fb3d7e-af8c-48e3-9da1-28c8cba05bb6",
@@ -4781,7 +4781,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "a2e28232-33be-49b3-b665-bf6316be3af5",
@@ -4808,7 +4808,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "8d8968e3-4868-468c-8d42-e66d8930e615",
@@ -4835,7 +4835,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "dc47f23e-b70b-4a0e-b06a-b61f8253a9fa",
@@ -4862,7 +4862,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "037518a9-8ffe-4590-b6b9-7730ea262908",
@@ -4889,7 +4889,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "65f1c3a6-678b-44f7-848e-cdea9f4971f2",
@@ -4916,7 +4916,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "17690579-b021-4947-8fe0-78e0e72b68f5",
@@ -4943,7 +4943,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "0ca35eac-c791-48cc-87d5-95ca09c4b27d",
@@ -4970,7 +4970,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "61aa61e6-7a7b-445a-8fe1-4fa848fc916c",
@@ -4997,7 +4997,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "c458cf03-f0b8-4968-9f46-f9439f4c4317",
@@ -5024,7 +5024,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "a63939a5-a6a9-4e04-a761-4fbe9628669b",
@@ -5375,7 +5375,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "275e3cd1-fb1c-4326-bed4-58568b7d21eb",
@@ -5402,7 +5402,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "3b34268b-b50f-4932-b8e0-805992654b59",
@@ -5429,7 +5429,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "3bce0d3f-1edf-46a4-85b4-a61d6aef7781",
@@ -5456,7 +5456,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "bc35c1c6-725f-4547-93e6-0693fbf9ddfb",
@@ -5483,7 +5483,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "72110bd8-7c97-4340-869f-574c783c0444",
@@ -5510,7 +5510,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "a01fd72d-07d9-4239-a5b3-57a33744e88f",
@@ -5537,7 +5537,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "16bef47f-331a-4611-94fd-01393983ea21",
@@ -5564,7 +5564,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "85354199-5e80-4165-a13b-2eb53855f303",
@@ -5591,7 +5591,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "16f0b69f-a51f-4353-9d4a-fa554003df19",
@@ -5618,7 +5618,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "255b667a-6623-493a-94c5-0e90f5fb2857",
@@ -5645,7 +5645,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "50d434e6-d011-46d9-8eb3-6cab7bfb0b61",
@@ -5672,7 +5672,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "f765a617-aac8-4d53-8d46-3cc7195ca712",
@@ -5699,7 +5699,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "d3fc75ea-cd30-4885-a4f4-de4fbee22261",
@@ -5726,7 +5726,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "3575606e-fc74-4818-b218-c487d7fdd346",
@@ -5753,7 +5753,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "1ee759f0-8818-4068-8162-cb6aabc1041c",
@@ -5780,7 +5780,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "d9d36926-6eac-4ece-bfba-2a9453fda615",
@@ -5807,7 +5807,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "48eeb6cc-2ea6-4b59-83d6-daec44862835",
@@ -5834,7 +5834,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "eebcde44-dd42-4eff-ad04-aba3c3522f66",
@@ -5861,7 +5861,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "fc2fc67b-dc9a-4e1a-b83f-e2b5eb7808de",
@@ -5888,7 +5888,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "cd7a521d-50fe-4d7a-8004-28cdea26bf97",
@@ -5915,7 +5915,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "48234fd0-2317-4759-b0d1-5a893e7e5928",
@@ -10235,7 +10235,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "청구는 E160223",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "6311103b-4b7c-4a95-8712-dc073744d7db",
@@ -10262,7 +10262,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "47512f92-a52c-4a67-862b-11fc0d651ad0",
@@ -10289,7 +10289,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "0d9e43b0-4109-4e80-aa46-300601cf600b",
@@ -10316,7 +10316,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "a147d347-dda5-46ab-9862-089e71f40ecb",
@@ -10343,7 +10343,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "bafd77fe-d122-4f80-b4ad-62357de5b48d",
@@ -10370,7 +10370,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "E050314 -\u003e E190335로 권한 변경 22.11.15",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "48cfb7f2-acb2-4c96-ac57-d985484ad837",
@@ -10397,7 +10397,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "d648e357-e666-4808-9909-d3c16e5deb0b",
@@ -10424,7 +10424,7 @@
                               "apply_ids":  "",
                               "amount":  "",
                               "note":  "",
-                              "is_active":  1
+                              "is_active":  0
                           },
                           {
                               "record_id":  "51849560-1f75-4ef5-be22-9ef6f6e8327b",
