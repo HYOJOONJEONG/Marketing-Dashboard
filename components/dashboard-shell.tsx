@@ -953,6 +953,25 @@ function renderStatusBadge(status: string) {
   )
 }
 
+function SaveIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M5 4.75A1.75 1.75 0 0 1 6.75 3h9.05c.46 0 .9.18 1.24.51l1.45 1.45c.33.33.51.78.51 1.24v11.05A1.75 1.75 0 0 1 17.25 19H6.75A1.75 1.75 0 0 1 5 17.25V4.75Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M8 3v5.25h7.5V3.5M8.25 19v-5.25h7.5V19" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function PdfIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M7 3.75h6.2L18 8.55v11.7H7a1.75 1.75 0 0 1-1.75-1.75v-13A1.75 1.75 0 0 1 7 3.75Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M13 4v4.75h4.75" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8.25 15.75h7.5M8.25 12.75h7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function summaryPairs(summary: any) {
   return [
     ["주간순증 합계", `${formatNumber(summary?.weeklyNetUnits)}대`],
@@ -3222,7 +3241,7 @@ export function DashboardShell({
       try {
         await commitDashboardData(pendingDataRef.current || data, [view])
       } catch {
-        window.alert("업데이트 저장에 실패했습니다. 잠시 후 다시 시도해주세요.")
+        window.alert("저장에 실패했습니다. 잠시 후 다시 시도해주세요.")
       }
     })
   }
@@ -3493,35 +3512,31 @@ export function DashboardShell({
               <div className="mt-1 text-[12px] font-semibold text-slate-500">
                 Last update: {formatLastUpdated(currentMenuUpdatedAt)}
               </div>
-              <div className={`mt-1 text-[12px] font-semibold ${currentViewDirty ? "text-amber-600" : "text-emerald-600"}`}>
-                {currentViewDirty ? "저장 전 변경사항 있음" : "저장됨"}
-              </div>
-              {hasUnsavedChanges && !currentViewDirty ? (
-                <div className="mt-1 text-[11px] font-semibold text-amber-500">
-                  다른 메뉴에 저장 전 변경사항이 있습니다.
-                </div>
-              ) : null}
             </div>
             <div className="dashboard-header-actions flex items-center gap-3">
               <button
                 type="button"
                 onClick={handleSaveCurrentView}
                 disabled={!hasUnsavedChanges || isPending}
-                className={`h-11 rounded-2xl px-4 text-[14px] font-semibold transition ${
+                title="저장"
+                aria-label="저장"
+                className={`flex h-11 w-11 items-center justify-center rounded-2xl transition ${
                   hasUnsavedChanges && !isPending
                     ? "bg-blue-600 text-white hover:bg-blue-700"
                     : "border border-slate-200 bg-slate-100 text-slate-400"
                 }`}
               >
-                {isPending && hasUnsavedChanges ? "업데이트 중..." : "업데이트"}
+                <SaveIcon className={isPending && hasUnsavedChanges ? "h-5 w-5 animate-pulse" : "h-5 w-5"} />
               </button>
               {view === "weekly-report" && (
                 <button
                   type="button"
                   onClick={handleWeeklyReportPrint}
-                  className="h-11 rounded-2xl bg-blue-600 px-4 text-[14px] font-semibold text-white transition hover:bg-blue-700"
+                  title="PDF 출력"
+                  aria-label="PDF 출력"
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white transition hover:bg-blue-700"
                 >
-                  PDF 출력
+                  <PdfIcon />
                 </button>
               )}
               <div className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-700">
@@ -4243,13 +4258,15 @@ export function DashboardShell({
                   type="button"
                   onClick={handleManualUpdate}
                   disabled={!currentViewDirty || isPending}
-                  className={`h-10 shrink-0 rounded-2xl px-5 text-[14px] font-semibold ${
+                  title="저장"
+                  aria-label="저장"
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
                     currentViewDirty && !isPending
                       ? "bg-blue-600 text-white hover:bg-blue-700"
                       : "border border-slate-200 bg-slate-100 text-slate-400"
                   }`}
                 >
-                  {isPending && currentViewDirty ? "업데이트 중..." : currentViewDirty ? "업데이트" : "저장됨"}
+                  <SaveIcon className={isPending && currentViewDirty ? "h-[18px] w-[18px] animate-pulse" : "h-[18px] w-[18px]"} />
                 </button>
               </div>
 
@@ -4752,9 +4769,11 @@ export function DashboardShell({
                       <button
                         type="button"
                         onClick={handleCollectionDeliveryPrint}
-                        className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white"
+                        title="PDF 출력"
+                        aria-label="PDF 출력"
+                        className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white"
                       >
-                        PDF 출력
+                        <PdfIcon className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
