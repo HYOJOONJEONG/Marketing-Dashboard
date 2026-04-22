@@ -3016,6 +3016,20 @@ export function DashboardShell({
       </button>
     )
   }
+  const receivedDatePickerOnlyProps = {
+    onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Tab" || event.key === "Escape") return
+      event.preventDefault()
+    },
+    onPaste: (event: React.ClipboardEvent<HTMLInputElement>) => event.preventDefault(),
+    onDrop: (event: React.DragEvent<HTMLInputElement>) => event.preventDefault(),
+    onClick: (event: React.MouseEvent<HTMLInputElement>) => {
+      try {
+        ;(event.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.()
+      } catch {}
+    },
+  }
+
 
   function handleManualUpdate() {
     startTransition(async () => {
@@ -4906,7 +4920,7 @@ export function DashboardShell({
                     <div className="grid grid-cols-4 gap-3">
                       <label className="space-y-1">
                         <div className="text-[12px] font-medium text-slate-600">접수일</div>
-                        <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" type="date" value={terminationDraft.receivedDate} onChange={(e)=>updateTerminationDraft("receivedDate", e.target.value)} />
+                        <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" type="date" value={terminationDraft.receivedDate} onChange={(e)=>updateTerminationDraft("receivedDate", e.target.value)} {...receivedDatePickerOnlyProps} />
                       </label>
                       <label className="space-y-1">
                         <div className="text-[12px] font-medium text-slate-600">담당자</div>
@@ -4959,7 +4973,7 @@ export function DashboardShell({
                     <div className="grid grid-cols-4 gap-3">
                       <label className="space-y-1">
                         <div className="text-[12px] font-medium text-slate-600">접수일</div>
-                        <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" type="date" value={holdDraft.receivedDate} onChange={(e)=>updateHoldDraft("receivedDate", e.target.value)} />
+                        <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" type="date" value={holdDraft.receivedDate} onChange={(e)=>updateHoldDraft("receivedDate", e.target.value)} {...receivedDatePickerOnlyProps} />
                       </label>
                       <label className="space-y-1">
                         <div className="text-[12px] font-medium text-slate-600">담당자</div>
@@ -5127,7 +5141,7 @@ export function DashboardShell({
                               onChange={() => toggleTerminationSelected(row.id)}
                             />
                           </td>
-                          <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="date" className="h-9 w-36 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.receivedDate || ""} onChange={(e)=>updateEditingTerminationDraft("receivedDate", e.target.value)} /> : normalizeDate(row.receivedDate)}</td>
+                          <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="date" className="h-9 w-36 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.receivedDate || ""} onChange={(e)=>updateEditingTerminationDraft("receivedDate", e.target.value)} {...receivedDatePickerOnlyProps} /> : normalizeDate(row.receivedDate)}</td>
                           <td className={tdClass}>{editing ? <input className="h-9 w-full min-w-[110px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.manager || ""} onChange={(e)=>updateEditingTerminationDraft("manager", e.target.value)} /> : row.manager}</td>
                           <td className={tdClass}>{editing ? <input className="h-9 w-full min-w-[110px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.customerId || ""} onChange={(e)=>updateEditingTerminationDraft("customerId", e.target.value)} /> : row.customerId}</td>
                           <td className={`${tdClass} whitespace-nowrap`}>{editing ? <input className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.companyName || ""} onChange={(e)=>updateEditingTerminationDraft("companyName", e.target.value)} /> : row.companyName}</td>
@@ -5336,7 +5350,7 @@ export function DashboardShell({
                         return (
                         <tr key={row.id}>
                           <td className={`${tdClass} text-center tabular-nums`}>{index + 1}</td>
-                          <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="date" className="h-9 w-36 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.receivedDate || ""} onChange={(e)=>updateEditingHoldDraft("receivedDate", e.target.value)} /> : normalizeDate(row.receivedDate)}</td>
+                          <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="date" className="h-9 w-36 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.receivedDate || ""} onChange={(e)=>updateEditingHoldDraft("receivedDate", e.target.value)} {...receivedDatePickerOnlyProps} /> : normalizeDate(row.receivedDate)}</td>
                           <td className={tdClass}>{editing ? <input className="h-9 w-full min-w-[110px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.manager || ""} onChange={(e)=>updateEditingHoldDraft("manager", e.target.value)} /> : row.manager}</td>
                           <td className={tdClass}>{editing ? <input className="h-9 w-full min-w-[110px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.customerId || ""} onChange={(e)=>updateEditingHoldDraft("customerId", e.target.value)} /> : row.customerId}</td>
                           <td className={`${tdClass} whitespace-nowrap`}>{editing ? <input className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.companyName || ""} onChange={(e)=>updateEditingHoldDraft("companyName", e.target.value)} /> : row.companyName}</td>
