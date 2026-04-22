@@ -979,6 +979,7 @@ export function DashboardShell({
   const [collectionTab, setCollectionTab] = useState<CollectionTabKey>(initialCollectionTab)
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({ performance: true, termination: true })
   const [isPending, startTransition] = useTransition()
+  const [dirtyViews, setDirtyViews] = useState<Partial<Record<ViewKey, boolean>>>({})
   const [manualDraft, setManualDraft] = useState<any>(() =>
     buildManualDraftFromWeekly(
       initialData?.weeklyReport || {},
@@ -1035,6 +1036,8 @@ export function DashboardShell({
   const pendingDataRef = useRef<any | null>(null)
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
   const lastHistoryAtRef = useRef<number>(0)
+  const dirtyViewsRef = useRef<Partial<Record<ViewKey, boolean>>>({})
+  const manualDraftReadyRef = useRef(false)
   const flushPendingSave = useRef<() => void>(() => {})
   const [terminationEntryMode, setTerminationEntryMode] = useState<"termination" | "hold">("termination")
   const [terminationDraft, setTerminationDraft] = useState<any>({
@@ -1574,24 +1577,67 @@ export function DashboardShell({
     return nextSave
   }
 
-  function persist(nextData: any, options: { immediate?: boolean; updatedViews?: ViewKey[] } = {}) {
-    const now = Date.now()
-    const updatedAt = new Date(now).toISOString()
-    const updatedViews = options.updatedViews?.length ? options.updatedViews : [view]
+  function markViewsDirty(views: ViewKey[] = [view]) {
+    setDirtyViews((prev) => ({
+      ...prev,
+      ...Object.fromEntries(views.map((key) => [key, true])),
+    }))
+  }
+
+  function clearDirtyViews(views: ViewKey[]) {
+    setDirtyViews((prev) => {
+      const next = { ...prev }
+      views.forEach((key) => {
+        delete next[key]
+      })
+      return next
+    })
+  }
+
+  function getDirtyViewKeys(extraViews: ViewKey[] = []) {
+    return Array.from(
+      new Set([
+        ...Object.entries(dirtyViewsRef.current)
+          .filter(([, dirty]) => dirty)
+          .map(([key]) => key as ViewKey),
+        ...extraViews,
+      ]),
+    )
+  }
+
+  async function commitDashboardData(sourceData: any = pendingDataRef.current || data, updatedViews: ViewKey[] = [view]) {
+    const viewsToCommit = getDirtyViewKeys(updatedViews)
+    const updatedAt = new Date().toISOString()
     const menuUpdatedAt = {
-      ...(nextData?.ui?.menuUpdatedAt || {}),
-      ...Object.fromEntries(updatedViews.map((key) => [key, updatedAt])),
+      ...(sourceData?.ui?.menuUpdatedAt || {}),
+      ...Object.fromEntries(viewsToCommit.map((key) => [key, updatedAt])),
     }
     const nextDataWithMeta = {
-      ...nextData,
+      ...sourceData,
       ui: {
-        ...(nextData?.ui || {}),
+        ...(sourceData?.ui || {}),
         menuUpdatedAt,
       },
     }
     const serialized = JSON.stringify(nextDataWithMeta)
+    await queueDashboardUpdate(serialized)
     setData(nextDataWithMeta)
     pendingDataRef.current = nextDataWithMeta
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(LOCAL_STORAGE_KEY, serialized)
+      }
+    } catch {}
+    clearDirtyViews(viewsToCommit)
+  }
+
+  function persist(nextData: any, options: { immediate?: boolean; updatedViews?: ViewKey[] } = {}) {
+    const now = Date.now()
+    const updatedViews = options.updatedViews?.length ? options.updatedViews : [view]
+    const serialized = JSON.stringify(nextData)
+    setData(nextData)
+    pendingDataRef.current = nextData
+    markViewsDirty(updatedViews)
     try {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(LOCAL_STORAGE_KEY, serialized)
@@ -1604,23 +1650,7 @@ export function DashboardShell({
     if (options.immediate) {
       pendingPayloadRef.current = null
       pendingSaveRef.current = null
-      savePromise = queueDashboardUpdate(serialized)
-    } else {
-      pendingSaveRef.current = window.setTimeout(() => {
-        const body = pendingPayloadRef.current || (pendingDataRef.current ? JSON.stringify(pendingDataRef.current) : null)
-        if (!pendingPayloadRef.current && pendingDataRef.current) {
-          pendingPayloadRef.current = body
-        }
-        pendingPayloadRef.current = null
-        pendingSaveRef.current = null
-        if (!body) return
-        const send = () => queueDashboardUpdate(body).catch(() => {})
-        if ("requestIdleCallback" in window) {
-          ;(window as any).requestIdleCallback(send, { timeout: 300 })
-        } else {
-          void send()
-        }
-      }, 30)
+      savePromise = commitDashboardData(nextData, updatedViews)
     }
     if (now - lastHistoryAtRef.current > 500) {
       const snapshot = () => {
@@ -1637,33 +1667,33 @@ export function DashboardShell({
   }
 
   flushPendingSave.current = () => {
-    const body = pendingPayloadRef.current || (pendingDataRef.current ? JSON.stringify(pendingDataRef.current) : null)
-    pendingPayloadRef.current = null
-    if (!body) return
-    if ("sendBeacon" in navigator) {
-      const blob = new Blob([body], { type: "application/json" })
-      ;(navigator as any).sendBeacon("/api/dashboard", blob)
-      return
-    }
-    void queueDashboardUpdate(body, true).catch(() => {})
+    // Saves are intentionally manual now. This function remains as a no-op
+    // so older call sites cannot push half-finished edits on page unload.
   }
 
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      flushPendingSave.current()
-    }
-    const handleVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        flushPendingSave.current()
-      }
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!Object.values(dirtyViewsRef.current).some(Boolean)) return
+      event.preventDefault()
+      event.returnValue = ""
     }
     window.addEventListener("beforeunload", handleBeforeUnload)
-    document.addEventListener("visibilitychange", handleVisibility)
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload)
-      document.removeEventListener("visibilitychange", handleVisibility)
     }
   }, [])
+
+  useEffect(() => {
+    dirtyViewsRef.current = dirtyViews
+  }, [dirtyViews])
+
+  useEffect(() => {
+    if (!manualDraftReadyRef.current) {
+      manualDraftReadyRef.current = true
+      return
+    }
+    markViewsDirty(["manual-input"])
+  }, [manualDraft])
 
   useEffect(() => {
     const serverCollection = data?.collection || {}
@@ -1694,15 +1724,10 @@ export function DashboardShell({
       return
     }
     const [previous, ...rest] = historyStack
-    startTransition(async () => {
-      setHistoryStack(rest)
-      setData(previous)
-      await fetch("/api/dashboard", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(previous),
-      })
-    })
+    setHistoryStack(rest)
+    setData(previous)
+    pendingDataRef.current = previous
+    markViewsDirty([view])
   }
 
   function handleWeeklyReportPrint() {
@@ -3188,6 +3213,20 @@ export function DashboardShell({
     })
   }
 
+  function handleSaveCurrentView() {
+    if (view === "manual-input") {
+      handleManualUpdate()
+      return
+    }
+    startTransition(async () => {
+      try {
+        await commitDashboardData(pendingDataRef.current || data, [view])
+      } catch {
+        window.alert("업데이트 저장에 실패했습니다. 잠시 후 다시 시도해주세요.")
+      }
+    })
+  }
+
   const reportGoalRows = buildGoalRows(weeklyReport.goalRows || [])
   const reportIndustryStats = buildIndustryStats(weeklyReport.industryStats || [])
   const reportSummary = {
@@ -3292,6 +3331,8 @@ export function DashboardShell({
   const reportIndustryColumns = [...reportIndustryColumnsStatic]
   const reportIndustryRows = buildWeeklyIndustryOverviewRows(weeklyReport.weeklyIndustryOverviewRows || [])
   const currentMenuUpdatedAt = data?.ui?.menuUpdatedAt?.[view]
+  const currentViewDirty = Boolean(dirtyViews[view])
+  const hasUnsavedChanges = Object.values(dirtyViews).some(Boolean)
 
   return (
     <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
@@ -3452,8 +3493,28 @@ export function DashboardShell({
               <div className="mt-1 text-[12px] font-semibold text-slate-500">
                 Last update: {formatLastUpdated(currentMenuUpdatedAt)}
               </div>
+              <div className={`mt-1 text-[12px] font-semibold ${currentViewDirty ? "text-amber-600" : "text-emerald-600"}`}>
+                {currentViewDirty ? "저장 전 변경사항 있음" : "저장됨"}
+              </div>
+              {hasUnsavedChanges && !currentViewDirty ? (
+                <div className="mt-1 text-[11px] font-semibold text-amber-500">
+                  다른 메뉴에 저장 전 변경사항이 있습니다.
+                </div>
+              ) : null}
             </div>
             <div className="dashboard-header-actions flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSaveCurrentView}
+                disabled={!hasUnsavedChanges || isPending}
+                className={`h-11 rounded-2xl px-4 text-[14px] font-semibold transition ${
+                  hasUnsavedChanges && !isPending
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "border border-slate-200 bg-slate-100 text-slate-400"
+                }`}
+              >
+                {isPending && hasUnsavedChanges ? "업데이트 중..." : "업데이트"}
+              </button>
               {view === "weekly-report" && (
                 <button
                   type="button"
@@ -4178,8 +4239,17 @@ export function DashboardShell({
                   <div className="text-[18px] font-bold text-slate-900">수동 입력 리스트</div>
                   <div className="mt-1 text-[12px] font-semibold text-amber-600">(음영처리된 부분은 자동계산 반영)</div>
                 </div>
-                <button type="button" onClick={handleManualUpdate} className="h-10 shrink-0 rounded-2xl bg-blue-600 px-5 text-[14px] font-semibold text-white">
-                  {isPending ? "업데이트 중..." : "업데이트"}
+                <button
+                  type="button"
+                  onClick={handleManualUpdate}
+                  disabled={!currentViewDirty || isPending}
+                  className={`h-10 shrink-0 rounded-2xl px-5 text-[14px] font-semibold ${
+                    currentViewDirty && !isPending
+                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                      : "border border-slate-200 bg-slate-100 text-slate-400"
+                  }`}
+                >
+                  {isPending && currentViewDirty ? "업데이트 중..." : currentViewDirty ? "업데이트" : "저장됨"}
                 </button>
               </div>
 
