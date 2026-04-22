@@ -1127,6 +1127,7 @@ export function DashboardShell({
   const [editingHoldDraft, setEditingHoldDraft] = useState<any>({})
   const [showTerminationArchive, setShowTerminationArchive] = useState(false)
   const [selectedConfirmedIds, setSelectedConfirmedIds] = useState<string[]>([])
+  const [selectedHoldIds, setSelectedHoldIds] = useState<string[]>([])
   const [selectedReleasedIds, setSelectedReleasedIds] = useState<string[]>([])
   const [holdReceivedDateFilter, setHoldReceivedDateFilter] = useState("all")
   const [holdEndDateFilter, setHoldEndDateFilter] = useState("all")
@@ -1578,6 +1579,10 @@ export function DashboardShell({
   useEffect(() => {
     setSelectedConfirmedIds((prev) => prev.filter((id) => confirmedTerminationItems.some((row: any) => row.id === id)))
   }, [confirmedTerminationItems])
+
+  useEffect(() => {
+    setSelectedHoldIds((prev) => prev.filter((id) => filteredHoldItems.some((row: any) => row.id === id)))
+  }, [filteredHoldItems])
 
   useEffect(() => {
     setSelectedReleasedIds((prev) => prev.filter((id) => releasedHoldItems.some((row: any) => row.id === id)))
@@ -2883,6 +2888,14 @@ export function DashboardShell({
     setSelectedConfirmedIds([])
   }
 
+  function toggleSelectAllHoldItems(checked: boolean) {
+    if (checked) {
+      setSelectedHoldIds(filteredHoldItems.map((row: any) => row.id))
+      return
+    }
+    setSelectedHoldIds([])
+  }
+
   function toggleSelectAllReleased(checked: boolean) {
     if (checked) {
       setSelectedReleasedIds(releasedHoldItems.map((row: any) => row.id))
@@ -3148,6 +3161,37 @@ export function DashboardShell({
         setEditingHoldId(null)
         setEditingHoldDraft({})
       }
+    })
+  }
+
+  function handleReleaseSelectedHoldRows() {
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet || selectedHoldIds.length === 0) return
+    const selectedSet = new Set(selectedHoldIds)
+    const releaseTargets = (latestSheet.holdItems || [])
+      .filter((item: any) => selectedSet.has(item.id))
+      .map((item: any) => mergeEditingHoldRow(item))
+    if (!releaseTargets.length) return
+    startTransition(async () => {
+      const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
+      const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+        sheet.id === latestSheet.id
+          ? {
+              ...sheet,
+              holdItems: (sheet.holdItems || []).filter((item: any) => !selectedSet.has(item.id)),
+              releasedHoldItems: [
+                ...releaseTargets.map((row: any) => ({ ...row, reflectedDate })),
+                ...(sheet.releasedHoldItems || []),
+              ],
+            }
+          : sheet,
+      )
+      await persist({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+      if (editingHoldId && selectedSet.has(editingHoldId)) {
+        setEditingHoldId(null)
+        setEditingHoldDraft({})
+      }
+      setSelectedHoldIds([])
     })
   }
 
@@ -5622,12 +5666,31 @@ export function DashboardShell({
                           필터 초기화
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={handleReleaseSelectedHoldRows}
+                        disabled={selectedHoldIds.length === 0}
+                        className={`h-9 rounded-xl px-3 text-[12px] font-semibold ${
+                          selectedHoldIds.length === 0
+                            ? "border border-slate-200 bg-slate-100 text-slate-400"
+                            : "border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                        }`}
+                      >
+                        청구재개
+                      </button>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
                   <table className={`${tableClass} min-w-full`}>
                     <thead>
                       <tr>
+                        <th className={`${thClass} text-center`}>
+                          <input
+                            type="checkbox"
+                            checked={filteredHoldItems.length > 0 && selectedHoldIds.length === filteredHoldItems.length}
+                            onChange={(e) => toggleSelectAllHoldItems(e.target.checked)}
+                          />
+                        </th>
                         <th className={`${thClass} text-center`}>No.</th>
                         <th className={thClass}>
                           {renderSortLabel("접수일", holdSort.key === "receivedDate", holdSort.dir, () => toggleHoldSort("receivedDate"))}
@@ -5651,6 +5714,18 @@ export function DashboardShell({
                         const editing = editingHoldId === row.id
                         return (
                         <tr key={row.id}>
+                          <td className={`${tdClass} text-center`}>
+                            <input
+                              type="checkbox"
+                              checked={selectedHoldIds.includes(row.id)}
+                              onChange={(e) => {
+                                const checked = e.target.checked
+                                setSelectedHoldIds((prev) =>
+                                  checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
+                                )
+                              }}
+                            />
+                          </td>
                           <td className={`${tdClass} text-center tabular-nums`}>{index + 1}</td>
                           <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="date" className="h-9 w-36 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.receivedDate || ""} onChange={(e)=>updateEditingHoldDraft("receivedDate", e.target.value)} {...receivedDatePickerOnlyProps} /> : normalizeDate(row.receivedDate)}</td>
                           <td className={tdClass}>{editing ? <input className="h-9 w-full min-w-[110px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.manager || ""} onChange={(e)=>updateEditingHoldDraft("manager", e.target.value)} /> : row.manager}</td>
@@ -5685,7 +5760,6 @@ export function DashboardShell({
                               <div className="flex items-center justify-center gap-2 whitespace-nowrap">
                                 <button type="button" onClick={() => handleHoldUpdate(row.id)} className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white">수정완료</button>
                                 <button type="button" onClick={() => handleMoveHoldToTermination(row.id)} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">해지이동</button>
-                                <button type="button" onClick={() => handleReleaseHoldRow(row.id)} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">해제</button>
                                 <button type="button" onClick={() => handleDeleteHoldRow(row.id)} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">삭제</button>
                                 <button type="button" onClick={() => { setEditingHoldId(null); setEditingHoldDraft({}) }} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">취소</button>
                               </div>
@@ -5697,13 +5771,6 @@ export function DashboardShell({
                                   className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 whitespace-nowrap"
                                 >
                                   수정
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleReleaseHoldRow(row.id)}
-                                  className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 whitespace-nowrap"
-                                >
-                                  해제
                                 </button>
                               </div>
                             )}
