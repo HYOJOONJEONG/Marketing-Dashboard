@@ -3146,6 +3146,15 @@ export function DashboardShell({
     },
   }
 
+  function handleManualInputKeyDownCapture(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Enter") return
+    if ((event.nativeEvent as KeyboardEvent).isComposing) return
+    const target = event.target
+    if (!(target instanceof HTMLInputElement)) return
+    event.preventDefault()
+    target.blur()
+  }
+
   function handleManualUpdate() {
     startTransition(async () => {
       const nextWeekly = {
@@ -4163,7 +4172,7 @@ export function DashboardShell({
           )}
 
           {view === "manual-input" && (
-            <div className={`${cardClass} space-y-4 p-5`}>
+            <div className={`${cardClass} space-y-4 p-5`} onKeyDownCapture={handleManualInputKeyDownCapture}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-[18px] font-bold text-slate-900">수동 입력 리스트</div>
