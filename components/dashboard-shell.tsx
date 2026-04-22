@@ -3366,7 +3366,7 @@ export function DashboardShell({
   const currentMenuUpdatedAt = data?.ui?.menuUpdatedAt?.[view]
   const currentViewDirty = Boolean(dirtyViews[view])
   const hasUnsavedChanges = Object.values(dirtyViews).some(Boolean)
-  const showHeaderSave = !["weekly-report", "contracts", "weekly-selection"].includes(view)
+  const showHeaderSave = !["weekly-report", "contracts", "weekly-selection", "manual-input"].includes(view)
 
   return (
     <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
