@@ -490,7 +490,11 @@ foreach ($cat in $categories) {
       $counts[$code] = $active.Count
     }
     "INDEX" {
-      $ids = $active | ForEach-Object { $_.user_id } | Where-Object { $_ } | Sort-Object -Unique
+      $ids = $active |
+        Where-Object { $indexGroupAllow -contains ([string]$_.sub_type).Trim() } |
+        ForEach-Object { $_.user_id } |
+        Where-Object { $_ } |
+        Sort-Object -Unique
       $counts[$code] = $ids.Count
     }
     "STOCK" {

@@ -15,6 +15,23 @@ const CATEGORY_LABELS: Record<string, string> = {
   SOFR: "SOFR",
 }
 
+const INDEX_COUNTABLE_SUB_TYPES = new Set([
+  "기업",
+  "은행",
+  "증권",
+  "보험",
+  "자산운용",
+  "공제회",
+  "외국계",
+  "선물",
+  "정부기관",
+  "공기관",
+  "공사",
+  "연기금/공공기관",
+  "연기금",
+  "공공기관",
+])
+
 const MOCK_PATH = path.join(process.cwd(), "data", "options-dashboard.mock.json")
 const APP_STATE_PATH = path.join(process.cwd(), "data", "app-state.json")
 
@@ -237,7 +254,16 @@ function buildCounts(records: any[], categories: any[]) {
       counts[code] = sum
       continue
     }
-    if (["BOND", "INDEX", "LME"].includes(code)) {
+    if (code === "INDEX") {
+      const ids = active
+        .filter((row) => row.category_code === code)
+        .filter((row) => INDEX_COUNTABLE_SUB_TYPES.has(String(row.sub_type || "").trim()))
+        .map((row) => row.user_id)
+        .filter(Boolean)
+      counts[code] = new Set(ids).size
+      continue
+    }
+    if (["BOND", "LME"].includes(code)) {
       counts[code] = getUniqueCount(code)
       continue
     }
@@ -273,6 +299,7 @@ export async function GET(req: Request) {
       category_name_ko: cat.category_name_ko || CATEGORY_LABELS[cat.category_code] || cat.category_code,
     }))
     const optionRecordsRaw = mock.optionRecords || []
+    const computedCounts = buildCounts(optionRecordsRaw, categories)
     const companyIndustryMap = buildCompanyIndustryMap(optionRecordsRaw)
     for (const [company, industry] of appStateIndustryMap.entries()) {
       companyIndustryMap.set(company, industry)
@@ -299,6 +326,7 @@ export async function GET(req: Request) {
       let value = seedMap.get(key) || 0
       if (basis === "latest") value = latestMap.get(key) ?? value
       if (basis === "date") value = dateMap.get(key) ?? value
+      if (key === "INDEX") value = computedCounts.INDEX || 0
       return { ...cat, count_value: value }
     })
 

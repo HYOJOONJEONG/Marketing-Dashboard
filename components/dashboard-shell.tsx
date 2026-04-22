@@ -428,18 +428,23 @@ function buildPaidOptionInfoColumns(columns: any[]) {
   return paidOptionOrderedTitles.map((title, index) => {
     const fromSource = sourceByTitle.get(title) || {}
     const fromBase = baseByTitle.get(title) || {}
+    const rows = Array.isArray(fromSource?.rows)
+      ? fromSource.rows.map((row: any) => [
+          sanitizeSummaryText(Array.isArray(row) ? row[0] : row?.[0], ""),
+          sanitizeSummaryText(Array.isArray(row) ? row[1] : row?.[1], ""),
+        ])
+      : Array.isArray(fromBase?.rows)
+        ? [...fromBase.rows]
+        : []
+    const rowTotal = rows.reduce((sum: number, row: any[]) => sum + parseLooseNumber(row?.[1]), 0)
     return {
       id: fromSource?.id || fromBase?.id || `paid-option-${index}`,
       title,
-      total: sanitizeSummaryText(fromSource?.total, fromBase?.total || "0건"),
-      rows: Array.isArray(fromSource?.rows)
-        ? fromSource.rows.map((row: any) => [
-            sanitizeSummaryText(Array.isArray(row) ? row[0] : row?.[0], ""),
-            sanitizeSummaryText(Array.isArray(row) ? row[1] : row?.[1], ""),
-          ])
-        : Array.isArray(fromBase?.rows)
-          ? [...fromBase.rows]
-          : [],
+      total:
+        title === "해외지수" && rowTotal > 0
+          ? `${rowTotal}건`
+          : sanitizeSummaryText(fromSource?.total, fromBase?.total || "0건"),
+      rows,
     }
   })
 }
@@ -466,10 +471,16 @@ function applySeedTotalsToPaidOptionColumns(columns: any[], cards: any[]) {
     if (!title) return
     countByTitle.set(title, formatCountToKoreanUnit(card?.count_value))
   })
-  return normalizedColumns.map((column: any) => ({
-    ...column,
-    total: countByTitle.get(column.title) || formatCountToKoreanUnit(column.total, "0건"),
-  }))
+  return normalizedColumns.map((column: any) => {
+    const rowTotal = (column.rows || []).reduce((sum: number, row: any[]) => sum + parseLooseNumber(row?.[1]), 0)
+    return {
+      ...column,
+      total:
+        column.title === "해외지수" && rowTotal > 0
+          ? `${rowTotal}건`
+          : countByTitle.get(column.title) || formatCountToKoreanUnit(column.total, "0건"),
+    }
+  })
 }
 
 function buildTerminationOverviewRows(rows: any[]) {
