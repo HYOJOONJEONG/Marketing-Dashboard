@@ -1487,37 +1487,53 @@ export function DashboardShell({
     return [...map.entries()]
   }, [selectedSheet])
 
-  function persist(nextData: any) {
+  async function sendDashboardUpdate(body: string, keepalive = false) {
+    const response = await fetch("/api/dashboard", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body,
+      ...(keepalive ? { keepalive: true } : {}),
+    })
+    if (!response.ok) {
+      throw new Error(`Dashboard save failed (${response.status})`)
+    }
+  }
+
+  function persist(nextData: any, options: { immediate?: boolean } = {}) {
     const now = Date.now()
+    const serialized = JSON.stringify(nextData)
     setData(nextData)
     pendingDataRef.current = nextData
     try {
       if (typeof window !== "undefined") {
-        window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(nextData))
+        window.localStorage.setItem(LOCAL_STORAGE_KEY, serialized)
       }
     } catch {}
     if (pendingSaveRef.current) {
       window.clearTimeout(pendingSaveRef.current)
     }
-    pendingSaveRef.current = window.setTimeout(() => {
-      const body = pendingPayloadRef.current || (pendingDataRef.current ? JSON.stringify(pendingDataRef.current) : null)
-      if (!pendingPayloadRef.current && pendingDataRef.current) {
-        pendingPayloadRef.current = body
-      }
+    let savePromise: Promise<void> = Promise.resolve()
+    if (options.immediate) {
       pendingPayloadRef.current = null
       pendingSaveRef.current = null
-      if (!body) return
-      const send = () => fetch("/api/dashboard", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body,
-      }).catch(() => {})
-      if ("requestIdleCallback" in window) {
-        ;(window as any).requestIdleCallback(send, { timeout: 300 })
-      } else {
-        void send()
-      }
-    }, 30)
+      savePromise = sendDashboardUpdate(serialized)
+    } else {
+      pendingSaveRef.current = window.setTimeout(() => {
+        const body = pendingPayloadRef.current || (pendingDataRef.current ? JSON.stringify(pendingDataRef.current) : null)
+        if (!pendingPayloadRef.current && pendingDataRef.current) {
+          pendingPayloadRef.current = body
+        }
+        pendingPayloadRef.current = null
+        pendingSaveRef.current = null
+        if (!body) return
+        const send = () => sendDashboardUpdate(body).catch(() => {})
+        if ("requestIdleCallback" in window) {
+          ;(window as any).requestIdleCallback(send, { timeout: 300 })
+        } else {
+          void send()
+        }
+      }, 30)
+    }
     if (now - lastHistoryAtRef.current > 500) {
       const snapshot = () => {
         setHistoryStack((prev) => [cloneData(data), ...prev].slice(0, 20))
@@ -1529,6 +1545,7 @@ export function DashboardShell({
         snapshot()
       }
     }
+    return savePromise
   }
 
   flushPendingSave.current = () => {
@@ -1540,12 +1557,7 @@ export function DashboardShell({
       ;(navigator as any).sendBeacon("/api/dashboard", blob)
       return
     }
-    void fetch("/api/dashboard", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body,
-      keepalive: true,
-    }).catch(() => {})
+    void sendDashboardUpdate(body, true).catch(() => {})
   }
 
   useEffect(() => {
@@ -2999,8 +3011,12 @@ export function DashboardShell({
         weeklyIndustryOverviewRows: cloneData(manualDraft.weeklyIndustryOverviewRows || []),
         additionalSales: normalizeAdditionalSalesRows(cloneData(manualDraft.additionalSales || [])),
       }
-      await persist({ ...data, weeklyReport: nextWeekly })
-      setView("weekly-report")
+      try {
+        await persist({ ...data, weeklyReport: nextWeekly }, { immediate: true })
+        setView("weekly-report")
+      } catch {
+        window.alert("Save failed. Please do not refresh; try Update again in a moment.")
+      }
     })
   }
 
