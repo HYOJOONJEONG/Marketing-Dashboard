@@ -2468,9 +2468,6 @@ export function DashboardShell({
           <td>${escapeHtml(row.companyName)}</td>
           <td>${escapeHtml(row.departmentName)}</td>
           <td>${escapeHtml(row.idCode)}</td>
-          <td>${escapeHtml(row.recommender)}</td>
-          <td>${escapeHtml(row.contractMonth)}</td>
-          <td>${escapeHtml(row.recoveredCount)}</td>
           <td>${escapeHtml(row.note)}</td>
         </tr>
       `)
@@ -2566,7 +2563,7 @@ export function DashboardShell({
             font-weight: 800;
           }
           tbody td { background: #ffffff; }
-          td:nth-child(2), td:nth-child(3), td:nth-child(8) { text-align: left; }
+          td:nth-child(2), td:nth-child(3), td:nth-child(5) { text-align: left; }
           .footer-note {
             padding: 0 10px 8px;
             font-size: 10px;
@@ -2603,13 +2600,10 @@ export function DashboardShell({
                 <thead>
                   <tr>
                     <th style="width:6%">구분</th>
-                    <th style="width:24%">회사명</th>
-                    <th style="width:14%">부서명</th>
-                    <th style="width:10%">ID</th>
-                    <th style="width:7%">권유</th>
-                    <th style="width:8%">계약월</th>
-                    <th style="width:7%">회수</th>
-                    <th>비고</th>
+                    <th style="width:27%">회사명</th>
+                    <th style="width:18%">부서명</th>
+                    <th style="width:12%">ID</th>
+                    <th style="width:37%">비고</th>
                   </tr>
                 </thead>
                 <tbody>${rowsHtml}</tbody>
@@ -4903,9 +4897,17 @@ export function DashboardShell({
 
                   <div className="overflow-auto rounded-2xl border border-slate-200">
                     <table className={tableClass}>
+                      <colgroup>
+                        <col style={{ width: "54px" }} />
+                        <col style={{ width: "18%" }} />
+                        <col style={{ width: "15%" }} />
+                        <col style={{ width: "12%" }} />
+                        <col />
+                        <col style={{ width: "72px" }} />
+                      </colgroup>
                       <thead>
                         <tr>
-                          {["구분", "회사명", "부서명", "ID", "권유", "계약월", "회수", "비고", "작업"].map((label) => (
+                          {["구분", "회사명", "부서명", "ID", "비고", "작업"].map((label) => (
                             <th key={label} className={thClass}>
                               {label}
                             </th>
@@ -4915,7 +4917,7 @@ export function DashboardShell({
                       <tbody>
                         {collectionDelivery.rows.length === 0 ? (
                           <tr>
-                            <td colSpan={9} className={`${tdClass} py-8 text-slate-500`}>
+                            <td colSpan={6} className={`${tdClass} py-8 text-slate-500`}>
                               전달 리스트 항목이 없습니다. 행 추가를 눌러 입력해 주세요.
                             </td>
                           </tr>
@@ -4933,16 +4935,7 @@ export function DashboardShell({
                                 <input className="h-9 w-full min-w-[95px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.idCode} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "idCode", e.target.value)} />
                               </td>
                               <td className={tdClass}>
-                                <input className="h-9 w-full min-w-[72px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.recommender} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "recommender", e.target.value)} />
-                              </td>
-                              <td className={tdClass}>
-                                <input className="h-9 w-full min-w-[88px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.contractMonth} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "contractMonth", e.target.value)} placeholder="26년 4월" />
-                              </td>
-                              <td className={tdClass}>
-                                <input className="h-9 w-full min-w-[56px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.recoveredCount} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "recoveredCount", e.target.value)} />
-                              </td>
-                              <td className={tdClass}>
-                                <input className="h-9 w-full min-w-[180px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.note} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "note", e.target.value)} />
+                                <input className="h-9 w-full min-w-[320px] rounded-xl border border-slate-200 px-3 text-[13px]" value={row.note} onChange={(e) => handleCollectionDeliveryRowChange(row.id, "note", e.target.value)} />
                               </td>
                               <td className={tdClass}>
                                 <button
