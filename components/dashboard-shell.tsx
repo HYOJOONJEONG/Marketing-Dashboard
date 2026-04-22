@@ -48,6 +48,20 @@ function formatMoney(value: unknown) {
   return `${formatNumber(value)}원`
 }
 
+function formatLastUpdated(value: unknown) {
+  if (!value) return "No updates yet"
+  const date = new Date(String(value))
+  if (Number.isNaN(date.getTime())) return "No updates yet"
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date)
+}
+
 function replaceDivisionName(text: unknown) {
   return String(text ?? "")
     .replace(/정보사업본부/g, "인포Biz본부")
@@ -1499,11 +1513,24 @@ export function DashboardShell({
     }
   }
 
-  function persist(nextData: any, options: { immediate?: boolean } = {}) {
+  function persist(nextData: any, options: { immediate?: boolean; updatedViews?: ViewKey[] } = {}) {
     const now = Date.now()
-    const serialized = JSON.stringify(nextData)
-    setData(nextData)
-    pendingDataRef.current = nextData
+    const updatedAt = new Date(now).toISOString()
+    const updatedViews = options.updatedViews?.length ? options.updatedViews : [view]
+    const menuUpdatedAt = {
+      ...(nextData?.ui?.menuUpdatedAt || {}),
+      ...Object.fromEntries(updatedViews.map((key) => [key, updatedAt])),
+    }
+    const nextDataWithMeta = {
+      ...nextData,
+      ui: {
+        ...(nextData?.ui || {}),
+        menuUpdatedAt,
+      },
+    }
+    const serialized = JSON.stringify(nextDataWithMeta)
+    setData(nextDataWithMeta)
+    pendingDataRef.current = nextDataWithMeta
     try {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(LOCAL_STORAGE_KEY, serialized)
@@ -3012,7 +3039,10 @@ export function DashboardShell({
         additionalSales: normalizeAdditionalSalesRows(cloneData(manualDraft.additionalSales || [])),
       }
       try {
-        await persist({ ...data, weeklyReport: nextWeekly }, { immediate: true })
+        await persist(
+          { ...data, weeklyReport: nextWeekly },
+          { immediate: true, updatedViews: ["manual-input", "weekly-report"] },
+        )
         setView("weekly-report")
       } catch {
         window.alert("Save failed. Please do not refresh; try Update again in a moment.")
@@ -3123,6 +3153,7 @@ export function DashboardShell({
   const reportTerminationRows = buildTerminationOverviewRows(weeklyReport.terminationOverviewRows || [])
   const reportIndustryColumns = [...reportIndustryColumnsStatic]
   const reportIndustryRows = buildWeeklyIndustryOverviewRows(weeklyReport.weeklyIndustryOverviewRows || [])
+  const currentMenuUpdatedAt = data?.ui?.menuUpdatedAt?.[view]
 
   return (
     <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
@@ -3279,6 +3310,9 @@ export function DashboardShell({
             <div className={`${cardClass} dashboard-header mb-5 flex items-start justify-between px-5 py-4`}>
             <div>
               <h1 className="mt-2 text-[20px] font-black tracking-[-0.04em] text-slate-950">{viewTitles[view]}</h1>
+              <div className="mt-1 text-[12px] font-semibold text-slate-500">
+                Last update: {formatLastUpdated(currentMenuUpdatedAt)}
+              </div>
             </div>
             <div className="dashboard-header-actions flex items-center gap-3">
               {view === "weekly-report" && (
