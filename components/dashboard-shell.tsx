@@ -3,7 +3,14 @@
 import React, { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
 
-type ViewKey = "weekly-report" | "contracts" | "weekly-selection" | "manual-input" | "collection" | "option-dashboard" | "termination"
+type ViewKey =
+  | "weekly-report"
+  | "contracts"
+  | "weekly-selection"
+  | "manual-input"
+  | "collection"
+  | "option-dashboard"
+  | "termination"
 type CollectionTabKey = "integrated" | "long-term" | "delivery"
 type SectionKey = "performance" | "termination"
 
@@ -991,6 +998,7 @@ export function DashboardShell({
   const pendingSaveRef = useRef<number | null>(null)
   const pendingPayloadRef = useRef<string | null>(null)
   const pendingDataRef = useRef<any | null>(null)
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
   const lastHistoryAtRef = useRef<number>(0)
   const flushPendingSave = useRef<() => void>(() => {})
   const [terminationEntryMode, setTerminationEntryMode] = useState<"termination" | "hold">("termination")
@@ -1513,6 +1521,14 @@ export function DashboardShell({
     }
   }
 
+  function queueDashboardUpdate(body: string, keepalive = false) {
+    const nextSave = saveQueueRef.current
+      .catch(() => undefined)
+      .then(() => sendDashboardUpdate(body, keepalive))
+    saveQueueRef.current = nextSave.catch(() => undefined)
+    return nextSave
+  }
+
   function persist(nextData: any, options: { immediate?: boolean; updatedViews?: ViewKey[] } = {}) {
     const now = Date.now()
     const updatedAt = new Date(now).toISOString()
@@ -1543,7 +1559,7 @@ export function DashboardShell({
     if (options.immediate) {
       pendingPayloadRef.current = null
       pendingSaveRef.current = null
-      savePromise = sendDashboardUpdate(serialized)
+      savePromise = queueDashboardUpdate(serialized)
     } else {
       pendingSaveRef.current = window.setTimeout(() => {
         const body = pendingPayloadRef.current || (pendingDataRef.current ? JSON.stringify(pendingDataRef.current) : null)
@@ -1553,7 +1569,7 @@ export function DashboardShell({
         pendingPayloadRef.current = null
         pendingSaveRef.current = null
         if (!body) return
-        const send = () => sendDashboardUpdate(body).catch(() => {})
+        const send = () => queueDashboardUpdate(body).catch(() => {})
         if ("requestIdleCallback" in window) {
           ;(window as any).requestIdleCallback(send, { timeout: 300 })
         } else {
@@ -1584,7 +1600,7 @@ export function DashboardShell({
       ;(navigator as any).sendBeacon("/api/dashboard", blob)
       return
     }
-    void sendDashboardUpdate(body, true).catch(() => {})
+    void queueDashboardUpdate(body, true).catch(() => {})
   }
 
   useEffect(() => {
@@ -1971,7 +1987,6 @@ export function DashboardShell({
           includedInWeekly: false,
           recommender: contractDraft.recommender.trim(),
           note: contractDraft.note.trim(),
-          replacementType: "신규",
         },
         ...contracts,
       ]
@@ -2521,7 +2536,7 @@ export function DashboardShell({
   function handleConfirmSelectedTerminations() {
     if (!selectedSheet) return
     const activeItems = selectedSheet.items || []
-    const selectedItems = activeItems.filter((row: any) => row.selected)
+    const selectedItems = activeItems.filter((row: any) => row.selected).map((row: any) => mergeEditingTerminationRow(row))
     if (!selectedItems.length) return
     const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
     startTransition(async () => {
@@ -2538,6 +2553,10 @@ export function DashboardShell({
           : sheet,
       )
       await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
+      if (selectedItems.some((row: any) => row.id === editingTerminationId)) {
+        setEditingTerminationId(null)
+        setEditingTerminationDraft({})
+      }
     })
   }
 
@@ -2787,6 +2806,24 @@ export function DashboardShell({
     setEditingTerminationDraft((prev: any) => ({ ...prev, [field]: value }))
   }
 
+  function mergeEditingTerminationRow(row: any) {
+    if (editingTerminationId !== row?.id) return row
+    return {
+      ...row,
+      receivedDate: normalizeDate(editingTerminationDraft.receivedDate),
+      manager: editingTerminationDraft.manager?.trim() || "",
+      customerId: editingTerminationDraft.customerId?.trim() || "",
+      companyName: editingTerminationDraft.companyName?.trim() || "",
+      departmentName: editingTerminationDraft.departmentName?.trim() || "",
+      reason:
+        editingTerminationDraft.reason === "기타" && editingTerminationDraft.reasonDetail?.trim()
+          ? `기타(${editingTerminationDraft.reasonDetail.trim()})`
+          : editingTerminationDraft.reason,
+      terminationDate: normalizeDate(editingTerminationDraft.terminationDate),
+      penalty: toNumber(editingTerminationDraft.penalty),
+    }
+  }
+
   function handleTerminationUpdate(rowId: string) {
     if (!selectedSheet) return
     startTransition(async () => {
@@ -2865,11 +2902,36 @@ export function DashboardShell({
     setEditingHoldDraft((prev: any) => ({ ...prev, [field]: value }))
   }
 
+  function mergeEditingHoldRow(row: any) {
+    if (editingHoldId !== row?.id) return row
+    return {
+      ...row,
+      receivedDate: normalizeDate(editingHoldDraft.receivedDate),
+      manager: editingHoldDraft.manager?.trim() || "",
+      customerId: editingHoldDraft.customerId?.trim() || "",
+      companyName: editingHoldDraft.companyName?.trim() || "",
+      departmentName: editingHoldDraft.departmentName?.trim() || "",
+      reason: editingHoldDraft.reason === "기타" && editingHoldDraft.reasonDetail?.trim()
+        ? `기타(${editingHoldDraft.reasonDetail.trim()})`
+        : editingHoldDraft.reason,
+      startDate: normalizeMonth(editingHoldDraft.startDate),
+      endDate: normalizeMonth(editingHoldDraft.endDate),
+    }
+  }
+
+  function getLatestTerminationContext() {
+    const latestData = pendingDataRef.current || data
+    const latestTermination = latestData?.termination || termination
+    const latestSheet = (latestTermination.sheets || []).find((sheet: any) => sheet.id === selectedSheet?.id) || selectedSheet
+    return { latestData, latestTermination, latestSheet }
+  }
+
   function handleHoldUpdate(rowId: string) {
-    if (!selectedSheet) return
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
     startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
+      const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+        sheet.id === latestSheet.id
           ? {
               ...sheet,
               holdItems: (sheet.holdItems || []).map((row: any) =>
@@ -2892,7 +2954,7 @@ export function DashboardShell({
             }
           : sheet,
       )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
+      await persist({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
       setEditingHoldId(null)
       setEditingHoldDraft({})
     })
@@ -2920,12 +2982,13 @@ export function DashboardShell({
   }
 
   function handleReleaseHoldRow(rowId: string) {
-    if (!selectedSheet) return
-    const row = (selectedSheet.holdItems || []).find((item: any) => item.id === rowId)
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    const row = mergeEditingHoldRow((latestSheet.holdItems || []).find((item: any) => item.id === rowId))
     if (!row) return
     startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
+      const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+        sheet.id === latestSheet.id
           ? {
               ...sheet,
               holdItems: (sheet.holdItems || []).filter((item: any) => item.id !== rowId),
@@ -2936,7 +2999,7 @@ export function DashboardShell({
             }
           : sheet,
       )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
+      await persist({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
       if (editingHoldId === rowId) {
         setEditingHoldId(null)
         setEditingHoldDraft({})
@@ -2963,8 +3026,9 @@ export function DashboardShell({
   }
 
   function handleMoveHoldToTermination(rowId: string) {
-    if (!selectedSheet) return
-    const row = (selectedSheet.holdItems || []).find((item: any) => item.id === rowId)
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    const row = mergeEditingHoldRow((latestSheet.holdItems || []).find((item: any) => item.id === rowId))
     if (!row) return
     const movedItem = {
       id: `term-${Date.now()}`,
@@ -2980,8 +3044,8 @@ export function DashboardShell({
       penalty: 0,
     }
     startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
+      const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+        sheet.id === latestSheet.id
           ? {
               ...sheet,
               items: [movedItem, ...(sheet.items || [])],
@@ -2991,7 +3055,7 @@ export function DashboardShell({
             }
           : sheet,
       )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
+      await persist({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
       if (editingHoldId === rowId) {
         setEditingHoldId(null)
         setEditingHoldDraft({})
@@ -3016,6 +3080,7 @@ export function DashboardShell({
       </button>
     )
   }
+
   const receivedDatePickerOnlyProps = {
     onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (event.key === "Tab" || event.key === "Escape") return
@@ -3029,7 +3094,6 @@ export function DashboardShell({
       } catch {}
     },
   }
-
 
   function handleManualUpdate() {
     startTransition(async () => {
@@ -3317,6 +3381,7 @@ export function DashboardShell({
                 </div>
               )}
             </div>
+
           </div>
         </aside>
 
@@ -5515,6 +5580,7 @@ export function DashboardShell({
               <OptionDashboardPage />
             </div>
           )}
+
         </main>
       </div>
     </div>
