@@ -1999,7 +1999,10 @@ export function DashboardShell({
     const nextContracts = contracts.map((row: any) =>
       row.id === contractId ? { ...row, includedInWeekly: !row.includedInWeekly } : row,
     )
-    persist({ ...data, contracts: nextContracts })
+    persist(
+      { ...data, contracts: nextContracts },
+      { immediate: true, updatedViews: ["weekly-selection", "weekly-report"] },
+    )
   }
 
   function handleMoveWeeklySelectionToCollection() {
@@ -2060,13 +2063,9 @@ export function DashboardShell({
       return
     }
     startTransition(async () => {
-      console.debug("[contracts] create start", contractDraft)
-      const nextNo =
-        contracts.reduce((max: number, row: any) => Math.max(max, Number(row.no || 0)), 0) + 1
-      const nextContracts = [
-        {
-          id: `c${Date.now()}`,
-          no: nextNo,
+      try {
+        const nextContract = {
+          id: `c${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           companyName: contractDraft.companyName.trim(),
           departmentName: contractDraft.departmentName.trim(),
           idCode: contractDraft.idCode.trim(),
@@ -2077,22 +2076,36 @@ export function DashboardShell({
           includedInWeekly: false,
           recommender: contractDraft.recommender.trim(),
           note: contractDraft.note.trim(),
-        },
-        ...contracts,
-      ]
-      await persist({ ...data, contracts: nextContracts })
-      console.debug("[contracts] create done", nextContracts[0])
-      setContractDraft({
-        companyName: "",
-        departmentName: "",
-        idCode: "",
-        industry: "국내증권",
-        contractMonth: "",
-        recommender: "",
-        note: "",
-        documentStatus: "미회수",
-        replacementType: "신규",
-      })
+        }
+        const response = await fetch("/api/dashboard", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "addContract", contract: nextContract }),
+        })
+        const payload = await response.json().catch(() => null)
+        if (!response.ok || !payload?.ok || !payload?.data) {
+          throw new Error(payload?.error || `계약 등록 실패 (${response.status})`)
+        }
+        setData(payload.data)
+        pendingDataRef.current = payload.data
+        clearDirtyViews(["contracts"])
+        try {
+          window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(payload.data))
+        } catch {}
+        setContractDraft({
+          companyName: "",
+          departmentName: "",
+          idCode: "",
+          industry: "국내증권",
+          contractMonth: "",
+          recommender: "",
+          note: "",
+          documentStatus: "미회수",
+          replacementType: "신규",
+        })
+      } catch (error: any) {
+        window.alert(String(error?.message || "계약 등록 저장에 실패했습니다."))
+      }
     })
   }
 
@@ -2118,7 +2131,7 @@ export function DashboardShell({
             }
           : row,
       )
-      await persist({ ...data, contracts: nextContracts })
+      await persist({ ...data, contracts: nextContracts }, { immediate: true, updatedViews: ["contracts"] })
       setEditingContractId(null)
       setEditingContractDraft({})
     })
@@ -2128,7 +2141,7 @@ export function DashboardShell({
     if (!window.confirm("이 계약을 삭제할까요?")) return
     startTransition(async () => {
       const nextContracts = contracts.filter((row: any) => row.id !== contractId)
-      await persist({ ...data, contracts: nextContracts })
+      await persist({ ...data, contracts: nextContracts }, { immediate: true, updatedViews: ["contracts"] })
       if (editingContractId === contractId) {
         setEditingContractId(null)
         setEditingContractDraft({})
@@ -3353,6 +3366,7 @@ export function DashboardShell({
   const currentMenuUpdatedAt = data?.ui?.menuUpdatedAt?.[view]
   const currentViewDirty = Boolean(dirtyViews[view])
   const hasUnsavedChanges = Object.values(dirtyViews).some(Boolean)
+  const showHeaderSave = !["weekly-report", "contracts", "weekly-selection"].includes(view)
 
   return (
     <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
@@ -3515,21 +3529,23 @@ export function DashboardShell({
               </div>
             </div>
             <div className="dashboard-header-actions flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleSaveCurrentView}
-                disabled={!hasUnsavedChanges || isPending}
-                title="저장"
-                aria-label="저장"
-                className={`inline-flex h-11 items-center gap-2 rounded-2xl px-4 text-[14px] font-bold transition ${
-                  hasUnsavedChanges && !isPending
-                    ? "bg-blue-600 text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)] hover:bg-blue-700"
-                    : "border border-slate-200 bg-slate-100 text-slate-400"
-                }`}
-              >
-                <SaveIcon className={isPending && hasUnsavedChanges ? "h-5 w-5 animate-pulse" : "h-5 w-5"} />
-                <span>저장</span>
-              </button>
+              {showHeaderSave && (
+                <button
+                  type="button"
+                  onClick={handleSaveCurrentView}
+                  disabled={!hasUnsavedChanges || isPending}
+                  title="저장"
+                  aria-label="저장"
+                  className={`inline-flex h-11 items-center gap-2 rounded-2xl px-4 text-[14px] font-bold transition ${
+                    hasUnsavedChanges && !isPending
+                      ? "bg-blue-600 text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)] hover:bg-blue-700"
+                      : "border border-slate-200 bg-slate-100 text-slate-400"
+                  }`}
+                >
+                  <SaveIcon className={isPending && hasUnsavedChanges ? "h-5 w-5 animate-pulse" : "h-5 w-5"} />
+                  <span>저장</span>
+                </button>
+              )}
               {view === "weekly-report" && (
                 <button
                   type="button"
@@ -4029,7 +4045,7 @@ export function DashboardShell({
                         <option value="회수">회수</option>
                       </select>
                       <button type="button" onClick={handleContractCreate} className="h-10 rounded-2xl bg-blue-600 px-4 text-[14px] font-semibold text-white whitespace-nowrap">
-                        {isPending ? "등록 중..." : "등록"}
+                        {isPending ? "저장 중..." : "등록&저장"}
                       </button>
                     </div>
                   </div>
