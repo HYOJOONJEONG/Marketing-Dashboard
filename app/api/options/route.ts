@@ -31,6 +31,7 @@ const INDEX_COUNTABLE_SUB_TYPES = new Set([
   "연기금",
   "공공기관",
 ])
+const INDEX_EXCLUDED_USER_IDS = new Set(["E110733"])
 
 const MOCK_PATH = path.join(process.cwd(), "data", "options-dashboard.mock.json")
 const APP_STATE_PATH = path.join(process.cwd(), "data", "app-state.json")
@@ -40,6 +41,13 @@ const getResponseCache = new Map<string, { expiresAt: number; payload: any }>()
 
 function normalizeCategoryCode(value: unknown) {
   return String(value ?? "").trim()
+}
+
+function isCountableIndexRecord(row: any) {
+  if (String(row?.category_code || "").trim() !== "INDEX") return true
+  const subType = String(row?.sub_type || "").trim()
+  const userId = String(row?.user_id || "").trim()
+  return INDEX_COUNTABLE_SUB_TYPES.has(subType) && !INDEX_EXCLUDED_USER_IDS.has(userId)
 }
 
 function normalizeStatus(value: unknown) {
@@ -257,7 +265,7 @@ function buildCounts(records: any[], categories: any[]) {
     if (code === "INDEX") {
       const ids = active
         .filter((row) => row.category_code === code)
-        .filter((row) => INDEX_COUNTABLE_SUB_TYPES.has(String(row.sub_type || "").trim()))
+        .filter(isCountableIndexRecord)
         .map((row) => row.user_id)
         .filter(Boolean)
       counts[code] = new Set(ids).size
@@ -332,6 +340,7 @@ export async function GET(req: Request) {
 
     const filteredRawRecords = optionRecordsRaw.filter((row: any) => {
       if (activeOnly && Number(row.is_active) !== 1) return false
+      if (activeOnly && row.category_code === "INDEX" && !isCountableIndexRecord(row)) return false
       if (categoryFilter !== "all" && row.category_code !== categoryFilter) return false
       const normalizedStatus = normalizeStatus(row.status)
       if (statusFilter !== "all" && normalizedStatus !== statusFilter) return false

@@ -428,8 +428,9 @@ function buildPaidOptionInfoColumns(columns: any[]) {
   return paidOptionOrderedTitles.map((title, index) => {
     const fromSource = sourceByTitle.get(title) || {}
     const fromBase = baseByTitle.get(title) || {}
-    const rows = Array.isArray(fromSource?.rows)
-      ? fromSource.rows.map((row: any) => [
+    const sourceRows = title === "해외지수" ? fromBase?.rows : fromSource?.rows
+    const rows = Array.isArray(sourceRows)
+      ? sourceRows.map((row: any) => [
           sanitizeSummaryText(Array.isArray(row) ? row[0] : row?.[0], ""),
           sanitizeSummaryText(Array.isArray(row) ? row[1] : row?.[1], ""),
         ])
