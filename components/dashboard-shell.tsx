@@ -2416,6 +2416,8 @@ export function DashboardShell({
 
   function handleCollectionDeliveryHistorySelect(nextDate: string) {
     setSelectedDeliveryHistoryDate(nextDate)
+    if (!nextDate) return
+    handleCollectionDeliveryLoadHistory(nextDate, true)
   }
 
   function handleCollectionDeliveryDeleteHistory(dateKey?: string) {
@@ -4930,18 +4932,6 @@ export function DashboardShell({
                           ))
                         )}
                       </select>
-                      <button
-                        type="button"
-                        onClick={() => handleCollectionDeliveryLoadHistory()}
-                        disabled={!selectedDeliveryHistoryDate}
-                        className={`rounded-xl border px-3 py-1.5 text-xs font-semibold ${
-                          selectedDeliveryHistoryDate
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-slate-200 bg-slate-100 text-slate-400"
-                        }`}
-                      >
-                        불러오기
-                      </button>
                       <button
                         type="button"
                         onClick={handleCollectionDeliveryOpenNewPage}
