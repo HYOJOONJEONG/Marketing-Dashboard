@@ -1203,6 +1203,18 @@ export function DashboardShell({
     })
   }, [data, termination, startTransition])
   const includedContracts = useMemo(() => contracts.filter((row: any) => row.includedInWeekly), [contracts])
+  const weeklyTerminationAutoCount = useMemo(
+    () => (selectedSheet?.items || []).filter((row: any) => Boolean(row?.selected)).length,
+    [selectedSheet],
+  )
+  const weeklyNewContractAutoCount = includedContracts.length
+  const weeklyNetAutoCount = weeklyNewContractAutoCount - weeklyTerminationAutoCount
+  const applyWeeklyAutoSummary = (summary: any = {}) => ({
+    ...summary,
+    weeklyNetUnits: weeklyNetAutoCount,
+    weeklyNewContracts: weeklyNewContractAutoCount,
+    weeklyTerminationContracts: weeklyTerminationAutoCount,
+  })
   const contractStatusOptions = useMemo(() => {
     const values = new Set<string>()
     contracts.forEach((row: any) => {
@@ -3351,7 +3363,7 @@ export function DashboardShell({
         subtitleOne: manualRevenueSubtitleOne,
         subtitleTwo: manualRevenueSubtitleTwo,
         revenueNoteText: manualDraft.revenueNoteText,
-        manualSummary: { ...manualDraft.manualSummary },
+        manualSummary: applyWeeklyAutoSummary(manualDraft.manualSummary),
         revenueRows: cloneData(manualDraft.revenueRows || []),
         goalRows: cloneData(manualDraft.goalRows || []),
         industryStats: cloneData(manualDraft.industryStats || []),
@@ -3388,8 +3400,10 @@ export function DashboardShell({
 
   const reportGoalRows = buildGoalRows(weeklyReport.goalRows || [])
   const reportIndustryStats = buildIndustryStats(weeklyReport.industryStats || [])
+  const autoManualSummary = applyWeeklyAutoSummary(manualDraft.manualSummary || {})
+  const autoWeeklyReportSummary = applyWeeklyAutoSummary(weeklyReport.manualSummary || {})
   const reportSummary = {
-    ...(weeklyReport.manualSummary || {}),
+    ...autoWeeklyReportSummary,
     competitorStatus: normalizeSummaryStatus(
       weeklyReport?.manualSummary?.competitorStatus,
       "체크19대, 마켓포인트2대, 블룸버그0대, 로이터1대, 기타0대, 신규155대",
@@ -3409,7 +3423,7 @@ export function DashboardShell({
     subtitleTwo: manualDraft.subtitleTwo,
     revenueUnitPrice: manualDraft.revenueUnitPrice,
     additionalContractCount: manualDraft.additionalContractCount,
-    manualSummary: manualDraft.manualSummary,
+    manualSummary: autoManualSummary,
     revenueRows: manualDraft.revenueRows || [],
     fallbackSelectedCount: includedContracts.length,
   })
@@ -3423,7 +3437,7 @@ export function DashboardShell({
     subtitleTwo: weeklyReport.subtitleTwo,
     revenueUnitPrice: weeklyReport.revenueUnitPrice,
     additionalContractCount: weeklyReport.additionalContractCount,
-    manualSummary: weeklyReport.manualSummary || {},
+    manualSummary: autoWeeklyReportSummary,
     revenueRows: weeklyReport.revenueRows || [],
     fallbackSelectedCount: includedContracts.length,
   })
@@ -3440,7 +3454,8 @@ export function DashboardShell({
   const revenueSubtitleMetricTwo = splitRevenueMetric(revenueSubtitleTwo, "연간 누적 매출 (추정)")
   const revenueNoteParts = splitRevenueNoteText(revenueNoteText)
   const manualGoalRows = buildGoalRows(manualDraft.goalRows || [])
-  const manualSummary = manualDraft.manualSummary || {}
+  const manualSummary = autoManualSummary
+  const autoManualSummaryFields = new Set(["weeklyNetUnits", "weeklyNewContracts", "weeklyTerminationContracts"])
   const monthLabels = Array.from({ length: 12 }, (_, index) => `${index + 1}월`)
   const summaryMatrixRows = [
     {
@@ -3806,9 +3821,9 @@ export function DashboardShell({
                         <th className={weeklyThClass}>총 계약대수</th>
                       </tr>
                       <tr>
-                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.weeklyNetUnits)}대</td>
-                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.weeklyNewContracts)}대</td>
-                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.weeklyTerminationContracts)}대</td>
+                        <td className={`${weeklyTdClass} bg-slate-100 font-bold text-slate-800`}>{formatNumber(reportSummary?.weeklyNetUnits)}대</td>
+                        <td className={`${weeklyTdClass} bg-slate-100 font-bold text-slate-800`}>{formatNumber(reportSummary?.weeklyNewContracts)}대</td>
+                        <td className={`${weeklyTdClass} bg-slate-100 font-bold text-slate-800`}>{formatNumber(reportSummary?.weeklyTerminationContracts)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.cumulativeNetUnits)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.cumulativeNewContracts)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.cumulativeTerminationContracts)}대</td>
@@ -4598,15 +4613,19 @@ export function DashboardShell({
                         </tr>
                         <tr>
                           <td className={`${tdClass} bg-white`} />
-                          {section.cells.map(([label, field], cellIndex) => (
-                            <td key={`${section.title}-${field}`} className={`${tdClass} p-1`}>
-                              <input
-                                className={`${manualTableInputClass} ${section.cells.length === 4 && cellIndex === section.cells.length - 1 ? "text-left px-4" : ""}`}
-                                value={String(manualSummary?.[field] ?? "")}
-                                onChange={(e) => updateManualSummaryField(field, e.target.value)}
-                              />
-                            </td>
-                          ))}
+                          {section.cells.map(([label, field], cellIndex) => {
+                            const isAutoField = autoManualSummaryFields.has(field)
+                            return (
+                              <td key={`${section.title}-${field}`} className={`${tdClass} p-1 ${isAutoField ? "bg-slate-100" : ""}`}>
+                                <input
+                                  className={`${manualTableInputClass} ${isAutoField ? "cursor-not-allowed bg-slate-100 font-bold text-slate-700 shadow-inner" : ""} ${section.cells.length === 4 && cellIndex === section.cells.length - 1 ? "text-left px-4" : ""}`}
+                                  value={String(manualSummary?.[field] ?? "")}
+                                  readOnly={isAutoField}
+                                  onChange={(e) => updateManualSummaryField(field, e.target.value)}
+                                />
+                              </td>
+                            )
+                          })}
                         </tr>
                       </tbody>
                     </table>
