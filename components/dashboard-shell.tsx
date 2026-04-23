@@ -2493,6 +2493,100 @@ export function DashboardShell({
     })
   }
 
+  function resolveCollectionDeliveryPageSource(dateKey?: string) {
+    const selectedDate = normalizeDate(dateKey || selectedDeliveryHistoryDate)
+    const historyItem = selectedDate
+      ? (collectionDelivery.history || []).find((entry: any) => normalizeDate(entry.deliveredDate) === selectedDate)
+      : null
+    return historyItem || collectionDelivery
+  }
+
+  function handleCollectionDeliveryOpenPage() {
+    const source = resolveCollectionDeliveryPageSource()
+    const popup = window.open("", "_blank", "width=1100,height=900")
+    if (!popup) {
+      window.alert("팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.")
+      return
+    }
+    const rowsHtml = (source.rows || [])
+      .map((row: any, index: number) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(row.companyName)}</td>
+          <td>${escapeHtml(row.departmentName)}</td>
+          <td>${escapeHtml(row.idCode)}</td>
+          <td>${escapeHtml(row.note)}</td>
+        </tr>
+      `)
+      .join("")
+    popup.document.open()
+    popup.document.write(`
+      <!doctype html>
+      <html lang="ko">
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(source.title || collectionDelivery.title)}</title>
+        <style>
+          body { margin: 0; background: #f3f6fb; color: #0f172a; font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+          .page { max-width: 1120px; margin: 28px auto; padding: 0 18px; }
+          .card { overflow: hidden; border: 1px solid #d8e2ef; border-radius: 24px; background: #fff; box-shadow: 0 18px 50px rgba(15, 23, 42, .08); }
+          .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 24px 28px; border-bottom: 1px solid #e2e8f0; }
+          h1 { margin: 0; font-size: 24px; letter-spacing: -.04em; }
+          .sub { margin-top: 8px; color: #64748b; font-size: 13px; }
+          .meta { min-width: 300px; border: 1px solid #dbe5f0; border-radius: 18px; padding: 14px 16px; background: #f8fafc; font-size: 13px; }
+          .meta-row { display: flex; justify-content: space-between; gap: 18px; padding: 5px 0; }
+          .label { color: #64748b; font-weight: 700; }
+          .value { color: #0f172a; font-weight: 800; }
+          .tools { padding: 14px 28px; text-align: right; border-bottom: 1px solid #e2e8f0; }
+          button { border: 1px solid #bfdbfe; border-radius: 999px; background: #eff6ff; color: #1d4ed8; padding: 9px 14px; font-weight: 800; cursor: pointer; }
+          table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+          th, td { border-bottom: 1px solid #e2e8f0; padding: 12px 14px; text-align: center; word-break: break-word; }
+          th { background: #f8fafc; color: #334155; font-weight: 900; }
+          td:nth-child(2), td:nth-child(3), td:nth-child(5) { text-align: left; }
+          @media print {
+            body { background: #fff; }
+            .page { margin: 0; max-width: none; padding: 0; }
+            .card { border: 0; border-radius: 0; box-shadow: none; }
+            .tools { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <main class="page">
+          <section class="card">
+            <header class="head">
+              <div>
+                <h1>${escapeHtml(source.title || collectionDelivery.title)}</h1>
+                <div class="sub">계약서 전달 확인용 문서</div>
+              </div>
+              <div class="meta">
+                <div class="meta-row"><span class="label">전달 일자</span><span class="value">${escapeHtml(source.deliveredDate)}</span></div>
+                <div class="meta-row"><span class="label">담당자 확인</span><span class="value">${escapeHtml(source.managerConfirm)}</span></div>
+                <div class="meta-row"><span class="label">전달자 확인</span><span class="value">${escapeHtml(source.senderConfirm)}</span></div>
+              </div>
+            </header>
+            <div class="tools"><button onclick="window.print()">PDF 출력</button></div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:7%">구분</th>
+                  <th style="width:28%">회사명</th>
+                  <th style="width:18%">부서명</th>
+                  <th style="width:12%">ID</th>
+                  <th style="width:35%">비고</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </section>
+        </main>
+      </body>
+      </html>
+    `)
+    popup.document.close()
+    popup.focus()
+  }
+
   function handleCollectionDeliveryPrint() {
     const popup = window.open("", "_blank", "width=980,height=1200")
     if (!popup) {
@@ -4901,6 +4995,7 @@ export function DashboardShell({
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div className="break-keep text-[18px] font-bold text-slate-900">{collectionDelivery.title}</div>
                     <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1">
                       <select
                         className="h-9 min-w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-700"
                         value={selectedDeliveryHistoryDate}
@@ -4931,6 +5026,13 @@ export function DashboardShell({
                       </button>
                       <button
                         type="button"
+                        onClick={handleCollectionDeliveryOpenPage}
+                        className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700"
+                      >
+                        새 페이지 열기
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleCollectionDeliveryDeleteHistory()}
                         disabled={!selectedDeliveryHistoryDate}
                         className={`rounded-xl border px-3 py-1.5 text-xs font-semibold ${
@@ -4948,6 +5050,7 @@ export function DashboardShell({
                       >
                         리스트 저장
                       </button>
+                      </div>
                       <button
                         type="button"
                         onClick={handleCollectionDeliveryAddRow}
