@@ -714,7 +714,7 @@ function normalizeAdditionalSalesRows(rows: any[]) {
 function buildAutoRevenueHeader(unitPrice: unknown, selectedCount: number, additionalContractCount: unknown) {
   const baseUnitPrice = toNumber(unitPrice) || 6160000
   const bonusRevenue = Math.max(0, toNumber(additionalContractCount))
-  const computedRevenue = Math.max(0, baseUnitPrice * Math.max(0, selectedCount)) + bonusRevenue
+  const computedRevenue = baseUnitPrice * selectedCount + bonusRevenue
   return `주간 순증 매출 (약 ${formatMoney(computedRevenue)})`
 }
 
@@ -809,7 +809,7 @@ function buildRevenueDisplaySet(params: {
   revenueRows?: any[]
   fallbackSelectedCount?: number
 }) {
-  const selectedContractCount = Math.max(0, Number(params.fallbackSelectedCount || 0))
+  const selectedContractCount = Number(params.fallbackSelectedCount || 0)
   const computedHeader = buildAutoRevenueHeader(
     params.revenueUnitPrice,
     selectedContractCount,
@@ -1269,7 +1269,7 @@ export function DashboardShell({
     if (manualRevenueHeaderEdited) return
     const nextHeader = buildAutoRevenueHeader(
       manualDraft.revenueUnitPrice,
-      includedContracts.length,
+      weeklyNetAutoCount,
       manualDraft.additionalContractCount,
     )
     setManualDraft((prev: any) => (
@@ -1277,7 +1277,7 @@ export function DashboardShell({
         ? prev
         : { ...prev, revenueHeaderText: nextHeader }
     ))
-  }, [includedContracts.length, manualDraft.additionalContractCount, manualDraft.revenueUnitPrice, manualRevenueHeaderEdited])
+  }, [manualDraft.additionalContractCount, manualDraft.revenueUnitPrice, manualRevenueHeaderEdited, weeklyNetAutoCount])
 
   useEffect(() => {
     const nextSubtitleOne = buildAnnualNetRevenueSubtitle(
@@ -3425,7 +3425,7 @@ export function DashboardShell({
     additionalContractCount: manualDraft.additionalContractCount,
     manualSummary: autoManualSummary,
     revenueRows: manualDraft.revenueRows || [],
-    fallbackSelectedCount: includedContracts.length,
+    fallbackSelectedCount: weeklyNetAutoCount,
   })
   const manualRevenueHeaderText = manualRevenueDisplay.header
   const manualRevenueSubtitleOne = manualRevenueDisplay.subtitleOne
@@ -3439,7 +3439,7 @@ export function DashboardShell({
     additionalContractCount: weeklyReport.additionalContractCount,
     manualSummary: autoWeeklyReportSummary,
     revenueRows: weeklyReport.revenueRows || [],
-    fallbackSelectedCount: includedContracts.length,
+    fallbackSelectedCount: weeklyNetAutoCount,
   })
   // Weekly report should reference the persisted manual-input values, just like
   // an Excel cell reference to saved cells.
