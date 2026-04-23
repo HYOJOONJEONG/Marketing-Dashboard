@@ -2416,10 +2416,31 @@ export function DashboardShell({
 
   function handleCollectionDeliveryHistorySelect(nextDate: string) {
     setSelectedDeliveryHistoryDate(nextDate)
-    if (!nextDate) return
-    const currentDate = normalizeDate(collectionDelivery.deliveredDate)
-    if (currentDate === normalizeDate(nextDate)) return
-    handleCollectionDeliveryLoadHistory(nextDate, true)
+  }
+
+  function handleCollectionDeliveryDeleteHistory(dateKey?: string) {
+    const selectedDate = normalizeDate(dateKey || selectedDeliveryHistoryDate)
+    if (!selectedDate) {
+      window.alert("삭제할 저장 주차를 선택해 주세요.")
+      return
+    }
+    const target = (collectionDelivery.history || []).find(
+      (entry: any) => normalizeDate(entry.deliveredDate) === selectedDate,
+    )
+    if (!target) {
+      window.alert("선택한 저장 주차를 찾을 수 없습니다.")
+      return
+    }
+    if (!window.confirm(`${selectedDate} 주차 저장본을 삭제할까요? 현재 화면 내용은 유지됩니다.`)) return
+    const nextHistory = (collectionDelivery.history || []).filter(
+      (entry: any) => normalizeDate(entry.deliveredDate) !== selectedDate,
+    )
+    persistCollectionDelivery({
+      ...collectionDelivery,
+      history: nextHistory,
+    })
+    setSelectedDeliveryHistoryDate(normalizeDate(nextHistory[0]?.deliveredDate || ""))
+    window.alert(`${selectedDate} 주차 저장본을 삭제했습니다.`)
   }
 
   function handleCollectionDeliveryMetaChange(field: "title" | "deliveredDate" | "managerConfirm" | "senderConfirm", value: string) {
@@ -4896,6 +4917,30 @@ export function DashboardShell({
                           ))
                         )}
                       </select>
+                      <button
+                        type="button"
+                        onClick={() => handleCollectionDeliveryLoadHistory()}
+                        disabled={!selectedDeliveryHistoryDate}
+                        className={`rounded-xl border px-3 py-1.5 text-xs font-semibold ${
+                          selectedDeliveryHistoryDate
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-slate-200 bg-slate-100 text-slate-400"
+                        }`}
+                      >
+                        불러오기
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCollectionDeliveryDeleteHistory()}
+                        disabled={!selectedDeliveryHistoryDate}
+                        className={`rounded-xl border px-3 py-1.5 text-xs font-semibold ${
+                          selectedDeliveryHistoryDate
+                            ? "border-rose-200 bg-rose-50 text-rose-700"
+                            : "border-slate-200 bg-slate-100 text-slate-400"
+                        }`}
+                      >
+                        주차 삭제
+                      </button>
                       <button
                         type="button"
                         onClick={handleCollectionDeliverySaveHistory}
