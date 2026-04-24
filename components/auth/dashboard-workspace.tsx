@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { DashboardShell } from "@/components/dashboard-shell"
-import { WorkspaceHeader } from "@/components/auth/workspace-header"
 
 type Props = {
   initialData: any
@@ -13,6 +12,7 @@ type Props = {
     name: string
     role: string
     teamName: string
+    avatarEmoji?: string | null
     color: { bg: string; text: string; border: string; hex: string }
   }
   permissions: Record<string, Record<string, boolean>>
@@ -29,11 +29,6 @@ export function DashboardWorkspace({
 
   return (
     <div className="min-h-screen bg-[#f6f8fc] px-4 py-4">
-      <WorkspaceHeader
-        currentPage="대시보드"
-        currentSection={currentSection}
-        currentUser={currentUser}
-      />
       <DashboardShell
         initialData={initialData}
         initialView={initialView as any}

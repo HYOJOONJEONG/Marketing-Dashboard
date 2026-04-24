@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { KeyRound, LogOut, UserRound, X } from "lucide-react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
 import terminationManagerLookup from "@/data/termination-manager-lookup.json"
 
@@ -1009,7 +1010,14 @@ export function DashboardShell({
   initialData: any
   initialView?: ViewKey
   initialCollectionTab?: CollectionTabKey
-  currentUser?: { id: string; name: string; role: string; teamName: string } | null
+  currentUser?: {
+    id: string
+    name: string
+    role: string
+    teamName: string
+    avatarEmoji?: string | null
+    color?: { bg: string; text: string; border: string; hex: string }
+  } | null
   permissions?: Record<string, Record<string, boolean>> | null
   onViewChange?: (view: ViewKey) => void
 }) {
@@ -1019,7 +1027,13 @@ export function DashboardShell({
   const [collectionTab, setCollectionTab] = useState<CollectionTabKey>(initialCollectionTab)
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({ performance: true, termination: true })
   const [isPending, startTransition] = useTransition()
+  const [isAccountPending, startAccountTransition] = useTransition()
   const [dirtyViews, setDirtyViews] = useState<Partial<Record<ViewKey, boolean>>>({})
+  const [isPasswordOpen, setIsPasswordOpen] = useState(false)
+  const [passwordMessage, setPasswordMessage] = useState("")
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [nextPassword, setNextPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [manualDraft, setManualDraft] = useState<any>(() =>
     buildManualDraftFromWeekly(
       initialData?.weeklyReport || {},
@@ -1098,6 +1112,7 @@ export function DashboardShell({
   const flushPendingSave = useRef<() => void>(() => {})
   const hasAccess = (menuKey: string, action: string = "view") =>
     Boolean(permissions?.[menuKey]?.admin || permissions?.[menuKey]?.[action])
+  const avatarLabel = String(currentUser?.avatarEmoji || "").trim() || String(currentUser?.name || "").slice(0, 1) || "사"
   const canViewWeeklyReport = hasAccess("weeklyReport", "view")
   const canViewManualInput = hasAccess("manualInput", "view")
   const canEditManualInput = hasAccess("manualInput", "edit")
@@ -1245,6 +1260,41 @@ export function DashboardShell({
   useEffect(() => {
     onViewChange?.(view)
   }, [onViewChange, view])
+  const handleLogout = () => {
+    startAccountTransition(async () => {
+      await fetch("/api/auth/logout", { method: "POST" }).catch(() => null)
+      router.refresh()
+    })
+  }
+  const handlePasswordChange = () => {
+    setPasswordMessage("")
+    if (!currentPassword || !nextPassword || !confirmPassword) {
+      setPasswordMessage("비밀번호 항목을 모두 입력해주세요.")
+      return
+    }
+    if (nextPassword !== confirmPassword) {
+      setPasswordMessage("새 비밀번호 확인이 일치하지 않습니다.")
+      return
+    }
+
+    startAccountTransition(async () => {
+      const response = await fetch("/api/auth/password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ currentPassword, nextPassword }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || !payload?.ok) {
+        setPasswordMessage(payload?.error || "비밀번호 변경에 실패했습니다.")
+        return
+      }
+      setCurrentPassword("")
+      setNextPassword("")
+      setConfirmPassword("")
+      setPasswordMessage("비밀번호가 변경되었습니다.")
+      setTimeout(() => setIsPasswordOpen(false), 700)
+    })
+  }
   const weeklyTerminationAutoCount = useMemo(
     () => (selectedSheet?.items || []).filter((row: any) => Boolean(row?.selected)).length,
     [selectedSheet],
@@ -3598,6 +3648,121 @@ export function DashboardShell({
                 </span>
               </div>
             </div>
+
+            {currentUser ? (
+              <div className="relative mt-4 rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => router.push("/me")}
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border ${
+                      currentUser.color?.border || "border-slate-200"
+                    } ${currentUser.color?.bg || "bg-slate-100"} ${currentUser.color?.text || "text-slate-700"} text-[21px] font-black shadow-sm transition hover:scale-[1.03]`}
+                    aria-label="개인페이지 열기"
+                  >
+                    {avatarLabel}
+                  </button>
+                  <div className="min-w-0">
+                    <div className="truncate text-[17px] font-black tracking-[-0.04em] text-slate-950">
+                      {currentUser.name}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-600">
+                        {currentUser.role}
+                      </span>
+                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[12px] font-semibold text-blue-700">
+                        {currentUser.teamName}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => router.push("/me")}
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <UserRound className="h-4 w-4" />
+                    내 페이지
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPasswordMessage("")
+                      setIsPasswordOpen((prev) => !prev)
+                    }}
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <KeyRound className="h-4 w-4" />
+                    비밀번호
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={isAccountPending}
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl bg-slate-950 px-3 text-[12px] font-bold text-white transition hover:bg-slate-800 disabled:opacity-60"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    로그아웃
+                  </button>
+                </div>
+
+                {isPasswordOpen ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+10px)] z-20 rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[15px] font-black tracking-[-0.03em] text-slate-950">비밀번호 변경</div>
+                        <div className="mt-1 text-[12px] text-slate-500">현재 비밀번호 확인 후 새 비밀번호로 바꿉니다.</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsPasswordOpen(false)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+                        aria-label="비밀번호 팝업 닫기"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      <input
+                        type="password"
+                        value={currentPassword}
+                        onChange={(event) => setCurrentPassword(event.target.value)}
+                        placeholder="현재 비밀번호"
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                      />
+                      <input
+                        type="password"
+                        value={nextPassword}
+                        onChange={(event) => setNextPassword(event.target.value)}
+                        placeholder="새 비밀번호"
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                      />
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        placeholder="새 비밀번호 확인"
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                      />
+                      {passwordMessage ? (
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                          {passwordMessage}
+                        </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={handlePasswordChange}
+                        disabled={isAccountPending}
+                        className="inline-flex h-11 w-full items-center justify-center rounded-2xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-60"
+                      >
+                        {isAccountPending ? "변경 중..." : "비밀번호 저장"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
           <div className="mt-8 space-y-5">
             <div>
