@@ -1001,10 +1001,16 @@ export function DashboardShell({
   initialData,
   initialView = "weekly-report",
   initialCollectionTab = "integrated",
+  currentUser,
+  permissions,
+  onViewChange,
 }: {
   initialData: any
   initialView?: ViewKey
   initialCollectionTab?: CollectionTabKey
+  currentUser?: { id: string; name: string; role: string; teamName: string } | null
+  permissions?: Record<string, Record<string, boolean>> | null
+  onViewChange?: (view: ViewKey) => void
 }) {
   const [data, setData] = useState<any>(initialData)
   const [view, setView] = useState<ViewKey>(initialView)
@@ -1026,7 +1032,7 @@ export function DashboardShell({
     idCode: "",
     industry: "국내증권",
     contractMonth: "",
-    recommender: "",
+    recommender: currentUser?.name || "",
     note: "",
     documentStatus: "미회수",
     replacementType: "신규",
@@ -1088,6 +1094,27 @@ export function DashboardShell({
   const dirtyViewsRef = useRef<Partial<Record<ViewKey, boolean>>>({})
   const manualDraftReadyRef = useRef(false)
   const flushPendingSave = useRef<() => void>(() => {})
+  const hasAccess = (menuKey: string, action: string = "view") =>
+    Boolean(permissions?.[menuKey]?.admin || permissions?.[menuKey]?.[action])
+  const canViewDashboard = hasAccess("dashboard", "view")
+  const canEditDashboard = hasAccess("dashboard", "edit")
+  const canViewContracts = hasAccess("newContractsList", "view")
+  const canCreateContracts = hasAccess("newContractCreate", "create")
+  const canEditContracts = hasAccess("newContractsList", "edit") || hasAccess("contractManagement", "edit")
+  const canDeleteContracts = hasAccess("newContractsList", "delete") || hasAccess("contractManagement", "delete")
+  const canViewCollections = hasAccess("contractManagement", "view")
+  const canViewTermination = hasAccess("contractManagement", "view")
+  const canViewWeeklySelection = canViewDashboard || canViewCollections
+  const canViewOptionDashboard = canViewDashboard
+  const visibleViews = [
+    canViewDashboard ? "weekly-report" : null,
+    canEditDashboard ? "manual-input" : null,
+    canViewContracts ? "contracts" : null,
+    canViewWeeklySelection ? "weekly-selection" : null,
+    canViewCollections ? "collection" : null,
+    canViewOptionDashboard ? "option-dashboard" : null,
+    canViewTermination ? "termination" : null,
+  ].filter(Boolean) as ViewKey[]
   const [terminationEntryMode, setTerminationEntryMode] = useState<"termination" | "hold">("termination")
   const [terminationDraft, setTerminationDraft] = useState<any>({
     receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
@@ -1203,6 +1230,17 @@ export function DashboardShell({
     })
   }, [data, termination, startTransition])
   const includedContracts = useMemo(() => contracts.filter((row: any) => row.includedInWeekly), [contracts])
+  useEffect(() => {
+    if (!currentUser?.name) return
+    setContractDraft((prev: any) => ({ ...prev, recommender: currentUser.name }))
+  }, [currentUser?.name])
+  useEffect(() => {
+    if (visibleViews.includes(view)) return
+    if (visibleViews.length) setView(visibleViews[0])
+  }, [view, visibleViews])
+  useEffect(() => {
+    onViewChange?.(view)
+  }, [onViewChange, view])
   const weeklyTerminationAutoCount = useMemo(
     () => (selectedSheet?.items || []).filter((row: any) => Boolean(row?.selected)).length,
     [selectedSheet],
@@ -2113,6 +2151,10 @@ export function DashboardShell({
   }
 
   function handleContractCreate() {
+    if (!canCreateContracts) {
+      window.alert("신규계약 등록 권한이 없습니다.")
+      return
+    }
     if (!contractDraft.companyName.trim() || !contractDraft.idCode.trim()) {
       window.alert("회사명과 아이디는 필수입니다.")
       return
@@ -2153,7 +2195,7 @@ export function DashboardShell({
           idCode: "",
           industry: "국내증권",
           contractMonth: "",
-          recommender: "",
+          recommender: currentUser?.name || "",
           note: "",
           documentStatus: "미회수",
           replacementType: "신규",
@@ -2165,6 +2207,10 @@ export function DashboardShell({
   }
 
   function handleContractUpdate(contractId: string) {
+    if (!canEditContracts) {
+      window.alert("계약 수정 권한이 없습니다.")
+      return
+    }
     if (!editingContractDraft.companyName?.trim() || !editingContractDraft.idCode?.trim()) {
       window.alert("회사명과 아이디는 필수입니다.")
       return
@@ -2193,6 +2239,10 @@ export function DashboardShell({
   }
 
   function handleContractDelete(contractId: string) {
+    if (!canDeleteContracts) {
+      window.alert("계약 삭제 권한이 없습니다.")
+      return
+    }
     if (!window.confirm("이 계약을 삭제할까요?")) return
     startTransition(async () => {
       const nextContracts = contracts.filter((row: any) => row.id !== contractId)
@@ -3569,60 +3619,72 @@ export function DashboardShell({
                 </button>
                 {sections.performance && (
                   <div className="mt-2 space-y-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setView("weekly-report")}
-                      className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
-                        view === "weekly-report" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
-                      }`}
-                    >
-                      {viewTitles["weekly-report"]}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setView("manual-input")}
-                      className={`ml-4 flex h-10 w-[calc(100%-1rem)] items-center rounded-2xl px-4 text-left text-[14px] font-semibold ${
-                        view === "manual-input" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      수동 입력 리스트
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setView("contracts")}
-                      className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
-                        view === "contracts" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
-                      }`}
-                    >
-                      {viewTitles.contracts}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setView("weekly-selection")}
-                      className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
-                        view === "weekly-selection" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
-                      }`}
-                    >
-                      {viewTitles["weekly-selection"]}
-                    </button>
-                <button
-                  type="button"
-                  onClick={() => setView("collection")}
-                  className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
-                    view === "collection" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  {viewTitles.collection}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setView("option-dashboard")}
-                  className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
-                    view === "option-dashboard" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  {viewTitles["option-dashboard"]}
-                </button>
+                    {canViewDashboard ? (
+                      <button
+                        type="button"
+                        onClick={() => setView("weekly-report")}
+                        className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                          view === "weekly-report" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {viewTitles["weekly-report"]}
+                      </button>
+                    ) : null}
+                    {canEditDashboard ? (
+                      <button
+                        type="button"
+                        onClick={() => setView("manual-input")}
+                        className={`ml-4 flex h-10 w-[calc(100%-1rem)] items-center rounded-2xl px-4 text-left text-[14px] font-semibold ${
+                          view === "manual-input" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        수동 입력 리스트
+                      </button>
+                    ) : null}
+                    {canViewContracts ? (
+                      <button
+                        type="button"
+                        onClick={() => setView("contracts")}
+                        className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                          view === "contracts" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {viewTitles.contracts}
+                      </button>
+                    ) : null}
+                    {canViewWeeklySelection ? (
+                      <button
+                        type="button"
+                        onClick={() => setView("weekly-selection")}
+                        className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                          view === "weekly-selection" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {viewTitles["weekly-selection"]}
+                      </button>
+                    ) : null}
+                    {canViewCollections ? (
+                      <button
+                        type="button"
+                        onClick={() => setView("collection")}
+                        className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                          view === "collection" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {viewTitles.collection}
+                      </button>
+                    ) : null}
+                    {canViewOptionDashboard ? (
+                      <button
+                        type="button"
+                        onClick={() => setView("option-dashboard")}
+                        className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                          view === "option-dashboard" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {viewTitles["option-dashboard"]}
+                      </button>
+                    ) : null}
                   </div>
                 )}
             </div>
@@ -3650,15 +3712,17 @@ export function DashboardShell({
               </button>
               {sections.termination && (
                 <div className="mt-2 space-y-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setView("termination")}
-                    className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
-                      view === "termination" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    해지 진행사항
-                  </button>
+                  {canViewTermination ? (
+                    <button
+                      type="button"
+                      onClick={() => setView("termination")}
+                      className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                        view === "termination" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      해지 진행사항
+                    </button>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -4160,6 +4224,11 @@ export function DashboardShell({
               </div>
               <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="mb-3 text-[14px] font-bold text-slate-800">신규계약 입력</div>
+                {!canCreateContracts ? (
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                    현재 계정은 신규계약 등록 권한이 없습니다.
+                  </div>
+                ) : (
                 <div className="space-y-3">
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" placeholder="회사명" value={contractDraft.companyName} onChange={(e)=>updateContractDraft("companyName", e.target.value)} />
@@ -4178,7 +4247,12 @@ export function DashboardShell({
                       value={toContractMonthInputValue(contractDraft.contractMonth)}
                       onChange={(e)=>updateContractDraft("contractMonth", fromContractMonthInputValue(e.target.value))}
                     />
-                    <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" placeholder="권유자" value={contractDraft.recommender} onChange={(e)=>updateContractDraft("recommender", e.target.value)} />
+                    <input
+                      className="h-10 w-full rounded-2xl border border-amber-200 bg-amber-50 px-3 text-[14px] font-semibold text-slate-700"
+                      placeholder="권유자"
+                      value={currentUser?.name || contractDraft.recommender}
+                      readOnly
+                    />
                     <select className="h-10 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" value={contractDraft.replacementType} onChange={(e)=>updateContractDraft("replacementType", e.target.value)}>
                       {["신규","체크","레피니티브","블룸버그","기타"].map((item) => (
                         <option key={item} value={item}>{item}</option>
@@ -4196,6 +4270,7 @@ export function DashboardShell({
                     </div>
                   </div>
                 </div>
+                )}
               </div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <input
@@ -4324,7 +4399,14 @@ export function DashboardShell({
                             ) : <span className="block truncate">{row.contractMonth}</span>}
                           </td>
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
-                            {editing ? <input className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]" value={editingContractDraft.recommender || ""} onChange={(e)=>updateEditingContractDraft("recommender", e.target.value)} /> : <span className="block truncate">{row.recommender}</span>}
+                            {editing ? (
+                              <input
+                                className="h-8 w-full rounded-lg border border-slate-200 bg-slate-100 px-2 text-[12px]"
+                                value={editingContractDraft.recommender || ""}
+                                onChange={(e)=>updateEditingContractDraft("recommender", e.target.value)}
+                                readOnly={!hasAccess("contractManagement", "admin")}
+                              />
+                            ) : <span className="block truncate">{row.recommender}</span>}
                           </td>
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
                             {editing ? (
@@ -4347,13 +4429,13 @@ export function DashboardShell({
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
                             {editing ? (
                               <div className="flex flex-wrap items-center justify-center gap-1">
-                                <button type="button" onClick={() => handleContractUpdate(row.id)} className="rounded-lg bg-blue-600 px-2 py-1.5 text-[11px] font-semibold text-white whitespace-nowrap">수정완료</button>
-                                <button type="button" onClick={() => handleContractDelete(row.id)} className="rounded-lg bg-rose-50 px-2 py-1.5 text-[11px] font-semibold text-rose-700 whitespace-nowrap">삭제</button>
+                                {canEditContracts ? <button type="button" onClick={() => handleContractUpdate(row.id)} className="rounded-lg bg-blue-600 px-2 py-1.5 text-[11px] font-semibold text-white whitespace-nowrap">수정완료</button> : null}
+                                {canDeleteContracts ? <button type="button" onClick={() => handleContractDelete(row.id)} className="rounded-lg bg-rose-50 px-2 py-1.5 text-[11px] font-semibold text-rose-700 whitespace-nowrap">삭제</button> : null}
                                 <button type="button" onClick={() => { setEditingContractId(null); setEditingContractDraft({}) }} className="rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-semibold whitespace-nowrap">취소</button>
                               </div>
                             ) : (
                               <div className="flex justify-center">
-                                <button type="button" onClick={() => startContractEdit(row)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-semibold">수정</button>
+                                {canEditContracts ? <button type="button" onClick={() => startContractEdit(row)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-semibold">수정</button> : <span className="text-slate-300">-</span>}
                               </div>
                             )}
                           </td>

@@ -1,5 +1,9 @@
 import path from "path"
 import { NextResponse } from "next/server"
+import { buildPermissionIndex, filterContractsForUser, hasPermission } from "@/lib/auth/permissions"
+import { getRequestIp, requireApiPermission } from "@/lib/auth/server"
+import { appendActivityLog, updateAuthState } from "@/lib/auth/store"
+import { resolveRequestSession } from "@/lib/auth/session"
 import { readDashboardState, writeDashboardState } from "@/lib/shared-db-store"
 
 export const runtime = "nodejs"
@@ -11,12 +15,28 @@ const FALLBACK_PATH = path.join(process.cwd(), "api-dashboard-response.json")
 const EMPTY_DASHBOARD = { ui: {}, contracts: [], termination: {} }
 
 export async function GET() {
+  const session = await resolveRequestSession()
+  if (!session) {
+    return NextResponse.json({ ok: false, error: "로그인이 필요합니다." }, { status: 401 })
+  }
+  const permissions = buildPermissionIndex(session.state, session.user)
+  if (!hasPermission(permissions, "dashboard", "view") && !hasPermission(permissions, "newContractsList", "view")) {
+    return NextResponse.json({ ok: false, error: "권한이 없습니다." }, { status: 403 })
+  }
   try {
     const data = await readDashboardState<any>(DATA_PATH)
-    if (data) return NextResponse.json(data)
+    if (data) {
+      return NextResponse.json({
+        ...data,
+        contracts: filterContractsForUser(Array.isArray(data.contracts) ? data.contracts : [], session.user, permissions),
+      })
+    }
 
     const fallbackData = await readDashboardState<any>(FALLBACK_PATH)
-    return NextResponse.json(fallbackData || EMPTY_DASHBOARD)
+    return NextResponse.json({
+      ...(fallbackData || EMPTY_DASHBOARD),
+      contracts: filterContractsForUser(Array.isArray(fallbackData?.contracts) ? fallbackData.contracts : [], session.user, permissions),
+    })
   } catch (error) {
     console.error("Failed to read dashboard state.", error)
     return NextResponse.json(EMPTY_DASHBOARD)
@@ -24,6 +44,11 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const dashboardAuth = await requireApiPermission("dashboard", "edit")
+  const contractAuth = await requireApiPermission("contractManagement", "edit")
+  if (!dashboardAuth.ok && !contractAuth.ok) {
+    return dashboardAuth.response
+  }
   const raw = await request.text()
   let body: any
 
@@ -41,6 +66,22 @@ export async function PUT(request: Request) {
       menuLabel: "Dashboard",
       changeLabel: "Save dashboard state",
     })
+    const granted = dashboardAuth.ok ? dashboardAuth.context : contractAuth.context
+    await updateAuthState((state) => {
+      appendActivityLog(state, {
+        actorUserId: granted.user.id,
+        actorName: granted.user.name,
+        actionType: "dashboard_put",
+        targetType: "dashboard_state",
+        targetId: "dashboard",
+        pageKey: "dashboard",
+        beforeValue: "",
+        afterValue: "save",
+        ipAddress: getRequestIp(request),
+        sessionId: granted.sessionId,
+        success: true,
+      })
+    })
     return NextResponse.json({ ok: true })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save dashboard state"
@@ -53,6 +94,8 @@ export async function PUT(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireApiPermission("newContractCreate", "create")
+  if (!auth.ok) return auth.response
   let body: any
 
   try {
@@ -83,8 +126,13 @@ export async function POST(request: Request) {
       documentStatus: String(incoming.documentStatus || "미회수"),
       replacementType: String(incoming.replacementType || "신규"),
       includedInWeekly: Boolean(incoming.includedInWeekly),
-      recommender: String(incoming.recommender || "").trim(),
+      recommender: auth.context.user.name,
+      recommenderUserId: auth.context.user.id,
+      createdBy: auth.context.user.id,
+      teamId: auth.context.user.teamId,
       note: String(incoming.note || "").trim(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
 
     if (!nextContract.companyName || !nextContract.idCode) {
@@ -108,6 +156,26 @@ export async function POST(request: Request) {
     await writeDashboardState(nextData, {
       menuLabel: "신규계약 리스트",
       changeLabel: "Register contract",
+    })
+    await updateAuthState((state) => {
+      appendActivityLog(state, {
+        actorUserId: auth.context.user.id,
+        actorName: auth.context.user.name,
+        actionType: "contract_create",
+        targetType: "contract",
+        targetId: nextContract.id,
+        pageKey: "newContractCreate",
+        beforeValue: "",
+        afterValue: JSON.stringify({
+          recommender: nextContract.recommender,
+          recommenderUserId: nextContract.recommenderUserId,
+          createdBy: nextContract.createdBy,
+          teamId: nextContract.teamId,
+        }),
+        ipAddress: getRequestIp(request),
+        sessionId: auth.context.sessionId,
+        success: true,
+      })
     })
     return NextResponse.json({ ok: true, data: nextData, contract: nextContract })
   } catch (error) {

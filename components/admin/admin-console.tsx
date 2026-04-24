@@ -1,0 +1,607 @@
+"use client"
+
+import { useEffect, useMemo, useState, useTransition } from "react"
+import { WorkspaceHeader } from "@/components/auth/workspace-header"
+
+type Props = {
+  currentUser: {
+    id: string
+    name: string
+    role: string
+    teamName: string
+    color: { bg: string; text: string; border: string; hex: string }
+  }
+  permissions: Record<string, Record<string, boolean>>
+}
+
+const tabs = [
+  { key: "users", label: "사용자관리" },
+  { key: "teams", label: "팀관리" },
+  { key: "permissions", label: "권한관리" },
+  { key: "contracts", label: "계약관리" },
+  { key: "permissionLogs", label: "권한변경로그" },
+  { key: "userLogs", label: "사용자변경로그" },
+  { key: "activityLogs", label: "활동로그" },
+] as const
+
+async function fetchJson(url: string, init?: RequestInit) {
+  const response = await fetch(url, init)
+  const payload = await response.json().catch(() => null)
+  if (!response.ok || !payload?.ok) throw new Error(payload?.error || `요청 실패 (${response.status})`)
+  return payload
+}
+
+export function AdminConsole({ currentUser, permissions }: Props) {
+  const [currentTab, setCurrentTab] = useState<(typeof tabs)[number]["key"]>("users")
+  const [bootstrap, setBootstrap] = useState<any | null>(null)
+  const [userSearch, setUserSearch] = useState("")
+  const [selectedUserId, setSelectedUserId] = useState("")
+  const [selectedRoleName, setSelectedRoleName] = useState("staff")
+  const [selectedPermissionMode, setSelectedPermissionMode] = useState<"role" | "user">("role")
+  const [selectedPermissionRoleId, setSelectedPermissionRoleId] = useState("")
+  const [selectedPermissionUserId, setSelectedPermissionUserId] = useState("")
+  const [contractFilter, setContractFilter] = useState("")
+  const [message, setMessage] = useState("")
+  const [isPending, startTransition] = useTransition()
+
+  const loadBootstrap = async () => {
+    const payload = await fetchJson("/api/admin/bootstrap")
+    setBootstrap(payload)
+    if (!selectedPermissionRoleId && payload.roles?.[0]?.id) setSelectedPermissionRoleId(payload.roles[0].id)
+    if (!selectedUserId && payload.users?.[0]?.id) setSelectedUserId(payload.users[0].id)
+    if (!selectedPermissionUserId && payload.users?.[0]?.id) setSelectedPermissionUserId(payload.users[0].id)
+  }
+
+  useEffect(() => {
+    void loadBootstrap()
+  }, [])
+
+  const users = bootstrap?.users || []
+  const teams = bootstrap?.teams || []
+  const roles = bootstrap?.roles || []
+  const permissionRows = bootstrap?.permissionRows || []
+  const rolePermissionMap = bootstrap?.rolePermissionMap || {}
+  const userOverrideMap = bootstrap?.userOverrideMap || {}
+  const contracts = bootstrap?.contracts || []
+
+  const selectedUser = useMemo(() => users.find((user: any) => user.id === selectedUserId) || null, [users, selectedUserId])
+  const filteredUsers = useMemo(() => {
+    const query = userSearch.trim().toLowerCase()
+    return users.filter((user: any) => {
+      if (!query) return true
+      return [user.name, user.teamName, user.role, user.active ? "active" : "inactive"]
+        .filter(Boolean)
+        .some((value: string) => String(value).toLowerCase().includes(query))
+    })
+  }, [users, userSearch])
+
+  const filteredContracts = useMemo(() => {
+    const query = contractFilter.trim().toLowerCase()
+    return contracts.filter((contract: any) => {
+      if (!query) return true
+      return [contract.companyName, contract.idCode, contract.recommender, contract.teamId]
+        .filter(Boolean)
+        .some((value: string) => String(value).toLowerCase().includes(query))
+    })
+  }, [contracts, contractFilter])
+
+  const selectedRolePermissionIndex = useMemo(() => {
+    if (selectedPermissionMode === "role") return rolePermissionMap[selectedPermissionRoleId] || {}
+    return userOverrideMap[selectedPermissionUserId] || {}
+  }, [rolePermissionMap, selectedPermissionMode, selectedPermissionRoleId, selectedPermissionUserId, userOverrideMap])
+
+  const runAction = (task: () => Promise<void>) => {
+    setMessage("")
+    startTransition(async () => {
+      try {
+        await task()
+        await loadBootstrap()
+        setMessage("저장되었습니다.")
+      } catch (error: any) {
+        setMessage(String(error?.message || "요청 처리에 실패했습니다."))
+      }
+    })
+  }
+
+  const createUser = () => {
+    const name = window.prompt("추가할 사용자명을 입력하세요.")
+    if (!name) return
+    const role = window.prompt("역할을 입력하세요. (admin/director/team_manager/staff/viewer)", "staff") || "staff"
+    const teamId = teams[0]?.id || ""
+    runAction(async () => {
+      await fetchJson("/api/admin/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, loginId: name, role, teamId }),
+      })
+    })
+  }
+
+  const updateUser = (fieldName: string, value: string | boolean) => {
+    if (!selectedUser) return
+    runAction(async () => {
+      await fetchJson("/api/admin/users", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId: selectedUser.id, fieldName, value }),
+      })
+    })
+  }
+
+  const deleteUser = (userId: string) => {
+    if (!window.confirm("이 사용자를 삭제 또는 비활성화 처리할까요?")) return
+    runAction(async () => {
+      await fetchJson("/api/admin/users", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId }),
+      })
+    })
+  }
+
+  const savePermission = (menuKey: string, action: string, allowed: boolean) => {
+    runAction(async () => {
+      await fetchJson("/api/admin/permissions", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: selectedPermissionMode,
+          roleId: selectedPermissionRoleId,
+          userId: selectedPermissionUserId,
+          menuKey,
+          action,
+          allowed,
+        }),
+      })
+    })
+  }
+
+  const resetOverrides = () => {
+    if (!selectedPermissionUserId) return
+    runAction(async () => {
+      await fetchJson("/api/admin/permissions", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId: selectedPermissionUserId }),
+      })
+    })
+  }
+
+  const updateContractStatus = (contractId: string, status: string) => {
+    runAction(async () => {
+      await fetchJson("/api/admin/contracts", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ contractId, fieldName: "documentStatus", value: status }),
+      })
+    })
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f6f8fc] px-4 py-4">
+      <WorkspaceHeader currentPage="관리자페이지" currentSection={currentTab} currentUser={currentUser} canViewAdmin={true} />
+
+      <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Admin Menu</div>
+          <div className="mt-4 space-y-2">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setCurrentTab(tab.key)}
+                className={`flex w-full items-center rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${
+                  currentTab === tab.key ? "bg-slate-950 text-white" : "text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            역할 기반 권한 + 사용자 override 구조로 동작합니다.
+            <div className="mt-2 text-xs text-slate-400">
+              director는 기본적으로 조회 중심이고, 필요한 관리 기능은 override로 열 수 있습니다.
+            </div>
+          </div>
+        </aside>
+
+        <main className="space-y-4">
+          {message ? (
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm">
+              {message}
+            </div>
+          ) : null}
+
+          {currentTab === "users" && (
+            <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black tracking-[-0.03em] text-slate-950">사용자관리</h2>
+                  <p className="mt-1 text-sm text-slate-500">사용자 추가, 이름 변경, 팀/역할 변경, 활성화/비활성화, 삭제를 관리합니다.</p>
+                </div>
+                <button type="button" onClick={createUser} className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white">
+                  사용자 추가
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+                <div className="rounded-2xl border border-slate-200">
+                  <div className="border-b border-slate-200 px-4 py-3">
+                    <input
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                      placeholder="이름 / 팀 / 역할 / 활성여부 검색"
+                      value={userSearch}
+                      onChange={(event) => setUserSearch(event.target.value)}
+                    />
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-500">
+                          <th className="px-4 py-3 text-left font-semibold">사용자</th>
+                          <th className="px-4 py-3 text-left font-semibold">팀</th>
+                          <th className="px-4 py-3 text-left font-semibold">역할</th>
+                          <th className="px-4 py-3 text-left font-semibold">상태</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredUsers.map((user: any) => (
+                          <tr
+                            key={user.id}
+                            onClick={() => {
+                              setSelectedUserId(user.id)
+                              setSelectedPermissionUserId(user.id)
+                            }}
+                            className={`cursor-pointer border-t border-slate-200 ${selectedUserId === user.id ? "bg-blue-50" : "hover:bg-slate-50"}`}
+                          >
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full border ${user.color.border} ${user.color.bg} ${user.color.text} text-xs font-black`}>
+                                  {user.name.slice(0, 1)}
+                                </span>
+                                <div>
+                                  <div className="font-semibold text-slate-800">{user.name}</div>
+                                  <div className="text-xs text-slate-400">{user.loginId}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">{user.teamName}</td>
+                            <td className="px-4 py-3">{user.role}</td>
+                            <td className="px-4 py-3">{user.active ? "활성" : "비활성"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  {selectedUser ? (
+                    <div className="space-y-4">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-500">선택 사용자</div>
+                        <div className="mt-1 text-lg font-black tracking-[-0.03em] text-slate-950">{selectedUser.name}</div>
+                      </div>
+                      <label className="block">
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">이름</div>
+                        <input
+                          defaultValue={selectedUser.name}
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                          onBlur={(event) => {
+                            if (event.target.value && event.target.value !== selectedUser.name) updateUser("name", event.target.value)
+                          }}
+                        />
+                      </label>
+                      <label className="block">
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">팀</div>
+                        <select
+                          value={selectedUser.teamId}
+                          onChange={(event) => updateUser("teamId", event.target.value)}
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                        >
+                          {teams.map((team: any) => (
+                            <option key={team.id} value={team.id}>
+                              {team.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">역할</div>
+                        <select
+                          value={selectedUser.role}
+                          onChange={(event) => updateUser("role", event.target.value)}
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                        >
+                          {roles.map((role: any) => (
+                            <option key={role.id} value={role.name}>
+                              {role.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateUser("active", !selectedUser.active)}
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                        >
+                          {selectedUser.active ? "비활성화" : "재활성화"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteUser(selectedUser.id)}
+                          className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700"
+                        >
+                          삭제/정리
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-slate-400">왼쪽에서 사용자를 선택하세요.</div>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {currentTab === "teams" && (
+            <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black tracking-[-0.03em] text-slate-950">팀관리</h2>
+                  <p className="mt-1 text-sm text-slate-500">팀별 사용자 수와 계약 수를 함께 관리합니다.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = window.prompt("팀명을 입력하세요.")
+                    const code = window.prompt("팀 코드를 입력하세요.")
+                    if (!name || !code) return
+                    runAction(async () => {
+                      await fetchJson("/api/admin/teams", {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({ name, code }),
+                      })
+                    })
+                  }}
+                  className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white"
+                >
+                  팀 추가
+                </button>
+              </div>
+              <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500">
+                      <th className="px-4 py-3 text-left font-semibold">코드</th>
+                      <th className="px-4 py-3 text-left font-semibold">팀명</th>
+                      <th className="px-4 py-3 text-left font-semibold">사용자 수</th>
+                      <th className="px-4 py-3 text-left font-semibold">계약 수</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {teams.map((team: any) => (
+                      <tr key={team.id} className="border-t border-slate-200">
+                        <td className="px-4 py-3">{team.code}</td>
+                        <td className="px-4 py-3">
+                          <input
+                            defaultValue={team.name}
+                            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                            onBlur={(event) => {
+                              if (event.target.value && event.target.value !== team.name) {
+                                runAction(async () => {
+                                  await fetchJson("/api/admin/teams", {
+                                    method: "PATCH",
+                                    headers: { "content-type": "application/json" },
+                                    body: JSON.stringify({ teamId: team.id, fieldName: "name", value: event.target.value }),
+                                  })
+                                })
+                              }
+                            }}
+                          />
+                        </td>
+                        <td className="px-4 py-3">{users.filter((user: any) => user.teamId === team.id && user.active).length}</td>
+                        <td className="px-4 py-3">{contracts.filter((contract: any) => contract.teamId === team.id).length}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {currentTab === "permissions" && (
+            <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black tracking-[-0.03em] text-slate-950">권한관리</h2>
+                  <p className="mt-1 text-sm text-slate-500">역할 기본 권한과 사용자별 override를 분리해서 관리합니다.</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPermissionMode("role")}
+                    className={`rounded-2xl px-4 py-2 text-sm font-semibold ${selectedPermissionMode === "role" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
+                  >
+                    역할 기준
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPermissionMode("user")}
+                    className={`rounded-2xl px-4 py-2 text-sm font-semibold ${selectedPermissionMode === "user" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
+                  >
+                    사용자 override
+                  </button>
+                  {selectedPermissionMode === "user" ? (
+                    <button type="button" onClick={resetOverrides} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
+                      override 초기화
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                {selectedPermissionMode === "role" ? (
+                  <select
+                    value={selectedPermissionRoleId}
+                    onChange={(event) => setSelectedPermissionRoleId(event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                  >
+                    {roles.map((role: any) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    value={selectedPermissionUserId}
+                    onChange={(event) => setSelectedPermissionUserId(event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                  >
+                    {users.map((user: any) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name} ({user.role})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500">
+                      <th className="px-4 py-3 text-left font-semibold">메뉴</th>
+                      {["view", "create", "edit", "delete", "approve", "admin"].map((action) => (
+                        <th key={action} className="px-4 py-3 text-center font-semibold">
+                          {action}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {permissionRows.map((row: any) => (
+                      <tr key={row.menuKey} className="border-t border-slate-200">
+                        <td className="px-4 py-3 font-semibold text-slate-800">{row.label}</td>
+                        {["view", "create", "edit", "delete", "approve", "admin"].map((action) => (
+                          <td key={`${row.menuKey}-${action}`} className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(selectedRolePermissionIndex?.[row.menuKey]?.[action])}
+                              onChange={(event) => savePermission(row.menuKey, action, event.target.checked)}
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {currentTab === "contracts" && (
+            <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black tracking-[-0.03em] text-slate-950">계약관리</h2>
+                  <p className="mt-1 text-sm text-slate-500">권유자/팀/상태 기준 필터와 관리 작업을 제공합니다.</p>
+                </div>
+                <input
+                  className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                  placeholder="회사명 / ID / 권유자 / 팀 검색"
+                  value={contractFilter}
+                  onChange={(event) => setContractFilter(event.target.value)}
+                />
+              </div>
+              <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500">
+                      {["회사명", "아이디", "권유자", "팀", "상태", "작업"].map((head) => (
+                        <th key={head} className="px-4 py-3 text-left font-semibold">
+                          {head}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredContracts.map((contract: any) => (
+                      <tr key={contract.id} className="border-t border-slate-200">
+                        <td className="px-4 py-3">{contract.companyName}</td>
+                        <td className="px-4 py-3">{contract.idCode}</td>
+                        <td className="px-4 py-3">{contract.recommender}</td>
+                        <td className="px-4 py-3">{bootstrap?.teamMap?.[contract.teamId] || contract.teamId}</td>
+                        <td className="px-4 py-3">{contract.documentStatus}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => updateContractStatus(contract.id, contract.documentStatus === "회수" ? "미회수" : "회수")}
+                              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
+                            >
+                              상태변경
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {currentTab === "permissionLogs" && (
+            <LogTable title="권한변경로그" rows={bootstrap?.permissionChangeLogs || []} columns={["targetUserId", "menuKey", "action", "beforeValue", "afterValue", "changedAt"]} />
+          )}
+
+          {currentTab === "userLogs" && (
+            <LogTable title="사용자변경로그" rows={bootstrap?.userChangeLogs || []} columns={["targetUserId", "fieldName", "beforeValue", "afterValue", "changedAt"]} />
+          )}
+
+          {currentTab === "activityLogs" && (
+            <LogTable title="활동로그" rows={bootstrap?.activityLogs || []} columns={["actorName", "actionType", "pageKey", "targetType", "success", "createdAt"]} />
+          )}
+        </main>
+      </div>
+    </div>
+  )
+}
+
+function LogTable({ title, rows, columns }: { title: string; rows: any[]; columns: string[] }) {
+  return (
+    <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="text-xl font-black tracking-[-0.03em] text-slate-950">{title}</h2>
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-50 text-slate-500">
+              {columns.map((column) => (
+                <th key={column} className="px-4 py-3 text-left font-semibold">
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-t border-slate-200">
+                {columns.map((column) => (
+                  <td key={`${row.id}-${column}`} className="px-4 py-3 align-top">
+                    {String(row[column] ?? "")}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}

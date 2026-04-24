@@ -1,5 +1,6 @@
 import path from "path"
 import { NextResponse } from "next/server"
+import { requireApiPermission } from "@/lib/auth/server"
 import { readDashboardState, readOptionsMock, writeOptionsMock } from "@/lib/shared-db-store"
 
 export const runtime = "nodejs"
@@ -285,6 +286,8 @@ function buildCounts(records: any[], categories: any[]) {
 }
 
 export async function GET(req: Request) {
+  const auth = await requireApiPermission("dashboard", "view")
+  if (!auth.ok) return auth.response
   const { searchParams } = new URL(req.url)
   const basis = searchParams.get("basis") || "seed"
   const date = searchParams.get("date") || ""
@@ -384,6 +387,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const auth = await requireApiPermission("dashboard", "edit")
+  if (!auth.ok) return auth.response
   try {
     const payload = await req.json()
     const action = payload?.action
