@@ -5,6 +5,7 @@ import { requireApiPermission } from "@/lib/auth/server"
 import { ADMIN_PERMISSION_ROW_KEYS, MENU_LABELS } from "@/lib/auth/model"
 import { buildPermissionIndex, createEmptyPermissionIndex } from "@/lib/auth/permissions"
 import { getTeamName, listOnlinePresence, toSafeUser } from "@/lib/auth/store"
+import { getIndustryGroupLabel } from "@/lib/industry-groups"
 
 const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
 const FALLBACK_PATH = path.join(process.cwd(), "api-dashboard-response.json")
@@ -24,9 +25,15 @@ export async function GET() {
   const industryOptions = Array.from(
     new Set(
       [
-        ...(Array.isArray(dashboard?.contracts) ? dashboard.contracts.map((row: any) => row?.industry) : []),
-        ...(Array.isArray(dashboard?.collection?.integrated) ? dashboard.collection.integrated.map((row: any) => row?.industry) : []),
-        ...(Array.isArray(dashboard?.collection?.longTerm) ? dashboard.collection.longTerm.map((row: any) => row?.industry) : []),
+        ...(Array.isArray(dashboard?.contracts)
+          ? dashboard.contracts.map((row: any) => getIndustryGroupLabel(row?.industry, row?.companyName))
+          : []),
+        ...(Array.isArray(dashboard?.collection?.integrated)
+          ? dashboard.collection.integrated.map((row: any) => getIndustryGroupLabel(row?.industry, row?.companyName))
+          : []),
+        ...(Array.isArray(dashboard?.collection?.longTerm)
+          ? dashboard.collection.longTerm.map((row: any) => getIndustryGroupLabel(row?.industry, row?.companyName))
+          : []),
       ]
         .map((value) => String(value || "").trim())
         .filter(Boolean),

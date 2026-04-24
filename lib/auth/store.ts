@@ -9,6 +9,7 @@ import {
   UserRecord,
   getUserColorToken,
 } from "@/lib/auth/model"
+import { normalizeAssignedIndustries } from "@/lib/industry-groups"
 import { readAuthSystem, writeAuthSystem } from "@/lib/shared-db-store"
 
 const PRESENCE_TIMEOUT_MS = 45 * 1000
@@ -233,9 +234,7 @@ function normalizeUserTitles(state: AuthState) {
   state.users = state.users.map((user) => ({
     ...user,
     title: user.title || getUserTitle(user.name, user.role),
-    assignedIndustries: Array.isArray(user.assignedIndustries)
-      ? user.assignedIndustries.map((item) => String(item || "").trim()).filter(Boolean)
-      : [],
+    assignedIndustries: normalizeAssignedIndustries(user.assignedIndustries),
   }))
 }
 
@@ -283,7 +282,7 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
       existing.active = true
       existing.deletedAt = null
       existing.assignedIndustries = Array.isArray(existing.assignedIndustries)
-        ? existing.assignedIndustries.map((item) => String(item || "").trim()).filter(Boolean)
+        ? normalizeAssignedIndustries(existing.assignedIndustries)
         : []
       existing.updatedAt = now
       return
@@ -466,7 +465,7 @@ export function toSafeUser(user: UserRecord, state: AuthState) {
     loginId: user.loginId,
     name: user.name,
     title: user.title || getUserTitle(user.name, user.role),
-    assignedIndustries: Array.isArray(user.assignedIndustries) ? user.assignedIndustries : [],
+    assignedIndustries: normalizeAssignedIndustries(user.assignedIndustries),
     role: user.role,
     teamId: user.teamId,
     teamName: getTeamName(state, user.teamId),

@@ -1,4 +1,5 @@
 import { UserRecord } from "@/lib/auth/model"
+import { getIndustryGroupLabel, normalizeAssignedIndustries } from "@/lib/industry-groups"
 
 function parseContractMonthKey(value: unknown) {
   const text = String(value ?? "").trim()
@@ -57,7 +58,10 @@ export function buildPersonalDashboardData(user: UserRecord, data: any) {
       const createdBy = normalizeText(row?.createdBy)
       const recommender = normalizeText(row?.recommender)
       return recommenderUserId === user.id || createdBy === user.id || recommender === user.name
-    }),
+    }).map((row: any) => ({
+      ...row,
+      industryGroup: getIndustryGroupLabel(row?.industry, row?.companyName),
+    })),
     "contractMonth",
   )
 
@@ -78,15 +82,20 @@ export function buildPersonalDashboardData(user: UserRecord, data: any) {
     .map(([, value]) => value)
     .sort((a, b) => parseContractMonthKey(b.month) - parseContractMonthKey(a.month))
 
-  const assignedIndustries = Array.isArray(user.assignedIndustries) ? user.assignedIndustries : []
+  const assignedIndustries = normalizeAssignedIndustries(user.assignedIndustries)
   const collectionRows = [
     ...(Array.isArray(data?.collection?.integrated) ? data.collection.integrated : []),
     ...(Array.isArray(data?.collection?.longTerm) ? data.collection.longTerm : []),
   ]
 
   const myPendingDocuments = sortByContractMonthDesc(
-    collectionRows.filter((row: any) => {
-      const industry = normalizeText(row?.industry)
+    collectionRows
+      .map((row: any) => ({
+        ...row,
+        industryGroup: getIndustryGroupLabel(row?.industry, row?.companyName),
+      }))
+      .filter((row: any) => {
+      const industry = normalizeText(row?.industryGroup || row?.industry)
       const status = normalizeText(row?.status)
       return assignedIndustries.includes(industry) && status !== "회수"
     }),

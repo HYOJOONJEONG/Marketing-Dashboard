@@ -7,6 +7,7 @@ import {
   findUserById,
   updateAuthState,
 } from "@/lib/auth/store"
+import { normalizeAssignedIndustries } from "@/lib/industry-groups"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
   const teamId = String(body?.teamId || "").trim()
   const password = String(body?.password || "").trim()
   const assignedIndustries = Array.isArray(body?.assignedIndustries)
-    ? body.assignedIndustries.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+    ? normalizeAssignedIndustries(body.assignedIndustries)
     : []
 
   if (!name || !loginId || !teamId) {
@@ -91,6 +92,10 @@ export async function PATCH(request: Request) {
     let nextValue = value
     if (typeof nextValue === "string") {
       nextValue = nextValue.trim()
+    }
+
+    if (fieldName === "assignedIndustries") {
+      nextValue = normalizeAssignedIndustries(nextValue)
     }
 
     if (fieldName === "name") {

@@ -143,7 +143,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                       <td className="px-4 py-3">{formatValue(row.companyName)}</td>
                       <td className="px-4 py-3">{formatValue(row.departmentName)}</td>
                       <td className="px-4 py-3">{formatValue(row.idCode)}</td>
-                      <td className="px-4 py-3">{formatValue(row.industry)}</td>
+                      <td className="px-4 py-3">{formatValue(row.industryGroup || row.industry)}</td>
                       <td className="px-4 py-3">{formatValue(row.contractMonth)}</td>
                       <td className="px-4 py-3">{formatValue(row.documentStatus)}</td>
                     </tr>
@@ -172,7 +172,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                         <td className="px-4 py-3">{formatValue(row.companyName)}</td>
                         <td className="px-4 py-3">{formatValue(row.departmentName)}</td>
                         <td className="px-4 py-3">{formatValue(row.idCode)}</td>
-                        <td className="px-4 py-3">{formatValue(row.industry)}</td>
+                        <td className="px-4 py-3">{formatValue(row.industryGroup || row.industry)}</td>
                         <td className="px-4 py-3">{formatValue(row.claimMonth)}</td>
                         <td className="px-4 py-3">{formatValue(row.status)}</td>
                       </tr>
