@@ -44,19 +44,19 @@ export function LoginPage() {
             <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/12 to-transparent" />
           </div>
 
-          <div className="p-6 sm:p-10">
-            <div className="mx-auto max-w-md text-center">
+          <div className="flex items-center p-6 sm:p-10">
+            <div className="mx-auto w-full max-w-md">
               <div className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">Login</div>
               <h1 className="mt-3 text-3xl font-black tracking-[-0.04em] text-slate-950">인포Biz 로그인</h1>
 
               <form className="mt-8 space-y-5" onSubmit={handleLogin}>
                 <label className="block">
-                  <span className="mb-2 block text-center text-sm font-semibold text-slate-700">이름(ID)</span>
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">이름(ID)</span>
                   <div className="flex h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 focus-within:border-blue-400 focus-within:bg-white">
                     <UserRound className="h-4 w-4 text-slate-400" />
                     <input
                       autoComplete="username"
-                      className="h-full w-full bg-transparent text-center text-[15px] text-slate-900 outline-none"
+                      className="h-full w-full bg-transparent text-[15px] text-slate-900 outline-none"
                       placeholder="이름 입력"
                       value={loginId}
                       onChange={(event) => setLoginId(event.target.value)}
@@ -66,12 +66,12 @@ export function LoginPage() {
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-center text-sm font-semibold text-slate-700">비밀번호</span>
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">비밀번호</span>
                   <div className="flex h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 focus-within:border-blue-400 focus-within:bg-white">
                     <Lock className="h-4 w-4 text-slate-400" />
                     <input
                       autoComplete="current-password"
-                      className="h-full w-full bg-transparent text-center text-[15px] text-slate-900 outline-none"
+                      className="h-full w-full bg-transparent text-[15px] text-slate-900 outline-none"
                       placeholder="비밀번호"
                       type={showPassword ? "text" : "password"}
                       value={password}
