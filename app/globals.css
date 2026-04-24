@@ -474,7 +474,7 @@
     display: block !important;
     border: 1px solid #d6d6d6 !important;
     border-radius: 6px !important;
-    background: #ffffff !important;
+    background: transparent !important;
     padding: 3px 5px !important;
     text-align: center !important;
   }
@@ -644,7 +644,7 @@
     border: 1px solid #d6d6d6 !important;
     border-radius: 0 !important;
     padding: 0 !important;
-    background: #fff !important;
+    background: transparent !important;
   }
 
   .weekly-report-print .contract-section-wrap {
@@ -695,6 +695,10 @@
     text-align: center !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+
+  .weekly-report-print .print-combined-summary-table tbody tr:nth-of-type(2) td:nth-of-type(-n + 3) {
+    background-color: transparent !important;
   }
 
   .weekly-report-print .text-\[18px\] {
