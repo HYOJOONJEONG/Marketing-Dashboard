@@ -13,11 +13,38 @@ import { normalizeAssignedIndustries } from "@/lib/industry-groups"
 import { readAuthSystem, writeAuthSystem } from "@/lib/shared-db-store"
 
 const PRESENCE_TIMEOUT_MS = 45 * 1000
+const PRESENCE_IDLE_MS = 7 * 60 * 1000
 
 let authWriteQueue: Promise<void> = Promise.resolve()
 
 function nowIso() {
   return new Date().toISOString()
+}
+
+function toTimestamp(value: string | null | undefined) {
+  const timestamp = new Date(String(value || "")).getTime()
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function resolvePresenceStatus(session: PresenceSessionRecord, now = Date.now()): PresenceSessionRecord["status"] {
+  const lastSeen = toTimestamp(session.lastSeenAt)
+  if (!lastSeen || lastSeen < now - PRESENCE_TIMEOUT_MS) {
+    return "offline"
+  }
+  if (session.manualStatus === "away") {
+    return "away"
+  }
+  const lastActivity = toTimestamp(session.lastActivityAt || session.lastSeenAt)
+  if (!lastActivity || lastActivity < now - PRESENCE_IDLE_MS) {
+    return "away"
+  }
+  return "online"
+}
+
+function presenceRank(status: PresenceSessionRecord["status"]) {
+  if (status === "online") return 0
+  if (status === "away") return 1
+  return 2
 }
 
 function buildRolePermissionId(roleId: string, menuKey: string, action: string) {
@@ -374,39 +401,70 @@ export function verifyPasswordHash(password: string, salt?: string | null, hash?
 }
 
 export function cleanupPresenceSessions(state: AuthState) {
-  const threshold = Date.now() - PRESENCE_TIMEOUT_MS
+  const now = Date.now()
   state.presenceSessions = state.presenceSessions.map((session) => {
-    const lastSeen = new Date(session.lastSeenAt).getTime()
-    if (!Number.isFinite(lastSeen) || lastSeen < threshold) {
-      return {
-        ...session,
-        status: "offline",
-        updatedAt: nowIso(),
-      }
+    const nextStatus = resolvePresenceStatus(session, now)
+    return {
+      ...session,
+      status: nextStatus,
+      manualStatus: session.manualStatus ?? null,
+      lastActivityAt: session.lastActivityAt || session.lastSeenAt,
+      updatedAt: nextStatus === session.status ? session.updatedAt : nowIso(),
     }
-    return session
   })
 }
 
-export function listOnlinePresence(state: AuthState) {
+export function listPresenceUsers(state: AuthState) {
   cleanupPresenceSessions(state)
-  const usersById = new Map(state.users.map((user) => [user.id, user]))
-  return state.presenceSessions
-    .filter((session) => session.status !== "offline")
-    .map((session) => {
-      const user = usersById.get(session.userId)
-      const color = getUserColorToken(session.userId)
-        return {
-          ...session,
-          userName: user?.name || "알 수 없음",
-          avatarEmoji: user?.avatarEmoji ? String(user.avatarEmoji).trim() : null,
-          title: user?.title || null,
-          role: user?.role || "viewer",
-          teamId: user?.teamId || "",
-          color,
-        }
-      })
-    .sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime())
+  const latestPresenceByUser = new Map<string, PresenceSessionRecord>()
+
+  state.presenceSessions.forEach((session) => {
+    const existing = latestPresenceByUser.get(session.userId)
+    if (!existing || toTimestamp(session.updatedAt) >= toTimestamp(existing.updatedAt)) {
+      latestPresenceByUser.set(session.userId, session)
+    }
+  })
+
+  return state.users
+    .filter((user) => !user.deletedAt && user.active)
+    .map((user) => {
+      const session = latestPresenceByUser.get(user.id)
+      const color = getUserColorToken(user.id)
+      const derivedStatus = session ? resolvePresenceStatus(session) : "offline"
+      return {
+        id: session?.id || `presence-user-${user.id}`,
+        userId: user.id,
+        userName: user.name || "알 수 없음",
+        avatarEmoji: user.avatarEmoji ? String(user.avatarEmoji).trim() : null,
+        title: user.title || null,
+        role: user.role || "viewer",
+        teamId: user.teamId || "",
+        teamName: getTeamName(state, user.teamId),
+        currentPage: session?.currentPage || "",
+        currentSection: session?.currentSection || "",
+        status: derivedStatus,
+        manualStatus: session?.manualStatus ?? null,
+        colorToken: color.token,
+        color,
+        lastSeenAt: session?.lastSeenAt || user.updatedAt,
+        lastActivityAt: session?.lastActivityAt || session?.lastSeenAt || user.updatedAt,
+        connectionId: session?.connectionId || "",
+        sessionId: session?.sessionId || "",
+        createdAt: session?.createdAt || user.createdAt,
+        updatedAt: session?.updatedAt || user.updatedAt,
+      }
+    })
+    .sort((a, b) => {
+      const rankDiff = presenceRank(a.status) - presenceRank(b.status)
+      if (rankDiff !== 0) return rankDiff
+      const seenDiff = toTimestamp(b.lastSeenAt) - toTimestamp(a.lastSeenAt)
+      if (seenDiff !== 0) return seenDiff
+      return a.userName.localeCompare(b.userName, "ko")
+    })
+}
+
+export function listOnlinePresence(state: AuthState) {
+  return listPresenceUsers(state).filter((user) => user.status !== "offline")
 }
 
 export function appendActivityLog(
@@ -497,6 +555,8 @@ export function upsertPresenceSession(
   state: AuthState,
   payload: Pick<PresenceSessionRecord, "userId" | "connectionId" | "sessionId" | "currentPage" | "currentSection"> & {
     status?: PresenceSessionRecord["status"]
+    manualStatus?: PresenceSessionRecord["manualStatus"]
+    lastActivityAt?: string
   },
 ) {
   cleanupPresenceSessions(state)
@@ -504,14 +564,27 @@ export function upsertPresenceSession(
     (session) => session.connectionId === payload.connectionId || session.sessionId === payload.sessionId,
   )
   const now = nowIso()
-  const nextStatus =
-    payload.status || (payload.currentSection.toLowerCase().includes("edit") ? "editing" : "online")
+  const nextLastActivityAt = payload.lastActivityAt || existing?.lastActivityAt || now
+  const nextManualStatus =
+    payload.manualStatus === undefined ? (existing?.manualStatus ?? null) : payload.manualStatus
 
   if (existing) {
     existing.currentPage = payload.currentPage
     existing.currentSection = payload.currentSection
-    existing.status = nextStatus
+    existing.manualStatus = nextManualStatus
     existing.lastSeenAt = now
+    existing.lastActivityAt = nextLastActivityAt
+    existing.status =
+      payload.status ||
+      resolvePresenceStatus(
+        {
+          ...existing,
+          manualStatus: nextManualStatus,
+          lastSeenAt: now,
+          lastActivityAt: nextLastActivityAt,
+        },
+        Date.now(),
+      )
     existing.updatedAt = now
     return existing
   }
@@ -519,11 +592,13 @@ export function upsertPresenceSession(
   const created: PresenceSessionRecord = {
     id: `presence-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     userId: payload.userId,
-    status: nextStatus,
+    status: payload.status || (nextManualStatus === "away" ? "away" : "online"),
+    manualStatus: nextManualStatus,
     currentPage: payload.currentPage,
     currentSection: payload.currentSection,
     colorToken: getUserColorToken(payload.userId).token,
     lastSeenAt: now,
+    lastActivityAt: nextLastActivityAt,
     connectionId: payload.connectionId,
     sessionId: payload.sessionId,
     createdAt: now,

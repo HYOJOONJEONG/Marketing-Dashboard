@@ -29,6 +29,32 @@ const viewTitles: Record<ViewKey, string> = {
   termination: "해지 진행사항",
 }
 
+type PresenceStatus = "online" | "away" | "offline"
+
+type PresenceUser = {
+  userId: string
+  userName: string
+  teamName: string
+  title?: string | null
+  avatarEmoji?: string | null
+  currentPage: string
+  currentSection: string
+  status: PresenceStatus
+  color: { bg: string; text: string; border: string; hex: string }
+}
+
+function getPresenceDotClass(status: PresenceStatus) {
+  if (status === "online") return "bg-emerald-500"
+  if (status === "away") return "bg-amber-400"
+  return "bg-slate-300"
+}
+
+function getPresenceLabel(status: PresenceStatus) {
+  if (status === "online") return "온라인"
+  if (status === "away") return "자리비움"
+  return "오프라인"
+}
+
   const cardClass = "rounded-[24px] border border-slate-200 bg-white shadow-sm"
 const tableClass = "w-full text-[14px]"
 const thClass = "border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-[13px] font-semibold text-slate-600"
@@ -1031,10 +1057,13 @@ export function DashboardShell({
   const [dirtyViews, setDirtyViews] = useState<Partial<Record<ViewKey, boolean>>>({})
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [isPasswordOpen, setIsPasswordOpen] = useState(false)
+  const [isPresenceListOpen, setIsPresenceListOpen] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState("")
   const [currentPassword, setCurrentPassword] = useState("")
   const [nextPassword, setNextPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [presenceUsers, setPresenceUsers] = useState<PresenceUser[]>([])
+  const [manualPresenceStatus, setManualPresenceStatus] = useState<"away" | null>(null)
   const [manualDraft, setManualDraft] = useState<any>(() =>
     buildManualDraftFromWeekly(
       initialData?.weeklyReport || {},
@@ -1111,6 +1140,8 @@ export function DashboardShell({
   const dirtyViewsRef = useRef<Partial<Record<ViewKey, boolean>>>({})
   const manualDraftReadyRef = useRef(false)
   const flushPendingSave = useRef<() => void>(() => {})
+  const heartbeatIdRef = useRef(`conn-${Math.random().toString(36).slice(2, 10)}`)
+  const lastActivityAtRef = useRef(Date.now())
   const hasAccess = (menuKey: string, action: string = "view") =>
     Boolean(permissions?.[menuKey]?.admin || permissions?.[menuKey]?.[action])
   const avatarLabel = String(currentUser?.avatarEmoji || "").trim() || String(currentUser?.name || "").slice(0, 1) || "사"
@@ -1126,6 +1157,16 @@ export function DashboardShell({
   const canViewWeeklySelection = hasAccess("weeklySelection", "view")
   const canViewOptionDashboard = hasAccess("optionDashboard", "view")
   const canViewAdminPage = hasAccess("adminPage", "view")
+  const currentPresenceStatus = useMemo<PresenceStatus>(() => {
+    if (!currentUser?.id) return "offline"
+    return presenceUsers.find((user) => user.userId === currentUser.id)?.status || "offline"
+  }, [currentUser?.id, presenceUsers])
+  const activePresenceUsers = useMemo(
+    () => presenceUsers.filter((user) => user.status !== "offline"),
+    [presenceUsers],
+  )
+  const visiblePresenceUsers = useMemo(() => activePresenceUsers.slice(0, 8), [activePresenceUsers])
+  const hiddenPresenceCount = Math.max(0, activePresenceUsers.length - visiblePresenceUsers.length)
   const visibleViews = [
     canViewWeeklyReport ? "weekly-report" : null,
     canViewManualInput ? "manual-input" : null,
@@ -1261,6 +1302,85 @@ export function DashboardShell({
   useEffect(() => {
     onViewChange?.(view)
   }, [onViewChange, view])
+  useEffect(() => {
+    if (!currentUser?.id) return
+    let alive = true
+    let eventSource: EventSource | null = null
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+
+    const markActivity = () => {
+      if (manualPresenceStatus === "away") return
+      lastActivityAtRef.current = Date.now()
+    }
+
+    const sendHeartbeat = async () => {
+      try {
+        await fetch("/api/presence/heartbeat", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            currentPage: viewTitles[view],
+            currentSection: view,
+            connectionId: heartbeatIdRef.current,
+            manualStatus: manualPresenceStatus,
+            lastActivityAt: new Date(lastActivityAtRef.current).toISOString(),
+          }),
+        })
+      } catch {
+        // Ignore transient heartbeat issues in sidebar presence UI.
+      }
+    }
+
+    const connect = () => {
+      eventSource = new EventSource("/api/presence/stream")
+      eventSource.onmessage = (event) => {
+        if (!alive) return
+        try {
+          const payload = JSON.parse(event.data)
+          setPresenceUsers(Array.isArray(payload?.presenceUsers) ? payload.presenceUsers : [])
+        } catch {
+          setPresenceUsers([])
+        }
+      }
+      eventSource.onerror = () => {
+        eventSource?.close()
+      }
+    }
+
+    const handleActivity = () => {
+      markActivity()
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        markActivity()
+        void sendHeartbeat()
+      }
+    }
+
+    if (manualPresenceStatus !== "away") {
+      lastActivityAtRef.current = Date.now()
+    }
+
+    const activityEvents: Array<keyof WindowEventMap> = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"]
+    activityEvents.forEach((eventName) => window.addEventListener(eventName, handleActivity, { passive: true }))
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    void sendHeartbeat()
+    heartbeatTimer = setInterval(() => {
+      void sendHeartbeat()
+    }, 15000)
+    connect()
+
+    return () => {
+      alive = false
+      activityEvents.forEach((eventName) => window.removeEventListener(eventName, handleActivity))
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      if (heartbeatTimer) clearInterval(heartbeatTimer)
+      if (eventSource) eventSource.close()
+    }
+  }, [currentUser?.id, manualPresenceStatus, view])
+
   const handleLogout = () => {
     startAccountTransition(async () => {
       await fetch("/api/auth/logout", { method: "POST" }).catch(() => null)
@@ -3622,7 +3742,7 @@ export function DashboardShell({
   return (
     <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1720px]">
-          <aside className="dashboard-sidebar w-[272px] border-r border-slate-200 bg-white px-4 py-4">
+          <aside className="dashboard-sidebar flex w-[272px] flex-col border-r border-slate-200 bg-white px-4 py-4">
             <div className="relative overflow-visible px-1 pt-1">
               <div className="flex items-center gap-2.5">
                 <img
@@ -3647,8 +3767,12 @@ export function DashboardShell({
                       }}
                       className="flex w-full items-center gap-2.5 rounded-2xl px-1 py-1.5 text-left transition hover:bg-slate-50"
                     >
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-[22px] shadow-sm">
+                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-[22px] shadow-sm">
                         {avatarLabel}
+                        <span
+                          className={`absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white ${getPresenceDotClass(currentPresenceStatus)}`}
+                          aria-label={getPresenceLabel(currentPresenceStatus)}
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[15px] font-black tracking-[-0.04em] text-slate-950">{currentUser.name}</div>
@@ -3681,6 +3805,24 @@ export function DashboardShell({
                         >
                           <UserRound className="ml-1 h-[18px] w-[18px] text-slate-400" />
                           <span className="flex-1 text-[14px] font-bold tracking-[-0.03em] text-slate-800">내 페이지</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManualPresenceStatus((prev) => {
+                              const next = prev === "away" ? null : "away"
+                              if (!next) {
+                                lastActivityAtRef.current = Date.now()
+                              }
+                              return next
+                            })
+                          }}
+                          className="flex h-11 w-full items-center gap-2.5 rounded-xl px-2 text-left text-slate-700 transition hover:bg-slate-50"
+                        >
+                          <span className={`ml-1 h-2.5 w-2.5 rounded-full ${manualPresenceStatus === "away" ? "bg-amber-400" : "bg-emerald-500"}`} />
+                          <span className="flex-1 text-[14px] font-bold tracking-[-0.03em] text-slate-800">
+                            {manualPresenceStatus === "away" ? "자동 상태 사용" : "자리비움으로 표시"}
+                          </span>
                         </button>
                         <button
                           type="button"
@@ -3768,7 +3910,7 @@ export function DashboardShell({
               ) : null}
             </div>
 
-          <div className="mt-5 space-y-5">
+          <div className="mt-5 flex-1 space-y-5">
             <div>
               <button
                 type="button"
@@ -3916,6 +4058,113 @@ export function DashboardShell({
             ) : null}
 
           </div>
+
+          {currentUser ? (
+            <div className="mt-auto px-1 pt-6">
+              <div className="rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[15px] font-black tracking-[-0.03em] text-slate-900">현재 접속 인원</div>
+                    <div className="mt-1 text-[12px] font-semibold text-emerald-600">
+                      {activePresenceUsers.length}명 접속 중
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsPresenceListOpen((prev) => !prev)}
+                    className="inline-flex h-8 items-center gap-1 rounded-full bg-slate-50 px-2.5 text-[12px] font-semibold text-slate-500 transition hover:bg-slate-100"
+                  >
+                    전체 보기
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 transition duration-200 ${isPresenceListOpen ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsPresenceListOpen((prev) => !prev)}
+                  className="mt-4 flex w-full items-center justify-between gap-3 text-left"
+                >
+                  <div className="flex min-w-0 items-center -space-x-3">
+                    {visiblePresenceUsers.length ? (
+                      visiblePresenceUsers.map((user) => {
+                        const label = String(user.avatarEmoji || "").trim() || String(user.userName || "").slice(0, 1)
+                        return (
+                          <span key={user.userId} className="group relative inline-flex">
+                            <span
+                              className={`relative inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-white ${user.color.bg} ${user.color.text} ${user.color.border} text-[18px] font-black shadow-sm`}
+                            >
+                              {label}
+                              <span
+                                className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${getPresenceDotClass(user.status)}`}
+                              />
+                            </span>
+                            <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 -translate-x-1/2 rounded-xl bg-slate-950 px-2.5 py-2 text-[11px] font-semibold text-white opacity-0 shadow-lg transition duration-150 group-hover:opacity-100">
+                              <span className="block whitespace-nowrap">{user.userName}</span>
+                              <span className="mt-0.5 block whitespace-nowrap text-slate-300">{user.teamName || "팀 미지정"}</span>
+                            </span>
+                          </span>
+                        )
+                      })
+                    ) : (
+                      <span className="text-[13px] font-medium text-slate-400">현재 접속 중인 사용자가 없습니다.</span>
+                    )}
+                    {hiddenPresenceCount > 0 ? (
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-[13px] font-bold text-slate-600 shadow-sm">
+                        +{hiddenPresenceCount}
+                      </span>
+                    ) : null}
+                  </div>
+                  <span className="text-[12px] font-semibold text-slate-400">Slack 스타일</span>
+                </button>
+
+                <div
+                  className={`overflow-hidden transition-all duration-200 ease-out ${
+                    isPresenceListOpen ? "mt-4 max-h-[420px] opacity-100" : "mt-0 max-h-0 opacity-0"
+                  }`}
+                >
+                  <div className="border-t border-slate-100 pt-3">
+                    <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+                      {presenceUsers.map((user) => {
+                        const label = String(user.avatarEmoji || "").trim() || String(user.userName || "").slice(0, 1)
+                        return (
+                          <div
+                            key={user.userId}
+                            className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2.5"
+                            title={`${user.userName} · ${user.teamName || "팀 미지정"}`}
+                          >
+                            <div
+                              className={`relative flex h-10 w-10 items-center justify-center rounded-full border ${user.color.border} ${user.color.bg} ${user.color.text} text-[18px] font-black`}
+                            >
+                              {label}
+                              <span
+                                className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${getPresenceDotClass(user.status)}`}
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="truncate text-[14px] font-bold tracking-[-0.03em] text-slate-900">
+                                  {user.userName}
+                                </span>
+                                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                                  {getPresenceLabel(user.status)}
+                                </span>
+                              </div>
+                              <div className="mt-1 truncate text-[12px] text-slate-500">
+                                {user.teamName || "팀 미지정"}
+                                {user.currentPage ? ` · ${user.currentPage}` : ""}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </aside>
 
         <main className="flex-1 px-5 py-5">

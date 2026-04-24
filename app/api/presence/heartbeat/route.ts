@@ -21,6 +21,8 @@ export async function POST(request: Request) {
   const currentPage = String(body?.currentPage || "대시보드")
   const currentSection = String(body?.currentSection || currentPage)
   const connectionId = String(body?.connectionId || `conn-${Date.now()}`)
+  const manualStatus = body?.manualStatus === "away" ? "away" : null
+  const lastActivityAt = body?.lastActivityAt ? String(body.lastActivityAt) : new Date().toISOString()
 
   await updateAuthState((state) => {
     upsertPresenceSession(state, {
@@ -29,6 +31,8 @@ export async function POST(request: Request) {
       currentSection,
       connectionId,
       sessionId: session.sessionId,
+      manualStatus,
+      lastActivityAt,
     })
     appendActivityLog(state, {
       actorUserId: session.user.id,
@@ -38,7 +42,7 @@ export async function POST(request: Request) {
       targetId: connectionId,
       pageKey: currentPage,
       beforeValue: "",
-      afterValue: JSON.stringify({ currentSection }),
+      afterValue: JSON.stringify({ currentSection, manualStatus }),
       ipAddress: "browser",
       sessionId: session.sessionId,
       success: true,

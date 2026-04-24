@@ -1,4 +1,4 @@
-import { readAuthState, listOnlinePresence } from "@/lib/auth/store"
+import { listOnlinePresence, listPresenceUsers, readAuthState } from "@/lib/auth/store"
 import { resolveRequestSession } from "@/lib/auth/session"
 
 export const runtime = "nodejs"
@@ -21,11 +21,19 @@ export async function GET() {
       const send = async () => {
         const state = await readAuthState()
         const onlineUsers = listOnlinePresence(state)
-        const samePageUsers = onlineUsers.filter((user) => user.currentPage === onlineUsers.find((row) => row.sessionId === session.sessionId)?.currentPage)
+        const presenceUsers = listPresenceUsers(state)
+        const currentUserPresence = presenceUsers.find((row) => row.userId === session.user.id)
+        const samePageUsers = presenceUsers.filter(
+          (user) =>
+            user.status !== "offline" &&
+            user.currentPage &&
+            user.currentPage === currentUserPresence?.currentPage,
+        )
         const recentActivities = state.activityLogs.slice(0, 12)
         controller.enqueue(
           encode({
             onlineUsers,
+            presenceUsers,
             samePageUsers,
             recentActivities,
           }),

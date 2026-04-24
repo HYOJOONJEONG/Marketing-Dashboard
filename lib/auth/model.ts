@@ -87,11 +87,13 @@ export type UserSessionRecord = {
 export type PresenceSessionRecord = {
   id: string
   userId: string
-  status: "online" | "offline" | "editing"
+  status: "online" | "away" | "offline"
+  manualStatus?: "away" | null
   currentPage: string
   currentSection: string
   colorToken: string
   lastSeenAt: string
+  lastActivityAt: string
   connectionId: string
   sessionId: string
   createdAt: string
