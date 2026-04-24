@@ -19,6 +19,7 @@ export async function POST(request: Request) {
   const name = String(body?.name || "").trim()
   const loginId = String(body?.loginId || name).trim()
   const role = String(body?.role || "staff").trim()
+  const title = String(body?.title || "사원").trim()
   const teamId = String(body?.teamId || "").trim()
   const password = String(body?.password || "").trim()
 
@@ -36,6 +37,7 @@ export async function POST(request: Request) {
       id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       loginId,
       name,
+      title,
       role: role as any,
       teamId,
       active: true,

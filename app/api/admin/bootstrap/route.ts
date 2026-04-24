@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { readDashboardState } from "@/lib/shared-db-store"
 import { requireApiPermission } from "@/lib/auth/server"
 import { MENU_KEYS, MENU_LABELS } from "@/lib/auth/model"
-import { createEmptyPermissionIndex } from "@/lib/auth/permissions"
+import { buildPermissionIndex, createEmptyPermissionIndex } from "@/lib/auth/permissions"
 import { getTeamName, listOnlinePresence, toSafeUser } from "@/lib/auth/store"
 
 const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
@@ -48,6 +48,9 @@ export async function GET() {
         }, {}),
     ]),
   )
+  const userPermissionMap = Object.fromEntries(
+    auth.context.state.users.map((user) => [user.id, buildPermissionIndex(auth.context.state, user)]),
+  )
 
   return NextResponse.json({
     ok: true,
@@ -57,6 +60,7 @@ export async function GET() {
     permissionRows,
     rolePermissionMap,
     userOverrideMap,
+    userPermissionMap,
     contracts: (dashboard.contracts || []).map((contract: any) => ({
       ...contract,
       teamName: teamMap[contract.teamId] || getTeamName(auth.context.state, contract.teamId),

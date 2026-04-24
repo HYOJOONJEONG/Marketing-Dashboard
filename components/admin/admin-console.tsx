@@ -24,6 +24,14 @@ const tabs = [
   { key: "activityLogs", label: "활동로그" },
 ] as const
 
+const TITLE_OPTIONS = ["본부장", "팀장", "부장", "과장", "대리", "사원"] as const
+
+function inferRoleFromTitle(title: string) {
+  if (title === "본부장") return "director"
+  if (title === "팀장") return "team_manager"
+  return "staff"
+}
+
 async function fetchJson(url: string, init?: RequestInit) {
   const response = await fetch(url, init)
   const payload = await response.json().catch(() => null)
@@ -36,9 +44,6 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   const [bootstrap, setBootstrap] = useState<any | null>(null)
   const [userSearch, setUserSearch] = useState("")
   const [selectedUserId, setSelectedUserId] = useState("")
-  const [selectedRoleName, setSelectedRoleName] = useState("staff")
-  const [selectedPermissionMode, setSelectedPermissionMode] = useState<"role" | "user">("role")
-  const [selectedPermissionRoleId, setSelectedPermissionRoleId] = useState("")
   const [selectedPermissionUserId, setSelectedPermissionUserId] = useState("")
   const [contractFilter, setContractFilter] = useState("")
   const [message, setMessage] = useState("")
@@ -47,7 +52,6 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   const loadBootstrap = async () => {
     const payload = await fetchJson("/api/admin/bootstrap")
     setBootstrap(payload)
-    if (!selectedPermissionRoleId && payload.roles?.[0]?.id) setSelectedPermissionRoleId(payload.roles[0].id)
     if (!selectedUserId && payload.users?.[0]?.id) setSelectedUserId(payload.users[0].id)
     if (!selectedPermissionUserId && payload.users?.[0]?.id) setSelectedPermissionUserId(payload.users[0].id)
   }
@@ -60,8 +64,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   const teams = bootstrap?.teams || []
   const roles = bootstrap?.roles || []
   const permissionRows = bootstrap?.permissionRows || []
-  const rolePermissionMap = bootstrap?.rolePermissionMap || {}
-  const userOverrideMap = bootstrap?.userOverrideMap || {}
+  const userPermissionMap = bootstrap?.userPermissionMap || {}
   const contracts = bootstrap?.contracts || []
 
   const selectedUser = useMemo(() => users.find((user: any) => user.id === selectedUserId) || null, [users, selectedUserId])
@@ -69,7 +72,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
     const query = userSearch.trim().toLowerCase()
     return users.filter((user: any) => {
       if (!query) return true
-      return [user.name, user.teamName, user.role, user.active ? "active" : "inactive"]
+      return [user.name, user.teamName, user.title, user.role, user.active ? "active" : "inactive"]
         .filter(Boolean)
         .some((value: string) => String(value).toLowerCase().includes(query))
     })
@@ -85,10 +88,10 @@ export function AdminConsole({ currentUser, permissions }: Props) {
     })
   }, [contracts, contractFilter])
 
-  const selectedRolePermissionIndex = useMemo(() => {
-    if (selectedPermissionMode === "role") return rolePermissionMap[selectedPermissionRoleId] || {}
-    return userOverrideMap[selectedPermissionUserId] || {}
-  }, [rolePermissionMap, selectedPermissionMode, selectedPermissionRoleId, selectedPermissionUserId, userOverrideMap])
+  const selectedUserPermissionIndex = useMemo(
+    () => userPermissionMap[selectedPermissionUserId] || {},
+    [selectedPermissionUserId, userPermissionMap],
+  )
 
   const runAction = (task: () => Promise<void>) => {
     setMessage("")
@@ -106,13 +109,14 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   const createUser = () => {
     const name = window.prompt("추가할 사용자명을 입력하세요.")
     if (!name) return
-    const role = window.prompt("역할을 입력하세요. (admin/director/team_manager/staff/viewer)", "staff") || "staff"
+    const title = window.prompt("직급을 입력하세요. (본부장/팀장/부장/과장/대리/사원)", "사원") || "사원"
+    const role = inferRoleFromTitle(title)
     const teamId = teams[0]?.id || ""
     runAction(async () => {
       await fetchJson("/api/admin/users", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, loginId: name, role, teamId }),
+        body: JSON.stringify({ name, loginId: name, title, role, teamId }),
       })
     })
   }
@@ -145,8 +149,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          mode: selectedPermissionMode,
-          roleId: selectedPermissionRoleId,
+          mode: "user",
           userId: selectedPermissionUserId,
           menuKey,
           action,
@@ -200,9 +203,9 @@ export function AdminConsole({ currentUser, permissions }: Props) {
           </div>
 
           <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            역할 기반 권한 + 사용자 override 구조로 동작합니다.
+            사용자별로 메뉴 권한을 직접 조정할 수 있습니다.
             <div className="mt-2 text-xs text-slate-400">
-              director는 기본적으로 조회 중심이고, 필요한 관리 기능은 override로 열 수 있습니다.
+              권한관리 탭에서는 이름을 선택한 뒤 체크박스로 바로 권한을 열고 닫으면 됩니다.
             </div>
           </div>
         </aside>
@@ -242,7 +245,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                         <tr className="bg-slate-50 text-slate-500">
                           <th className="px-4 py-3 text-left font-semibold">사용자</th>
                           <th className="px-4 py-3 text-left font-semibold">팀</th>
-                          <th className="px-4 py-3 text-left font-semibold">역할</th>
+                          <th className="px-4 py-3 text-left font-semibold">직급</th>
                           <th className="px-4 py-3 text-left font-semibold">상태</th>
                         </tr>
                       </thead>
@@ -268,7 +271,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                               </div>
                             </td>
                             <td className="px-4 py-3">{user.teamName}</td>
-                            <td className="px-4 py-3">{user.role}</td>
+                            <td className="px-4 py-3">{user.title || "-"}</td>
                             <td className="px-4 py-3">{user.active ? "활성" : "비활성"}</td>
                           </tr>
                         ))}
@@ -309,7 +312,21 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                         </select>
                       </label>
                       <label className="block">
-                        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">역할</div>
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">직급</div>
+                        <select
+                          value={selectedUser.title || "사원"}
+                          onChange={(event) => updateUser("title", event.target.value)}
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                        >
+                          {TITLE_OPTIONS.map((title) => (
+                            <option key={title} value={title}>
+                              {title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">시스템 역할</div>
                         <select
                           value={selectedUser.role}
                           onChange={(event) => updateUser("role", event.target.value)}
@@ -419,57 +436,27 @@ export function AdminConsole({ currentUser, permissions }: Props) {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-black tracking-[-0.03em] text-slate-950">권한관리</h2>
-                  <p className="mt-1 text-sm text-slate-500">역할 기본 권한과 사용자별 override를 분리해서 관리합니다.</p>
+                  <p className="mt-1 text-sm text-slate-500">이름을 선택해서 사용자별 권한을 직접 조정합니다.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPermissionMode("role")}
-                    className={`rounded-2xl px-4 py-2 text-sm font-semibold ${selectedPermissionMode === "role" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
-                  >
-                    역할 기준
+                  <button type="button" onClick={resetOverrides} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
+                    개별 권한 초기화
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPermissionMode("user")}
-                    className={`rounded-2xl px-4 py-2 text-sm font-semibold ${selectedPermissionMode === "user" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
-                  >
-                    사용자 override
-                  </button>
-                  {selectedPermissionMode === "user" ? (
-                    <button type="button" onClick={resetOverrides} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
-                      override 초기화
-                    </button>
-                  ) : null}
                 </div>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                {selectedPermissionMode === "role" ? (
-                  <select
-                    value={selectedPermissionRoleId}
-                    onChange={(event) => setSelectedPermissionRoleId(event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
-                  >
-                    {roles.map((role: any) => (
-                      <option key={role.id} value={role.id}>
-                        {role.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <select
-                    value={selectedPermissionUserId}
-                    onChange={(event) => setSelectedPermissionUserId(event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
-                  >
-                    {users.map((user: any) => (
-                      <option key={user.id} value={user.id}>
-                        {user.name} ({user.role})
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <select
+                  value={selectedPermissionUserId}
+                  onChange={(event) => setSelectedPermissionUserId(event.target.value)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                >
+                  {users.map((user: any) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} {user.title ? `· ${user.title}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
@@ -492,7 +479,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                           <td key={`${row.menuKey}-${action}`} className="px-4 py-3 text-center">
                             <input
                               type="checkbox"
-                              checked={Boolean(selectedRolePermissionIndex?.[row.menuKey]?.[action])}
+                              checked={Boolean(selectedUserPermissionIndex?.[row.menuKey]?.[action])}
                               onChange={(event) => savePermission(row.menuKey, action, event.target.checked)}
                             />
                           </td>

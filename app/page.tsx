@@ -53,7 +53,7 @@ export default async function Page({
       currentUser={{
         id: auth.user.id,
         name: auth.user.name,
-        role: auth.user.role,
+        role: auth.user.title || auth.user.role,
         teamName: auth.teamName,
         color: getUserColorToken(auth.user.id),
       }}

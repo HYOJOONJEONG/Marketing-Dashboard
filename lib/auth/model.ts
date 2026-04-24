@@ -53,6 +53,7 @@ export type UserRecord = {
   id: string
   loginId: string
   name: string
+  title?: string | null
   role: RoleKey
   teamId: string
   active: boolean

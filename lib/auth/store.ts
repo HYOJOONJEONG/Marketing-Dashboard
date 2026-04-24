@@ -31,6 +31,31 @@ function buildUserId(name: string) {
   return `user-${name}`
 }
 
+const USER_TITLE_BY_NAME: Record<string, string> = {
+  신무길: "팀장",
+  이홍민: "부장",
+  정효준: "과장",
+  조홍희: "대리",
+  정진영: "사원",
+  박혜리: "사원",
+  윤옥수: "팀장",
+  진효정: "과장",
+  김다빈: "사원",
+  박대일: "사원",
+  김대일: "사원",
+  이상철: "본부장",
+  시스템관리자: "관리자",
+}
+
+function getUserTitle(name: string, fallbackRole?: RoleKey) {
+  return USER_TITLE_BY_NAME[String(name || "").trim()] || (
+    fallbackRole === "director" ? "본부장" :
+    fallbackRole === "team_manager" ? "팀장" :
+    fallbackRole === "admin" ? "관리자" :
+    "사원"
+  )
+}
+
 function createSeedTeams(now: string): TeamRecord[] {
   return [
     { id: "team-infobiz1", code: "INFOBIZ1", name: "인포Biz1팀", createdAt: now, updatedAt: now },
@@ -60,6 +85,7 @@ function createSeedUsers(now: string, teams: TeamRecord[]): UserRecord[] {
     id: buildUserId(user.name),
     loginId: user.name,
     name: user.name,
+    title: getUserTitle(user.name, user.role),
     role: user.role,
     teamId: String(teamIdByName.get(user.team) || teams[0]?.id || ""),
     active: true,
@@ -75,6 +101,7 @@ function createSeedUsers(now: string, teams: TeamRecord[]): UserRecord[] {
     id: "user-admin-primary",
     loginId: adminLoginId,
     name: "시스템관리자",
+    title: getUserTitle("시스템관리자", "admin"),
     role: "admin",
     teamId: "team-hq",
     active: true,
@@ -211,11 +238,19 @@ function normalizeFullAccessRolePermissions(state: AuthState) {
   state.rolePermissions = expectedPermissions
 }
 
+function normalizeUserTitles(state: AuthState) {
+  state.users = state.users.map((user) => ({
+    ...user,
+    title: user.title || getUserTitle(user.name, user.role),
+  }))
+}
+
 export async function readAuthState(): Promise<AuthState> {
   try {
     const parsed = await readAuthSystem<AuthState>()
     if (parsed?.users) {
       normalizeFullAccessRolePermissions(parsed)
+      normalizeUserTitles(parsed)
       return parsed
     }
     const seeded = createSeedState()
@@ -358,6 +393,7 @@ export function toSafeUser(user: UserRecord, state: AuthState) {
     id: user.id,
     loginId: user.loginId,
     name: user.name,
+    title: user.title || getUserTitle(user.name, user.role),
     role: user.role,
     teamId: user.teamId,
     teamName: getTeamName(state, user.teamId),
