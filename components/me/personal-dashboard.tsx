@@ -3,8 +3,7 @@
 import type { ReactNode } from "react"
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { BriefcaseBusiness, ChevronDown, FolderClock, Landmark, Sparkles } from "lucide-react"
-import { WorkspaceHeader } from "@/components/auth/workspace-header"
+import { BriefcaseBusiness, ChevronDown, FolderClock, Landmark, Sparkles, UserRound } from "lucide-react"
 
 type Props = {
   currentUser: {
@@ -28,7 +27,7 @@ type Props = {
   }
 }
 
-const cardClass = "rounded-[30px] border border-slate-200/90 bg-white/92 p-6 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur"
+const cardClass = "rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
 const avatarOptions = ["😀", "😎", "🧑‍💼", "📈", "💼", "🦊", "🐯", "⭐", "🚀", "🧠", "🫶", "🔥", "🐻", "🐼", "🦁", "🐸", "🌈", "⚡", "🎯", "🎧", "☕", "🍀", "🪐", "🎨"]
 
 function formatValue(value: unknown, fallback = "-") {
@@ -58,13 +57,13 @@ function MetricCard({
   icon: ReactNode
 }) {
   return (
-    <div className={`${cardClass} overflow-hidden`}>
+    <div className={`${cardClass} overflow-hidden p-5`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-slate-500">{title}</div>
-          <div className="mt-4 text-[42px] font-black tracking-[-0.05em] text-slate-950">{value}</div>
+          <div className="mt-4 text-[26px] font-black tracking-[-0.05em] text-slate-950">{value}</div>
         </div>
-        <div className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl ${tone}`}>{icon}</div>
+        <div className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl ${tone}`}>{icon}</div>
       </div>
     </div>
   )
@@ -75,6 +74,8 @@ export function PersonalDashboard({ currentUser, data }: Props) {
   const [profileMessage, setProfileMessage] = useState("")
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>(data.assignedIndustries || [])
   const [selectedAvatar, setSelectedAvatar] = useState<string>(String(currentUser.avatarEmoji || "").trim())
+  const [isIndustryOpen, setIsIndustryOpen] = useState(false)
+  const [isAvatarOpen, setIsAvatarOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   const pendingDocuments = useMemo(() => {
@@ -120,118 +121,130 @@ export function PersonalDashboard({ currentUser, data }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef6ff_0%,#f8fbff_36%,#f3f6fb_100%)] px-4 py-4">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef6ff_0%,#f8fbff_36%,#f3f6fb_100%)] px-4 py-3">
       <div className="mx-auto max-w-[1680px]">
-        <WorkspaceHeader currentPage="개인페이지" currentSection="my-dashboard" currentUser={currentUser} />
-
-        <div className="space-y-5">
-          <section className={`${cardClass} relative z-20 overflow-visible`}>
-            <div className="grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)_320px_140px] xl:items-start">
-              <div className="flex items-start gap-4">
+        <div className="space-y-4">
+          <section className={`${cardClass} relative z-20 overflow-visible p-4`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <div
-                  className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-[28px] border ${currentUser.color.border} ${currentUser.color.bg} text-[34px] shadow-sm`}
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border ${currentUser.color.border} ${currentUser.color.bg} text-[22px] shadow-sm`}
                 >
                   {selectedAvatar || currentUser.avatarEmoji || currentUser.name.slice(0, 1)}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[13px] font-semibold uppercase tracking-[0.2em] text-slate-400">Profile</div>
-                  <div className="mt-2 text-[28px] font-black tracking-[-0.05em] text-slate-950">{currentUser.name}</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{currentUser.role}</span>
-                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{currentUser.teamName}</span>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                      담당 업종 {selectedIndustryLabels.length || 0}개
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-[20px] font-black tracking-[-0.05em] text-slate-950">{currentUser.name}</span>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-600">{currentUser.role}</span>
+                    <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[12px] font-semibold text-blue-700">{currentUser.teamName}</span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-semibold text-emerald-700">
+                      담당업종 {selectedIndustryLabels.length || 0}개
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div>
-                <div className="text-sm font-semibold text-slate-700">아바타 선택</div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {avatarOptions.map((avatar) => {
-                    const active = selectedAvatar === avatar
-                    return (
-                      <button
-                        key={avatar}
-                        type="button"
-                        onClick={() => setSelectedAvatar(active ? "" : avatar)}
-                        className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl border text-[22px] transition ${
-                          active
-                            ? "border-blue-300 bg-blue-50 shadow-sm"
-                            : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
-                        }`}
-                        aria-label={`아바타 ${avatar}`}
-                      >
-                        {avatar}
-                      </button>
-                    )
-                  })}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setSelectedAvatar("")}
-                    className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-500 transition hover:bg-white"
+                    onClick={() => {
+                      setIsAvatarOpen(false)
+                      setIsIndustryOpen((prev) => !prev)
+                    }}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
-                    기본값
+                    담당 업종 선택
+                    <ChevronDown className={`h-4 w-4 text-slate-400 transition ${isIndustryOpen ? "rotate-180" : ""}`} />
                   </button>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-semibold text-slate-700">담당 업종 선택</div>
-                  <div className="text-xs text-slate-400">미회수 현황 집계 기준</div>
-                </div>
-                <details className="group relative mt-3">
-                  <summary className="flex h-12 cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 transition hover:bg-white">
-                    <span className="truncate pr-3">
-                      {selectedIndustryLabels.length
-                        ? `${selectedIndustryLabels.slice(0, 2).join(", ")}${selectedIndustryLabels.length > 2 ? ` 외 ${selectedIndustryLabels.length - 2}개` : ""}`
-                        : "담당 업종 선택"}
-                    </span>
-                    <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition group-open:rotate-180" />
-                  </summary>
-                  <div className="mt-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_12px_28px_rgba(15,23,42,0.08)]">
-                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                      {(data.industryOptions || []).map((industry) => {
-                        const checked = selectedIndustries.includes(industry)
-                        return (
-                          <label
-                            key={industry}
-                            className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
-                              checked ? "bg-blue-50 text-blue-700" : "bg-slate-50 text-slate-700 hover:bg-slate-100"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleIndustry(industry)}
-                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="flex-1">{industry}</span>
-                          </label>
-                        )
-                      })}
+                  {isIndustryOpen ? (
+                    <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[300px] rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+                      <div className="mb-2 text-xs font-semibold text-slate-400">미회수 현황 집계 기준</div>
+                      <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                        {(data.industryOptions || []).map((industry) => {
+                          const checked = selectedIndustries.includes(industry)
+                          return (
+                            <label
+                              key={industry}
+                              className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
+                                checked ? "bg-blue-50 text-blue-700" : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleIndustry(industry)}
+                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="flex-1">{industry}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
                     </div>
-                  </div>
-                </details>
-              </div>
+                  ) : null}
+                </div>
 
-              <div className="flex flex-wrap items-center gap-3 xl:justify-end">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsIndustryOpen(false)
+                      setIsAvatarOpen((prev) => !prev)
+                    }}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <UserRound className="h-4 w-4 text-slate-400" />
+                    아바타 변경
+                  </button>
+                  {isAvatarOpen ? (
+                    <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[304px] rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+                      <div className="mb-3 text-xs font-semibold text-slate-400">아바타 선택</div>
+                      <div className="flex flex-wrap gap-2">
+                        {avatarOptions.map((avatar) => {
+                          const active = selectedAvatar === avatar
+                          return (
+                            <button
+                              key={avatar}
+                              type="button"
+                              onClick={() => setSelectedAvatar(active ? "" : avatar)}
+                              className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border text-[20px] transition ${
+                                active
+                                  ? "border-blue-300 bg-blue-50 shadow-sm"
+                                  : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
+                              }`}
+                              aria-label={`아바타 ${avatar}`}
+                            >
+                              {avatar}
+                            </button>
+                          )
+                        })}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAvatar("")}
+                          className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-500 transition hover:bg-white"
+                        >
+                          기본값
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
                 <button
                   type="button"
                   onClick={saveProfile}
                   disabled={isPending}
-                  className="inline-flex h-11 min-w-[120px] items-center justify-center rounded-2xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-60"
                 >
                   {isPending ? "저장 중..." : "프로필 저장"}
                 </button>
               </div>
-              {profileMessage ? <div className="xl:col-span-4 text-sm text-slate-500">{profileMessage}</div> : null}
             </div>
+            {profileMessage ? <div className="mt-3 text-sm text-slate-500">{profileMessage}</div> : null}
           </section>
 
-          <section className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               title="내 신규계약"
               value={data.myContracts.length}
