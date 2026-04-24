@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { WorkspaceHeader } from "@/components/auth/workspace-header"
 
 type Props = {
@@ -16,8 +17,10 @@ type Props = {
     myContracts: any[]
     myContractMonthlySummary: Array<{ month: string; total: number; pending: number; recovered: number }>
     myPendingDocuments: any[]
+    pendingDocumentSource: any[]
     myTerminationRows: any[]
     assignedIndustries: string[]
+    industryOptions: string[]
   }
 }
 
@@ -29,11 +32,22 @@ function formatValue(value: unknown, fallback = "-") {
 }
 
 export function PersonalDashboard({ currentUser, data }: Props) {
+  const router = useRouter()
   const [currentPassword, setCurrentPassword] = useState("")
   const [nextPassword, setNextPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [message, setMessage] = useState("")
+  const [industryMessage, setIndustryMessage] = useState("")
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>(data.assignedIndustries || [])
   const [isPending, startTransition] = useTransition()
+
+  const pendingDocuments = useMemo(() => {
+    return (data.pendingDocumentSource || []).filter((row) => {
+      const industry = String(row?.industryGroup || row?.industry || "").trim()
+      const status = String(row?.status || "").trim()
+      return selectedIndustries.includes(industry) && status !== "회수"
+    })
+  }, [data.pendingDocumentSource, selectedIndustries])
 
   const updatePassword = () => {
     setMessage("")
@@ -64,6 +78,31 @@ export function PersonalDashboard({ currentUser, data }: Props) {
     })
   }
 
+  const toggleIndustry = (industry: string) => {
+    setSelectedIndustries((prev) =>
+      prev.includes(industry) ? prev.filter((item) => item !== industry) : [...prev, industry],
+    )
+  }
+
+  const saveIndustries = () => {
+    setIndustryMessage("")
+    startTransition(async () => {
+      const response = await fetch("/api/auth/profile", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ assignedIndustries: selectedIndustries }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || !payload?.ok) {
+        setIndustryMessage(payload?.error || "업종 저장에 실패했습니다.")
+        return
+      }
+      setSelectedIndustries(Array.isArray(payload?.assignedIndustries) ? payload.assignedIndustries : selectedIndustries)
+      setIndustryMessage("내 업종 설정이 저장되었습니다.")
+      router.refresh()
+    })
+  }
+
   return (
     <div className="min-h-screen bg-[#f6f8fc] px-4 py-4">
       <WorkspaceHeader currentPage="개인페이지" currentSection="my-dashboard" currentUser={currentUser} />
@@ -77,8 +116,8 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                 <p className="mt-1 text-sm text-slate-500">내 신규계약, 내 미회수 계약서, 내 해지 현황을 한 번에 봅니다.</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {data.assignedIndustries.length ? (
-                  data.assignedIndustries.map((industry) => (
+                {selectedIndustries.length ? (
+                  selectedIndustries.map((industry) => (
                     <span key={industry} className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
                       {industry}
                     </span>
@@ -97,7 +136,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             </div>
             <div className={cardClass}>
               <div className="text-sm font-semibold text-slate-500">내 미회수 계약서</div>
-              <div className="mt-3 text-3xl font-black tracking-[-0.03em] text-slate-950">{data.myPendingDocuments.length}</div>
+              <div className="mt-3 text-3xl font-black tracking-[-0.03em] text-slate-950">{pendingDocuments.length}</div>
             </div>
             <div className={cardClass}>
               <div className="text-sm font-semibold text-slate-500">나의 해지 리스트</div>
@@ -155,7 +194,40 @@ export function PersonalDashboard({ currentUser, data }: Props) {
 
           <div className={cardClass}>
             <h3 className="text-lg font-black tracking-[-0.03em] text-slate-950">2. 내 이름으로 된 계약서 미회수 현황</h3>
-            <p className="mt-1 text-sm text-slate-500">관리자페이지에서 지정한 담당 업종 기준으로 미회수 건만 모아 보여줍니다.</p>
+            <p className="mt-1 text-sm text-slate-500">내가 직접 선택한 담당 업종 기준으로 미회수 건을 모아 보여줍니다.</p>
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-700">내 담당 업종 선택</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(data.industryOptions || []).map((industry) => {
+                  const checked = selectedIndustries.includes(industry)
+                  return (
+                    <button
+                      key={industry}
+                      type="button"
+                      onClick={() => toggleIndustry(industry)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                        checked
+                          ? "border-blue-200 bg-blue-50 text-blue-700"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      {industry}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={saveIndustries}
+                  disabled={isPending}
+                  className="inline-flex h-10 items-center justify-center rounded-2xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  업종 저장
+                </button>
+                {industryMessage ? <div className="text-sm text-slate-600">{industryMessage}</div> : null}
+              </div>
+            </div>
             <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
               <table className="w-full text-sm">
                 <thead>
@@ -166,8 +238,8 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.myPendingDocuments.length ? (
-                    data.myPendingDocuments.map((row) => (
+                  {pendingDocuments.length ? (
+                    pendingDocuments.map((row) => (
                       <tr key={row.id} className="border-t border-slate-200">
                         <td className="px-4 py-3">{formatValue(row.companyName)}</td>
                         <td className="px-4 py-3">{formatValue(row.departmentName)}</td>
@@ -180,7 +252,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                   ) : (
                     <tr>
                       <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">
-                        {data.assignedIndustries.length ? "미회수 계약서가 없습니다." : "먼저 관리자페이지에서 담당 업종을 지정해주세요."}
+                        {selectedIndustries.length ? "미회수 계약서가 없습니다." : "담당 업종을 선택해주세요."}
                       </td>
                     </tr>
                   )}

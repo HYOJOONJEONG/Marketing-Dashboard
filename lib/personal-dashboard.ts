@@ -101,6 +101,13 @@ export function buildPersonalDashboardData(user: UserRecord, data: any) {
     }),
     "claimMonth",
   )
+  const pendingDocumentSource = sortByContractMonthDesc(
+    collectionRows.map((row: any) => ({
+      ...row,
+      industryGroup: getIndustryGroupLabel(row?.industry, row?.companyName),
+    })),
+    "claimMonth",
+  )
 
   const terminationSheets = Array.isArray(data?.termination?.sheets) ? data.termination.sheets : []
   const myTerminationRows = sortByDateDesc(
@@ -117,6 +124,7 @@ export function buildPersonalDashboardData(user: UserRecord, data: any) {
     myContracts,
     myContractMonthlySummary,
     myPendingDocuments,
+    pendingDocumentSource,
     myTerminationRows,
     assignedIndustries,
   }
