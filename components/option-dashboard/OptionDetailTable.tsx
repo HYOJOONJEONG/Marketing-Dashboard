@@ -558,7 +558,7 @@ export function OptionDetailTable({
                         <td key={column.key} className={cellClass}>
                           {column.key === "note" ? (
                             <div
-                              className={`${column.valueClass || ""} whitespace-pre-wrap break-all`}
+                              className={`flex min-h-[64px] items-center justify-center text-center ${column.valueClass || ""} whitespace-pre-wrap break-all`}
                               title={String(value ?? "")}
                               style={{
                                 display: "-webkit-box",
