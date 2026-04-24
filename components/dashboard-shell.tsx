@@ -751,8 +751,8 @@ function getRevenueRowMillionsByLabel(rows: any[], label: string) {
 function buildAnnualNetRevenueSubtitle(rows: any[], summary: any, unitPrice: unknown) {
   const totalMillions = getRevenueTotalMillions(rows)
   const salesMillions = getRevenueRowMillionsByLabel(rows, "매출순증")
-  const nonSalesRevenue = Math.max(0, totalMillions - salesMillions) * 1000000
-  const cumulativeNetUnits = Math.max(0, toNumber(summary?.cumulativeNetUnits))
+  const nonSalesRevenue = (totalMillions - salesMillions) * 1000000
+  const cumulativeNetUnits = toNumber(summary?.cumulativeNetUnits)
   const baseUnitPrice = toNumber(unitPrice) || 6160000
   const cumulativeNetRevenue = cumulativeNetUnits * baseUnitPrice
   return `26년 순증 매출 (약 ${formatMoney(nonSalesRevenue + cumulativeNetRevenue)})`
@@ -769,7 +769,7 @@ function buildRevenueNoteText(baseDate: unknown, unitPrice: unknown) {
   const mmdd = normalized && normalized.length >= 10 ? normalized.slice(5, 10).replace(".", "/") : ""
   const baseUnitPrice = toNumber(unitPrice) || 6160000
   const dateLabel = mmdd ? ` (${mmdd} 기준)` : ""
-  return `※대당 연 ${formatNumber(baseUnitPrice)}원으로 매출을 산정${dateLabel} / 위약금 및 이전비는 월 단위로 계산하되, 모든 금액 단위는 백만 원으로 표기.`
+  return `※대당 연 ${formatNumber(baseUnitPrice)}원으로 매출을 산정${dateLabel} / 연간 순증 매출은 (누적순증 합계 × 단가) + ((합계 - 매출순증) × 1,000,000) 기준이며, 위약금 및 이전비는 월 단위로 계산하되 모든 금액 단위는 백만 원으로 표기.`
 }
 
 function getUpcomingThursday(baseDate = new Date()) {
@@ -1297,7 +1297,12 @@ export function DashboardShell({
         subtitleTwo: nextSubtitleTwo,
       }
     })
-  }, [manualDraft.revenueRows, manualDraft.manualSummary?.totalContracts, manualDraft.revenueUnitPrice])
+  }, [
+    manualDraft.revenueRows,
+    manualDraft.manualSummary?.cumulativeNetUnits,
+    manualDraft.manualSummary?.totalContracts,
+    manualDraft.revenueUnitPrice,
+  ])
 
   useEffect(() => {
     setManualDraft(buildManualDraftFromWeekly(weeklyReport, contracts, paidOptionSourceColumns))
@@ -4508,14 +4513,14 @@ export function DashboardShell({
                   </label>
                 </div>
                 <div className="grid gap-3 xl:grid-cols-2">
-                  <label className="space-y-1.5">
-                    <div className="text-[12px] font-semibold text-slate-500">
-                      연간 순증 매출 <span className="text-amber-600">(자동계산)</span>
-                      {calcHint("((합계 - 매출순증) × 1,000,000) + (누적순증 합계 × 단가)")}
-                    </div>
-                    <input
-                      className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
-                      value={manualRevenueSubtitleOne}
+                    <label className="space-y-1.5">
+                      <div className="text-[12px] font-semibold text-slate-500">
+                        연간 순증 매출 <span className="text-amber-600">(자동계산)</span>
+                      {calcHint("누적순증 합계(단말기 순증 및 해지) × 단가 + ((매출 자동계산 설정 표의 합계 - 매출순증) × 1,000,000)")}
+                      </div>
+                      <input
+                        className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
+                        value={manualRevenueSubtitleOne}
                       readOnly
                     />
                   </label>
