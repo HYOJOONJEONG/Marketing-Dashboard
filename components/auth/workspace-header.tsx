@@ -136,7 +136,7 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser }: Pr
   }, [currentPage, currentSection])
 
   return (
-    <div className="relative mb-5 overflow-visible rounded-[28px] border border-slate-200/90 bg-white/95 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur">
+    <div className="workspace-header-shell relative mb-5 overflow-visible rounded-[28px] border border-slate-200/90 bg-white/95 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur">
       <div className="flex items-center justify-between gap-4 px-6 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <button

@@ -233,7 +233,8 @@
   }
 
   .dashboard-sidebar,
-  .dashboard-header-actions {
+  .dashboard-header-actions,
+  .workspace-header-shell {
     display: none !important;
   }
 
@@ -256,15 +257,6 @@
   }
 
   .dashboard-header {
-    margin-bottom: 6px !important;
-    border: 0 !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    min-height: auto !important;
-  }
-
-  .dashboard-header .text-\[15px\],
-  .dashboard-header h1 {
     display: none !important;
   }
 
