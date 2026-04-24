@@ -179,7 +179,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
 
   return (
     <div className="min-h-screen bg-[#f6f8fc] px-4 py-4">
-      <WorkspaceHeader currentPage="관리자페이지" currentSection={currentTab} currentUser={currentUser} canViewAdmin={true} />
+      <WorkspaceHeader currentPage="관리자페이지" currentSection={currentTab} currentUser={currentUser} />
 
       <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">

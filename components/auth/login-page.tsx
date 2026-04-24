@@ -35,38 +35,19 @@ export function LoginPage() {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#e0f2fe_0%,#f8fafc_34%,#eef6ff_100%)] px-4 py-10">
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl items-center justify-center">
         <div className="grid w-full max-w-5xl overflow-hidden rounded-[36px] border border-white/60 bg-white/80 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="hidden bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_48%,#22c55e_100%)] p-10 text-white xl:block">
-            <div className="inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-semibold">
-              INFoBiz Internal Workspace
-            </div>
-            <div className="mt-8 text-4xl font-black leading-tight tracking-[-0.04em]">
-              업무형 로그인
-              <br />
-              협업 대시보드
-            </div>
-            <p className="mt-5 max-w-md text-base leading-7 text-white/78">
-              로그인 후 권한에 맞는 메뉴만 노출되고, 접속 상태와 활동 로그, 편집 상태까지 함께 추적되는 내부 업무 시스템입니다.
-            </p>
-            <div className="mt-10 grid gap-4">
-              {[
-                "이름(ID) + 비밀번호 로그인",
-                "역할 기반 메뉴 노출과 서버단 권한 차단",
-                "현재 접속자, 편집 중 상태, 감사 로그 지원",
-              ].map((item) => (
-                <div key={item} className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-medium">
-                  {item}
-                </div>
-              ))}
-            </div>
+          <div className="relative hidden min-h-[640px] overflow-hidden xl:block">
+            <div
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ backgroundImage: "url('/login-yonhapinfomax.jpg')" }}
+            />
+            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(15,23,42,0.72)_0%,rgba(29,78,216,0.38)_55%,rgba(15,23,42,0.58)_100%)]" />
+            <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/30 to-transparent" />
           </div>
 
           <div className="p-6 sm:p-10">
             <div className="mx-auto max-w-md">
               <div className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">Login</div>
-              <h1 className="mt-3 text-3xl font-black tracking-[-0.04em] text-slate-950">인포Biz 업무 로그인</h1>
-              <p className="mt-3 text-sm leading-6 text-slate-500">
-                일반 사용자는 이름(ID)과 공통 비밀번호로 로그인하고, 관리자 계정은 별도 로그인 정보를 사용합니다.
-              </p>
+              <h1 className="mt-3 text-3xl font-black tracking-[-0.04em] text-slate-950">인포Biz 로그인</h1>
 
               <form className="mt-8 space-y-5" onSubmit={handleLogin}>
                 <label className="block">
@@ -76,7 +57,7 @@ export function LoginPage() {
                     <input
                       autoComplete="username"
                       className="h-full w-full bg-transparent text-[15px] text-slate-900 outline-none"
-                      placeholder="예: 정효준 / admin"
+                      placeholder="이름 입력"
                       value={loginId}
                       onChange={(event) => setLoginId(event.target.value)}
                       aria-label="이름 또는 로그인 아이디"
@@ -122,13 +103,6 @@ export function LoginPage() {
                   {isPending ? "로그인 중..." : "로그인"}
                 </button>
               </form>
-
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-500">
-                비밀번호는 코드에 고정하지 않고 환경변수에서 읽도록 설계되어 있습니다.
-                <br />
-                예: <code className="font-semibold text-slate-700">INFOBIZ_COMMON_PASSWORD</code>,{" "}
-                <code className="font-semibold text-slate-700">INFOBIZ_ADMIN_PASSWORD</code>
-              </div>
             </div>
           </div>
         </div>

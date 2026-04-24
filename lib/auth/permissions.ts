@@ -1,5 +1,19 @@
-import { ACTION_KEYS, AuthState, MENU_KEYS, PermissionAction, PermissionIndex, UserRecord } from "@/lib/auth/model"
+import { ACTION_KEYS, AuthState, MENU_KEYS, MenuKey, PermissionAction, PermissionIndex, UserRecord } from "@/lib/auth/model"
 import { getRoleIdByName } from "@/lib/auth/store"
+
+const ADMIN_ONLY_USER_NAME = "정효준"
+const ADMIN_CONSOLE_MENU_KEYS: MenuKey[] = [
+  "adminPage",
+  "userManagement",
+  "teamManagement",
+  "permissionManagement",
+  "permissionAuditLog",
+  "activityLog",
+]
+
+export function canAccessAdminConsole(user: UserRecord | null | undefined) {
+  return String(user?.name || "").trim() === ADMIN_ONLY_USER_NAME
+}
 
 export function createEmptyPermissionIndex(): PermissionIndex {
   return MENU_KEYS.reduce((acc, menuKey) => {
@@ -27,6 +41,14 @@ export function buildPermissionIndex(state: AuthState, user: UserRecord | null |
     .forEach((override) => {
       index[override.menuKey][override.action] = override.allowed
     })
+
+  if (!canAccessAdminConsole(user)) {
+    ADMIN_CONSOLE_MENU_KEYS.forEach((menuKey) => {
+      ACTION_KEYS.forEach((action) => {
+        index[menuKey][action] = false
+      })
+    })
+  }
 
   return index
 }
