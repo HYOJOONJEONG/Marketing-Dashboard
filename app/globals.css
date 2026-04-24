@@ -211,7 +211,7 @@
 
 .report-section-title {
   display: block;
-  background: transparent;
+  background: #e9f1ff;
   color: #111827;
   font-weight: 800;
   padding: 6px 10px;
@@ -687,7 +687,7 @@
   }
 
   .weekly-report-print .report-section-title {
-    background: transparent !important;
+    background: #e9f1ff !important;
     color: #111827 !important;
     padding: 4px 6px !important;
     border-bottom: 0 !important;
