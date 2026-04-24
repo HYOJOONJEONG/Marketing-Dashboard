@@ -150,7 +150,7 @@ export function OptionDetailTable({
           key: "note",
           label: "비고",
           headerClass: "w-[14%]",
-          cellClass: "whitespace-normal break-words align-top",
+          cellClass: "whitespace-normal break-words align-middle",
           valueClass: "leading-4",
         },
       ]
@@ -168,7 +168,7 @@ export function OptionDetailTable({
             key: "note",
             label: "비고",
             headerClass: "w-[13%]",
-            cellClass: "whitespace-normal break-all align-top",
+            cellClass: "whitespace-normal break-all align-middle",
             valueClass: "leading-4",
           },
         ]
@@ -185,7 +185,7 @@ export function OptionDetailTable({
             key: "note",
             label: "비고",
             headerClass: "min-w-[280px]",
-            cellClass: "whitespace-normal break-words align-top",
+            cellClass: "whitespace-normal break-words align-middle",
             valueClass: "leading-5",
           },
         ]
