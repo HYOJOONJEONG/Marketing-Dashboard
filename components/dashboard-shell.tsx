@@ -1098,20 +1098,21 @@ export function DashboardShell({
   const flushPendingSave = useRef<() => void>(() => {})
   const hasAccess = (menuKey: string, action: string = "view") =>
     Boolean(permissions?.[menuKey]?.admin || permissions?.[menuKey]?.[action])
-  const canViewDashboard = hasAccess("dashboard", "view")
-  const canEditDashboard = hasAccess("dashboard", "edit")
+  const canViewWeeklyReport = hasAccess("weeklyReport", "view")
+  const canViewManualInput = hasAccess("manualInput", "view")
+  const canEditManualInput = hasAccess("manualInput", "edit")
   const canViewContracts = hasAccess("newContractsList", "view")
-  const canCreateContracts = hasAccess("newContractCreate", "create")
-  const canEditContracts = hasAccess("newContractsList", "edit") || hasAccess("contractManagement", "edit")
-  const canDeleteContracts = hasAccess("newContractsList", "delete") || hasAccess("contractManagement", "delete")
-  const canViewCollections = hasAccess("contractManagement", "view")
-  const canViewTermination = hasAccess("contractManagement", "view")
-  const canViewWeeklySelection = canViewDashboard || canViewCollections
-  const canViewOptionDashboard = canViewDashboard
+  const canCreateContracts = hasAccess("newContractsList", "edit")
+  const canEditContracts = hasAccess("newContractsList", "edit")
+  const canDeleteContracts = hasAccess("newContractsList", "edit")
+  const canViewCollections = hasAccess("collectionManagement", "view")
+  const canViewTermination = hasAccess("terminationManagement", "view")
+  const canViewWeeklySelection = hasAccess("weeklySelection", "view")
+  const canViewOptionDashboard = hasAccess("optionDashboard", "view")
   const canViewAdminPage = hasAccess("adminPage", "view")
   const visibleViews = [
-    canViewDashboard ? "weekly-report" : null,
-    canEditDashboard ? "manual-input" : null,
+    canViewWeeklyReport ? "weekly-report" : null,
+    canViewManualInput ? "manual-input" : null,
     canViewContracts ? "contracts" : null,
     canViewWeeklySelection ? "weekly-selection" : null,
     canViewCollections ? "collection" : null,
@@ -3622,7 +3623,7 @@ export function DashboardShell({
                 </button>
                 {sections.performance && (
                   <div className="mt-2 space-y-1.5">
-                    {canViewDashboard ? (
+                    {canViewWeeklyReport ? (
                       <button
                         type="button"
                         onClick={() => setView("weekly-report")}
@@ -3633,7 +3634,7 @@ export function DashboardShell({
                         {viewTitles["weekly-report"]}
                       </button>
                     ) : null}
-                    {canEditDashboard ? (
+                    {canViewManualInput ? (
                       <button
                         type="button"
                         onClick={() => setView("manual-input")}
@@ -4422,7 +4423,7 @@ export function DashboardShell({
                                 className="h-8 w-full rounded-lg border border-slate-200 bg-slate-100 px-2 text-[12px]"
                                 value={editingContractDraft.recommender || ""}
                                 onChange={(e)=>updateEditingContractDraft("recommender", e.target.value)}
-                                readOnly={!hasAccess("contractManagement", "admin")}
+                                readOnly={!canEditContracts}
                               />
                             ) : <span className="block truncate">{row.recommender}</span>}
                           </td>

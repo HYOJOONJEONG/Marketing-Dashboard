@@ -286,7 +286,7 @@ function buildCounts(records: any[], categories: any[]) {
 }
 
 export async function GET(req: Request) {
-  const auth = await requireApiPermission("dashboard", "view")
+  const auth = await requireApiPermission("optionDashboard", "view")
   if (!auth.ok) return auth.response
   const { searchParams } = new URL(req.url)
   const basis = searchParams.get("basis") || "seed"
@@ -387,7 +387,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const auth = await requireApiPermission("dashboard", "edit")
+  const auth = await requireApiPermission("optionDashboard", "edit")
   if (!auth.ok) return auth.response
   try {
     const payload = await req.json()

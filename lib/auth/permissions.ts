@@ -33,12 +33,14 @@ export function buildPermissionIndex(state: AuthState, user: UserRecord | null |
   state.rolePermissions
     .filter((permission) => permission.roleId === roleId)
     .forEach((permission) => {
+      if (!index[permission.menuKey]) return
       index[permission.menuKey][permission.action] = permission.allowed
     })
 
   state.userPermissionOverrides
     .filter((override) => override.userId === user.id)
     .forEach((override) => {
+      if (!index[override.menuKey]) return
       index[override.menuKey][override.action] = override.allowed
     })
 

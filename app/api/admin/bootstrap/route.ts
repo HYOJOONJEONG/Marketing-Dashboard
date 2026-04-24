@@ -2,7 +2,7 @@ import path from "path"
 import { NextResponse } from "next/server"
 import { readDashboardState } from "@/lib/shared-db-store"
 import { requireApiPermission } from "@/lib/auth/server"
-import { MENU_KEYS, MENU_LABELS } from "@/lib/auth/model"
+import { ADMIN_PERMISSION_ROW_KEYS, MENU_LABELS } from "@/lib/auth/model"
 import { buildPermissionIndex, createEmptyPermissionIndex } from "@/lib/auth/permissions"
 import { getTeamName, listOnlinePresence, toSafeUser } from "@/lib/auth/store"
 
@@ -23,7 +23,7 @@ export async function GET() {
   const teamMap = Object.fromEntries(auth.context.state.teams.map((team) => [team.id, team.name]))
   const users = auth.context.state.users.map((user) => toSafeUser(user, auth.context.state))
   const roles = auth.context.state.roles
-  const permissionRows = MENU_KEYS.map((menuKey) => ({ menuKey, label: MENU_LABELS[menuKey] }))
+  const permissionRows = ADMIN_PERMISSION_ROW_KEYS.map((menuKey) => ({ menuKey, label: MENU_LABELS[menuKey] }))
   const rolePermissionMap = Object.fromEntries(
     roles.map((role) => [
       role.id,

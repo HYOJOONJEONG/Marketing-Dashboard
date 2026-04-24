@@ -1,8 +1,14 @@
 export type RoleKey = "admin" | "director" | "team_manager" | "staff" | "viewer"
 export type MenuKey =
   | "dashboard"
+  | "weeklyReport"
+  | "manualInput"
   | "newContractsList"
+  | "weeklySelection"
   | "newContractCreate"
+  | "collectionManagement"
+  | "optionDashboard"
+  | "terminationManagement"
   | "contractManagement"
   | "userManagement"
   | "teamManagement"
@@ -146,8 +152,14 @@ export type AuthState = {
 
 export const MENU_LABELS: Record<MenuKey, string> = {
   dashboard: "대시보드",
+  weeklyReport: "주간실적보고",
+  manualInput: "수동입력리스트",
   newContractsList: "신규계약리스트",
+  weeklySelection: "주간 반영 리스트",
   newContractCreate: "신규계약등록",
+  collectionManagement: "계약서통합관리",
+  optionDashboard: "유료 옵션 정보 현황",
+  terminationManagement: "해지 진행사항",
   contractManagement: "계약관리",
   userManagement: "사용자관리",
   teamManagement: "팀관리",
@@ -168,6 +180,17 @@ export const ACTION_LABELS: Record<PermissionAction, string> = {
 
 export const MENU_KEYS = Object.keys(MENU_LABELS) as MenuKey[]
 export const ACTION_KEYS = Object.keys(ACTION_LABELS) as PermissionAction[]
+
+export const ADMIN_PERMISSION_ROW_KEYS: MenuKey[] = [
+  "weeklyReport",
+  "manualInput",
+  "newContractsList",
+  "weeklySelection",
+  "collectionManagement",
+  "optionDashboard",
+  "terminationManagement",
+  "adminPage",
+]
 
 export const USER_COLOR_PALETTE = [
   { token: "blue", bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-300", hex: "#2563eb" },

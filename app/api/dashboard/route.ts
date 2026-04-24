@@ -13,6 +13,22 @@ const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
 const FALLBACK_PATH = path.join(process.cwd(), "api-dashboard-response.json")
 
 const EMPTY_DASHBOARD = { ui: {}, contracts: [], termination: {} }
+const DASHBOARD_VIEW_KEYS = [
+  "weeklyReport",
+  "manualInput",
+  "newContractsList",
+  "weeklySelection",
+  "collectionManagement",
+  "terminationManagement",
+  "optionDashboard",
+] as const
+const DASHBOARD_EDIT_KEYS = [
+  "manualInput",
+  "newContractsList",
+  "weeklySelection",
+  "collectionManagement",
+  "terminationManagement",
+] as const
 
 export async function GET() {
   const session = await resolveRequestSession()
@@ -20,7 +36,7 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "로그인이 필요합니다." }, { status: 401 })
   }
   const permissions = buildPermissionIndex(session.state, session.user)
-  if (!hasPermission(permissions, "dashboard", "view") && !hasPermission(permissions, "newContractsList", "view")) {
+  if (!DASHBOARD_VIEW_KEYS.some((menuKey) => hasPermission(permissions, menuKey, "view"))) {
     return NextResponse.json({ ok: false, error: "권한이 없습니다." }, { status: 403 })
   }
   try {
@@ -44,10 +60,13 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const dashboardAuth = await requireApiPermission("dashboard", "edit")
-  const contractAuth = await requireApiPermission("contractManagement", "edit")
-  if (!dashboardAuth.ok && !contractAuth.ok) {
-    return dashboardAuth.response
+  const session = await resolveRequestSession()
+  if (!session) {
+    return NextResponse.json({ ok: false, error: "로그인이 필요합니다." }, { status: 401 })
+  }
+  const permissions = buildPermissionIndex(session.state, session.user)
+  if (!DASHBOARD_EDIT_KEYS.some((menuKey) => hasPermission(permissions, menuKey, "edit"))) {
+    return NextResponse.json({ ok: false, error: "권한이 없습니다." }, { status: 403 })
   }
   const raw = await request.text()
   let body: any
@@ -66,19 +85,18 @@ export async function PUT(request: Request) {
       menuLabel: "Dashboard",
       changeLabel: "Save dashboard state",
     })
-    const granted = dashboardAuth.ok ? dashboardAuth.context : contractAuth.context
     await updateAuthState((state) => {
       appendActivityLog(state, {
-        actorUserId: granted.user.id,
-        actorName: granted.user.name,
+        actorUserId: session.user.id,
+        actorName: session.user.name,
         actionType: "dashboard_put",
         targetType: "dashboard_state",
         targetId: "dashboard",
-        pageKey: "dashboard",
+        pageKey: "weeklyReport",
         beforeValue: "",
         afterValue: "save",
         ipAddress: getRequestIp(request),
-        sessionId: granted.sessionId,
+        sessionId: session.sessionId,
         success: true,
       })
     })
@@ -94,7 +112,7 @@ export async function PUT(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireApiPermission("newContractCreate", "create")
+  const auth = await requireApiPermission("newContractsList", "edit")
   if (!auth.ok) return auth.response
   let body: any
 
@@ -164,7 +182,7 @@ export async function POST(request: Request) {
         actionType: "contract_create",
         targetType: "contract",
         targetId: nextContract.id,
-        pageKey: "newContractCreate",
+        pageKey: "newContractsList",
         beforeValue: "",
         afterValue: JSON.stringify({
           recommender: nextContract.recommender,

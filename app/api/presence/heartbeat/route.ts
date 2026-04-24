@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server"
-import { requireApiPermission } from "@/lib/auth/server"
+import { resolveRequestSession } from "@/lib/auth/session"
 import { appendActivityLog, updateAuthState, upsertPresenceSession } from "@/lib/auth/store"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function POST(request: Request) {
-  const auth = await requireApiPermission("newContractsList", "view")
-  if (!auth.ok) return auth.response
+  const session = await resolveRequestSession()
+  if (!session) {
+    return NextResponse.json({ ok: false, error: "로그인이 필요합니다." }, { status: 401 })
+  }
 
   let body: any
   try {
@@ -22,15 +24,15 @@ export async function POST(request: Request) {
 
   await updateAuthState((state) => {
     upsertPresenceSession(state, {
-      userId: auth.context.user.id,
+      userId: session.user.id,
       currentPage,
       currentSection,
       connectionId,
-      sessionId: auth.context.sessionId,
+      sessionId: session.sessionId,
     })
     appendActivityLog(state, {
-      actorUserId: auth.context.user.id,
-      actorName: auth.context.user.name,
+      actorUserId: session.user.id,
+      actorName: session.user.name,
       actionType: "presence_heartbeat",
       targetType: "presence",
       targetId: connectionId,
@@ -38,7 +40,7 @@ export async function POST(request: Request) {
       beforeValue: "",
       afterValue: JSON.stringify({ currentSection }),
       ipAddress: "browser",
-      sessionId: auth.context.sessionId,
+      sessionId: session.sessionId,
       success: true,
     })
   })

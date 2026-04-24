@@ -39,7 +39,7 @@ export default async function Page({
 
   const initialView =
     (params.view as any) ||
-    (hasPermission(permissionIndex, "dashboard", "view")
+    (hasPermission(permissionIndex, "weeklyReport", "view")
       ? "weekly-report"
       : hasPermission(permissionIndex, "newContractsList", "view")
         ? "contracts"
