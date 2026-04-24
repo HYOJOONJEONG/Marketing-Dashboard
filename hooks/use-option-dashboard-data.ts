@@ -71,7 +71,10 @@ export function useOptionDashboardData(params: Params) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const query = useMemo(() => buildQuery(params), [params])
+  const query = useMemo(
+    () => buildQuery(params),
+    [params.basis, params.date, params.category, params.search],
+  )
 
   useEffect(() => {
     let mounted = true
@@ -80,9 +83,17 @@ export function useOptionDashboardData(params: Params) {
     if (isFreshCache) {
       setData(cached.data)
       setLoading(false)
-    } else {
-      setLoading(true)
+      setError(null)
+      return () => {
+        mounted = false
+      }
     }
+
+    if (cached) {
+      setData(cached.data)
+    }
+
+    setLoading(true)
     setError(null)
     const controller = new AbortController()
     fetch(`/api/options?${query}`, { signal: controller.signal, cache: "no-store" })
