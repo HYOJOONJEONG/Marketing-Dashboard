@@ -31,9 +31,14 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser }: Pr
     <div className="mb-4 overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center justify-between gap-4 px-5 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${currentUser.color.border} ${currentUser.color.bg} ${currentUser.color.text} text-[20px] font-black`}>
+          <button
+            type="button"
+            onClick={() => router.push("/me")}
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${currentUser.color.border} ${currentUser.color.bg} ${currentUser.color.text} text-[20px] font-black transition hover:scale-[1.02]`}
+            aria-label="개인페이지 열기"
+          >
             {currentUser.name.slice(0, 1)}
-          </div>
+          </button>
           <div className="flex min-w-0 items-center gap-2.5 overflow-hidden text-[14px]">
             <span className="shrink-0 text-[17px] font-black tracking-[-0.03em] text-slate-950">{currentUser.name}</span>
             <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-600">{currentUser.role}</span>

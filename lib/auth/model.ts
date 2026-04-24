@@ -60,6 +60,7 @@ export type UserRecord = {
   loginId: string
   name: string
   title?: string | null
+  assignedIndustries?: string[]
   role: RoleKey
   teamId: string
   active: boolean

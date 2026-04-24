@@ -21,6 +21,17 @@ export async function GET() {
     (await readDashboardState<any>(FALLBACK_PATH)) || { contracts: [] }
 
   const teamMap = Object.fromEntries(auth.context.state.teams.map((team) => [team.id, team.name]))
+  const industryOptions = Array.from(
+    new Set(
+      [
+        ...(Array.isArray(dashboard?.contracts) ? dashboard.contracts.map((row: any) => row?.industry) : []),
+        ...(Array.isArray(dashboard?.collection?.integrated) ? dashboard.collection.integrated.map((row: any) => row?.industry) : []),
+        ...(Array.isArray(dashboard?.collection?.longTerm) ? dashboard.collection.longTerm.map((row: any) => row?.industry) : []),
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "ko"))
   const visibleUsers = auth.context.state.users.filter((user) => !user.deletedAt)
   const users = visibleUsers.map((user) => toSafeUser(user, auth.context.state))
   const roles = auth.context.state.roles
@@ -56,6 +67,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     users,
+    industryOptions,
     teams: auth.context.state.teams,
     roles,
     permissionRows,

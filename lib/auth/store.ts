@@ -92,6 +92,7 @@ function createSeedUsers(now: string, teams: TeamRecord[]): UserRecord[] {
     loginId: user.name,
     name: user.name,
     title: getUserTitle(user.name, user.role),
+    assignedIndustries: [],
     role: user.role,
     teamId: String(teamIdByName.get(user.team) || teams[0]?.id || ""),
     active: true,
@@ -232,6 +233,9 @@ function normalizeUserTitles(state: AuthState) {
   state.users = state.users.map((user) => ({
     ...user,
     title: user.title || getUserTitle(user.name, user.role),
+    assignedIndustries: Array.isArray(user.assignedIndustries)
+      ? user.assignedIndustries.map((item) => String(item || "").trim()).filter(Boolean)
+      : [],
   }))
 }
 
@@ -278,9 +282,9 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
       existing.title = getUserTitle(seedUser.name, seedUser.role)
       existing.active = true
       existing.deletedAt = null
-      existing.authStrategy = "common"
-      existing.passwordHash = null
-      existing.passwordSalt = null
+      existing.assignedIndustries = Array.isArray(existing.assignedIndustries)
+        ? existing.assignedIndustries.map((item) => String(item || "").trim()).filter(Boolean)
+        : []
       existing.updatedAt = now
       return
     }
@@ -290,6 +294,7 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
       loginId: seedUser.name,
       name: seedUser.name,
       title: getUserTitle(seedUser.name, seedUser.role),
+      assignedIndustries: [],
       role: seedUser.role,
       teamId,
       active: true,
@@ -461,6 +466,7 @@ export function toSafeUser(user: UserRecord, state: AuthState) {
     loginId: user.loginId,
     name: user.name,
     title: user.title || getUserTitle(user.name, user.role),
+    assignedIndustries: Array.isArray(user.assignedIndustries) ? user.assignedIndustries : [],
     role: user.role,
     teamId: user.teamId,
     teamName: getTeamName(state, user.teamId),

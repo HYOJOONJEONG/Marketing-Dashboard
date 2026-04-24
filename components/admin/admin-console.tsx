@@ -73,6 +73,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   const permissionRows = bootstrap?.permissionRows || []
   const userPermissionMap = bootstrap?.userPermissionMap || {}
   const contracts = bootstrap?.contracts || []
+  const industryOptions = bootstrap?.industryOptions || []
 
   const selectedUser = useMemo(() => users.find((user: any) => user.id === selectedUserId) || null, [users, selectedUserId])
   const filteredUsers = useMemo(() => {
@@ -344,6 +345,43 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                           ))}
                         </select>
                       </label>
+                      <div className="block">
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">담당 업종</div>
+                        <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                          <div className="flex flex-wrap gap-2">
+                            {industryOptions.length ? (
+                              industryOptions.map((industry: string) => {
+                                const checked = Array.isArray(selectedUser.assignedIndustries) && selectedUser.assignedIndustries.includes(industry)
+                                return (
+                                  <label
+                                    key={industry}
+                                    className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                                      checked
+                                        ? "border-blue-200 bg-blue-50 text-blue-700"
+                                        : "border-slate-200 bg-slate-50 text-slate-600"
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="hidden"
+                                      checked={checked}
+                                      onChange={(event) => {
+                                        const nextValues = event.target.checked
+                                          ? [...(selectedUser.assignedIndustries || []), industry]
+                                          : (selectedUser.assignedIndustries || []).filter((item: string) => item !== industry)
+                                        updateUser("assignedIndustries", nextValues)
+                                      }}
+                                    />
+                                    {industry}
+                                  </label>
+                                )
+                              })
+                            ) : (
+                              <div className="text-sm text-slate-400">업종 데이터가 아직 없습니다.</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                       <label className="block">
                         <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">시스템 역할</div>
                         <select

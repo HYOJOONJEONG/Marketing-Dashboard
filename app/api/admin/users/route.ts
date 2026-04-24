@@ -22,6 +22,9 @@ export async function POST(request: Request) {
   const title = String(body?.title || "사원").trim()
   const teamId = String(body?.teamId || "").trim()
   const password = String(body?.password || "").trim()
+  const assignedIndustries = Array.isArray(body?.assignedIndustries)
+    ? body.assignedIndustries.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+    : []
 
   if (!name || !loginId || !teamId) {
     return NextResponse.json({ ok: false, error: "이름, 로그인ID, 팀은 필수입니다." }, { status: 400 })
@@ -38,6 +41,7 @@ export async function POST(request: Request) {
       loginId,
       name,
       title,
+      assignedIndustries,
       role: role as any,
       teamId,
       active: true,
