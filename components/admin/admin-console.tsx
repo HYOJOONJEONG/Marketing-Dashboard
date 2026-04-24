@@ -25,6 +25,7 @@ const tabs = [
 ] as const
 
 const TITLE_OPTIONS = ["본부장", "팀장", "부장", "과장", "대리", "사원"] as const
+const EDITABLE_ACTIONS = ["create", "edit", "delete", "approve", "admin"] as const
 
 function inferRoleFromTitle(title: string) {
   if (title === "본부장") return "director"
@@ -92,6 +93,8 @@ export function AdminConsole({ currentUser, permissions }: Props) {
     () => userPermissionMap[selectedPermissionUserId] || {},
     [selectedPermissionUserId, userPermissionMap],
   )
+  const hasEditablePermission = (menuKey: string) =>
+    EDITABLE_ACTIONS.some((action) => Boolean(selectedUserPermissionIndex?.[menuKey]?.[action]))
 
   const runAction = (task: () => Promise<void>) => {
     setMessage("")
@@ -156,6 +159,72 @@ export function AdminConsole({ currentUser, permissions }: Props) {
           allowed,
         }),
       })
+    })
+  }
+
+  const saveMenuPermission = (menuKey: string, mode: "read" | "edit", allowed: boolean) => {
+    runAction(async () => {
+      if (mode === "read") {
+        await fetchJson("/api/admin/permissions", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            mode: "user",
+            userId: selectedPermissionUserId,
+            menuKey,
+            action: "view",
+            allowed,
+          }),
+        })
+        if (!allowed) {
+          await Promise.all(
+            EDITABLE_ACTIONS.map((action) =>
+              fetchJson("/api/admin/permissions", {
+                method: "PUT",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                  mode: "user",
+                  userId: selectedPermissionUserId,
+                  menuKey,
+                  action,
+                  allowed: false,
+                }),
+              }),
+            ),
+          )
+        }
+        return
+      }
+
+      if (allowed) {
+        await fetchJson("/api/admin/permissions", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            mode: "user",
+            userId: selectedPermissionUserId,
+            menuKey,
+            action: "view",
+            allowed: true,
+          }),
+        })
+      }
+
+      await Promise.all(
+        EDITABLE_ACTIONS.map((action) =>
+          fetchJson("/api/admin/permissions", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              mode: "user",
+              userId: selectedPermissionUserId,
+              menuKey,
+              action,
+              allowed,
+            }),
+          }),
+        ),
+      )
     })
   }
 
@@ -464,26 +533,28 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
                       <th className="px-4 py-3 text-left font-semibold">메뉴</th>
-                      {["view", "create", "edit", "delete", "approve", "admin"].map((action) => (
-                        <th key={action} className="px-4 py-3 text-center font-semibold">
-                          {action}
-                        </th>
-                      ))}
+                      <th className="px-4 py-3 text-center font-semibold">읽기</th>
+                      <th className="px-4 py-3 text-center font-semibold">수정가능</th>
                     </tr>
                   </thead>
                   <tbody>
                     {permissionRows.map((row: any) => (
                       <tr key={row.menuKey} className="border-t border-slate-200">
                         <td className="px-4 py-3 font-semibold text-slate-800">{row.label}</td>
-                        {["view", "create", "edit", "delete", "approve", "admin"].map((action) => (
-                          <td key={`${row.menuKey}-${action}`} className="px-4 py-3 text-center">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(selectedUserPermissionIndex?.[row.menuKey]?.[action])}
-                              onChange={(event) => savePermission(row.menuKey, action, event.target.checked)}
-                            />
-                          </td>
-                        ))}
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(selectedUserPermissionIndex?.[row.menuKey]?.view)}
+                            onChange={(event) => saveMenuPermission(row.menuKey, "read", event.target.checked)}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={hasEditablePermission(row.menuKey)}
+                            onChange={(event) => saveMenuPermission(row.menuKey, "edit", event.target.checked)}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
