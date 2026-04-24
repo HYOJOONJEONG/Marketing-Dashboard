@@ -4084,7 +4084,7 @@ export function DashboardShell({
                 <button
                   type="button"
                   onClick={() => setIsPresenceListOpen((prev) => !prev)}
-                  className="mt-4 flex w-full items-center justify-between gap-3 text-left"
+                  className="mt-4 flex w-full items-center gap-3 text-left"
                 >
                   <div className="flex min-w-0 items-center -space-x-3">
                     {visiblePresenceUsers.length ? (
@@ -4116,7 +4116,6 @@ export function DashboardShell({
                       </span>
                     ) : null}
                   </div>
-                  <span className="text-[12px] font-semibold text-slate-400">Slack 스타일</span>
                 </button>
 
                 <div
@@ -4131,11 +4130,11 @@ export function DashboardShell({
                         return (
                           <div
                             key={user.userId}
-                            className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2.5"
+                            className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2.5"
                             title={`${user.userName} · ${user.teamName || "팀 미지정"}`}
                           >
                             <div
-                              className={`relative flex h-10 w-10 items-center justify-center rounded-full border ${user.color.border} ${user.color.bg} ${user.color.text} text-[18px] font-black`}
+                              className={`relative mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${user.color.border} ${user.color.bg} ${user.color.text} text-[18px] font-black`}
                             >
                               {label}
                               <span
@@ -4143,17 +4142,17 @@ export function DashboardShell({
                               />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="truncate text-[14px] font-bold tracking-[-0.03em] text-slate-900">
+                              <div className="text-[14px] font-bold tracking-[-0.03em] text-slate-900">
+                                <span className="block break-keep pr-1">
                                   {user.userName}
                                 </span>
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-slate-500">
+                                <span className="break-keep">{user.teamName || "팀 미지정"}</span>
                                 <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
                                   {getPresenceLabel(user.status)}
                                 </span>
-                              </div>
-                              <div className="mt-1 truncate text-[12px] text-slate-500">
-                                {user.teamName || "팀 미지정"}
-                                {user.currentPage ? ` · ${user.currentPage}` : ""}
+                                {user.currentPage ? <span className="break-keep">{user.currentPage}</span> : null}
                               </div>
                             </div>
                           </div>
