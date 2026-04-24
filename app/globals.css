@@ -233,6 +233,19 @@
     print-color-adjust: exact !important;
   }
 
+  body > div,
+  body > div > div,
+  .min-h-screen,
+  .dashboard-shell,
+  .dashboard-shell > div,
+  .dashboard-shell main,
+  .weekly-report-print,
+  .print-report-cover {
+    background: #ffffff !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
   .dashboard-sidebar,
   .dashboard-header-actions,
   .workspace-header-shell {
