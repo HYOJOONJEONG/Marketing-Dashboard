@@ -21,7 +21,8 @@ export async function GET() {
     (await readDashboardState<any>(FALLBACK_PATH)) || { contracts: [] }
 
   const teamMap = Object.fromEntries(auth.context.state.teams.map((team) => [team.id, team.name]))
-  const users = auth.context.state.users.map((user) => toSafeUser(user, auth.context.state))
+  const visibleUsers = auth.context.state.users.filter((user) => !user.deletedAt)
+  const users = visibleUsers.map((user) => toSafeUser(user, auth.context.state))
   const roles = auth.context.state.roles
   const permissionRows = ADMIN_PERMISSION_ROW_KEYS.map((menuKey) => ({ menuKey, label: MENU_LABELS[menuKey] }))
   const rolePermissionMap = Object.fromEntries(
@@ -37,7 +38,7 @@ export async function GET() {
     ]),
   )
   const userOverrideMap = Object.fromEntries(
-    auth.context.state.users.map((user) => [
+    visibleUsers.map((user) => [
       user.id,
       auth.context.state.userPermissionOverrides
         .filter((override) => override.userId === user.id)
@@ -49,7 +50,7 @@ export async function GET() {
     ]),
   )
   const userPermissionMap = Object.fromEntries(
-    auth.context.state.users.map((user) => [user.id, buildPermissionIndex(auth.context.state, user)]),
+    visibleUsers.map((user) => [user.id, buildPermissionIndex(auth.context.state, user)]),
   )
 
   return NextResponse.json({

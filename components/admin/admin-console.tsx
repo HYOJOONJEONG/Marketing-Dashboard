@@ -49,14 +49,18 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   const [selectedPermissionUserId, setSelectedPermissionUserId] = useState("")
   const [contractFilter, setContractFilter] = useState("")
   const [message, setMessage] = useState("")
-  const [userNameDraft, setUserNameDraft] = useState("")
   const [isPending, startTransition] = useTransition()
 
   const loadBootstrap = async () => {
     const payload = await fetchJson("/api/admin/bootstrap")
     setBootstrap(payload)
-    if (!selectedUserId && payload.users?.[0]?.id) setSelectedUserId(payload.users[0].id)
-    if (!selectedPermissionUserId && payload.users?.[0]?.id) setSelectedPermissionUserId(payload.users[0].id)
+    const nextDefaultUserId = payload.users?.[0]?.id || ""
+    if (!payload.users?.some((user: any) => user.id === selectedUserId)) {
+      setSelectedUserId(nextDefaultUserId)
+    }
+    if (!payload.users?.some((user: any) => user.id === selectedPermissionUserId)) {
+      setSelectedPermissionUserId(nextDefaultUserId)
+    }
   }
 
   useEffect(() => {
@@ -71,10 +75,6 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   const contracts = bootstrap?.contracts || []
 
   const selectedUser = useMemo(() => users.find((user: any) => user.id === selectedUserId) || null, [users, selectedUserId])
-
-  useEffect(() => {
-    setUserNameDraft(selectedUser?.name || "")
-  }, [selectedUser?.id, selectedUser?.name])
   const filteredUsers = useMemo(() => {
     const query = userSearch.trim().toLowerCase()
     return users.filter((user: any) => {
@@ -139,15 +139,6 @@ export function AdminConsole({ currentUser, permissions }: Props) {
         body: JSON.stringify({ userId: selectedUser.id, fieldName, value }),
       })
     })
-  }
-
-  const commitUserName = () => {
-    const nextName = userNameDraft.trim()
-    if (!selectedUser || !nextName || nextName === selectedUser.name) {
-      setUserNameDraft(selectedUser?.name || "")
-      return
-    }
-    updateUser("name", nextName)
   }
 
   const deleteUser = (userId: string) => {
@@ -259,7 +250,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-black tracking-[-0.03em] text-slate-950">사용자관리</h2>
-                  <p className="mt-1 text-sm text-slate-500">사용자 추가, 이름 변경, 팀/역할 변경, 활성화/비활성화, 삭제를 관리합니다.</p>
+                  <p className="mt-1 text-sm text-slate-500">사용자 추가, 팀/직급 변경, 활성화/비활성화, 삭제를 관리합니다.</p>
                 </div>
                 <button type="button" onClick={createUser} className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white">
                   사용자 추가
@@ -323,25 +314,8 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                       <div>
                         <div className="text-sm font-semibold text-slate-500">선택 사용자</div>
                         <div className="mt-1 text-lg font-black tracking-[-0.03em] text-slate-950">{selectedUser.name}</div>
+                        <div className="mt-1 text-sm text-slate-400">{selectedUser.loginId}</div>
                       </div>
-                      <label className="block">
-                        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">이름</div>
-                        <input
-                          value={userNameDraft}
-                          className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm"
-                          onChange={(event) => setUserNameDraft(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault()
-                              commitUserName()
-                            }
-                          }}
-                          onBlur={(event) => {
-                            void event
-                            commitUserName()
-                          }}
-                        />
-                      </label>
                       <label className="block">
                         <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">팀</div>
                         <select
@@ -392,15 +366,15 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                         >
                           {selectedUser.active ? "비활성화" : "재활성화"}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteUser(selectedUser.id)}
-                          className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700"
-                        >
-                          삭제/정리
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteUser(selectedUser.id)}
+                            className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700"
+                          >
+                            삭제
+                          </button>
+                        </div>
                       </div>
-                    </div>
                   ) : (
                     <div className="text-sm text-slate-400">왼쪽에서 사용자를 선택하세요.</div>
                   )}
