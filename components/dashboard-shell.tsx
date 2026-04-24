@@ -3821,9 +3821,9 @@ export function DashboardShell({
                         <th className={weeklyThClass}>총 계약대수</th>
                       </tr>
                       <tr>
-                        <td className={`${weeklyTdClass} bg-amber-50 font-bold text-slate-800`}>{formatNumber(reportSummary?.weeklyNetUnits)}대</td>
-                        <td className={`${weeklyTdClass} bg-amber-50 font-bold text-slate-800`}>{formatNumber(reportSummary?.weeklyNewContracts)}대</td>
-                        <td className={`${weeklyTdClass} bg-amber-50 font-bold text-slate-800`}>{formatNumber(reportSummary?.weeklyTerminationContracts)}대</td>
+                        <td className={`${weeklyTdClass} font-bold text-slate-800`} style={{ backgroundColor: "#fffbeb" }}>{formatNumber(reportSummary?.weeklyNetUnits)}대</td>
+                        <td className={`${weeklyTdClass} font-bold text-slate-800`} style={{ backgroundColor: "#fffbeb" }}>{formatNumber(reportSummary?.weeklyNewContracts)}대</td>
+                        <td className={`${weeklyTdClass} font-bold text-slate-800`} style={{ backgroundColor: "#fffbeb" }}>{formatNumber(reportSummary?.weeklyTerminationContracts)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.cumulativeNetUnits)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.cumulativeNewContracts)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.cumulativeTerminationContracts)}대</td>
@@ -4616,10 +4616,10 @@ export function DashboardShell({
                           {section.cells.map(([label, field], cellIndex) => {
                             const isAutoField = autoManualSummaryFields.has(field)
                             return (
-                              <td key={`${section.title}-${field}`} className={`${tdClass} p-1 ${isAutoField ? "bg-amber-50" : ""}`}>
+                              <td key={`${section.title}-${field}`} className={`${tdClass} p-1`}>
                                 <input
-                                  className={`${manualTableInputClass} ${isAutoField ? "cursor-not-allowed bg-amber-50 font-bold text-amber-900 shadow-inner" : ""} ${section.cells.length === 4 && cellIndex === section.cells.length - 1 ? "text-left px-4" : ""}`}
-                                  style={isAutoField ? { borderColor: "#fcd34d" } : undefined}
+                                  className={`${manualTableInputClass} ${isAutoField ? "cursor-not-allowed font-bold text-slate-900" : ""} ${section.cells.length === 4 && cellIndex === section.cells.length - 1 ? "text-left px-4" : ""}`}
+                                  style={isAutoField ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
                                   value={String(manualSummary?.[field] ?? "")}
                                   readOnly={isAutoField}
                                   onChange={(e) => updateManualSummaryField(field, e.target.value)}
