@@ -17,6 +17,7 @@ const SHARED_DB_ALLOW_SEED = process.env.SHARED_DB_ALLOW_SEED !== "0"
 const STORE_KEYS = {
   dashboard: "dashboard_state",
   options: "options_mock",
+  auth: "auth_system",
 } as const
 
 type SharedKey = (typeof STORE_KEYS)[keyof typeof STORE_KEYS]
@@ -122,12 +123,14 @@ function buildHash(prevHash: string, key: string, actor: string, action: string,
 function defaultMenuLabelByKey(key: SharedKey) {
   if (key === STORE_KEYS.dashboard) return "Dashboard"
   if (key === STORE_KEYS.options) return "Options"
+  if (key === STORE_KEYS.auth) return "Auth"
   return "System"
 }
 
 function defaultChangeLabelByKey(key: SharedKey) {
   if (key === STORE_KEYS.dashboard) return "Save dashboard state"
   if (key === STORE_KEYS.options) return "Save options data"
+  if (key === STORE_KEYS.auth) return "Save auth system"
   return "Save data"
 }
 
@@ -170,6 +173,7 @@ async function readRawValue(key: SharedKey) {
     const legacyPathByKey: Record<SharedKey, string> = {
       [STORE_KEYS.dashboard]: "/api/dashboard",
       [STORE_KEYS.options]: "/api/options",
+      [STORE_KEYS.auth]: "/api/auth/session",
     }
     const legacyResp = await fetch(`${baseUrl}${legacyPathByKey[key]}`, {
       headers: CENTRAL_DB_API_TOKEN ? { "x-central-token": CENTRAL_DB_API_TOKEN } : undefined,
@@ -294,4 +298,18 @@ export async function writeOptionsMock(value: unknown, meta?: WriteAuditMeta) {
     throw new Error("Options data must be a JSON object.")
   }
   await writeRawValue(STORE_KEYS.options, JSON.stringify(value, null, 2), meta)
+}
+
+export async function readAuthSystem<T>(fallbackValue?: T): Promise<T | null> {
+  const raw = await readRawValue(STORE_KEYS.auth)
+  const parsed = parseJsonObject<T>(raw)
+  if (parsed) return parsed
+  return fallbackValue ?? null
+}
+
+export async function writeAuthSystem(value: unknown, meta?: WriteAuditMeta) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Auth system must be a JSON object.")
+  }
+  await writeRawValue(STORE_KEYS.auth, JSON.stringify(value, null, 2), meta)
 }

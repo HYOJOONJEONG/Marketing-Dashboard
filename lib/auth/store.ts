@@ -1,6 +1,4 @@
 import crypto from "crypto"
-import fs from "fs/promises"
-import path from "path"
 import {
   ACTION_KEYS,
   AuthState,
@@ -11,8 +9,8 @@ import {
   UserRecord,
   getUserColorToken,
 } from "@/lib/auth/model"
+import { readAuthSystem, writeAuthSystem } from "@/lib/shared-db-store"
 
-const AUTH_STORE_PATH = path.join(process.cwd(), "data", "auth-system.json")
 const PRESENCE_TIMEOUT_MS = 45 * 1000
 
 let authWriteQueue: Promise<void> = Promise.resolve()
@@ -197,26 +195,31 @@ function createSeedState(): AuthState {
   }
 }
 
-async function ensureStoreDir() {
-  await fs.mkdir(path.dirname(AUTH_STORE_PATH), { recursive: true })
-}
-
 export async function readAuthState(): Promise<AuthState> {
-  await ensureStoreDir()
   try {
-    const raw = await fs.readFile(AUTH_STORE_PATH, "utf8")
-    const parsed = JSON.parse(raw.replace(/^\uFEFF/, "")) as AuthState
-    return parsed?.users ? parsed : createSeedState()
-  } catch {
+    const parsed = await readAuthSystem<AuthState>()
+    if (parsed?.users) return parsed
     const seeded = createSeedState()
-    await fs.writeFile(AUTH_STORE_PATH, JSON.stringify(seeded, null, 2), "utf8")
+    try {
+      await writeAuthSystem(seeded, {
+        menuLabel: "Auth",
+        changeLabel: "Seed auth system",
+      })
+    } catch {
+      // In read-only fallback environments, keep serving the seeded state
+      // so login can still work if writes are unavailable.
+    }
     return seeded
+  } catch {
+    return createSeedState()
   }
 }
 
 async function writeAuthState(state: AuthState) {
-  await ensureStoreDir()
-  await fs.writeFile(AUTH_STORE_PATH, JSON.stringify(state, null, 2), "utf8")
+  await writeAuthSystem(state, {
+    menuLabel: "Auth",
+    changeLabel: "Persist auth state",
+  })
 }
 
 export async function updateAuthState(mutator: (draft: AuthState) => void | Promise<void>) {
