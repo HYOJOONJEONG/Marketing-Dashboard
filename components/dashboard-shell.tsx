@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { KeyRound, LogOut, UserRound, X } from "lucide-react"
+import { ChevronRight, KeyRound, LayoutGrid, LogOut, UserRound, X } from "lucide-react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
 import terminationManagerLookup from "@/data/termination-manager-lookup.json"
 
@@ -3622,147 +3622,143 @@ export function DashboardShell({
     <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1720px]">
           <aside className="dashboard-sidebar w-[272px] border-r border-slate-200 bg-white px-4 py-4">
-            <div className="overflow-hidden rounded-[24px] border border-[#dbe7ff] bg-[linear-gradient(180deg,#ffffff_0%,#f5f9ff_100%)] px-5 py-4 shadow-[0_8px_20px_rgba(37,99,235,0.06)]">
-              <div className="flex items-center justify-start">
+            <div className="relative overflow-visible rounded-[28px] border border-slate-200 bg-white px-5 py-5 shadow-sm">
+              <div className="flex items-center gap-3">
                 <img
                   src="/yonhapinfomax-logo.png"
                   alt="연합인포맥스"
                   className="h-8 w-auto shrink-0 object-contain"
                 />
+                <div className="text-[17px] font-black tracking-[-0.05em] text-[#173b93]">연합인포맥스</div>
               </div>
-              <div
-                className="mt-2.5 text-[19px] font-black leading-[1.22] tracking-[-0.055em] text-[#1e3a8a]"
-                style={{ fontFamily: '"SUIT Variable","Pretendard Variable","Aptos","Noto Sans KR",sans-serif' }}
-              >
-                인포Biz본부
-                <br />
-                통합 대시보드
-              </div>
-              <div className="mt-4 flex items-center gap-2">
-                <div className="h-1.5 w-10 rounded-full bg-gradient-to-r from-[#2563eb] to-[#60a5fa]" />
-                <span
-                  className="text-[10px] font-medium tracking-[0.01em] text-[#8da0c2]"
-                  style={{ fontFamily: '"Aptos","SUIT Variable","Pretendard Variable","Noto Sans KR",sans-serif' }}
-                >
-                  Internal Dashboard
-                </span>
-              </div>
-            </div>
 
-            {currentUser ? (
-              <div className="relative mt-4 rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                <div className="flex items-center gap-3">
+              <div className="mt-6 flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                  <LayoutGrid className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[15px] font-black tracking-[-0.04em] text-slate-950">인포Biz본부 통합 대시보드</div>
+                  <div className="mt-1 h-2 w-2 rounded-full bg-blue-500" />
+                </div>
+              </div>
+
+              {currentUser ? (
+                <>
+                  <div className="my-5 h-px bg-slate-200" />
                   <button
                     type="button"
                     onClick={() => router.push("/me")}
-                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border ${
-                      currentUser.color?.border || "border-slate-200"
-                    } ${currentUser.color?.bg || "bg-slate-100"} ${currentUser.color?.text || "text-slate-700"} text-[21px] font-black shadow-sm transition hover:scale-[1.03]`}
-                    aria-label="개인페이지 열기"
+                    className="flex w-full items-center gap-3 text-left"
                   >
-                    {avatarLabel}
-                  </button>
-                  <div className="min-w-0">
-                    <div className="truncate text-[17px] font-black tracking-[-0.04em] text-slate-950">
-                      {currentUser.name}
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-[30px] shadow-sm">
+                      {avatarLabel}
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-600">
-                        {currentUser.role}
-                      </span>
-                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[12px] font-semibold text-blue-700">
-                        {currentUser.teamName}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => router.push("/me")}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    <UserRound className="h-4 w-4" />
-                    내 페이지
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPasswordMessage("")
-                      setIsPasswordOpen((prev) => !prev)
-                    }}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    <KeyRound className="h-4 w-4" />
-                    비밀번호
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    disabled={isAccountPending}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl bg-slate-950 px-3 text-[12px] font-bold text-white transition hover:bg-slate-800 disabled:opacity-60"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    로그아웃
-                  </button>
-                </div>
-
-                {isPasswordOpen ? (
-                  <div className="absolute left-0 right-0 top-[calc(100%+10px)] z-20 rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-[15px] font-black tracking-[-0.03em] text-slate-950">비밀번호 변경</div>
-                        <div className="mt-1 text-[12px] text-slate-500">현재 비밀번호 확인 후 새 비밀번호로 바꿉니다.</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[18px] font-black tracking-[-0.04em] text-slate-950">{currentUser.name}</div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-semibold text-slate-600">
+                          {currentUser.role}
+                        </span>
+                        <span className="rounded-full bg-blue-50 px-3 py-1 text-[12px] font-semibold text-blue-700">
+                          {currentUser.teamName}
+                        </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsPasswordOpen(false)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
-                        aria-label="비밀번호 팝업 닫기"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
                     </div>
-                    <div className="mt-4 space-y-3">
-                      <input
-                        type="password"
-                        value={currentPassword}
-                        onChange={(event) => setCurrentPassword(event.target.value)}
-                        placeholder="현재 비밀번호"
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
-                      />
-                      <input
-                        type="password"
-                        value={nextPassword}
-                        onChange={(event) => setNextPassword(event.target.value)}
-                        placeholder="새 비밀번호"
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
-                      />
-                      <input
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(event) => setConfirmPassword(event.target.value)}
-                        placeholder="새 비밀번호 확인"
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
-                      />
-                      {passwordMessage ? (
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                          {passwordMessage}
-                        </div>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={handlePasswordChange}
-                        disabled={isAccountPending}
-                        className="inline-flex h-11 w-full items-center justify-center rounded-2xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-60"
-                      >
-                        {isAccountPending ? "변경 중..." : "비밀번호 저장"}
-                      </button>
-                    </div>
+                    <ChevronRight className="h-6 w-6 shrink-0 text-slate-400" />
+                  </button>
+
+                  <div className="my-5 h-px bg-slate-200" />
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => router.push("/me")}
+                      className="flex h-14 w-full items-center gap-3 rounded-2xl px-2 text-left text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <UserRound className="ml-1 h-6 w-6 text-slate-400" />
+                      <span className="flex-1 text-[15px] font-bold tracking-[-0.03em] text-slate-800">내 페이지</span>
+                      <ChevronRight className="h-6 w-6 text-slate-400" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPasswordMessage("")
+                        setIsPasswordOpen((prev) => !prev)
+                      }}
+                      className="flex h-14 w-full items-center gap-3 rounded-2xl px-2 text-left text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <KeyRound className="ml-1 h-6 w-6 text-slate-400" />
+                      <span className="flex-1 text-[15px] font-bold tracking-[-0.03em] text-slate-800">비밀번호 변경</span>
+                      <ChevronRight className="h-6 w-6 text-slate-400" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      disabled={isAccountPending}
+                      className="flex h-14 w-full items-center gap-3 rounded-2xl px-2 text-left text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      <LogOut className="ml-1 h-6 w-6 text-slate-400" />
+                      <span className="flex-1 text-[15px] font-bold tracking-[-0.03em] text-slate-800">로그아웃</span>
+                      <ChevronRight className="h-6 w-6 text-slate-400" />
+                    </button>
                   </div>
-                ) : null}
-              </div>
-            ) : null}
+
+                  {isPasswordOpen ? (
+                    <div className="absolute left-4 right-4 top-[calc(100%-18px)] z-20 rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-[15px] font-black tracking-[-0.03em] text-slate-950">비밀번호 변경</div>
+                          <div className="mt-1 text-[12px] text-slate-500">현재 비밀번호 확인 후 새 비밀번호로 바꿉니다.</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsPasswordOpen(false)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+                          aria-label="비밀번호 팝업 닫기"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        <input
+                          type="password"
+                          value={currentPassword}
+                          onChange={(event) => setCurrentPassword(event.target.value)}
+                          placeholder="현재 비밀번호"
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                        />
+                        <input
+                          type="password"
+                          value={nextPassword}
+                          onChange={(event) => setNextPassword(event.target.value)}
+                          placeholder="새 비밀번호"
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                        />
+                        <input
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(event) => setConfirmPassword(event.target.value)}
+                          placeholder="새 비밀번호 확인"
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                        />
+                        {passwordMessage ? (
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                            {passwordMessage}
+                          </div>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={handlePasswordChange}
+                          disabled={isAccountPending}
+                          className="inline-flex h-11 w-full items-center justify-center rounded-2xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-60"
+                        >
+                          {isAccountPending ? "변경 중..." : "비밀번호 저장"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
 
           <div className="mt-8 space-y-5">
             <div>
