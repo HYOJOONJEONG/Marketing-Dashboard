@@ -44,7 +44,13 @@ export function buildPermissionIndex(state: AuthState, user: UserRecord | null |
       index[override.menuKey][override.action] = override.allowed
     })
 
-  if (!canAccessAdminConsole(user)) {
+  if (canAccessAdminConsole(user)) {
+    ADMIN_CONSOLE_MENU_KEYS.forEach((menuKey) => {
+      ACTION_KEYS.forEach((action) => {
+        index[menuKey][action] = true
+      })
+    })
+  } else {
     ADMIN_CONSOLE_MENU_KEYS.forEach((menuKey) => {
       ACTION_KEYS.forEach((action) => {
         index[menuKey][action] = false
