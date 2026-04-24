@@ -3909,9 +3909,9 @@ export function DashboardShell({
                         <th className={weeklyThClass}>총 계약대수</th>
                       </tr>
                       <tr>
-                        <td className={`${weeklyTdClass} font-bold text-slate-800`} style={{ backgroundColor: "#fffbeb" }}>{formatNumber(reportSummary?.weeklyNetUnits)}대</td>
-                        <td className={`${weeklyTdClass} font-bold text-slate-800`} style={{ backgroundColor: "#fffbeb" }}>{formatNumber(reportSummary?.weeklyNewContracts)}대</td>
-                        <td className={`${weeklyTdClass} font-bold text-slate-800`} style={{ backgroundColor: "#fffbeb" }}>{formatNumber(reportSummary?.weeklyTerminationContracts)}대</td>
+                        <td className={`${weeklyTdClass} font-bold text-slate-800 print-no-highlight`} style={{ backgroundColor: "#fffbeb" }}>{formatNumber(reportSummary?.weeklyNetUnits)}대</td>
+                        <td className={`${weeklyTdClass} font-bold text-slate-800 print-no-highlight`} style={{ backgroundColor: "#fffbeb" }}>{formatNumber(reportSummary?.weeklyNewContracts)}대</td>
+                        <td className={`${weeklyTdClass} font-bold text-slate-800 print-no-highlight`} style={{ backgroundColor: "#fffbeb" }}>{formatNumber(reportSummary?.weeklyTerminationContracts)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.cumulativeNetUnits)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.cumulativeNewContracts)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.cumulativeTerminationContracts)}대</td>

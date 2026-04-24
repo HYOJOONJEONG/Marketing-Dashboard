@@ -211,7 +211,7 @@
 
 .report-section-title {
   display: block;
-  background: transparent;
+  background: #e9f1ff;
   color: #111827;
   font-weight: 800;
   padding: 6px 10px;
@@ -641,7 +641,7 @@
   }
 
   .weekly-report-print .print-report-sheet-section {
-    border: 1px solid #d6d6d6 !important;
+    border: 0 !important;
     border-radius: 0 !important;
     padding: 0 !important;
     background: transparent !important;
@@ -680,14 +680,14 @@
     font-weight: 800 !important;
     color: #111827 !important;
     text-align: center !important;
-    background: transparent !important;
+    background: #e9f1ff !important;
     padding: 4px 6px !important;
     border-bottom: 0 !important;
     border: 0 !important;
   }
 
   .weekly-report-print .report-section-title {
-    background: transparent !important;
+    background: #e9f1ff !important;
     color: #111827 !important;
     padding: 4px 6px !important;
     border-bottom: 0 !important;
@@ -698,6 +698,10 @@
   }
 
   .weekly-report-print .print-combined-summary-table tbody tr:nth-of-type(2) td:nth-of-type(-n + 3) {
+    background-color: transparent !important;
+  }
+
+  .weekly-report-print .print-no-highlight {
     background-color: transparent !important;
   }
 
