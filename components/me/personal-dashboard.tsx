@@ -125,18 +125,18 @@ export function PersonalDashboard({ currentUser, data }: Props) {
         <WorkspaceHeader currentPage="개인페이지" currentSection="my-dashboard" currentUser={currentUser} />
 
         <div className="space-y-5">
-          <section className="grid gap-5 xl:grid-cols-[1.3fr_0.9fr]">
-            <div className={`${cardClass} relative overflow-hidden bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_48%,#0ea5a4_100%)] text-white`}>
+          <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className={`${cardClass} relative overflow-hidden bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_48%,#0ea5a4_100%)] py-5 text-white`}>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.22),transparent_34%)]" />
-              <div className="relative flex h-full flex-col justify-between gap-8">
+              <div className="relative flex h-full flex-col justify-between gap-5">
                 <div className="flex items-center gap-3">
                   <div className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-white/80">
                     My Workspace
                   </div>
                 </div>
                 <div className="max-w-3xl">
-                  <h2 className="text-[34px] font-black tracking-[-0.05em]">{currentUser.name}님의 업무 대시보드</h2>
-                  <p className="mt-3 max-w-2xl text-[15px] leading-7 text-white/78">
+                  <h2 className="text-[28px] font-black tracking-[-0.05em]">{currentUser.name}님의 업무 대시보드</h2>
+                  <p className="mt-2 max-w-2xl text-[14px] leading-6 text-white/78">
                     신규계약, 계약서 미회수, 해지와 청구보류 현황을 한 화면에서 보고 바로 정리할 수 있게 구성했습니다.
                   </p>
                 </div>
@@ -264,7 +264,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             />
           </section>
 
-          <section className="grid gap-5 xl:grid-cols-[1.18fr_0.82fr]">
+          <section className="space-y-5">
             <div className={cardClass}>
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -391,7 +391,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             </div>
           </section>
 
-          <section className="grid gap-5 xl:grid-cols-2">
+          <section className="space-y-5">
             <div className={cardClass}>
               <div className="flex items-center justify-between gap-3">
                 <div>
