@@ -396,14 +396,16 @@ export function listOnlinePresence(state: AuthState) {
     .map((session) => {
       const user = usersById.get(session.userId)
       const color = getUserColorToken(session.userId)
-      return {
-        ...session,
-        userName: user?.name || "알 수 없음",
-        role: user?.role || "viewer",
-        teamId: user?.teamId || "",
-        color,
-      }
-    })
+        return {
+          ...session,
+          userName: user?.name || "알 수 없음",
+          avatarEmoji: user?.avatarEmoji ? String(user.avatarEmoji).trim() : null,
+          title: user?.title || null,
+          role: user?.role || "viewer",
+          teamId: user?.teamId || "",
+          color,
+        }
+      })
     .sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime())
 }
 

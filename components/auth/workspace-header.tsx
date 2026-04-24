@@ -1,8 +1,8 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { KeyRound, LogOut, X } from "lucide-react"
-import { useMemo, useState, useTransition } from "react"
+import { ChevronDown, KeyRound, LogOut, Users, X } from "lucide-react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 
 type Props = {
   currentPage: string
@@ -19,16 +19,34 @@ type Props = {
 
 export function WorkspaceHeader({ currentPage, currentSection, currentUser }: Props) {
   const router = useRouter()
+  const heartbeatIdRef = useRef(`conn-${Math.random().toString(36).slice(2, 10)}`)
   const [isPasswordOpen, setIsPasswordOpen] = useState(false)
+  const [isPresenceOpen, setIsPresenceOpen] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState("")
   const [currentPassword, setCurrentPassword] = useState("")
   const [nextPassword, setNextPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [onlineUsers, setOnlineUsers] = useState<
+    Array<{
+      userId: string
+      userName: string
+      avatarEmoji?: string | null
+      currentPage: string
+      currentSection: string
+      title?: string | null
+      color: { bg: string; text: string; border: string; hex: string }
+    }>
+  >([])
   const [isPending, startTransition] = useTransition()
   const avatarLabel = useMemo(() => {
     const emoji = String(currentUser.avatarEmoji || "").trim()
     return emoji || currentUser.name.slice(0, 1)
   }, [currentUser.avatarEmoji, currentUser.name])
+  const onlineSummary = useMemo(() => {
+    if (!onlineUsers.length) return "현재 접속 없음"
+    const firstName = onlineUsers[0]?.userName || "알 수 없음"
+    return onlineUsers.length > 1 ? `${firstName} 외 ${onlineUsers.length - 1}명` : firstName
+  }, [onlineUsers])
 
   const logout = () => {
     startTransition(async () => {
@@ -67,6 +85,56 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser }: Pr
     })
   }
 
+  useEffect(() => {
+    let alive = true
+    let eventSource: EventSource | null = null
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+
+    const sendHeartbeat = async () => {
+      try {
+        await fetch("/api/presence/heartbeat", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            currentPage,
+            currentSection,
+            connectionId: heartbeatIdRef.current,
+          }),
+        })
+      } catch {
+        // Ignore transient presence errors in the header UI.
+      }
+    }
+
+    const connect = () => {
+      eventSource = new EventSource("/api/presence/stream")
+      eventSource.onmessage = (event) => {
+        if (!alive) return
+        try {
+          const payload = JSON.parse(event.data)
+          setOnlineUsers(Array.isArray(payload?.onlineUsers) ? payload.onlineUsers : [])
+        } catch {
+          setOnlineUsers([])
+        }
+      }
+      eventSource.onerror = () => {
+        eventSource?.close()
+      }
+    }
+
+    void sendHeartbeat()
+    heartbeatTimer = setInterval(() => {
+      void sendHeartbeat()
+    }, 15000)
+    connect()
+
+    return () => {
+      alive = false
+      if (heartbeatTimer) clearInterval(heartbeatTimer)
+      if (eventSource) eventSource.close()
+    }
+  }, [currentPage, currentSection])
+
   return (
     <div className="relative mb-5 overflow-visible rounded-[28px] border border-slate-200/90 bg-white/95 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur">
       <div className="flex items-center justify-between gap-4 px-6 py-4">
@@ -89,6 +157,15 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser }: Pr
               {currentSection ? <> / <span className="font-semibold text-slate-700">{currentSection}</span></> : null}
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setIsPresenceOpen((prev) => !prev)}
+            className="inline-flex h-10 max-w-[250px] items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 transition hover:bg-white"
+          >
+            <Users className="h-4 w-4 shrink-0 text-slate-500" />
+            <span className="truncate">{onlineSummary}</span>
+            <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition ${isPresenceOpen ? "rotate-180" : ""}`} />
+          </button>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -114,6 +191,37 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser }: Pr
           </button>
         </div>
       </div>
+
+      {isPresenceOpen ? (
+        <div className="border-t border-slate-200/90 px-6 py-4">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">현재 접속 중</div>
+          <div className="flex flex-wrap gap-2.5">
+            {onlineUsers.length ? (
+              onlineUsers.map((user) => {
+                const label = String(user.avatarEmoji || "").trim() || String(user.userName || "").slice(0, 1)
+                return (
+                  <div
+                    key={`${user.userId}-${user.currentPage}-${user.currentSection}`}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                  >
+                    <span
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-xl border ${user.color.border} ${user.color.bg} ${user.color.text} text-[16px] font-black`}
+                    >
+                      {label}
+                    </span>
+                    <div className="leading-tight">
+                      <div className="font-semibold text-slate-900">{user.userName}</div>
+                      <div className="text-xs text-slate-500">{user.currentPage}</div>
+                    </div>
+                  </div>
+                )
+              })
+            ) : (
+              <div className="text-sm text-slate-400">현재 접속 중인 사용자가 없습니다.</div>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {isPasswordOpen ? (
         <div className="absolute right-6 top-[calc(100%+10px)] z-20 w-[360px] rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]">
