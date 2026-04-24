@@ -3,7 +3,7 @@
 import type { ReactNode } from "react"
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { BriefcaseBusiness, ChevronDown, FolderClock, Landmark, LayoutDashboard, Sparkles, UserRound } from "lucide-react"
+import { ArrowLeft, BriefcaseBusiness, ChevronDown, FolderClock, Landmark, Sparkles, UserRound } from "lucide-react"
 
 type Props = {
   currentUser: {
@@ -150,8 +150,8 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                   onClick={() => router.push("/")}
                   className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
-                  <LayoutDashboard className="h-4 w-4 text-slate-400" />
-                  대시보드
+                  <ArrowLeft className="h-4 w-4 text-slate-400" />
+                  대시보드 돌아가기
                 </button>
                 <div className="relative">
                   <button
