@@ -170,26 +170,21 @@ export async function DELETE(request: Request) {
   await updateAuthState((state) => {
     const target = findUserById(state, userId)
     if (!target) throw new Error("대상 사용자를 찾을 수 없습니다.")
-    const hasHistory =
-      state.activityLogs.some((log) => log.actorUserId === userId || log.targetId === userId) ||
-      state.permissionChangeLogs.some((log) => log.targetUserId === userId) ||
-      state.userChangeLogs.some((log) => log.targetUserId === userId)
-    if (hasHistory) {
-      target.active = false
-      target.deletedAt = target.deletedAt || new Date().toISOString()
-    } else {
-      state.users = state.users.filter((user) => user.id !== userId)
-      state.userPermissionOverrides = state.userPermissionOverrides.filter((item) => item.userId !== userId)
-    }
+    const deletedAt = target.deletedAt || new Date().toISOString()
+    target.active = false
+    target.deletedAt = deletedAt
+    target.updatedAt = deletedAt
+    state.userSessions = state.userSessions.filter((session) => session.userId !== userId)
+    state.presenceSessions = state.presenceSessions.filter((session) => session.userId !== userId)
     appendActivityLog(state, {
       actorUserId: auth.context.user.id,
       actorName: auth.context.user.name,
-      actionType: hasHistory ? "user_inactivate" : "user_delete",
+      actionType: "user_delete",
       targetType: "user",
       targetId: userId,
       pageKey: "userManagement",
       beforeValue: "",
-      afterValue: JSON.stringify({ hasHistory }),
+      afterValue: JSON.stringify({ deletedAt }),
       ipAddress: getRequestIp(request),
       sessionId: auth.context.sessionId,
       success: true,

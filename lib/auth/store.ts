@@ -267,6 +267,9 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
       state.users.find((user) => user.name === seedUser.name)
 
     if (existing) {
+      if (existing.deletedAt) {
+        return
+      }
       existing.id = buildUserId(seedUser.name)
       existing.loginId = seedUser.name
       existing.name = seedUser.name
