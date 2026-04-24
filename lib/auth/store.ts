@@ -31,6 +31,14 @@ function buildUserId(name: string) {
   return `user-${name}`
 }
 
+function normalizeIdentityValue(value: string) {
+  return String(value || "")
+    .normalize("NFC")
+    .trim()
+    .replace(/\s+/g, "")
+    .toLowerCase()
+}
+
 const USER_TITLE_BY_NAME: Record<string, string> = {
   신무길: "팀장",
   이홍민: "부장",
@@ -426,7 +434,14 @@ export function appendPermissionChangeLog(
 }
 
 export function findUserByLoginId(state: AuthState, loginId: string) {
-  return state.users.find((user) => user.loginId === loginId && !user.deletedAt)
+  const normalizedLoginId = normalizeIdentityValue(loginId)
+  return state.users.find((user) => {
+    if (user.deletedAt) return false
+    return (
+      normalizeIdentityValue(user.loginId) === normalizedLoginId ||
+      normalizeIdentityValue(user.name) === normalizedLoginId
+    )
+  })
 }
 
 export function findUserById(state: AuthState, userId: string) {
