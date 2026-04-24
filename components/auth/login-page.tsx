@@ -47,7 +47,7 @@ export function LoginPage() {
           <div className="flex items-center p-6 sm:p-10">
             <div className="mx-auto w-full max-w-md">
               <div className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">Login</div>
-              <h1 className="mt-3 text-3xl font-black tracking-[-0.04em] text-slate-950">인포Biz 로그인</h1>
+              <h1 className="mt-3 text-3xl font-black tracking-[-0.04em] text-slate-950">인포Biz본부 로그인</h1>
 
               <form className="mt-8 space-y-5" onSubmit={handleLogin}>
                 <label className="block">
