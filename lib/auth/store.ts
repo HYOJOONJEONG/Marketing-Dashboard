@@ -46,6 +46,20 @@ const USER_TITLE_BY_NAME: Record<string, string> = {
   이상철: "본부장",
 }
 
+const DEFAULT_DIRECTORY_USERS = [
+  { name: "신무길", team: "인포Biz1팀", role: "team_manager" as RoleKey },
+  { name: "이홍민", team: "인포Biz1팀", role: "staff" as RoleKey },
+  { name: "정효준", team: "인포Biz1팀", role: "staff" as RoleKey },
+  { name: "조홍희", team: "인포Biz1팀", role: "staff" as RoleKey },
+  { name: "정진영", team: "인포Biz1팀", role: "staff" as RoleKey },
+  { name: "박혜리", team: "인포Biz1팀", role: "staff" as RoleKey },
+  { name: "윤옥수", team: "인포Biz2팀", role: "team_manager" as RoleKey },
+  { name: "진효정", team: "인포Biz2팀", role: "staff" as RoleKey },
+  { name: "김다빈", team: "인포Biz2팀", role: "staff" as RoleKey },
+  { name: "박대일", team: "인포Biz2팀", role: "staff" as RoleKey },
+  { name: "이상철", team: "본부", role: "director" as RoleKey },
+] as const
+
 function getUserTitle(name: string, fallbackRole?: RoleKey) {
   return USER_TITLE_BY_NAME[String(name || "").trim()] || (
     fallbackRole === "director" ? "본부장" :
@@ -65,21 +79,7 @@ function createSeedTeams(now: string): TeamRecord[] {
 
 function createSeedUsers(now: string, teams: TeamRecord[]): UserRecord[] {
   const teamIdByName = new Map(teams.map((team) => [team.name, team.id]))
-  const staffUsers = [
-    { name: "신무길", team: "인포Biz1팀", role: "team_manager" as RoleKey },
-    { name: "이홍민", team: "인포Biz1팀", role: "staff" as RoleKey },
-    { name: "정효준", team: "인포Biz1팀", role: "staff" as RoleKey },
-    { name: "조홍희", team: "인포Biz1팀", role: "staff" as RoleKey },
-    { name: "정진영", team: "인포Biz1팀", role: "staff" as RoleKey },
-    { name: "박혜리", team: "인포Biz1팀", role: "staff" as RoleKey },
-    { name: "윤옥수", team: "인포Biz2팀", role: "team_manager" as RoleKey },
-    { name: "진효정", team: "인포Biz2팀", role: "staff" as RoleKey },
-    { name: "김다빈", team: "인포Biz2팀", role: "staff" as RoleKey },
-    { name: "박대일", team: "인포Biz2팀", role: "staff" as RoleKey },
-    { name: "이상철", team: "본부", role: "director" as RoleKey },
-  ]
-
-  const seeded = staffUsers.map((user) => ({
+  const seeded = DEFAULT_DIRECTORY_USERS.map((user) => ({
     id: buildUserId(user.name),
     loginId: user.name,
     name: user.name,
@@ -247,12 +247,58 @@ function normalizeLegacyAdminAccount(state: AuthState) {
   state.userPermissionOverrides = state.userPermissionOverrides.filter((item) => !removedUserIds.has(item.userId))
 }
 
+function normalizeRequiredDirectoryUsers(state: AuthState) {
+  const now = nowIso()
+  const teamIdByName = new Map(state.teams.map((team) => [team.name, team.id]))
+
+  DEFAULT_DIRECTORY_USERS.forEach((seedUser) => {
+    const teamId = String(teamIdByName.get(seedUser.team) || state.teams[0]?.id || "")
+    const existing =
+      state.users.find((user) => user.id === buildUserId(seedUser.name)) ||
+      state.users.find((user) => user.loginId === seedUser.name) ||
+      state.users.find((user) => user.name === seedUser.name)
+
+    if (existing) {
+      existing.id = buildUserId(seedUser.name)
+      existing.loginId = seedUser.name
+      existing.name = seedUser.name
+      existing.role = seedUser.role
+      existing.teamId = teamId
+      existing.title = getUserTitle(seedUser.name, seedUser.role)
+      existing.active = true
+      existing.deletedAt = null
+      existing.authStrategy = "common"
+      existing.passwordHash = null
+      existing.passwordSalt = null
+      existing.updatedAt = now
+      return
+    }
+
+    state.users.unshift({
+      id: buildUserId(seedUser.name),
+      loginId: seedUser.name,
+      name: seedUser.name,
+      title: getUserTitle(seedUser.name, seedUser.role),
+      role: seedUser.role,
+      teamId,
+      active: true,
+      deletedAt: null,
+      authStrategy: "common",
+      passwordHash: null,
+      passwordSalt: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+  })
+}
+
 export async function readAuthState(): Promise<AuthState> {
   try {
     const parsed = await readAuthSystem<AuthState>()
     if (parsed?.users) {
       normalizeFullAccessRolePermissions(parsed)
       normalizeLegacyAdminAccount(parsed)
+      normalizeRequiredDirectoryUsers(parsed)
       normalizeUserTitles(parsed)
       return parsed
     }
