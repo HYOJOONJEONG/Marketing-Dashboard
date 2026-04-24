@@ -44,7 +44,6 @@ const USER_TITLE_BY_NAME: Record<string, string> = {
   박대일: "사원",
   김대일: "사원",
   이상철: "본부장",
-  시스템관리자: "관리자",
 }
 
 function getUserTitle(name: string, fallbackRole?: RoleKey) {
@@ -66,7 +65,6 @@ function createSeedTeams(now: string): TeamRecord[] {
 
 function createSeedUsers(now: string, teams: TeamRecord[]): UserRecord[] {
   const teamIdByName = new Map(teams.map((team) => [team.name, team.id]))
-  const adminLoginId = process.env.INFOBIZ_ADMIN_LOGIN_ID?.trim() || "admin"
   const staffUsers = [
     { name: "신무길", team: "인포Biz1팀", role: "team_manager" as RoleKey },
     { name: "이홍민", team: "인포Biz1팀", role: "staff" as RoleKey },
@@ -94,24 +92,8 @@ function createSeedUsers(now: string, teams: TeamRecord[]): UserRecord[] {
     passwordHash: null,
     passwordSalt: null,
     createdAt: now,
-    updatedAt: now,
-  }))
-
-  seeded.unshift({
-    id: "user-admin-primary",
-    loginId: adminLoginId,
-    name: "시스템관리자",
-    title: getUserTitle("시스템관리자", "admin"),
-    role: "admin",
-    teamId: "team-hq",
-    active: true,
-    deletedAt: null,
-    authStrategy: "admin",
-    passwordHash: null,
-    passwordSalt: null,
-    createdAt: now,
-    updatedAt: now,
-  })
+      updatedAt: now,
+    }))
 
   return seeded
 }
@@ -245,11 +227,32 @@ function normalizeUserTitles(state: AuthState) {
   }))
 }
 
+function normalizeLegacyAdminAccount(state: AuthState) {
+  const removedUserIds = new Set(
+    state.users
+      .filter(
+        (user) =>
+          user.id === "user-admin-primary" ||
+          user.name === "시스템관리자" ||
+          user.authStrategy === "admin",
+      )
+      .map((user) => user.id),
+  )
+
+  if (!removedUserIds.size) return
+
+  state.users = state.users.filter((user) => !removedUserIds.has(user.id))
+  state.userSessions = state.userSessions.filter((session) => !removedUserIds.has(session.userId))
+  state.presenceSessions = state.presenceSessions.filter((session) => !removedUserIds.has(session.userId))
+  state.userPermissionOverrides = state.userPermissionOverrides.filter((item) => !removedUserIds.has(item.userId))
+}
+
 export async function readAuthState(): Promise<AuthState> {
   try {
     const parsed = await readAuthSystem<AuthState>()
     if (parsed?.users) {
       normalizeFullAccessRolePermissions(parsed)
+      normalizeLegacyAdminAccount(parsed)
       normalizeUserTitles(parsed)
       return parsed
     }
