@@ -3630,10 +3630,7 @@ export function DashboardShell({
                   alt="연합인포맥스"
                   className="h-7 w-auto shrink-0 object-contain"
                 />
-                <div className="min-w-0">
-                  <div className="truncate text-[16px] font-black tracking-[-0.05em] text-[#173b93]">연합인포맥스</div>
-                  <div className="mt-1 text-[12px] font-semibold text-slate-500">인포Biz본부</div>
-                </div>
+                <div className="truncate text-[15px] font-black tracking-[-0.04em] text-slate-900">인포Biz본부</div>
               </div>
 
               {currentUser ? (
