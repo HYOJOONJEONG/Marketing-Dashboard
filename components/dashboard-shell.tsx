@@ -3993,7 +3993,8 @@ export function DashboardShell({
                   <div className="print-revenue-note">
                     <div className="print-revenue-note-block">
                       <div className="print-revenue-note-value">
-                        {[revenueNoteParts.primary, revenueNoteParts.secondary].filter(Boolean).join(" / ")}
+                        <div>{revenueNoteParts.primary}</div>
+                        {revenueNoteParts.secondary ? <div>{revenueNoteParts.secondary}</div> : null}
                       </div>
                     </div>
                   </div>

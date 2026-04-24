@@ -209,6 +209,10 @@
   word-break: keep-all;
 }
 
+.print-revenue-note-value > * + * {
+  margin-top: 2px;
+}
+
 .report-section-title {
   display: block;
   background: #e9f1ff;
@@ -535,6 +539,10 @@
     white-space: normal !important;
     word-break: keep-all !important;
     overflow-wrap: break-word !important;
+  }
+
+  .weekly-report-print .print-revenue-note-value > * + * {
+    margin-top: 1px !important;
   }
 
 
