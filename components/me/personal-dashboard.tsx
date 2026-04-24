@@ -29,7 +29,7 @@ type Props = {
 }
 
 const cardClass = "rounded-[30px] border border-slate-200/90 bg-white/92 p-6 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur"
-const avatarOptions = ["😀", "😎", "🧑‍💼", "📈", "💼", "🦊", "🐯", "⭐", "🚀", "🧠", "🫶", "🔥"]
+const avatarOptions = ["😀", "😎", "🧑‍💼", "📈", "💼", "🦊", "🐯", "⭐", "🚀", "🧠", "🫶", "🔥", "🐻", "🐼", "🦁", "🐸", "🌈", "⚡", "🎯", "🎧", "☕", "🍀", "🪐", "🎨"]
 
 function formatValue(value: unknown, fallback = "-") {
   const text = String(value ?? "").trim()
@@ -125,32 +125,8 @@ export function PersonalDashboard({ currentUser, data }: Props) {
         <WorkspaceHeader currentPage="개인페이지" currentSection="my-dashboard" currentUser={currentUser} />
 
         <div className="space-y-5">
-          <section className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
-            <div className={`${cardClass} relative overflow-hidden bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_48%,#0ea5a4_100%)] py-4 text-white`}>
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.22),transparent_34%)]" />
-              <div className="relative flex h-full flex-col gap-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-white/80">
-                    My Workspace
-                  </div>
-                  <div className="text-xs font-semibold text-white/70">
-                    담당 업종 {selectedIndustryLabels.length || 0}개
-                  </div>
-                </div>
-                <div className="max-w-3xl">
-                  <h2 className="text-[24px] font-black tracking-[-0.05em]">{currentUser.name}님의 업무 대시보드</h2>
-                  <p className="mt-1 text-[13px] leading-5 text-white/78">
-                    신규계약, 계약서 미회수, 해지와 청구보류 현황을 한 화면에서 보고 바로 정리할 수 있게 구성했습니다.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-white/12 px-3 py-1.5 text-xs font-semibold text-white/90">{currentUser.role}</span>
-                  <span className="rounded-full bg-white/12 px-3 py-1.5 text-xs font-semibold text-white/90">{currentUser.teamName}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className={cardClass}>
+          <section className={`${cardClass} relative z-20 overflow-visible`}>
+            <div className="grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)_320px_140px] xl:items-start">
               <div className="flex items-start gap-4">
                 <div
                   className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-[28px] border ${currentUser.color.border} ${currentUser.color.bg} text-[34px] shadow-sm`}
@@ -160,13 +136,17 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                 <div className="min-w-0">
                   <div className="text-[13px] font-semibold uppercase tracking-[0.2em] text-slate-400">Profile</div>
                   <div className="mt-2 text-[28px] font-black tracking-[-0.05em] text-slate-950">{currentUser.name}</div>
-                  <div className="mt-1 text-sm text-slate-500">
-                    아바타와 담당 업종을 설정해 개인 대시보드를 더 편하게 볼 수 있습니다.
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{currentUser.role}</span>
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{currentUser.teamName}</span>
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                      담당 업종 {selectedIndustryLabels.length || 0}개
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-6">
+              <div>
                 <div className="text-sm font-semibold text-slate-700">아바타 선택</div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {avatarOptions.map((avatar) => {
@@ -197,7 +177,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                 </div>
               </div>
 
-              <div className="mt-6">
+              <div>
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-semibold text-slate-700">담당 업종 선택</div>
                   <div className="text-xs text-slate-400">미회수 현황 집계 기준</div>
@@ -211,7 +191,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                     </span>
                     <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition group-open:rotate-180" />
                   </summary>
-                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-10 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.1)]">
+                  <div className="mt-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_12px_28px_rgba(15,23,42,0.08)]">
                     <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
                       {(data.industryOptions || []).map((industry) => {
                         const checked = selectedIndustries.includes(industry)
@@ -237,17 +217,17 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                 </details>
               </div>
 
-              <div className="mt-6 flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3 xl:justify-end">
                 <button
                   type="button"
                   onClick={saveProfile}
                   disabled={isPending}
-                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-60"
+                  className="inline-flex h-11 min-w-[120px] items-center justify-center rounded-2xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-60"
                 >
                   {isPending ? "저장 중..." : "프로필 저장"}
                 </button>
-                {profileMessage ? <div className="text-sm text-slate-500">{profileMessage}</div> : null}
               </div>
+              {profileMessage ? <div className="xl:col-span-4 text-sm text-slate-500">{profileMessage}</div> : null}
             </div>
           </section>
 
