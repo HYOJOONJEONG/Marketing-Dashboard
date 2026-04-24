@@ -1,6 +1,7 @@
 ﻿"use client"
 
 import React, { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
 import terminationManagerLookup from "@/data/termination-manager-lookup.json"
 
@@ -1012,6 +1013,7 @@ export function DashboardShell({
   permissions?: Record<string, Record<string, boolean>> | null
   onViewChange?: (view: ViewKey) => void
 }) {
+  const router = useRouter()
   const [data, setData] = useState<any>(initialData)
   const [view, setView] = useState<ViewKey>(initialView)
   const [collectionTab, setCollectionTab] = useState<CollectionTabKey>(initialCollectionTab)
@@ -1106,6 +1108,7 @@ export function DashboardShell({
   const canViewTermination = hasAccess("contractManagement", "view")
   const canViewWeeklySelection = canViewDashboard || canViewCollections
   const canViewOptionDashboard = canViewDashboard
+  const canViewAdminPage = hasAccess("adminPage", "view")
   const visibleViews = [
     canViewDashboard ? "weekly-report" : null,
     canEditDashboard ? "manual-input" : null,
@@ -3726,6 +3729,21 @@ export function DashboardShell({
                 </div>
               )}
             </div>
+
+            {canViewAdminPage ? (
+              <div>
+                <div className="mb-2 px-3 text-[12px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                  관리자
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push("/admin")}
+                  className="flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  관리자페이지
+                </button>
+              </div>
+            ) : null}
 
           </div>
         </aside>

@@ -1,8 +1,7 @@
 "use client"
 
-import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { LogOut, ShieldCheck } from "lucide-react"
+import { LogOut } from "lucide-react"
 import { useTransition } from "react"
 import { usePresenceChannel } from "@/hooks/use-presence-channel"
 
@@ -16,10 +15,9 @@ type Props = {
     teamName: string
     color: { bg: string; text: string; border: string; hex: string }
   }
-  canViewAdmin: boolean
 }
 
-export function WorkspaceHeader({ currentPage, currentSection, currentUser, canViewAdmin }: Props) {
+export function WorkspaceHeader({ currentPage, currentSection, currentUser }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const { onlineUsers, samePageUsers, recentActivities } = usePresenceChannel({ currentPage, currentSection })
@@ -52,15 +50,6 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, canV
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {canViewAdmin ? (
-            <Link
-              href="/admin"
-              className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              <ShieldCheck className="h-4 w-4" />
-              관리자페이지
-            </Link>
-          ) : null}
           <button
             type="button"
             onClick={logout}

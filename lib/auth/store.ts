@@ -100,7 +100,8 @@ function createSeedRoles() {
 }
 
 function buildBaselinePermissions(roleName: RoleKey) {
-  const allowAll = roleName === "admin"
+  // For the current rollout, every seeded role starts with full menu access.
+  const allowAll = true
   return MENU_KEYS.flatMap((menuKey) =>
     ACTION_KEYS.map((action) => {
       if (allowAll) return { menuKey, action, allowed: true }
@@ -195,10 +196,28 @@ function createSeedState(): AuthState {
   }
 }
 
+function normalizeFullAccessRolePermissions(state: AuthState) {
+  const expectedPermissions = state.roles.flatMap((role) =>
+    MENU_KEYS.flatMap((menuKey) =>
+      ACTION_KEYS.map((action) => ({
+        id: buildRolePermissionId(role.id, menuKey, action),
+        roleId: role.id,
+        menuKey,
+        action,
+        allowed: true,
+      })),
+    ),
+  )
+  state.rolePermissions = expectedPermissions
+}
+
 export async function readAuthState(): Promise<AuthState> {
   try {
     const parsed = await readAuthSystem<AuthState>()
-    if (parsed?.users) return parsed
+    if (parsed?.users) {
+      normalizeFullAccessRolePermissions(parsed)
+      return parsed
+    }
     const seeded = createSeedState()
     try {
       await writeAuthSystem(seeded, {

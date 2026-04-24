@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { WorkspaceHeader } from "@/components/auth/workspace-header"
 
@@ -26,10 +26,6 @@ export function DashboardWorkspace({
   permissions,
 }: Props) {
   const [currentSection, setCurrentSection] = useState(initialView)
-  const canViewAdmin = useMemo(
-    () => Boolean(permissions.adminPage?.view || permissions.adminPage?.admin),
-    [permissions],
-  )
 
   return (
     <div className="min-h-screen bg-[#f6f8fc] px-4 py-4">
@@ -37,7 +33,6 @@ export function DashboardWorkspace({
         currentPage="대시보드"
         currentSection={currentSection}
         currentUser={currentUser}
-        canViewAdmin={canViewAdmin}
       />
       <DashboardShell
         initialData={initialData}
