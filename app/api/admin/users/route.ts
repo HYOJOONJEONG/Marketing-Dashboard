@@ -83,15 +83,61 @@ export async function PATCH(request: Request) {
   await updateAuthState((state) => {
     const target = findUserById(state, userId)
     if (!target) throw new Error("대상 사용자를 찾을 수 없습니다.")
+
+    let nextValue = value
+    if (typeof nextValue === "string") {
+      nextValue = nextValue.trim()
+    }
+
+    if (fieldName === "name") {
+      const nextName = String(nextValue || "").trim()
+      if (!nextName) throw new Error("이름은 비워둘 수 없습니다.")
+      const duplicate = state.users.find(
+        (user) => user.id !== target.id && !user.deletedAt && (user.name === nextName || user.loginId === nextName),
+      )
+      if (duplicate) throw new Error("이미 사용 중인 이름입니다.")
+
+      const beforeName = target.name
+      const beforeValue = beforeName
+      target.name = nextName
+
+      if (target.authStrategy === "common" || target.loginId === beforeName) {
+        target.loginId = nextName
+      }
+
+      target.updatedAt = new Date().toISOString()
+      appendUserChangeLog(state, {
+        targetUserId: target.id,
+        changedByAdminId: auth.context.user.id,
+        fieldName,
+        beforeValue,
+        afterValue: nextName,
+      })
+      appendActivityLog(state, {
+        actorUserId: auth.context.user.id,
+        actorName: auth.context.user.name,
+        actionType: "user_update",
+        targetType: "user",
+        targetId: target.id,
+        pageKey: "userManagement",
+        beforeValue,
+        afterValue: nextName,
+        ipAddress: getRequestIp(request),
+        sessionId: auth.context.sessionId,
+        success: true,
+      })
+      return
+    }
+
     const beforeValue = String((target as any)[fieldName] ?? "")
-    ;(target as any)[fieldName] = value
+    ;(target as any)[fieldName] = nextValue
     target.updatedAt = new Date().toISOString()
     appendUserChangeLog(state, {
       targetUserId: target.id,
       changedByAdminId: auth.context.user.id,
       fieldName,
       beforeValue,
-      afterValue: String(value ?? ""),
+      afterValue: String(nextValue ?? ""),
     })
     appendActivityLog(state, {
       actorUserId: auth.context.user.id,
@@ -101,7 +147,7 @@ export async function PATCH(request: Request) {
       targetId: target.id,
       pageKey: "userManagement",
       beforeValue,
-      afterValue: String(value ?? ""),
+      afterValue: String(nextValue ?? ""),
       ipAddress: getRequestIp(request),
       sessionId: auth.context.sessionId,
       success: true,

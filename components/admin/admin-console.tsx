@@ -49,6 +49,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   const [selectedPermissionUserId, setSelectedPermissionUserId] = useState("")
   const [contractFilter, setContractFilter] = useState("")
   const [message, setMessage] = useState("")
+  const [userNameDraft, setUserNameDraft] = useState("")
   const [isPending, startTransition] = useTransition()
 
   const loadBootstrap = async () => {
@@ -70,6 +71,10 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   const contracts = bootstrap?.contracts || []
 
   const selectedUser = useMemo(() => users.find((user: any) => user.id === selectedUserId) || null, [users, selectedUserId])
+
+  useEffect(() => {
+    setUserNameDraft(selectedUser?.name || "")
+  }, [selectedUser?.id, selectedUser?.name])
   const filteredUsers = useMemo(() => {
     const query = userSearch.trim().toLowerCase()
     return users.filter((user: any) => {
@@ -134,6 +139,15 @@ export function AdminConsole({ currentUser, permissions }: Props) {
         body: JSON.stringify({ userId: selectedUser.id, fieldName, value }),
       })
     })
+  }
+
+  const commitUserName = () => {
+    const nextName = userNameDraft.trim()
+    if (!selectedUser || !nextName || nextName === selectedUser.name) {
+      setUserNameDraft(selectedUser?.name || "")
+      return
+    }
+    updateUser("name", nextName)
   }
 
   const deleteUser = (userId: string) => {
@@ -313,10 +327,18 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                       <label className="block">
                         <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">이름</div>
                         <input
-                          defaultValue={selectedUser.name}
+                          value={userNameDraft}
                           className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                          onChange={(event) => setUserNameDraft(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault()
+                              commitUserName()
+                            }
+                          }}
                           onBlur={(event) => {
-                            if (event.target.value && event.target.value !== selectedUser.name) updateUser("name", event.target.value)
+                            void event
+                            commitUserName()
                           }}
                         />
                       </label>
