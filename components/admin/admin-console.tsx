@@ -26,6 +26,7 @@ const tabs = [
 
 const TITLE_OPTIONS = ["본부장", "팀장", "부장", "과장", "대리", "사원"] as const
 const EDITABLE_ACTIONS = ["create", "edit", "delete", "approve", "admin"] as const
+type PermissionUpdate = { menuKey: string; action: string; allowed: boolean }
 
 function inferRoleFromTitle(title: string) {
   if (title === "본부장") return "director"
@@ -146,7 +147,8 @@ export function AdminConsole({ currentUser, permissions }: Props) {
     })
   }
 
-  const savePermission = (menuKey: string, action: string, allowed: boolean) => {
+  const savePermissionUpdates = (updates: PermissionUpdate[]) => {
+    if (!selectedPermissionUserId || !updates.length) return
     runAction(async () => {
       await fetchJson("/api/admin/permissions", {
         method: "PUT",
@@ -154,78 +156,30 @@ export function AdminConsole({ currentUser, permissions }: Props) {
         body: JSON.stringify({
           mode: "user",
           userId: selectedPermissionUserId,
-          menuKey,
-          action,
-          allowed,
+          updates,
         }),
       })
     })
   }
 
   const saveMenuPermission = (menuKey: string, mode: "read" | "edit", allowed: boolean) => {
-    runAction(async () => {
-      if (mode === "read") {
-        await fetchJson("/api/admin/permissions", {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            mode: "user",
-            userId: selectedPermissionUserId,
-            menuKey,
-            action: "view",
-            allowed,
-          }),
-        })
-        if (!allowed) {
-          await Promise.all(
-            EDITABLE_ACTIONS.map((action) =>
-              fetchJson("/api/admin/permissions", {
-                method: "PUT",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({
-                  mode: "user",
-                  userId: selectedPermissionUserId,
-                  menuKey,
-                  action,
-                  allowed: false,
-                }),
-              }),
-            ),
-          )
-        }
-        return
-      }
+    const updates: PermissionUpdate[] = []
 
-      if (allowed) {
-        await fetchJson("/api/admin/permissions", {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            mode: "user",
-            userId: selectedPermissionUserId,
-            menuKey,
-            action: "view",
-            allowed: true,
-          }),
-        })
+    if (mode === "read") {
+      updates.push({ menuKey, action: "view", allowed })
+      if (!allowed) {
+        updates.push(...EDITABLE_ACTIONS.map((action) => ({ menuKey, action, allowed: false })))
       }
+      savePermissionUpdates(updates)
+      return
+    }
 
-      await Promise.all(
-        EDITABLE_ACTIONS.map((action) =>
-          fetchJson("/api/admin/permissions", {
-            method: "PUT",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              mode: "user",
-              userId: selectedPermissionUserId,
-              menuKey,
-              action,
-              allowed,
-            }),
-          }),
-        ),
-      )
-    })
+    if (allowed) {
+      updates.push({ menuKey, action: "view", allowed: true })
+    }
+
+    updates.push(...EDITABLE_ACTIONS.map((action) => ({ menuKey, action, allowed })))
+    savePermissionUpdates(updates)
   }
 
   const resetOverrides = () => {
