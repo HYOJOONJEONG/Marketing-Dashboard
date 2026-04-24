@@ -3622,61 +3622,54 @@ export function DashboardShell({
     <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1720px]">
           <aside className="dashboard-sidebar w-[272px] border-r border-slate-200 bg-white px-4 py-4">
-            <div className="relative overflow-visible rounded-[28px] border border-slate-200 bg-white px-5 py-5 shadow-sm">
-              <div className="flex items-center gap-3">
+            <div className="relative overflow-visible rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+              <div className="flex items-center gap-2.5">
                 <img
                   src="/yonhapinfomax-logo.png"
                   alt="연합인포맥스"
-                  className="h-8 w-auto shrink-0 object-contain"
+                  className="h-7 w-auto shrink-0 object-contain"
                 />
-                <div className="text-[17px] font-black tracking-[-0.05em] text-[#173b93]">연합인포맥스</div>
               </div>
 
-              <div className="mt-6 flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-                  <LayoutGrid className="h-6 w-6" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[15px] font-black tracking-[-0.04em] text-slate-950">인포Biz본부 통합 대시보드</div>
-                  <div className="mt-1 h-2 w-2 rounded-full bg-blue-500" />
-                </div>
+              <div className="mt-3 text-[14px] font-black tracking-[-0.04em] text-slate-900">
+                인포Biz본부
               </div>
 
               {currentUser ? (
                 <>
-                  <div className="my-5 h-px bg-slate-200" />
+                  <div className="my-4 h-px bg-slate-200" />
                   <button
                     type="button"
                     onClick={() => router.push("/me")}
-                    className="flex w-full items-center gap-3 text-left"
+                    className="flex w-full items-center gap-2.5 text-left"
                   >
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-[30px] shadow-sm">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-[24px] shadow-sm">
                       {avatarLabel}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[18px] font-black tracking-[-0.04em] text-slate-950">{currentUser.name}</div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-semibold text-slate-600">
+                      <div className="truncate text-[16px] font-black tracking-[-0.04em] text-slate-950">{currentUser.name}</div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
                           {currentUser.role}
                         </span>
-                        <span className="rounded-full bg-blue-50 px-3 py-1 text-[12px] font-semibold text-blue-700">
+                        <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700">
                           {currentUser.teamName}
                         </span>
                       </div>
                     </div>
-                    <ChevronRight className="h-6 w-6 shrink-0 text-slate-400" />
+                    <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
                   </button>
 
-                  <div className="my-5 h-px bg-slate-200" />
+                  <div className="my-4 h-px bg-slate-200" />
                   <div className="space-y-1">
                     <button
                       type="button"
                       onClick={() => router.push("/me")}
-                      className="flex h-14 w-full items-center gap-3 rounded-2xl px-2 text-left text-slate-700 transition hover:bg-slate-50"
+                      className="flex h-12 w-full items-center gap-2.5 rounded-2xl px-1.5 text-left text-slate-700 transition hover:bg-slate-50"
                     >
-                      <UserRound className="ml-1 h-6 w-6 text-slate-400" />
-                      <span className="flex-1 text-[15px] font-bold tracking-[-0.03em] text-slate-800">내 페이지</span>
-                      <ChevronRight className="h-6 w-6 text-slate-400" />
+                      <UserRound className="ml-1 h-5 w-5 text-slate-400" />
+                      <span className="flex-1 text-[14px] font-bold tracking-[-0.03em] text-slate-800">내 페이지</span>
+                      <ChevronRight className="h-5 w-5 text-slate-400" />
                     </button>
                     <button
                       type="button"
@@ -3684,21 +3677,21 @@ export function DashboardShell({
                         setPasswordMessage("")
                         setIsPasswordOpen((prev) => !prev)
                       }}
-                      className="flex h-14 w-full items-center gap-3 rounded-2xl px-2 text-left text-slate-700 transition hover:bg-slate-50"
+                      className="flex h-12 w-full items-center gap-2.5 rounded-2xl px-1.5 text-left text-slate-700 transition hover:bg-slate-50"
                     >
-                      <KeyRound className="ml-1 h-6 w-6 text-slate-400" />
-                      <span className="flex-1 text-[15px] font-bold tracking-[-0.03em] text-slate-800">비밀번호 변경</span>
-                      <ChevronRight className="h-6 w-6 text-slate-400" />
+                      <KeyRound className="ml-1 h-5 w-5 text-slate-400" />
+                      <span className="flex-1 text-[14px] font-bold tracking-[-0.03em] text-slate-800">비밀번호 변경</span>
+                      <ChevronRight className="h-5 w-5 text-slate-400" />
                     </button>
                     <button
                       type="button"
                       onClick={handleLogout}
                       disabled={isAccountPending}
-                      className="flex h-14 w-full items-center gap-3 rounded-2xl px-2 text-left text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                      className="flex h-12 w-full items-center gap-2.5 rounded-2xl px-1.5 text-left text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                     >
-                      <LogOut className="ml-1 h-6 w-6 text-slate-400" />
-                      <span className="flex-1 text-[15px] font-bold tracking-[-0.03em] text-slate-800">로그아웃</span>
-                      <ChevronRight className="h-6 w-6 text-slate-400" />
+                      <LogOut className="ml-1 h-5 w-5 text-slate-400" />
+                      <span className="flex-1 text-[14px] font-bold tracking-[-0.03em] text-slate-800">로그아웃</span>
+                      <ChevronRight className="h-5 w-5 text-slate-400" />
                     </button>
                   </div>
 
