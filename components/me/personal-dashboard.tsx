@@ -3,7 +3,7 @@
 import type { ReactNode } from "react"
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { BriefcaseBusiness, FolderClock, Landmark, Sparkles } from "lucide-react"
+import { BriefcaseBusiness, ChevronDown, FolderClock, Landmark, Sparkles } from "lucide-react"
 import { WorkspaceHeader } from "@/components/auth/workspace-header"
 
 type Props = {
@@ -125,27 +125,27 @@ export function PersonalDashboard({ currentUser, data }: Props) {
         <WorkspaceHeader currentPage="개인페이지" currentSection="my-dashboard" currentUser={currentUser} />
 
         <div className="space-y-5">
-          <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-            <div className={`${cardClass} relative overflow-hidden bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_48%,#0ea5a4_100%)] py-5 text-white`}>
+          <section className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
+            <div className={`${cardClass} relative overflow-hidden bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_48%,#0ea5a4_100%)] py-4 text-white`}>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.22),transparent_34%)]" />
-              <div className="relative flex h-full flex-col justify-between gap-5">
-                <div className="flex items-center gap-3">
+              <div className="relative flex h-full flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
                   <div className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-white/80">
                     My Workspace
                   </div>
+                  <div className="text-xs font-semibold text-white/70">
+                    담당 업종 {selectedIndustryLabels.length || 0}개
+                  </div>
                 </div>
                 <div className="max-w-3xl">
-                  <h2 className="text-[28px] font-black tracking-[-0.05em]">{currentUser.name}님의 업무 대시보드</h2>
-                  <p className="mt-2 max-w-2xl text-[14px] leading-6 text-white/78">
+                  <h2 className="text-[24px] font-black tracking-[-0.05em]">{currentUser.name}님의 업무 대시보드</h2>
+                  <p className="mt-1 text-[13px] leading-5 text-white/78">
                     신규계약, 계약서 미회수, 해지와 청구보류 현황을 한 화면에서 보고 바로 정리할 수 있게 구성했습니다.
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2.5">
+                <div className="flex flex-wrap gap-2">
                   <span className="rounded-full bg-white/12 px-3 py-1.5 text-xs font-semibold text-white/90">{currentUser.role}</span>
                   <span className="rounded-full bg-white/12 px-3 py-1.5 text-xs font-semibold text-white/90">{currentUser.teamName}</span>
-                  <span className="rounded-full bg-white/12 px-3 py-1.5 text-xs font-semibold text-white/90">
-                    담당 업종 {selectedIndustryLabels.length || 0}개
-                  </span>
                 </div>
               </div>
             </div>
@@ -202,25 +202,39 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                   <div className="text-sm font-semibold text-slate-700">담당 업종 선택</div>
                   <div className="text-xs text-slate-400">미회수 현황 집계 기준</div>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {(data.industryOptions || []).map((industry) => {
-                    const checked = selectedIndustries.includes(industry)
-                    return (
-                      <button
-                        key={industry}
-                        type="button"
-                        onClick={() => toggleIndustry(industry)}
-                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                          checked
-                            ? "border-blue-200 bg-blue-50 text-blue-700"
-                            : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"
-                        }`}
-                      >
-                        {industry}
-                      </button>
-                    )
-                  })}
-                </div>
+                <details className="group relative mt-3">
+                  <summary className="flex h-12 cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 transition hover:bg-white">
+                    <span className="truncate pr-3">
+                      {selectedIndustryLabels.length
+                        ? `${selectedIndustryLabels.slice(0, 2).join(", ")}${selectedIndustryLabels.length > 2 ? ` 외 ${selectedIndustryLabels.length - 2}개` : ""}`
+                        : "담당 업종 선택"}
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition group-open:rotate-180" />
+                  </summary>
+                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-10 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.1)]">
+                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                      {(data.industryOptions || []).map((industry) => {
+                        const checked = selectedIndustries.includes(industry)
+                        return (
+                          <label
+                            key={industry}
+                            className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
+                              checked ? "bg-blue-50 text-blue-700" : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleIndustry(industry)}
+                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="flex-1">{industry}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </details>
               </div>
 
               <div className="mt-6 flex flex-wrap items-center gap-3">
