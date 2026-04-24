@@ -55,6 +55,7 @@ export default async function Page({
         name: auth.user.name,
         role: auth.user.title || auth.user.role,
         teamName: auth.teamName,
+        avatarEmoji: auth.user.avatarEmoji || null,
         color: getUserColorToken(auth.user.id),
       }}
       permissions={permissionIndex as any}

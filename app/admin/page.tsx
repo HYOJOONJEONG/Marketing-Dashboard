@@ -14,6 +14,7 @@ export default async function AdminPage() {
         name: auth.user.name,
         role: auth.user.title || auth.user.role,
         teamName: auth.teamName,
+        avatarEmoji: auth.user.avatarEmoji || null,
         color: getUserColorToken(auth.user.id),
       }}
       permissions={auth.permissionIndex as any}

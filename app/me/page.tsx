@@ -44,6 +44,7 @@ export default async function MyPage() {
         name: auth.user.name,
         role: auth.user.title || auth.user.role,
         teamName: auth.teamName,
+        avatarEmoji: auth.user.avatarEmoji || null,
         color: getUserColorToken(auth.user.id),
         assignedIndustries: auth.user.assignedIndustries || [],
       }}
