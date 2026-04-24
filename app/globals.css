@@ -638,6 +638,7 @@
     overflow: visible !important;
     border: 0 !important;
     border-radius: 0 !important;
+    box-shadow: none !important;
   }
 
   .weekly-report-print .print-report-sheet-section {
@@ -645,6 +646,20 @@
     border-radius: 0 !important;
     padding: 0 !important;
     background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .weekly-report-print .rounded-2xl,
+  .weekly-report-print .rounded-\[24px\],
+  .weekly-report-print .rounded-xl,
+  .weekly-report-print .rounded-lg,
+  .weekly-report-print .rounded-md {
+    border-radius: 0 !important;
+  }
+
+  .weekly-report-print * {
+    box-shadow: none !important;
+    background-image: none !important;
   }
 
   .weekly-report-print .contract-section-wrap {
