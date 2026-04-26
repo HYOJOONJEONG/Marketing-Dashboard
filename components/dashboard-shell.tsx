@@ -99,8 +99,7 @@ function formatLastUpdated(value: unknown) {
 function getTerminationManagerFallback(row: any) {
   const manager = String(row?.manager || "").trim()
   if (manager) return manager
-  const customerId = String(row?.customerId || "").trim()
-  return customerId ? String(terminationManagerMap[customerId] || "").trim() : ""
+  return ""
 }
 
 function backfillTerminationManagerRows(rows: any[] = []) {
