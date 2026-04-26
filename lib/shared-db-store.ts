@@ -6,6 +6,7 @@ import { redisCommand } from "@/lib/redis-client"
 const DEFAULT_STORE_PATH = path.join(process.cwd(), "data", "shared-kv-store.json")
 const CENTRAL_DB_API_URL = process.env.CENTRAL_DB_API_URL?.trim() || ""
 const CENTRAL_DB_API_TOKEN = process.env.CENTRAL_DB_API_TOKEN?.trim() || ""
+const SHARED_KV_API_KEY = process.env.SHARED_KV_API_KEY?.trim() || CENTRAL_DB_API_TOKEN
 const CENTRAL_DB_SOURCE = process.env.CENTRAL_DB_SOURCE?.trim() || "unknown-client"
 const KV_REST_API_URL = process.env.KV_REST_API_URL?.trim() || ""
 const KV_REST_API_TOKEN = process.env.KV_REST_API_TOKEN?.trim() || ""
@@ -79,6 +80,20 @@ async function kvCommand<T = unknown>(command: unknown[]) {
 
 function kvValueKey(key: SharedKey) {
   return `shared-kv:value:${key}`
+}
+
+function buildCentralApiHeaders(extra?: Record<string, string>) {
+  const authHeaders: Record<string, string> = {
+    ...(extra || {}),
+  }
+  if (SHARED_KV_API_KEY) {
+    authHeaders["x-api-key"] = SHARED_KV_API_KEY
+    authHeaders.authorization = `Bearer ${SHARED_KV_API_KEY}`
+  }
+  if (CENTRAL_DB_API_TOKEN) {
+    authHeaders["x-central-token"] = CENTRAL_DB_API_TOKEN
+  }
+  return Object.keys(authHeaders).length ? authHeaders : undefined
 }
 
 function resolveStorePath() {
@@ -160,7 +175,7 @@ async function readRawValue(key: SharedKey) {
     const baseUrl = CENTRAL_DB_API_URL.replace(/\/$/, "")
     const sharedUrl = `${baseUrl}/api/shared-kv?key=${encodeURIComponent(key)}`
     const sharedResp = await fetch(sharedUrl, {
-      headers: CENTRAL_DB_API_TOKEN ? { "x-central-token": CENTRAL_DB_API_TOKEN } : undefined,
+      headers: buildCentralApiHeaders(),
       cache: "no-store",
     })
     if (sharedResp.ok) {
@@ -176,7 +191,7 @@ async function readRawValue(key: SharedKey) {
       [STORE_KEYS.auth]: "/api/auth/session",
     }
     const legacyResp = await fetch(`${baseUrl}${legacyPathByKey[key]}`, {
-      headers: CENTRAL_DB_API_TOKEN ? { "x-central-token": CENTRAL_DB_API_TOKEN } : undefined,
+      headers: buildCentralApiHeaders(),
       cache: "no-store",
     })
     if (!legacyResp.ok) return null
@@ -214,7 +229,7 @@ async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta)
       method: "POST",
       headers: {
         "content-type": "application/json",
-        ...(CENTRAL_DB_API_TOKEN ? { "x-central-token": CENTRAL_DB_API_TOKEN } : {}),
+        ...(buildCentralApiHeaders({ "content-type": "application/json" }) || {}),
       },
       body: JSON.stringify({
         key,

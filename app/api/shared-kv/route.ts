@@ -3,11 +3,13 @@ import fs from "fs/promises"
 import path from "path"
 import { NextResponse } from "next/server"
 import { redisCommand } from "@/lib/redis-client"
+import { resolveRequestSession } from "@/lib/auth/session"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const CENTRAL_DB_API_TOKEN = process.env.CENTRAL_DB_API_TOKEN?.trim() || ""
+const SHARED_KV_API_KEY = process.env.SHARED_KV_API_KEY?.trim() || CENTRAL_DB_API_TOKEN
 const KV_REST_API_URL = process.env.KV_REST_API_URL?.trim() || ""
 const KV_REST_API_TOKEN = process.env.KV_REST_API_TOKEN?.trim() || ""
 const REDIS_URL = process.env.REDIS_URL?.trim() || ""
@@ -93,9 +95,29 @@ function kvValueKey(key: string) {
 const KV_AUDIT_LIST_KEY = "shared-kv:audit"
 const KV_AUDIT_ID_KEY = "shared-kv:audit:id"
 
-function isAuthorized(request: Request) {
-  if (!CENTRAL_DB_API_TOKEN) return true
-  return request.headers.get("x-central-token") === CENTRAL_DB_API_TOKEN
+function safeTokenEquals(input: string, expected: string) {
+  if (!input || !expected) return false
+  const inputBuffer = Buffer.from(input)
+  const expectedBuffer = Buffer.from(expected)
+  if (inputBuffer.length !== expectedBuffer.length) return false
+  return crypto.timingSafeEqual(inputBuffer, expectedBuffer)
+}
+
+function extractApiKey(request: Request) {
+  const xApiKey = String(request.headers.get("x-api-key") || "").trim()
+  if (xApiKey) return xApiKey
+  const legacyToken = String(request.headers.get("x-central-token") || "").trim()
+  if (legacyToken) return legacyToken
+  const authorization = String(request.headers.get("authorization") || "").trim()
+  const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i)
+  return bearerMatch?.[1]?.trim() || ""
+}
+
+async function isAuthorized(request: Request) {
+  const session = await resolveRequestSession()
+  if (session) return true
+  if (!SHARED_KV_API_KEY) return false
+  return safeTokenEquals(extractApiKey(request), SHARED_KV_API_KEY)
 }
 
 function safeErrorMessage(error: unknown) {
