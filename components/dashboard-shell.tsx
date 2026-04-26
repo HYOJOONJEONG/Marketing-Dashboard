@@ -72,6 +72,11 @@ const manualLabelCellClass = "w-[132px] bg-slate-50 px-3 py-2.5 text-center text
 const manualTableTitleRowClass = "border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[16px] font-bold text-slate-900"
 const terminationManagerMap = terminationManagerLookup as Record<string, string>
 
+function getManagerFromCustomerId(customerId: unknown) {
+  const key = String(customerId || "").trim().toUpperCase()
+  return key ? String(terminationManagerMap[key] || "").trim() : ""
+}
+
 function toNumber(value: unknown) {
   const num = Number(String(value ?? "").replace(/,/g, ""))
   return Number.isNaN(num) ? 0 : num
@@ -2998,11 +3003,33 @@ export function DashboardShell({
   }
 
   function updateTerminationDraft(field: string, value: string) {
-    setTerminationDraft((prev: any) => ({ ...prev, [field]: value }))
+    setTerminationDraft((prev: any) => {
+      if (field === "customerId") {
+        const nextCustomerId = String(value || "").trim().toUpperCase()
+        const matchedManager = getManagerFromCustomerId(nextCustomerId)
+        return {
+          ...prev,
+          customerId: nextCustomerId,
+          manager: matchedManager || prev.manager,
+        }
+      }
+      return { ...prev, [field]: value }
+    })
   }
 
   function updateHoldDraft(field: string, value: string) {
-    setHoldDraft((prev: any) => ({ ...prev, [field]: value }))
+    setHoldDraft((prev: any) => {
+      if (field === "customerId") {
+        const nextCustomerId = String(value || "").trim().toUpperCase()
+        const matchedManager = getManagerFromCustomerId(nextCustomerId)
+        return {
+          ...prev,
+          customerId: nextCustomerId,
+          manager: matchedManager || prev.manager,
+        }
+      }
+      return { ...prev, [field]: value }
+    })
   }
 
   function resetTerminationDraft() {
@@ -3044,8 +3071,8 @@ export function DashboardShell({
       no: "0",
       selected: false,
       receivedDate: normalizeDate(terminationDraft.receivedDate),
-      manager: terminationDraft.manager.trim(),
-      customerId: terminationDraft.customerId.trim(),
+      manager: getManagerFromCustomerId(terminationDraft.customerId) || terminationDraft.manager.trim(),
+      customerId: terminationDraft.customerId.trim().toUpperCase(),
       companyName: terminationDraft.companyName.trim(),
       departmentName: terminationDraft.departmentName.trim(),
       reason: terminationDraft.reason === "기타" && terminationDraft.reasonDetail.trim()
@@ -3079,8 +3106,8 @@ export function DashboardShell({
       id: `hold-${Date.now()}`,
       no: "0",
       receivedDate: normalizeDate(holdDraft.receivedDate),
-      manager: holdDraft.manager.trim(),
-      customerId: holdDraft.customerId.trim(),
+      manager: getManagerFromCustomerId(holdDraft.customerId) || holdDraft.manager.trim(),
+      customerId: holdDraft.customerId.trim().toUpperCase(),
       companyName: holdDraft.companyName.trim(),
       departmentName: holdDraft.departmentName.trim(),
       reason: holdDraft.reason === "기타" && holdDraft.reasonDetail?.trim()
@@ -3249,7 +3276,18 @@ export function DashboardShell({
   }
 
   function updateEditingTerminationDraft(field: string, value: string) {
-    setEditingTerminationDraft((prev: any) => ({ ...prev, [field]: value }))
+    setEditingTerminationDraft((prev: any) => {
+      if (field === "customerId") {
+        const nextCustomerId = String(value || "").trim().toUpperCase()
+        const matchedManager = getManagerFromCustomerId(nextCustomerId)
+        return {
+          ...prev,
+          customerId: nextCustomerId,
+          manager: matchedManager || prev.manager,
+        }
+      }
+      return { ...prev, [field]: value }
+    })
   }
 
   function mergeEditingTerminationRow(row: any) {
@@ -3257,8 +3295,8 @@ export function DashboardShell({
     return {
       ...row,
       receivedDate: normalizeDate(editingTerminationDraft.receivedDate),
-      manager: editingTerminationDraft.manager?.trim() || "",
-      customerId: editingTerminationDraft.customerId?.trim() || "",
+      manager: getManagerFromCustomerId(editingTerminationDraft.customerId) || editingTerminationDraft.manager?.trim() || "",
+      customerId: editingTerminationDraft.customerId?.trim().toUpperCase() || "",
       companyName: editingTerminationDraft.companyName?.trim() || "",
       departmentName: editingTerminationDraft.departmentName?.trim() || "",
       reason:
@@ -3282,8 +3320,8 @@ export function DashboardShell({
                   ? {
                       ...row,
                       receivedDate: normalizeDate(editingTerminationDraft.receivedDate),
-                      manager: editingTerminationDraft.manager?.trim() || "",
-                      customerId: editingTerminationDraft.customerId?.trim() || "",
+                      manager: getManagerFromCustomerId(editingTerminationDraft.customerId) || editingTerminationDraft.manager?.trim() || "",
+                      customerId: editingTerminationDraft.customerId?.trim().toUpperCase() || "",
                       companyName: editingTerminationDraft.companyName?.trim() || "",
                       departmentName: editingTerminationDraft.departmentName?.trim() || "",
                       reason:
@@ -3345,7 +3383,18 @@ export function DashboardShell({
   }
 
   function updateEditingHoldDraft(field: string, value: string) {
-    setEditingHoldDraft((prev: any) => ({ ...prev, [field]: value }))
+    setEditingHoldDraft((prev: any) => {
+      if (field === "customerId") {
+        const nextCustomerId = String(value || "").trim().toUpperCase()
+        const matchedManager = getManagerFromCustomerId(nextCustomerId)
+        return {
+          ...prev,
+          customerId: nextCustomerId,
+          manager: matchedManager || prev.manager,
+        }
+      }
+      return { ...prev, [field]: value }
+    })
   }
 
   function mergeEditingHoldRow(row: any) {
@@ -3353,8 +3402,8 @@ export function DashboardShell({
     return {
       ...row,
       receivedDate: normalizeDate(editingHoldDraft.receivedDate),
-      manager: editingHoldDraft.manager?.trim() || "",
-      customerId: editingHoldDraft.customerId?.trim() || "",
+      manager: getManagerFromCustomerId(editingHoldDraft.customerId) || editingHoldDraft.manager?.trim() || "",
+      customerId: editingHoldDraft.customerId?.trim().toUpperCase() || "",
       companyName: editingHoldDraft.companyName?.trim() || "",
       departmentName: editingHoldDraft.departmentName?.trim() || "",
       reason: editingHoldDraft.reason === "기타" && editingHoldDraft.reasonDetail?.trim()
@@ -3385,8 +3434,8 @@ export function DashboardShell({
                   ? {
                       ...row,
                       receivedDate: normalizeDate(editingHoldDraft.receivedDate),
-                      manager: editingHoldDraft.manager?.trim() || "",
-                      customerId: editingHoldDraft.customerId?.trim() || "",
+                      manager: getManagerFromCustomerId(editingHoldDraft.customerId) || editingHoldDraft.manager?.trim() || "",
+                      customerId: editingHoldDraft.customerId?.trim().toUpperCase() || "",
                       companyName: editingHoldDraft.companyName?.trim() || "",
                       departmentName: editingHoldDraft.departmentName?.trim() || "",
                       reason: editingHoldDraft.reason === "기타" && editingHoldDraft.reasonDetail?.trim()
