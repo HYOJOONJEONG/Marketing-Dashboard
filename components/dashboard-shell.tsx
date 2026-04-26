@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useRef, useState, useTransition } from "reac
 import { useRouter } from "next/navigation"
 import { ChevronDown, KeyRound, LogOut, UserRound, X } from "lucide-react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
-import terminationManagerLookup from "@/data/termination-manager-lookup.json"
 
 type ViewKey =
   | "weekly-report"
@@ -70,13 +69,6 @@ const manualSectionTitleClass = "text-[15px] font-bold text-slate-900"
 const manualHeaderCellClass = "border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-[13px] font-semibold text-slate-700"
 const manualLabelCellClass = "w-[132px] bg-slate-50 px-3 py-2.5 text-center text-[13px] font-semibold text-slate-700"
 const manualTableTitleRowClass = "border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[16px] font-bold text-slate-900"
-const terminationManagerMap = terminationManagerLookup as Record<string, string>
-
-function getManagerFromCustomerId(customerId: unknown) {
-  const key = String(customerId || "").trim().toUpperCase()
-  return key ? String(terminationManagerMap[key] || "").trim() : ""
-}
-
 function toNumber(value: unknown) {
   const num = Number(String(value ?? "").replace(/,/g, ""))
   return Number.isNaN(num) ? 0 : num
@@ -1184,7 +1176,7 @@ export function DashboardShell({
   const [terminationEntryMode, setTerminationEntryMode] = useState<"termination" | "hold">("termination")
   const [terminationDraft, setTerminationDraft] = useState<any>({
     receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
-    manager: "",
+    manager: currentUser?.name || "",
     customerId: "",
     companyName: "",
     departmentName: "",
@@ -1195,7 +1187,7 @@ export function DashboardShell({
   })
   const [holdDraft, setHoldDraft] = useState<any>({
     receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
-    manager: "",
+    manager: currentUser?.name || "",
     customerId: "",
     companyName: "",
     departmentName: "",
@@ -1299,6 +1291,11 @@ export function DashboardShell({
   useEffect(() => {
     if (!currentUser?.name) return
     setContractDraft((prev: any) => ({ ...prev, recommender: currentUser.name }))
+  }, [currentUser?.name])
+  useEffect(() => {
+    if (!currentUser?.name) return
+    setTerminationDraft((prev: any) => (prev.manager ? prev : { ...prev, manager: currentUser.name }))
+    setHoldDraft((prev: any) => (prev.manager ? prev : { ...prev, manager: currentUser.name }))
   }, [currentUser?.name])
   useEffect(() => {
     if (visibleViews.includes(view)) return
@@ -1990,7 +1987,7 @@ export function DashboardShell({
 
   useEffect(() => {
     const serverCollection = data?.collection || {}
-    setCollectionTab(serverCollection?.tab || "integrated")
+    setCollectionTab("integrated")
     setCollectionYearFilter(serverCollection?.yearFilter || 2026)
     setCollectionStatusFilter(serverCollection?.statusFilter || "all")
     setCollectionSort(serverCollection?.sort || { key: "year", dir: "desc" })
@@ -3003,39 +3000,17 @@ export function DashboardShell({
   }
 
   function updateTerminationDraft(field: string, value: string) {
-    setTerminationDraft((prev: any) => {
-      if (field === "customerId") {
-        const nextCustomerId = String(value || "").trim().toUpperCase()
-        const matchedManager = getManagerFromCustomerId(nextCustomerId)
-        return {
-          ...prev,
-          customerId: nextCustomerId,
-          manager: matchedManager || prev.manager,
-        }
-      }
-      return { ...prev, [field]: value }
-    })
+    setTerminationDraft((prev: any) => ({ ...prev, [field]: field === "customerId" ? String(value || "").trim().toUpperCase() : value }))
   }
 
   function updateHoldDraft(field: string, value: string) {
-    setHoldDraft((prev: any) => {
-      if (field === "customerId") {
-        const nextCustomerId = String(value || "").trim().toUpperCase()
-        const matchedManager = getManagerFromCustomerId(nextCustomerId)
-        return {
-          ...prev,
-          customerId: nextCustomerId,
-          manager: matchedManager || prev.manager,
-        }
-      }
-      return { ...prev, [field]: value }
-    })
+    setHoldDraft((prev: any) => ({ ...prev, [field]: field === "customerId" ? String(value || "").trim().toUpperCase() : value }))
   }
 
   function resetTerminationDraft() {
     setTerminationDraft({
       receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
-      manager: "",
+      manager: currentUser?.name || "",
       customerId: "",
       companyName: "",
       departmentName: "",
@@ -3049,7 +3024,7 @@ export function DashboardShell({
   function resetHoldDraft() {
     setHoldDraft({
       receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
-      manager: "",
+      manager: currentUser?.name || "",
       customerId: "",
       companyName: "",
       departmentName: "",
@@ -3071,7 +3046,7 @@ export function DashboardShell({
       no: "0",
       selected: false,
       receivedDate: normalizeDate(terminationDraft.receivedDate),
-      manager: getManagerFromCustomerId(terminationDraft.customerId) || terminationDraft.manager.trim(),
+      manager: terminationDraft.manager.trim(),
       customerId: terminationDraft.customerId.trim().toUpperCase(),
       companyName: terminationDraft.companyName.trim(),
       departmentName: terminationDraft.departmentName.trim(),
@@ -3106,7 +3081,7 @@ export function DashboardShell({
       id: `hold-${Date.now()}`,
       no: "0",
       receivedDate: normalizeDate(holdDraft.receivedDate),
-      manager: getManagerFromCustomerId(holdDraft.customerId) || holdDraft.manager.trim(),
+      manager: holdDraft.manager.trim(),
       customerId: holdDraft.customerId.trim().toUpperCase(),
       companyName: holdDraft.companyName.trim(),
       departmentName: holdDraft.departmentName.trim(),
@@ -3276,18 +3251,7 @@ export function DashboardShell({
   }
 
   function updateEditingTerminationDraft(field: string, value: string) {
-    setEditingTerminationDraft((prev: any) => {
-      if (field === "customerId") {
-        const nextCustomerId = String(value || "").trim().toUpperCase()
-        const matchedManager = getManagerFromCustomerId(nextCustomerId)
-        return {
-          ...prev,
-          customerId: nextCustomerId,
-          manager: matchedManager || prev.manager,
-        }
-      }
-      return { ...prev, [field]: value }
-    })
+    setEditingTerminationDraft((prev: any) => ({ ...prev, [field]: field === "customerId" ? String(value || "").trim().toUpperCase() : value }))
   }
 
   function mergeEditingTerminationRow(row: any) {
@@ -3295,7 +3259,7 @@ export function DashboardShell({
     return {
       ...row,
       receivedDate: normalizeDate(editingTerminationDraft.receivedDate),
-      manager: getManagerFromCustomerId(editingTerminationDraft.customerId) || editingTerminationDraft.manager?.trim() || "",
+      manager: editingTerminationDraft.manager?.trim() || "",
       customerId: editingTerminationDraft.customerId?.trim().toUpperCase() || "",
       companyName: editingTerminationDraft.companyName?.trim() || "",
       departmentName: editingTerminationDraft.departmentName?.trim() || "",
@@ -3320,7 +3284,7 @@ export function DashboardShell({
                   ? {
                       ...row,
                       receivedDate: normalizeDate(editingTerminationDraft.receivedDate),
-                      manager: getManagerFromCustomerId(editingTerminationDraft.customerId) || editingTerminationDraft.manager?.trim() || "",
+                      manager: editingTerminationDraft.manager?.trim() || "",
                       customerId: editingTerminationDraft.customerId?.trim().toUpperCase() || "",
                       companyName: editingTerminationDraft.companyName?.trim() || "",
                       departmentName: editingTerminationDraft.departmentName?.trim() || "",
@@ -3383,18 +3347,7 @@ export function DashboardShell({
   }
 
   function updateEditingHoldDraft(field: string, value: string) {
-    setEditingHoldDraft((prev: any) => {
-      if (field === "customerId") {
-        const nextCustomerId = String(value || "").trim().toUpperCase()
-        const matchedManager = getManagerFromCustomerId(nextCustomerId)
-        return {
-          ...prev,
-          customerId: nextCustomerId,
-          manager: matchedManager || prev.manager,
-        }
-      }
-      return { ...prev, [field]: value }
-    })
+    setEditingHoldDraft((prev: any) => ({ ...prev, [field]: field === "customerId" ? String(value || "").trim().toUpperCase() : value }))
   }
 
   function mergeEditingHoldRow(row: any) {
@@ -3402,7 +3355,7 @@ export function DashboardShell({
     return {
       ...row,
       receivedDate: normalizeDate(editingHoldDraft.receivedDate),
-      manager: getManagerFromCustomerId(editingHoldDraft.customerId) || editingHoldDraft.manager?.trim() || "",
+      manager: editingHoldDraft.manager?.trim() || "",
       customerId: editingHoldDraft.customerId?.trim().toUpperCase() || "",
       companyName: editingHoldDraft.companyName?.trim() || "",
       departmentName: editingHoldDraft.departmentName?.trim() || "",
@@ -3434,7 +3387,7 @@ export function DashboardShell({
                   ? {
                       ...row,
                       receivedDate: normalizeDate(editingHoldDraft.receivedDate),
-                      manager: getManagerFromCustomerId(editingHoldDraft.customerId) || editingHoldDraft.manager?.trim() || "",
+                      manager: editingHoldDraft.manager?.trim() || "",
                       customerId: editingHoldDraft.customerId?.trim().toUpperCase() || "",
                       companyName: editingHoldDraft.companyName?.trim() || "",
                       departmentName: editingHoldDraft.departmentName?.trim() || "",
@@ -4030,7 +3983,10 @@ export function DashboardShell({
                     {canViewCollections ? (
                       <button
                         type="button"
-                        onClick={() => setView("collection")}
+                        onClick={() => {
+                          setCollectionTab("integrated")
+                          setView("collection")
+                        }}
                         className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
                           view === "collection" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
                         }`}
