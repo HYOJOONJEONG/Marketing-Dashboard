@@ -3038,12 +3038,7 @@ export function DashboardShell({
           </tr>
         `
 
-    const popup = window.open("", "_blank", "noopener,noreferrer,width=960,height=1280")
-    if (!popup) return
-
-    popup.document.title = fileTitle
-    popup.document.open()
-    popup.document.write(`
+    const printHtml = `
       <!doctype html>
       <html lang="ko">
       <head>
@@ -3218,12 +3213,28 @@ export function DashboardShell({
         </script>
       </body>
       </html>
-    `)
-    popup.document.close()
+    `
+
+    const blob = new Blob([printHtml], { type: "text/html;charset=utf-8" })
+    const objectUrl = URL.createObjectURL(blob)
+    const popup = window.open(objectUrl, "_blank", "noopener,noreferrer,width=960,height=1280")
+    if (!popup) {
+      URL.revokeObjectURL(objectUrl)
+      return
+    }
+
+    const revoke = () => {
+      try {
+        URL.revokeObjectURL(objectUrl)
+      } catch {}
+    }
+
+    popup.addEventListener("beforeunload", revoke, { once: true })
     popup.onload = () => {
       popup.focus()
       popup.setTimeout(() => {
         popup.print()
+        popup.setTimeout(revoke, 1500)
       }, 300)
     }
   }
