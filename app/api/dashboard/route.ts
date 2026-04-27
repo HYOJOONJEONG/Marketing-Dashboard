@@ -14,6 +14,7 @@ const FALLBACK_PATH = path.join(process.cwd(), "api-dashboard-response.json")
 
 const EMPTY_DASHBOARD = { ui: {}, contracts: [], termination: {} }
 const DASHBOARD_VIEW_KEYS = [
+  "dailyReport",
   "weeklyReport",
   "manualInput",
   "newContractsList",
@@ -23,6 +24,7 @@ const DASHBOARD_VIEW_KEYS = [
   "optionDashboard",
 ] as const
 const DASHBOARD_EDIT_KEYS = [
+  "dailyReport",
   "manualInput",
   "newContractsList",
   "weeklySelection",

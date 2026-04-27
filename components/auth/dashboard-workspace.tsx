@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { DashboardShell } from "@/components/dashboard-shell"
+import { DailyDirectoryUser } from "@/lib/daily-report"
 
 type Props = {
   initialData: any
@@ -15,6 +16,7 @@ type Props = {
     avatarEmoji?: string | null
     color: { bg: string; text: string; border: string; hex: string }
   }
+  directoryUsers: DailyDirectoryUser[]
   permissions: Record<string, Record<string, boolean>>
 }
 
@@ -23,6 +25,7 @@ export function DashboardWorkspace({
   initialView,
   initialCollectionTab,
   currentUser,
+  directoryUsers,
   permissions,
 }: Props) {
   const [currentSection, setCurrentSection] = useState(initialView)
@@ -34,6 +37,7 @@ export function DashboardWorkspace({
         initialView={initialView as any}
         initialCollectionTab={initialCollectionTab as any}
         currentUser={currentUser}
+        directoryUsers={directoryUsers}
         permissions={permissions}
         onViewChange={setCurrentSection}
       />

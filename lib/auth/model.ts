@@ -1,5 +1,6 @@
 export type RoleKey = "admin" | "director" | "team_manager" | "staff" | "viewer"
 export type MenuKey =
+  | "dailyReport"
   | "dashboard"
   | "weeklyReport"
   | "manualInput"
@@ -22,6 +23,7 @@ export type TeamRecord = {
   id: string
   code: string
   name: string
+  teamOrder?: number
   createdAt: string
   updatedAt: string
 }
@@ -62,6 +64,7 @@ export type UserRecord = {
   title?: string | null
   avatarEmoji?: string | null
   assignedIndustries?: string[]
+  displayOrder?: number
   role: RoleKey
   teamId: string
   active: boolean
@@ -155,6 +158,7 @@ export type AuthState = {
 }
 
 export const MENU_LABELS: Record<MenuKey, string> = {
+  dailyReport: "업무일지",
   dashboard: "대시보드",
   weeklyReport: "주간실적보고",
   manualInput: "수동입력리스트",
@@ -186,6 +190,7 @@ export const MENU_KEYS = Object.keys(MENU_LABELS) as MenuKey[]
 export const ACTION_KEYS = Object.keys(ACTION_LABELS) as PermissionAction[]
 
 export const ADMIN_PERMISSION_ROW_KEYS: MenuKey[] = [
+  "dailyReport",
   "weeklyReport",
   "manualInput",
   "newContractsList",

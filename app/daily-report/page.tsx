@@ -2,8 +2,7 @@ import path from "path"
 
 import { LoginPage } from "@/components/auth/login-page"
 import { DashboardWorkspace } from "@/components/auth/dashboard-workspace"
-import { DashboardShell } from "@/components/dashboard-shell"
-import { buildPermissionIndex, filterContractsForUser, hasPermission } from "@/lib/auth/permissions"
+import { buildPermissionIndex, filterContractsForUser } from "@/lib/auth/permissions"
 import { requirePageAuth } from "@/lib/auth/server"
 import { getUserColorToken } from "@/lib/auth/model"
 import { sortDailyDirectoryUsers } from "@/lib/daily-report"
@@ -12,12 +11,7 @@ import { readDashboardState } from "@/lib/shared-db-store"
 const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
 const FALLBACK_PATH = path.join(process.cwd(), "api-dashboard-response.json")
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams?: Promise<{ view?: string; tab?: string }>
-}) {
-  const params = (await searchParams) || {}
+export default async function DailyReportPageRoute() {
   let data: any
   const auth = await requirePageAuth()
 
@@ -56,21 +50,11 @@ export default async function Page({
       }),
   )
 
-  const initialView =
-    (params.view as any) ||
-    (hasPermission(permissionIndex, "dailyReport", "view")
-      ? "daily-report"
-      : hasPermission(permissionIndex, "weeklyReport", "view")
-        ? "weekly-report"
-        : hasPermission(permissionIndex, "newContractsList", "view")
-        ? "contracts"
-        : "daily-report")
-
   return (
     <DashboardWorkspace
       initialData={safeData}
-      initialView={initialView}
-      initialCollectionTab={(params.tab as any) || "integrated"}
+      initialView="daily-report"
+      initialCollectionTab="integrated"
       currentUser={{
         id: auth.user.id,
         name: auth.user.name,

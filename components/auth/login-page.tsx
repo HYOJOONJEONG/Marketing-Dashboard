@@ -27,6 +27,7 @@ export function LoginPage() {
         setError(payload?.error || "로그인에 실패했습니다.")
         return
       }
+      router.push("/daily-report")
       router.refresh()
     })
   }

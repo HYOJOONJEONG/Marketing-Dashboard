@@ -107,14 +107,28 @@ function getUserTitle(name: string, fallbackRole?: RoleKey) {
 
 function createSeedTeams(now: string): TeamRecord[] {
   return [
-    { id: "team-infobiz1", code: "INFOBIZ1", name: "인포Biz1팀", createdAt: now, updatedAt: now },
-    { id: "team-infobiz2", code: "INFOBIZ2", name: "인포Biz2팀", createdAt: now, updatedAt: now },
-    { id: "team-hq", code: "HQ", name: "본부", createdAt: now, updatedAt: now },
+    { id: "team-hq", code: "HQ", name: "본부", teamOrder: 1, createdAt: now, updatedAt: now },
+    { id: "team-infobiz1", code: "INFOBIZ1", name: "인포Biz1팀", teamOrder: 2, createdAt: now, updatedAt: now },
+    { id: "team-infobiz2", code: "INFOBIZ2", name: "인포Biz2팀", teamOrder: 3, createdAt: now, updatedAt: now },
   ]
 }
 
 function createSeedUsers(now: string, teams: TeamRecord[]): UserRecord[] {
   const teamIdByName = new Map(teams.map((team) => [team.name, team.id]))
+  const displayOrderByName: Record<string, number> = {
+    이상철: 1,
+    신무길: 1,
+    이홍민: 2,
+    정효준: 3,
+    조홍희: 4,
+    정진영: 5,
+    박혜리: 6,
+    윤옥수: 1,
+    진효정: 2,
+    김다빈: 3,
+    박대일: 4,
+    김대일: 4,
+  }
   const seeded = DEFAULT_DIRECTORY_USERS.map((user) => ({
     id: buildUserId(user.name),
     loginId: user.name,
@@ -122,6 +136,7 @@ function createSeedUsers(now: string, teams: TeamRecord[]): UserRecord[] {
     title: getUserTitle(user.name, user.role),
     avatarEmoji: null,
     assignedIndustries: [],
+    displayOrder: displayOrderByName[user.name] || 99,
     role: user.role,
     teamId: String(teamIdByName.get(user.team) || teams[0]?.id || ""),
     active: true,
@@ -243,6 +258,18 @@ function createSeedState(): AuthState {
   }
 }
 
+function normalizeTeamOrders(state: AuthState) {
+  const teamOrderByName: Record<string, number> = {
+    본부: 1,
+    인포Biz1팀: 2,
+    인포Biz2팀: 3,
+  }
+  state.teams = state.teams.map((team) => ({
+    ...team,
+    teamOrder: Number(team.teamOrder ?? teamOrderByName[team.name] ?? 99),
+  }))
+}
+
 function normalizeFullAccessRolePermissions(state: AuthState) {
   const expectedPermissions = state.roles.flatMap((role) =>
     MENU_KEYS.flatMap((menuKey) =>
@@ -259,11 +286,29 @@ function normalizeFullAccessRolePermissions(state: AuthState) {
 }
 
 function normalizeUserTitles(state: AuthState) {
+  const teamMap = new Map(state.teams.map((team) => [team.id, team.name]))
+  const displayOrderByName: Record<string, number> = {
+    이상철: 1,
+    신무길: 1,
+    이홍민: 2,
+    정효준: 3,
+    조홍희: 4,
+    정진영: 5,
+    박혜리: 6,
+    윤옥수: 1,
+    진효정: 2,
+    김다빈: 3,
+    김대일: 4,
+    박대일: 4,
+    기타: 5,
+  }
   state.users = state.users.map((user) => ({
     ...user,
     title: user.title || getUserTitle(user.name, user.role),
     avatarEmoji: user.avatarEmoji ? String(user.avatarEmoji).trim() : null,
     assignedIndustries: normalizeAssignedIndustries(user.assignedIndustries),
+    displayOrder: Number(user.displayOrder ?? displayOrderByName[user.name] ?? 99),
+    teamId: user.teamId || String([...teamMap.keys()][0] || ""),
   }))
 }
 
@@ -290,6 +335,20 @@ function normalizeLegacyAdminAccount(state: AuthState) {
 function normalizeRequiredDirectoryUsers(state: AuthState) {
   const now = nowIso()
   const teamIdByName = new Map(state.teams.map((team) => [team.name, team.id]))
+  const displayOrderByName: Record<string, number> = {
+    이상철: 1,
+    신무길: 1,
+    이홍민: 2,
+    정효준: 3,
+    조홍희: 4,
+    정진영: 5,
+    박혜리: 6,
+    윤옥수: 1,
+    진효정: 2,
+    김다빈: 3,
+    박대일: 4,
+    김대일: 4,
+  }
 
   DEFAULT_DIRECTORY_USERS.forEach((seedUser) => {
     const teamId = String(teamIdByName.get(seedUser.team) || state.teams[0]?.id || "")
@@ -309,6 +368,7 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
       existing.teamId = teamId
       existing.title = getUserTitle(seedUser.name, seedUser.role)
       existing.avatarEmoji = existing.avatarEmoji ? String(existing.avatarEmoji).trim() : null
+      existing.displayOrder = displayOrderByName[seedUser.name] || 99
       existing.active = true
       existing.deletedAt = null
       existing.assignedIndustries = Array.isArray(existing.assignedIndustries)
@@ -325,6 +385,7 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
       title: getUserTitle(seedUser.name, seedUser.role),
       avatarEmoji: null,
       assignedIndustries: [],
+      displayOrder: displayOrderByName[seedUser.name] || 99,
       role: seedUser.role,
       teamId,
       active: true,
@@ -342,6 +403,7 @@ export async function readAuthState(): Promise<AuthState> {
   try {
     const parsed = await readAuthSystem<AuthState>()
     if (parsed?.users) {
+      normalizeTeamOrders(parsed)
       normalizeFullAccessRolePermissions(parsed)
       normalizeLegacyAdminAccount(parsed)
       normalizeRequiredDirectoryUsers(parsed)

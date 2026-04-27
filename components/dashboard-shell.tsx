@@ -4,8 +4,15 @@ import React, { useEffect, useMemo, useRef, useState, useTransition } from "reac
 import { useRouter } from "next/navigation"
 import { ChevronDown, KeyRound, LogOut, UserRound, X } from "lucide-react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
+import { DailyReportPage } from "./daily-report/daily-report-page"
+import {
+  DailyDirectoryUser,
+  createEmptyDailyReportState,
+  normalizeDailyReportState,
+} from "@/lib/daily-report"
 
 type ViewKey =
+  | "daily-report"
   | "weekly-report"
   | "contracts"
   | "weekly-selection"
@@ -14,11 +21,12 @@ type ViewKey =
   | "option-dashboard"
   | "termination"
 type CollectionTabKey = "integrated" | "long-term" | "delivery"
-type SectionKey = "performance" | "termination"
+type SectionKey = "dailyReport" | "performance" | "termination"
 
 const LOCAL_STORAGE_KEY = "infobiz-dashboard-state-v1"
 
 const viewTitles: Record<ViewKey, string> = {
+  "daily-report": "업무일지",
   "weekly-report": "주간실적보고",
   contracts: "신규계약 리스트",
   "weekly-selection": "주간 반영 리스트",
@@ -94,6 +102,15 @@ function formatLastUpdated(value: unknown) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date)
+}
+
+function getSeoulTodayKey() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
 }
 
 function getTerminationManagerFallback(row: any) {
@@ -1053,6 +1070,7 @@ export function DashboardShell({
   initialView = "weekly-report",
   initialCollectionTab = "integrated",
   currentUser,
+  directoryUsers,
   permissions,
   onViewChange,
 }: {
@@ -1067,6 +1085,7 @@ export function DashboardShell({
     avatarEmoji?: string | null
     color?: { bg: string; text: string; border: string; hex: string }
   } | null
+  directoryUsers: DailyDirectoryUser[]
   permissions?: Record<string, Record<string, boolean>> | null
   onViewChange?: (view: ViewKey) => void
 }) {
@@ -1074,7 +1093,7 @@ export function DashboardShell({
   const [data, setData] = useState<any>(initialData)
   const [view, setView] = useState<ViewKey>(initialView)
   const [collectionTab, setCollectionTab] = useState<CollectionTabKey>(initialCollectionTab)
-  const [sections, setSections] = useState<Record<SectionKey, boolean>>({ performance: true, termination: true })
+  const [sections, setSections] = useState<Record<SectionKey, boolean>>({ dailyReport: true, performance: true, termination: true })
   const [isPending, startTransition] = useTransition()
   const [isAccountPending, startAccountTransition] = useTransition()
   const [dirtyViews, setDirtyViews] = useState<Partial<Record<ViewKey, boolean>>>({})
@@ -1153,6 +1172,7 @@ export function DashboardShell({
     key: "year" | "companyName" | "departmentName" | "idCode" | "industry" | "claimMonth" | "receiptDate" | "reflectedDate" | "status"
     dir: "asc" | "desc"
   }>(initialData?.collection?.sort || { key: "year", dir: "desc" })
+  const [dailyReportFocus, setDailyReportFocus] = useState<"today" | "status" | "ai">("today")
   const [selectedDeliveryHistoryDate, setSelectedDeliveryHistoryDate] = useState<string>("")
   const [historyStack, setHistoryStack] = useState<any[]>([])
   const pendingSaveRef = useRef<number | null>(null)
@@ -1168,6 +1188,7 @@ export function DashboardShell({
   const hasAccess = (menuKey: string, action: string = "view") =>
     Boolean(permissions?.[menuKey]?.admin || permissions?.[menuKey]?.[action])
   const avatarLabel = String(currentUser?.avatarEmoji || "").trim() || String(currentUser?.name || "").slice(0, 1) || "사"
+  const canViewDailyReport = hasAccess("dailyReport", "view")
   const canViewWeeklyReport = hasAccess("weeklyReport", "view")
   const canViewManualInput = hasAccess("manualInput", "view")
   const canEditManualInput = hasAccess("manualInput", "edit")
@@ -1191,6 +1212,7 @@ export function DashboardShell({
   const visiblePresenceUsers = useMemo(() => activePresenceUsers.slice(0, 8), [activePresenceUsers])
   const hiddenPresenceCount = Math.max(0, activePresenceUsers.length - visiblePresenceUsers.length)
   const visibleViews = [
+    canViewDailyReport ? "daily-report" : null,
     canViewWeeklyReport ? "weekly-report" : null,
     canViewManualInput ? "manual-input" : null,
     canViewContracts ? "contracts" : null,
@@ -1257,6 +1279,11 @@ export function DashboardShell({
   const [holdQuery, setHoldQuery] = useState("")
 
   const weeklyReport = data.weeklyReport || {}
+  const dailyReportDate = getSeoulTodayKey()
+  const normalizedDailyReport = useMemo(
+    () => normalizeDailyReportState(data.dailyReport || createEmptyDailyReportState(), directoryUsers || [], dailyReportDate),
+    [data.dailyReport, directoryUsers, dailyReportDate],
+  )
   const contracts = data.contracts || []
   const collection = data.collection || { integrated: [], longTerm: [] }
   const termination = data.termination || { sheets: [], currentSheetId: undefined }
@@ -1994,6 +2021,16 @@ export function DashboardShell({
     return savePromise
   }
 
+  async function persistDailyReportState(nextDailyReportState: any) {
+    await persist(
+      {
+        ...data,
+        dailyReport: nextDailyReportState,
+      },
+      { immediate: true, updatedViews: ["daily-report"] },
+    )
+  }
+
   flushPendingSave.current = () => {
     // Saves are intentionally manual now. This function remains as a no-op
     // so older call sites cannot push half-finished edits on page unload.
@@ -2033,6 +2070,28 @@ export function DashboardShell({
       window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data))
     } catch {}
   }, [])
+
+  useEffect(() => {
+    if (view !== "daily-report") return
+    let cancelled = false
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await fetch("/api/dashboard", { cache: "no-store" })
+        if (!response.ok) return
+        const latest = await response.json()
+        if (cancelled) return
+        if (latest?.dailyReport) {
+          setData((prev: any) => ({ ...prev, dailyReport: latest.dailyReport, ui: latest.ui || prev.ui }))
+        }
+      } catch {
+        // Ignore transient polling issues for collaborative daily reports.
+      }
+    }, 15000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [view])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -4211,7 +4270,7 @@ export function DashboardShell({
   const currentMenuUpdatedAt = data?.ui?.menuUpdatedAt?.[view]
   const currentViewDirty = Boolean(dirtyViews[view])
   const hasUnsavedChanges = Object.values(dirtyViews).some(Boolean)
-  const showHeaderSave = !["weekly-report", "contracts", "weekly-selection", "manual-input"].includes(view)
+  const showHeaderSave = !["daily-report", "weekly-report", "contracts", "weekly-selection", "manual-input"].includes(view)
 
   return (
     <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
@@ -4385,6 +4444,73 @@ export function DashboardShell({
             </div>
 
           <div className="mt-5 flex-1 space-y-5">
+            <div>
+              <button
+                type="button"
+                onClick={() => setSections((prev) => ({ ...prev, dailyReport: !prev.dailyReport }))}
+                className="group flex w-full items-center justify-between rounded-2xl border border-transparent px-3 py-2.5 text-[15px] font-bold text-slate-900 transition hover:border-slate-200 hover:bg-slate-50"
+              >
+                <span className="flex items-center gap-2.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                  <span className="tracking-[-0.02em]">업무일지</span>
+                </span>
+                <span
+                  className={`flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition ${
+                    sections.dailyReport ? "rotate-180" : ""
+                  } group-hover:bg-slate-200 group-hover:text-slate-500`}
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5">
+                    <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+              </button>
+              {sections.dailyReport && (
+                <div className="mt-2 space-y-1.5">
+                  {canViewDailyReport ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDailyReportFocus("today")
+                          setView("daily-report")
+                        }}
+                        className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                          view === "daily-report" && dailyReportFocus === "today" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        오늘 업무일지
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDailyReportFocus("status")
+                          setView("daily-report")
+                        }}
+                        className={`ml-4 flex h-10 w-[calc(100%-1rem)] items-center rounded-2xl px-4 text-left text-[14px] font-semibold ${
+                          view === "daily-report" && dailyReportFocus === "status" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        제출 현황
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDailyReportFocus("ai")
+                          setView("daily-report")
+                        }}
+                        className={`ml-4 flex h-10 w-[calc(100%-1rem)] items-center rounded-2xl px-4 text-left text-[14px] font-semibold ${
+                          view === "daily-report" && dailyReportFocus === "ai" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        AI 요약
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
             <div>
               <button
                 type="button"
@@ -4681,19 +4807,47 @@ export function DashboardShell({
                   <span>PDF</span>
                 </button>
               )}
-              <div className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-700">
-                {currentYear}년도
-              </div>
-              <button
-                type="button"
-                onClick={handleUndoLastAction}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!historyStack.length || isPending}
-              >
-                이전 작업 되돌리기
-              </button>
+              {view !== "daily-report" ? (
+                <>
+                  <div className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-700">
+                    {currentYear}년도
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleUndoLastAction}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!historyStack.length || isPending}
+                  >
+                    이전 작업 되돌리기
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
+
+          {view === "daily-report" && (
+            <DailyReportPage
+              currentUser={{
+                id: currentUser?.id || "",
+                name: currentUser?.name || "",
+                role: currentUser?.role || "",
+                teamName: currentUser?.teamName || "",
+                avatarEmoji: currentUser?.avatarEmoji || null,
+              }}
+              directoryUsers={directoryUsers}
+              reportState={normalizedDailyReport}
+              currentDate={dailyReportDate}
+              focus={dailyReportFocus}
+              lastUpdatedText={formatLastUpdated(currentMenuUpdatedAt)}
+              presenceUsers={presenceUsers.map((user) => ({
+                userId: user.userId,
+                userName: user.userName,
+                teamName: user.teamName,
+                status: user.status,
+              }))}
+              onSaveState={persistDailyReportState}
+            />
+          )}
 
           {view === "weekly-report" && (
             <div className="weekly-report-print space-y-4">
