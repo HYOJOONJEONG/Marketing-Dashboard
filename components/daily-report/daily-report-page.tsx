@@ -519,6 +519,30 @@ export function DailyReportPage({
     }
   }
 
+  async function handleCancelSubmission() {
+    if (!selectedEntry) return
+    setStatusMessage("")
+    setIsSaving(true)
+    try {
+      const now = new Date().toISOString()
+      const nextEntry: DailyReportEntry = {
+        ...selectedEntry,
+        reportBody: "",
+        plannedTasks: "",
+        submittedAt: null,
+        updatedAt: now,
+      }
+      const nextState = upsertDailyReportEntry(reportState, nextEntry)
+      await onSaveState(nextState)
+      setDraft({ reportBody: "", plannedTasks: "" })
+      setStatusMessage(`${nextEntry.userName} 업무일지 제출을 취소했습니다.`)
+    } catch {
+      setStatusMessage("제출 취소 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   async function handleCopyDocument(target: "team1" | "team2") {
     try {
       await navigator.clipboard.writeText(target === "team1" ? teamOneDocument : teamTwoDocument)
@@ -726,6 +750,16 @@ export function DailyReportPage({
                       />
                     </label> : null}
                     <div className="sticky bottom-3 z-10 -mx-1 mt-2 flex flex-col gap-2 rounded-[22px] border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur sm:static sm:mx-0 sm:flex-row sm:justify-end sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
+                      {selectedEntryStatus === "complete" ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleCancelSubmission()}
+                          disabled={isSaving}
+                          className="inline-flex h-11 items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-4 text-[13px] font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60 sm:h-10"
+                        >
+                          제출취소
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => void commitReport("draft")}
