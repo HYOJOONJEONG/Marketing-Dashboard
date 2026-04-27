@@ -458,11 +458,11 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             </div>
 
             <div className={cardClass}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">4. 나의 청구보류 리스트</h3>
-                  <p className="mt-1 text-sm text-slate-500">현재 내 이름으로 관리 중인 청구보류 건을 따로 모았습니다.</p>
-                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">4. 나의 청구보류 리스트</h3>
+                  <p className="mt-1 text-sm text-slate-500">현재 내 이름으로 관리 중인 청구보류 건의 시작일과 종료일을 함께 보여줍니다.</p>
+                  </div>
                 <div className="rounded-2xl bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
                   {data.myHoldRows.length}건
                 </div>
@@ -472,7 +472,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
-                      {["구분", "고객사", "부서", "고객번호", "사유", "처리일"].map((head) => (
+                      {["구분", "고객사", "부서", "고객번호", "사유", "시작일", "종료일"].map((head) => (
                         <th key={head} className="px-4 py-3 text-left font-semibold">
                           {head}
                         </th>
@@ -492,12 +492,13 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                           <td className="px-4 py-3">{formatValue(row.departmentName)}</td>
                           <td className="px-4 py-3">{formatValue(row.customerId)}</td>
                           <td className="px-4 py-3">{formatValue(row.reason)}</td>
-                          <td className="px-4 py-3">{formatValue(row.terminationDate || row.receivedDate)}</td>
+                          <td className="px-4 py-3">{formatValue(row.startDate)}</td>
+                          <td className="px-4 py-3">{formatValue(row.endDate)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">
+                        <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">
                           배정된 청구보류 리스트가 없습니다.
                         </td>
                       </tr>
