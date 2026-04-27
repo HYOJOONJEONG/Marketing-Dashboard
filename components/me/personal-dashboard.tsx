@@ -3,7 +3,7 @@
 import type { ReactNode } from "react"
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, BriefcaseBusiness, ChevronDown, FolderClock, Landmark, Sparkles, UserRound } from "lucide-react"
+import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, OctagonAlert, UserRound } from "lucide-react"
 
 type Props = {
   currentUser: {
@@ -257,7 +257,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
               title="내 신규계약"
               value={data.myContracts.length}
               tone="bg-blue-50 text-blue-700"
-              icon={<BriefcaseBusiness className="h-5 w-5" />}
+              icon={<FileSignature className="h-5 w-5" />}
             />
             <MetricCard
               title="내 미회수 계약서"
@@ -269,13 +269,13 @@ export function PersonalDashboard({ currentUser, data }: Props) {
               title="나의 해지 리스트"
               value={data.myTerminationRows.length}
               tone="bg-orange-50 text-orange-700"
-              icon={<Sparkles className="h-5 w-5" />}
+              icon={<OctagonAlert className="h-5 w-5" />}
             />
             <MetricCard
               title="나의 청구보류 리스트"
               value={data.myHoldRows.length}
               tone="bg-amber-50 text-amber-700"
-              icon={<Landmark className="h-5 w-5" />}
+              icon={<CirclePause className="h-5 w-5" />}
             />
           </section>
 
