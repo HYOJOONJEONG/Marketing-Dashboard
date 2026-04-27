@@ -5939,12 +5939,12 @@ export function DashboardShell({
                     <button
                       type="button"
                       onClick={handleCollectionIntegratedPrint}
-                      title="PDF 다운로드"
-                      aria-label="PDF 다운로드"
-                      className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-rose-100 bg-white px-3 text-[12px] font-bold text-rose-600 shadow-sm hover:bg-rose-50"
+                      title="PDF 출력"
+                      aria-label="PDF 출력"
+                      className="inline-flex h-11 items-center gap-2 rounded-2xl border border-rose-100 bg-white px-4 text-[14px] font-bold text-rose-600 shadow-sm transition hover:border-rose-200 hover:bg-rose-50"
                     >
-                      <PdfIcon className="h-4 w-4" />
-                      <span>PDF 다운로드</span>
+                      <PdfIcon className="h-5 w-5" />
+                      <span>PDF</span>
                     </button>
                   )}
                 </div>
