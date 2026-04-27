@@ -602,7 +602,7 @@ export function DailyReportPage({
               </span>
               <span className="text-[12px] font-semibold text-slate-500">{formatDisplayDate(currentDate)}</span>
             </div>
-            <h2 className="mt-3 text-[24px] font-black tracking-[-0.04em] text-slate-950">인포Biz본부 업무일지 취합</h2>
+            <h2 className="mt-3 text-[24px] font-black tracking-[-0.04em] text-slate-950">데일리 업무일지</h2>
             <div className="mt-4 flex flex-wrap items-center gap-2.5 text-[13px] text-slate-600">
               <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
                 <span className={`h-2.5 w-2.5 rounded-full ${getPresenceDot(currentPresence)}`} />
@@ -757,8 +757,8 @@ export function DailyReportPage({
                         <textarea
                           value={draft.reportBody}
                           onChange={(event) => setDraft((prev) => ({ ...prev, reportBody: event.target.value }))}
-                          rows={10}
-                          className="min-h-[300px] w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 sm:min-h-[260px]"
+                          rows={12}
+                          className="min-h-[380px] w-full rounded-[24px] border border-slate-200 bg-white px-5 py-5 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 sm:min-h-[320px]"
                           placeholder={isSelectedEmployeeUpdate ? "직원동정 내용을 입력해주세요." : isSelectedMajorWork ? "일일 주요 업무를 입력해주세요." : "금일 진행한 업무를 입력해주세요."}
                         />
                       </label>
@@ -767,8 +767,8 @@ export function DailyReportPage({
                         <textarea
                           value={draft.plannedTasks}
                         onChange={(event) => setDraft((prev) => ({ ...prev, plannedTasks: event.target.value }))}
-                        rows={6}
-                        className="min-h-[180px] w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                        rows={1}
+                        className="min-h-[56px] w-full rounded-[20px] border border-slate-200 bg-white px-4 py-3 text-[14px] leading-6 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
                         placeholder="내일 예정 업무 또는 follow-up을 입력해주세요."
                       />
                     </label> : null}
