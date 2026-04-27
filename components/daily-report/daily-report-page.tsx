@@ -116,9 +116,9 @@ function buildTeamClipboardDocument(
   departmentTitle: string,
   date: string,
   groupedEntries: Array<{ teamName: string; entries: DailyReportEntry[] }>,
-  plannedSummary: Array<{ label: string; items: string[] }>,
+  _plannedSummary: Array<{ label: string; items: string[] }>,
   majorContent?: string,
-  employeeUpdate?: string,
+  _employeeUpdate?: string,
 ) {
   const lines: string[] = [`${departmentTitle} 일일 업무보고`, `${formatReportDate(date)}`, "", "<일일 주요 업무>", majorContent?.trim() || "-", ""]
 
@@ -135,22 +135,6 @@ function buildTeamClipboardDocument(
       lines.push("")
     })
   })
-
-  lines.push("<당일업무>")
-  lines.push("")
-
-  if (plannedSummary.length) {
-    plannedSummary.forEach((group) => {
-      lines.push(`${group.label} : ${group.items.length ? group.items.join(", ") : "없음"}`)
-      lines.push("")
-    })
-  } else {
-    lines.push("당일업무 : 없음")
-  }
-
-  lines.push("")
-  lines.push("<직원동정>")
-  lines.push(employeeUpdate?.trim() || "-")
 
   return lines.join("\n").trim()
 }
