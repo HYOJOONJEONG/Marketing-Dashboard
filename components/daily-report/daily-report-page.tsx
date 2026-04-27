@@ -40,6 +40,24 @@ type Props = {
 
 type MobileDailySection = "write" | "status" | "docs"
 
+function getSeoulNow() {
+  const now = new Date()
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000
+  return new Date(utcMs + 9 * 60 * 60 * 1000)
+}
+
+function getTimeUntilSeoulMidnight() {
+  const seoulNow = getSeoulNow()
+  const nextMidnight = new Date(seoulNow.getTime())
+  nextMidnight.setUTCHours(24, 0, 0, 0)
+  const diffMs = Math.max(0, nextMidnight.getTime() - seoulNow.getTime())
+  const totalSeconds = Math.floor(diffMs / 1000)
+  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0")
+  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0")
+  const seconds = String(totalSeconds % 60).padStart(2, "0")
+  return `${hours}:${minutes}:${seconds}`
+}
+
 function getStatusTone(status: ReturnType<typeof resolveDailyReportStatus>) {
   if (status === "complete") return "border-emerald-200 bg-emerald-50 text-emerald-700"
   if (status === "draft") return "border-amber-200 bg-amber-50 text-amber-700"
@@ -309,6 +327,7 @@ export function DailyReportPage({
   const [isSaving, setIsSaving] = useState(false)
   const [copiedTarget, setCopiedTarget] = useState<"team1" | "team2" | null>(null)
   const [mobileSection, setMobileSection] = useState<MobileDailySection>("write")
+  const [timeUntilReset, setTimeUntilReset] = useState(() => getTimeUntilSeoulMidnight())
 
   const todayEntries = useMemo(
     () => getDailyReportsByDate(reportState, currentDate, directoryUsers),
@@ -488,6 +507,15 @@ export function DailyReportPage({
     return () => window.clearInterval(timer)
   }, [currentDate])
 
+  useEffect(() => {
+    setTimeUntilReset(getTimeUntilSeoulMidnight())
+    const timer = window.setInterval(() => {
+      setTimeUntilReset(getTimeUntilSeoulMidnight())
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+  }, [])
+
   async function commitReport(mode: "draft" | "submit") {
     if (!selectedEntry) return
     setStatusMessage("")
@@ -574,7 +602,7 @@ export function DailyReportPage({
               </span>
               <span className="text-[12px] font-semibold text-slate-500">{formatDisplayDate(currentDate)}</span>
             </div>
-            <h2 className="mt-3 text-[24px] font-black tracking-[-0.04em] text-slate-950">업무일지 협업 보드</h2>
+            <h2 className="mt-3 text-[24px] font-black tracking-[-0.04em] text-slate-950">인포Biz본부 업무일지 취합</h2>
             <div className="mt-4 flex flex-wrap items-center gap-2.5 text-[13px] text-slate-600">
               <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
                 <span className={`h-2.5 w-2.5 rounded-full ${getPresenceDot(currentPresence)}`} />
@@ -582,6 +610,9 @@ export function DailyReportPage({
               </span>
               <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">{currentUser.role}</span>
               <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-blue-700">{currentUser.teamName}</span>
+            </div>
+            <div className="mt-3 text-[12px] font-medium text-slate-500">
+              매일 자정 초기화 됩니다 (남은시간 : {timeUntilReset})
             </div>
           </div>
 

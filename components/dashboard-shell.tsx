@@ -4505,7 +4505,7 @@ export function DashboardShell({
                           view === "daily-report" && dailyReportFocus === "today" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
                         }`}
                       >
-                        오늘 업무일지
+                        데일리 업무일지
                       </button>
                       <button
                         type="button"
