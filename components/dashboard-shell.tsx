@@ -3061,8 +3061,9 @@ export function DashboardShell({
         `
       }
 
-    const primaryDetailedHtml = buildYearDetailTable(2026, false)
-    const secondaryDetailedHtml = [2025, 2024, 2022].map((year) => buildYearDetailTable(year, true)).join("")
+    const detailedSectionsHtml = [2026, 2025, 2024, 2022]
+      .map((year, index) => buildYearDetailTable(year, index !== 0))
+      .join("")
 
     const longTermUncollectedRows = longTermRows
       .filter((row: any) => String(row?.status || "미정") === "미회수")
@@ -3144,14 +3145,15 @@ export function DashboardShell({
             justify-content: space-between;
             align-items: flex-start;
             gap: 16px;
-            margin-bottom: 8px;
+            gap: 10px;
+            margin-bottom: 5px;
           }
           .title-block {
             min-width: 0;
           }
           .title {
             margin: 0;
-            font-size: 22px;
+            font-size: 20px;
             line-height: 1.15;
             font-weight: 800;
             color: #0b1f44;
@@ -3161,41 +3163,35 @@ export function DashboardShell({
             white-space: nowrap;
           }
           .meta .dept {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             color: #0b1f44;
           }
           .meta .date {
             margin-top: 2px;
-            font-size: 11px;
+            font-size: 10px;
             color: #475569;
             font-weight: 600;
           }
           .summary-section,
           .detail-section {
-            margin-top: 8px;
+            margin-top: 5px;
           }
           .section-title {
-            margin: 0 0 4px;
-            font-size: 14px;
+            margin: 0 0 3px;
+            font-size: 12px;
             font-weight: 800;
             color: #0b1f44;
           }
           .detail-year-block {
-            margin-top: 8px;
-          }
-          .detail-mini-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px;
-            margin-top: 8px;
+            margin-top: 5px;
           }
           .detail-year-mini {
             min-width: 0;
           }
           .mini-section-title {
-            margin: 0 0 4px;
-            font-size: 11px;
+            margin: 0 0 2px;
+            font-size: 10px;
             font-weight: 800;
             color: #0b1f44;
           }
@@ -3204,17 +3200,18 @@ export function DashboardShell({
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
-            font-size: 10px;
+            font-size: 8.6px;
           }
           .summary-table th,
           .summary-table td,
           .detail-table th,
           .detail-table td {
             border: 1px solid #cfd8e3;
-            padding: 4px 4px;
+            padding: 2px 2px;
             vertical-align: middle;
             text-align: center;
             word-break: keep-all;
+            line-height: 1.12;
           }
           .summary-table th,
           .detail-table th {
@@ -3229,28 +3226,28 @@ export function DashboardShell({
             text-align: left;
           }
           .semi-compact-table {
-            font-size: 9.5px;
+            font-size: 8.2px;
           }
           .semi-compact-table th,
           .semi-compact-table td {
-            padding: 4px 3px;
+            padding: 2px 2px;
           }
           .compact-table {
-            font-size: 9px;
+            font-size: 7.8px;
           }
           .compact-table th,
           .compact-table td {
-            padding: 3px 2px;
+            padding: 1.5px 1.5px;
           }
           .empty-cell {
-            height: 36px;
+            height: 24px;
             color: #64748b;
             text-align: center !important;
           }
           .footer-note {
-            margin-top: 6px;
+            margin-top: 4px;
             text-align: right;
-            font-size: 9px;
+            font-size: 8px;
             color: #64748b;
           }
           .page-break {
@@ -3288,11 +3285,7 @@ export function DashboardShell({
             </table>
           </div>
 
-          ${primaryDetailedHtml}
-
-          <div class="detail-mini-grid">
-            ${secondaryDetailedHtml}
-          </div>
+          ${detailedSectionsHtml}
 
           <div class="footer-note">인포Biz본부 주간 계약서 회수 보고서</div>
 
