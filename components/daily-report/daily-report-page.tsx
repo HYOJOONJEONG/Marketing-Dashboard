@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { CheckCircle2, Clock3, FileDown, FileText, UsersRound } from "lucide-react"
+import { Check, Copy, UsersRound } from "lucide-react"
 import {
   countDailyReportStatus,
   DailyDirectoryUser,
@@ -37,8 +37,6 @@ type Props = {
   presenceUsers?: PresenceUser[]
   onSaveState: (nextState: DailyReportState) => Promise<void> | void
 }
-
-type DailyViewMode = "original" | "team" | "division"
 
 function getStatusTone(status: ReturnType<typeof resolveDailyReportStatus>) {
   if (status === "complete") return "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -100,9 +98,9 @@ export function DailyReportPage({
   onSaveState,
 }: Props) {
   const [draft, setDraft] = useState({ reportBody: "", plannedTasks: "" })
-  const [viewMode, setViewMode] = useState<DailyViewMode>("original")
   const [statusMessage, setStatusMessage] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const todayEntries = useMemo(
     () => getDailyReportsByDate(reportState, currentDate, directoryUsers),
@@ -113,7 +111,21 @@ export function DailyReportPage({
     [todayEntries, currentUser.id],
   )
   const groupedEntries = useMemo(() => groupEntriesByTeam(todayEntries), [todayEntries])
-  const plannedGroups = useMemo(() => groupPlannedTasksByTeam(todayEntries), [todayEntries])
+  const previewEntries = useMemo(
+    () =>
+      todayEntries.map((entry) =>
+        entry.userId === currentUser.id
+          ? {
+              ...entry,
+              reportBody: draft.reportBody,
+              plannedTasks: draft.plannedTasks,
+            }
+          : entry,
+      ),
+    [todayEntries, currentUser.id, draft.plannedTasks, draft.reportBody],
+  )
+  const previewGroupedEntries = useMemo(() => groupEntriesByTeam(previewEntries), [previewEntries])
+  const previewPlannedGroups = useMemo(() => groupPlannedTasksByTeam(previewEntries), [previewEntries])
   const statusCounts = useMemo(() => countDailyReportStatus(todayEntries), [todayEntries])
   const currentEntryStatus = useMemo(
     () => resolveDailyReportStatus(currentEntry || { reportBody: "", plannedTasks: "", submittedAt: null }),
@@ -125,16 +137,47 @@ export function DailyReportPage({
   )
   const statusRef = useRef<HTMLDivElement | null>(null)
   const documentRef = useRef<HTMLDivElement | null>(null)
-  const otherGroupedEntries = useMemo(
-    () =>
-      groupedEntries
-        .map((group) => ({
-          ...group,
-          entries: group.entries.filter((entry) => entry.userId !== currentUser.id),
-        }))
-        .filter((group) => group.entries.length > 0),
-    [groupedEntries, currentUser.id],
-  )
+  const markdownDocument = useMemo(() => {
+    const lines: string[] = [`# 업무일지`, `${formatDisplayDate(currentDate)}`, ""]
+
+    previewGroupedEntries.forEach((group) => {
+      lines.push(`## ${group.teamName}`)
+      lines.push("")
+
+      group.entries.forEach((entry) => {
+        lines.push(`### ${entry.userName}`)
+        lines.push("")
+        lines.push(entry.reportBody?.trim() || "-")
+        lines.push("")
+        lines.push("예정사항")
+        const plannedLines = splitLines(entry.plannedTasks)
+        if (plannedLines.length) {
+          plannedLines.forEach((line) => lines.push(`- ${line}`))
+        } else {
+          lines.push("- 없음")
+        }
+        lines.push("")
+      })
+    })
+
+    lines.push("## 당일업무")
+    lines.push("")
+    if (previewPlannedGroups.length) {
+      previewPlannedGroups.forEach((group) => {
+        lines.push(`### ${group.teamName}`)
+        if (group.items.length) {
+          group.items.forEach((item) => lines.push(`- ${item}`))
+        } else {
+          lines.push("- 없음")
+        }
+        lines.push("")
+      })
+    } else {
+      lines.push("- 아직 예정사항이 없습니다.")
+    }
+
+    return lines.join("\n").trim()
+  }, [currentDate, previewGroupedEntries, previewPlannedGroups])
 
   useEffect(() => {
     setDraft({
@@ -171,12 +214,22 @@ export function DailyReportPage({
     }
   }
 
-  const myTaskCount = splitLines(currentEntry?.reportBody || "").length
-  const myPlannedCount = splitLines(currentEntry?.plannedTasks || "").length
+  async function handleCopyDocument() {
+    try {
+      await navigator.clipboard.writeText(markdownDocument)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      setStatusMessage("문서 복사에 실패했습니다. 다시 시도해주세요.")
+    }
+  }
+
+  const myTaskCount = splitLines(draft.reportBody).length
+  const myPlannedCount = splitLines(draft.plannedTasks).length
 
   return (
-    <div className="space-y-10 lg:space-y-12">
-      <section className="rounded-[32px] border border-slate-200 bg-white px-8 py-8 shadow-sm lg:px-10 lg:py-9">
+    <div className="space-y-8 lg:space-y-10">
+      <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-6 shadow-sm lg:px-8 lg:py-7">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -186,8 +239,8 @@ export function DailyReportPage({
               <span className="text-[12px] font-semibold text-slate-500">{formatDisplayDate(currentDate)}</span>
               {lastUpdatedText ? <span className="text-[12px] text-slate-400">Last update: {lastUpdatedText}</span> : null}
             </div>
-            <h2 className="mt-4 text-[28px] font-black tracking-[-0.04em] text-slate-950">업무일지 협업 보드</h2>
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-[13px] text-slate-600">
+            <h2 className="mt-3 text-[24px] font-black tracking-[-0.04em] text-slate-950">업무일지 협업 보드</h2>
+            <div className="mt-4 flex flex-wrap items-center gap-2.5 text-[13px] text-slate-600">
               <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
                 <span className={`h-2.5 w-2.5 rounded-full ${getPresenceDot(currentPresence)}`} />
                 {currentUser.name}
@@ -197,110 +250,34 @@ export function DailyReportPage({
               <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-emerald-700">
                 전체 {todayEntries.length}명 / 제출 {statusCounts.complete}명
               </span>
+              <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600">작성중 {statusCounts.draft}명</span>
+              <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600">미작성 {statusCounts.empty}명</span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={() => window.alert("PDF 다운로드는 다음 단계에서 연결됩니다.")}
+              onClick={() => void handleCopyDocument()}
               className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-bold text-slate-700 transition hover:bg-slate-50"
             >
-              <FileDown className="h-4 w-4" />
-              PDF
-            </button>
-            <button
-              type="button"
-              onClick={() => window.alert("Word 다운로드는 다음 단계에서 연결됩니다.")}
-              className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-bold text-slate-700 transition hover:bg-slate-50"
-            >
-              <FileText className="h-4 w-4" />
-              Word
+              {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+              {copied ? "복사됨" : "문서 복사"}
             </button>
           </div>
         </div>
       </section>
 
-      <section className="grid gap-6 xl:gap-8 lg:grid-cols-2">
-        <div className="rounded-[30px] border border-slate-200 bg-white px-8 py-8 shadow-sm lg:px-8 lg:py-8">
+      <section className="grid gap-6 xl:gap-8 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
+        <aside ref={statusRef} className="rounded-[26px] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[14px] font-semibold text-slate-500">전체 제출 현황</div>
-              <div className="mt-2 text-[28px] font-black tracking-[-0.05em] text-slate-950">
-                {statusCounts.complete} / {todayEntries.length}
-              </div>
-            </div>
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-              <CheckCircle2 className="h-5 w-5" />
-            </span>
-          </div>
-          <div className="mt-7 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-5 py-5">
-              <div className="text-[12px] font-semibold text-slate-500">완료</div>
-              <div className="mt-2 text-[24px] font-black tracking-[-0.04em] text-slate-950">{statusCounts.complete}</div>
-            </div>
-            <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-5 py-5">
-              <div className="text-[12px] font-semibold text-slate-500">작성중</div>
-              <div className="mt-2 text-[24px] font-black tracking-[-0.04em] text-slate-950">{statusCounts.draft}</div>
-            </div>
-            <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-5 py-5">
-              <div className="text-[12px] font-semibold text-slate-500">미작성</div>
-              <div className="mt-2 text-[24px] font-black tracking-[-0.04em] text-slate-950">{statusCounts.empty}</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-[30px] border border-slate-200 bg-white px-8 py-8 shadow-sm lg:px-8 lg:py-8">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[14px] font-semibold text-slate-500">내 업무</div>
-              <div className="mt-2 text-[28px] font-black tracking-[-0.05em] text-slate-950">{myTaskCount}</div>
-            </div>
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-              <FileText className="h-5 w-5" />
-            </span>
-          </div>
-          <div className="mt-7 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-5 py-5">
-              <div className="text-[12px] font-semibold text-slate-500">업무일지 항목</div>
-              <div className="mt-2 text-[24px] font-black tracking-[-0.04em] text-slate-950">{myTaskCount}</div>
-            </div>
-            <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-5 py-5">
-              <div className="text-[12px] font-semibold text-slate-500">예정사항 항목</div>
-              <div className="mt-2 text-[24px] font-black tracking-[-0.04em] text-slate-950">{myPlannedCount}</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-[30px] border border-slate-200 bg-white px-8 py-8 shadow-sm lg:col-span-2 lg:px-8 lg:py-8">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[14px] font-semibold text-slate-500">내 작성 상태</div>
-              <div className="mt-2 text-[28px] font-black tracking-[-0.05em] text-slate-950">{getStatusLabel(currentEntryStatus)}</div>
-            </div>
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-700">
-              <Clock3 className="h-5 w-5" />
-            </span>
-          </div>
-          <div className="mt-7 rounded-[22px] border border-slate-200 bg-slate-50 px-5 py-5">
-            <div className="text-[12px] font-semibold text-slate-500">현재 안내</div>
-            <div className="mt-2 text-[16px] font-bold tracking-[-0.03em] text-slate-900">
-              {currentEntry?.submittedAt ? "오늘 제출이 완료되었습니다." : "작성 후 제출 완료를 눌러 팀 취합에 반영해주세요."}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-6 xl:gap-8 xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)]">
-        <aside ref={statusRef} className="rounded-[30px] border border-slate-200 bg-white p-8 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[18px] font-black tracking-[-0.04em] text-slate-950">제출 현황</div>
+              <div className="text-[17px] font-black tracking-[-0.04em] text-slate-950">제출 현황</div>
               <div className="mt-2 text-[12px] text-slate-500">오늘 제출 상태를 팀 순서대로 확인합니다.</div>
             </div>
             <UsersRound className="h-5 w-5 text-blue-500" />
           </div>
-          <div className="mt-8 space-y-8">
+          <div className="mt-6 space-y-7">
             {groupedEntries.map((group) => (
               <div key={group.teamName} className="space-y-4">
                 <div className="text-[12px] font-bold uppercase tracking-[0.18em] text-slate-400">{group.teamName}</div>
@@ -309,7 +286,7 @@ export function DailyReportPage({
                     const status = resolveDailyReportStatus(entry)
                     const presence = presenceUsers.find((user) => user.userId === entry.userId)?.status || "offline"
                     return (
-                      <div key={entry.userId} className="rounded-[22px] border border-slate-200 bg-slate-50 px-5 py-4">
+                      <div key={entry.userId} className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3.5">
                         <div className="flex items-center gap-3">
                           <span className={`h-2.5 w-2.5 rounded-full ${getStatusDot(status)}`} />
                           <div className="min-w-0">
@@ -334,189 +311,102 @@ export function DailyReportPage({
         </aside>
 
         <div ref={documentRef} className="space-y-8">
-          <section className="rounded-[30px] border border-slate-200 bg-white p-8 shadow-sm lg:p-9">
+          <section className="rounded-[26px] border border-slate-200 bg-white p-6 shadow-sm lg:p-7">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="text-[18px] font-black tracking-[-0.04em] text-slate-950">업무일지 문서</div>
-                <div className="mt-2 text-[12px] text-slate-500">원문, 팀 요약, 본부 요약을 흐름에 맞게 나눠서 봅니다.</div>
+                <div className="mt-2 text-[12px] text-slate-500">내 입력은 위에서 바로 수정하고, 아래 문서는 팀 단위로 한 번에 복사할 수 있게 정리합니다.</div>
               </div>
-              <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
-                {[
-                  ["original", "원문"],
-                  ["team", "팀 요약"],
-                  ["division", "본부 요약"],
-                ].map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setViewMode(value as DailyViewMode)}
-                    className={`rounded-xl px-3 py-2 text-[13px] font-bold transition ${
-                      viewMode === value ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">내 업무 {myTaskCount}개</span>
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">예정사항 {myPlannedCount}개</span>
+                <span className={`rounded-full border px-3 py-1.5 ${getStatusTone(currentEntryStatus)}`}>{getStatusLabel(currentEntryStatus)}</span>
               </div>
             </div>
 
             {statusMessage ? (
-              <div className="mt-8 rounded-[22px] border border-slate-200 bg-slate-50 px-5 py-4 text-[13px] text-slate-700">
+              <div className="mt-6 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3 text-[13px] text-slate-700">
                 {statusMessage}
               </div>
             ) : null}
 
-            <div className="mt-10 space-y-10">
-              {viewMode === "original" ? (
-                <>
-                  {currentEntry ? (
-                    <div className="rounded-[26px] border border-blue-100 bg-blue-50/40 p-7 lg:p-8">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <div className="text-[17px] font-black tracking-[-0.03em] text-slate-950">{currentUser.name}</div>
-                          <div className="mt-2 text-[12px] text-slate-500">{currentUser.teamName} · 오늘 가장 먼저 작성할 수 있도록 맨 위에 고정됩니다.</div>
-                        </div>
-                        <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getStatusTone(currentEntryStatus)}`}>
-                          {getStatusLabel(currentEntryStatus)}
-                        </span>
-                      </div>
-                      <div className="mt-7 grid gap-6">
-                        <label className="grid gap-3">
-                          <span className="text-[12px] font-semibold text-slate-500">업무일지 본문</span>
-                          <textarea
-                            value={draft.reportBody}
-                            onChange={(event) => setDraft((prev) => ({ ...prev, reportBody: event.target.value }))}
-                            rows={7}
-                            className="w-full rounded-3xl border border-slate-200 bg-white px-5 py-5 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                            placeholder="금일 진행한 업무를 입력해주세요."
-                          />
-                        </label>
-                        <label className="grid gap-3">
-                          <span className="text-[12px] font-semibold text-slate-500">예정사항</span>
-                          <textarea
-                            value={draft.plannedTasks}
-                            onChange={(event) => setDraft((prev) => ({ ...prev, plannedTasks: event.target.value }))}
-                            rows={6}
-                            className="w-full rounded-3xl border border-slate-200 bg-white px-5 py-5 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                            placeholder="내일 예정 업무 또는 follow-up을 입력해주세요."
-                          />
-                        </label>
-                        <div className="flex flex-wrap items-center justify-end gap-3 pt-3">
-                          <button
-                            type="button"
-                            onClick={() => void commitReport("draft")}
-                            disabled={isSaving}
-                            className="inline-flex h-10 items-center rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-                          >
-                            임시저장
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void commitReport("submit")}
-                            disabled={isSaving}
-                            className="inline-flex h-10 items-center rounded-2xl bg-blue-600 px-4 text-[13px] font-bold text-white transition hover:bg-blue-700 disabled:opacity-60"
-                          >
-                            {isSaving ? "저장 중..." : "제출 완료"}
-                          </button>
-                        </div>
-                      </div>
+            <div className="mt-8 space-y-6">
+              {currentEntry ? (
+                <div className="rounded-[24px] border border-blue-100 bg-blue-50/30 p-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[16px] font-black tracking-[-0.03em] text-slate-950">{currentUser.name}</div>
+                      <div className="mt-1 text-[12px] text-slate-500">{currentUser.teamName} · 맨 위에서 바로 작성합니다.</div>
                     </div>
-                  ) : null}
-
-                  {otherGroupedEntries.map((group) => (
-                  <div key={group.teamName} className="rounded-[26px] border border-slate-200 bg-slate-50/70 p-7 lg:p-8">
-                    <div className="text-[17px] font-black tracking-[-0.03em] text-slate-950">{group.teamName}</div>
-                    <div className="mt-8 space-y-6">
-                      {group.entries.map((entry) => {
-                        const status = resolveDailyReportStatus(entry)
-                        return (
-                          <div key={entry.userId} className="rounded-[24px] border border-slate-200 bg-white p-7 shadow-sm">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <div className="text-[15px] font-black tracking-[-0.03em] text-slate-950">{entry.userName}</div>
-                                <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getStatusTone(status)}`}>
-                                  {getStatusLabel(status)}
-                                </span>
-                              </div>
-                              {entry.submittedAt ? (
-                                <div className="text-[11px] text-slate-400">제출 {new Date(entry.submittedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</div>
-                              ) : null}
-                            </div>
-
-                            <div className="mt-7 grid gap-5">
-                              <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-5">
-                                <div className="text-[11px] font-semibold text-slate-500">업무일지 본문</div>
-                                <div className="mt-3 whitespace-pre-wrap text-[14px] leading-7 text-slate-800">
-                                  {entry.reportBody || "아직 작성된 내용이 없습니다."}
-                                </div>
-                              </div>
-                              <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-5">
-                                <div className="text-[11px] font-semibold text-slate-500">예정사항</div>
-                                <div className="mt-3 whitespace-pre-wrap text-[14px] leading-7 text-slate-800">
-                                  {entry.plannedTasks || "아직 예정사항이 없습니다."}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getStatusTone(currentEntryStatus)}`}>
+                        {getStatusLabel(currentEntryStatus)}
+                      </span>
+                      <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-500">
+                        업무 {myTaskCount} · 예정 {myPlannedCount}
+                      </span>
                     </div>
                   </div>
-                  ))}
-                </>
-              ) : null}
-
-              {viewMode === "team" ? (
-                groupedEntries.map((group) => (
-                  <div key={group.teamName} className="rounded-[26px] border border-slate-200 bg-slate-50/70 p-7 lg:p-8">
-                    <div className="text-[17px] font-black tracking-[-0.03em] text-slate-950">{group.teamName}</div>
-                    <div className="mt-8 grid gap-5">
-                      {group.entries.map((entry) => (
-                        <div key={entry.userId} className="rounded-[24px] border border-slate-200 bg-white px-6 py-6 shadow-sm">
-                          <div className="text-[14px] font-bold text-slate-900">{entry.userName}</div>
-                          <div className="mt-5 space-y-5 text-[13px] leading-7 text-slate-700">
-                            <div>
-                              <span className="font-semibold text-slate-500">금일 업무</span>
-                              <div className="mt-2 whitespace-pre-wrap">{entry.reportBody || "-"}</div>
-                            </div>
-                            <div>
-                              <span className="font-semibold text-slate-500">예정사항</span>
-                              <div className="mt-2 whitespace-pre-wrap">{entry.plannedTasks || "-"}</div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                  <div className="mt-5 grid gap-4">
+                    <label className="grid gap-2.5">
+                      <span className="text-[12px] font-semibold text-slate-500">업무일지 본문</span>
+                      <textarea
+                        value={draft.reportBody}
+                        onChange={(event) => setDraft((prev) => ({ ...prev, reportBody: event.target.value }))}
+                        rows={6}
+                        className="w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                        placeholder="금일 진행한 업무를 입력해주세요."
+                      />
+                    </label>
+                    <label className="grid gap-2.5">
+                      <span className="text-[12px] font-semibold text-slate-500">예정사항</span>
+                      <textarea
+                        value={draft.plannedTasks}
+                        onChange={(event) => setDraft((prev) => ({ ...prev, plannedTasks: event.target.value }))}
+                        rows={4}
+                        className="w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                        placeholder="내일 예정 업무 또는 follow-up을 입력해주세요."
+                      />
+                    </label>
+                    <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => void commitReport("draft")}
+                        disabled={isSaving}
+                        className="inline-flex h-10 items-center rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        임시저장
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void commitReport("submit")}
+                        disabled={isSaving}
+                        className="inline-flex h-10 items-center rounded-2xl bg-blue-600 px-4 text-[13px] font-bold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                      >
+                        {isSaving ? "저장 중..." : "제출 완료"}
+                      </button>
                     </div>
-                  </div>
-                ))
-              ) : null}
-
-              {viewMode === "division" ? (
-                <div className="rounded-[26px] border border-slate-200 bg-slate-50/70 p-7 lg:p-8">
-                  <div className="text-[17px] font-black tracking-[-0.03em] text-slate-950">당일업무</div>
-                  <div className="mt-8 space-y-6">
-                    {plannedGroups.length ? (
-                      plannedGroups.map((group) => (
-                        <div key={group.teamName} className="rounded-[24px] border border-slate-200 bg-white px-6 py-6 shadow-sm">
-                          <div className="text-[14px] font-bold text-slate-900">{group.teamName}</div>
-                          <ul className="mt-5 space-y-3.5 text-[14px] leading-7 text-slate-700">
-                            {group.items.map((item, index) => (
-                              <li key={`${group.teamName}-${index}`} className="flex gap-2">
-                                <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
-                                <span>{item}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="rounded-[22px] border border-dashed border-slate-200 bg-white px-5 py-8 text-center text-[14px] text-slate-500">
-                        아직 취합된 예정사항이 없습니다.
-                      </div>
-                    )}
                   </div>
                 </div>
               ) : null}
+
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50/50 p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[16px] font-black tracking-[-0.03em] text-slate-950">팀 문서 미리보기</div>
+                    <div className="mt-1 text-[12px] text-slate-500">마크다운 문서처럼 정리된 형태라 그대로 복사해서 전달하기 좋습니다.</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyDocument()}
+                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                    {copied ? "복사됨" : "전체 복사"}
+                  </button>
+                </div>
+                <pre className="mt-5 overflow-x-auto rounded-[22px] border border-slate-200 bg-white px-5 py-5 text-[13px] leading-7 text-slate-800">{markdownDocument}</pre>
+              </div>
             </div>
           </section>
         </div>
