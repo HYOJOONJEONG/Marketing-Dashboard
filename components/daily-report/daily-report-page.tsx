@@ -343,10 +343,10 @@ export function DailyReportPage({
     [todayEntries],
   )
   const previewEntries = useMemo(
-    () =>
-      todayEntries.map((entry) =>
-        entry.userId === selectedUserId
-          ? {
+      () =>
+        todayEntries.map((entry) =>
+          entry.userId === selectedUserId
+            ? {
               ...entry,
               reportBody: draft.reportBody,
               plannedTasks: draft.plannedTasks,
@@ -355,27 +355,31 @@ export function DailyReportPage({
       ),
     [todayEntries, selectedUserId, draft.plannedTasks, draft.reportBody],
   )
+  const submittedPreviewEntries = useMemo(
+    () => todayEntries.filter((entry) => resolveDailyReportStatus(entry) === "complete"),
+    [todayEntries],
+  )
   const previewTeamOneEntries = useMemo(
-    () => previewEntries.filter((entry) => (entry.teamName === "본부" || entry.teamName === "인포Biz1팀") && !isMajorWorkName(entry.userName)),
-    [previewEntries],
+    () => submittedPreviewEntries.filter((entry) => (entry.teamName === "본부" || entry.teamName === "인포Biz1팀") && !isMajorWorkName(entry.userName)),
+    [submittedPreviewEntries],
   )
   const previewTeamTwoEntries = useMemo(
-    () => previewEntries.filter((entry) => entry.teamName === "인포Biz2팀" && !isEmployeeUpdateName(entry.userName)),
-    [previewEntries],
+    () => submittedPreviewEntries.filter((entry) => entry.teamName === "인포Biz2팀" && !isEmployeeUpdateName(entry.userName)),
+    [submittedPreviewEntries],
   )
   const previewEmployeeUpdateEntry = useMemo(
-    () => previewEntries.find((entry) => entry.teamName === "인포Biz2팀" && isEmployeeUpdateName(entry.userName)) || null,
-    [previewEntries],
+    () => submittedPreviewEntries.find((entry) => entry.teamName === "인포Biz2팀" && isEmployeeUpdateName(entry.userName)) || null,
+    [submittedPreviewEntries],
   )
   const previewMajorEntry = useMemo(
-    () => previewEntries.find((entry) => entry.teamName === "본부" && isMajorWorkName(entry.userName)) || null,
-    [previewEntries],
+    () => submittedPreviewEntries.find((entry) => entry.teamName === "본부" && isMajorWorkName(entry.userName)) || null,
+    [submittedPreviewEntries],
   )
   const previewTeamOneGroupedEntries = useMemo(() => groupEntriesByTeam(previewTeamOneEntries), [previewTeamOneEntries])
   const previewTeamTwoGroupedEntries = useMemo(() => groupEntriesByTeam(previewTeamTwoEntries), [previewTeamTwoEntries])
   const previewAllGroupedEntries = useMemo(
-    () => groupEntriesByTeam(previewEntries.filter((entry) => !isEmployeeUpdateName(entry.userName) && !isMajorWorkName(entry.userName))),
-    [previewEntries],
+    () => groupEntriesByTeam(submittedPreviewEntries.filter((entry) => !isEmployeeUpdateName(entry.userName) && !isMajorWorkName(entry.userName))),
+    [submittedPreviewEntries],
   )
   const previewTeamOnePlannedGroups = useMemo(() => groupPlannedTasksByTeam(previewTeamOneEntries), [previewTeamOneEntries])
   const previewTeamTwoPlannedGroups = useMemo(() => groupPlannedTasksByTeam(previewTeamTwoEntries), [previewTeamTwoEntries])
@@ -506,14 +510,14 @@ export function DailyReportPage({
     setIsSaving(true)
     try {
       const now = new Date().toISOString()
-      const nextEntry: DailyReportEntry = {
-        ...selectedEntry,
-        reportBody: draft.reportBody.trim(),
-        plannedTasks: draft.plannedTasks.trim(),
-        submittedAt: mode === "submit" ? now : selectedEntry.submittedAt,
-        statusOverride: mode === "submit" ? null : selectedEntry.statusOverride ?? null,
-        updatedAt: now,
-      }
+        const nextEntry: DailyReportEntry = {
+          ...selectedEntry,
+          reportBody: draft.reportBody.trim(),
+          plannedTasks: draft.plannedTasks.trim(),
+          submittedAt: mode === "submit" ? now : null,
+          statusOverride: mode === "submit" ? null : null,
+          updatedAt: now,
+        }
       const nextState = upsertDailyReportEntry(reportState, nextEntry)
       await onSaveState(nextState)
       setStatusMessage(mode === "submit" ? `${nextEntry.userName} 업무일지를 제출했습니다.` : `${nextEntry.userName} 업무일지를 저장했습니다.`)
