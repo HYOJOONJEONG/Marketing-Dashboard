@@ -439,7 +439,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">3. 나의 해지 리스트</h3>
-                  <p className="mt-1 text-sm text-slate-500">해지 진행과 해지 확정 건을 구분해서 보여줍니다.</p>
+                  <p className="mt-1 text-sm text-slate-500">해지 예정인 계약건만 보여줍니다.</p>
                 </div>
                 <div className="rounded-2xl bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700">
                   {data.myTerminationRows.length}건
