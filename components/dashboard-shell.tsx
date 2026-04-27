@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronDown, KeyRound, LogOut, UserRound, X } from "lucide-react"
+import { ChevronDown, KeyRound, LogOut, Menu, UserRound, X } from "lucide-react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
 import { DailyReportPage } from "./daily-report/daily-report-page"
 import {
@@ -1100,6 +1100,7 @@ export function DashboardShell({
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [isPasswordOpen, setIsPasswordOpen] = useState(false)
   const [isPresenceListOpen, setIsPresenceListOpen] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState("")
   const [currentPassword, setCurrentPassword] = useState("")
   const [nextPassword, setNextPassword] = useState("")
@@ -1369,6 +1370,9 @@ export function DashboardShell({
   useEffect(() => {
     onViewChange?.(view)
   }, [onViewChange, view])
+  useEffect(() => {
+    setIsSidebarOpen(false)
+  }, [view])
   useEffect(() => {
     if (!currentUser?.id) return
     let alive = true
@@ -4275,15 +4279,37 @@ export function DashboardShell({
   return (
     <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1720px]">
-          <aside className="dashboard-sidebar flex w-[272px] flex-col border-r border-slate-200 bg-white px-4 py-4">
+        <button
+          type="button"
+          aria-label="사이드바 닫기"
+          onClick={() => setIsSidebarOpen(false)}
+          className={`fixed inset-0 z-30 bg-slate-950/25 transition-opacity duration-200 lg:hidden ${
+            isSidebarOpen ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
+        />
+          <aside
+            className={`dashboard-sidebar fixed inset-y-0 left-0 z-40 flex w-[286px] max-w-[calc(100vw-24px)] flex-col border-r border-slate-200 bg-white px-4 py-4 shadow-xl transition-transform duration-200 lg:static lg:z-auto lg:w-[272px] lg:max-w-none lg:translate-x-0 lg:shadow-none ${
+              isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
+          >
             <div className="relative overflow-visible px-1 pt-1">
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2.5">
                 <img
                   src="/yonhapinfomax-logo.png"
                   alt="연합인포맥스"
                   className="h-7 w-auto shrink-0 object-contain"
                 />
                 <div className="truncate text-[15px] font-black tracking-[-0.04em] text-slate-900">인포Biz본부</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 lg:hidden"
+                  aria-label="사이드바 닫기"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
 
               {currentUser ? (
@@ -4757,13 +4783,23 @@ export function DashboardShell({
           ) : null}
         </aside>
 
-        <main className="flex-1 px-5 py-5">
+        <main className="min-w-0 flex-1 px-3 py-3 sm:px-4 sm:py-4 lg:px-5 lg:py-5">
             <div className={`${cardClass} dashboard-header mb-5 flex items-start justify-between px-5 py-4`}>
-            <div>
+            <div className="flex items-start gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSidebarOpen(true)}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 lg:hidden"
+                aria-label="사이드바 열기"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <div>
               <h1 className="mt-2 text-[20px] font-black tracking-[-0.04em] text-slate-950">{viewTitles[view]}</h1>
               <div className="mt-1 text-[12px] font-semibold text-slate-500">
                 Last update: {formatLastUpdated(currentMenuUpdatedAt)}
               </div>
+            </div>
             </div>
             <div className="dashboard-header-actions flex items-center gap-3">
               {showHeaderSave && (

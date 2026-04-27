@@ -517,22 +517,6 @@ export function DailyReportPage({
             >
               본부 전체 Word
             </button>
-            <button
-              type="button"
-              onClick={() => void handleCopyDocument("team1")}
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-bold text-slate-700 transition hover:bg-slate-50 sm:w-auto"
-            >
-              {copiedTarget === "team1" ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-              {copiedTarget === "team1" ? "1팀 복사됨" : "1팀 문서 복사"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleCopyDocument("team2")}
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-bold text-slate-700 transition hover:bg-slate-50 sm:w-auto"
-            >
-              {copiedTarget === "team2" ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-              {copiedTarget === "team2" ? "2팀 복사됨" : "2팀 문서 복사"}
-            </button>
           </div>
         </div>
       </section>
@@ -665,8 +649,8 @@ export function DailyReportPage({
                       <textarea
                         value={draft.reportBody}
                         onChange={(event) => setDraft((prev) => ({ ...prev, reportBody: event.target.value }))}
-                        rows={8}
-                        className="w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                        rows={10}
+                        className="min-h-[300px] w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 sm:min-h-[260px]"
                         placeholder="금일 진행한 업무를 입력해주세요."
                       />
                     </label>
@@ -675,8 +659,8 @@ export function DailyReportPage({
                       <textarea
                         value={draft.plannedTasks}
                         onChange={(event) => setDraft((prev) => ({ ...prev, plannedTasks: event.target.value }))}
-                        rows={5}
-                        className="w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                        rows={6}
+                        className="min-h-[180px] w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
                         placeholder="내일 예정 업무 또는 follow-up을 입력해주세요."
                       />
                     </label>
