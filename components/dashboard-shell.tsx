@@ -2035,6 +2035,25 @@ export function DashboardShell({
     )
   }
 
+  useEffect(() => {
+    const rawDailyReport = data.dailyReport || createEmptyDailyReportState()
+    const rawReports = Array.isArray(rawDailyReport?.reports) ? rawDailyReport.reports : []
+    const rawSummaries = Array.isArray(rawDailyReport?.aiSummaries) ? rawDailyReport.aiSummaries : []
+    const needsPrune =
+      rawReports.some((row: any) => String(row?.date || "").trim() !== dailyReportDate) ||
+      rawSummaries.some((row: any) => String(row?.date || "").trim() !== dailyReportDate)
+
+    if (!needsPrune) return
+
+    void persist(
+      {
+        ...data,
+        dailyReport: normalizedDailyReport,
+      },
+      { immediate: true, updatedViews: ["daily-report"] },
+    )
+  }, [data, dailyReportDate, normalizedDailyReport, persist])
+
   flushPendingSave.current = () => {
     // Saves are intentionally manual now. This function remains as a no-op
     // so older call sites cannot push half-finished edits on page unload.

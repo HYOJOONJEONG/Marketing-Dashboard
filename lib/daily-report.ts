@@ -181,26 +181,8 @@ export function normalizeDailyReportState(raw: any, directoryUsers: DailyDirecto
     } satisfies DailyReportEntry
   })
 
-  const legacyReports = reports
-    .filter((row: any) => safeString(row?.date) !== date)
-    .map((row: any) => ({
-      id: safeString(row?.id),
-      date: safeString(row?.date),
-      userId: safeString(row?.userId),
-      userName: safeString(row?.userName),
-      teamId: safeString(row?.teamId),
-      teamName: safeString(row?.teamName),
-      teamOrder: Number(row?.teamOrder ?? getDailyTeamOrder(row?.teamName)),
-      displayOrder: Number(row?.displayOrder ?? getDailyDisplayOrder(row?.userName)),
-      reportBody: safeString(row?.reportBody),
-      plannedTasks: safeString(row?.plannedTasks),
-      submittedAt: safeString(row?.submittedAt) || null,
-      statusOverride: safeString(row?.statusOverride) === "empty" ? "empty" : null,
-      updatedAt: safeString(row?.updatedAt) || now,
-    }))
-
   return {
-    reports: sortDailyDirectoryUsers([...legacyReports, ...seededReports]),
+    reports: sortDailyDirectoryUsers(seededReports),
     aiSummaries: aiSummaries
       .map((row: any) => ({
         date: safeString(row?.date),
@@ -208,7 +190,7 @@ export function normalizeDailyReportState(raw: any, directoryUsers: DailyDirecto
         createdAt: safeString(row?.createdAt) || now,
         createdBy: safeString(row?.createdBy),
       }))
-      .filter((row) => row.date),
+      .filter((row) => row.date === date),
   }
 }
 
