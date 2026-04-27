@@ -76,6 +76,16 @@ function formatDisplayDate(date: string) {
   }).format(parsed)
 }
 
+function formatReportDate(date: string) {
+  const parsed = new Date(`${date}T09:00:00`)
+  if (Number.isNaN(parsed.getTime())) return date
+  const weekday = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    weekday: "short",
+  }).format(parsed)
+  return `${parsed.getFullYear()}.${String(parsed.getMonth() + 1).padStart(2, "0")}.${String(parsed.getDate()).padStart(2, "0")}(${weekday})`
+}
+
 function splitLines(value: string) {
   return String(value || "")
     .split(/\r?\n/)
@@ -94,52 +104,45 @@ function getDailyDocumentSectionTitle(teamName: string) {
   return teamName
 }
 
-function buildTeamMarkdownDocument(
-  title: string,
+function buildTeamClipboardDocument(
+  departmentTitle: string,
   date: string,
   groupedEntries: Array<{ teamName: string; entries: DailyReportEntry[] }>,
-  plannedGroups: Array<{ teamName: string; items: string[] }>,
+  plannedSummary: Array<{ label: string; items: string[] }>,
 ) {
-  const lines: string[] = [`# ${title}`, `${formatDisplayDate(date)}`, ""]
+  const lines: string[] = [`${departmentTitle} 일일 업무보고`, `${formatReportDate(date)}`, ""]
 
   groupedEntries.forEach((group) => {
-    lines.push(`## ${getDailyDocumentSectionTitle(group.teamName)}`)
+    lines.push(getDailyDocumentSectionTitle(group.teamName))
     lines.push("")
 
     group.entries.forEach((entry) => {
-      lines.push(`### ${entry.userName}`)
-      lines.push("")
+      lines.push(`<${entry.userName}>`)
       lines.push(entry.reportBody?.trim() || "-")
-      lines.push("")
-      lines.push("예정사항")
-      const plannedLines = splitLines(entry.plannedTasks)
-      if (plannedLines.length) {
-        plannedLines.forEach((line) => lines.push(`- ${line}`))
-      } else {
-        lines.push("- 없음")
-      }
       lines.push("")
     })
   })
 
-  lines.push("## 당일업무")
+  lines.push("<당일업무>")
   lines.push("")
 
-  if (plannedGroups.length) {
-    plannedGroups.forEach((group) => {
-      lines.push(`### ${getDailyDocumentSectionTitle(group.teamName)}`)
-      if (group.items.length) {
-        group.items.forEach((item) => lines.push(`- ${item}`))
-      } else {
-        lines.push("- 없음")
-      }
+  if (plannedSummary.length) {
+    plannedSummary.forEach((group) => {
+      lines.push(`${group.label} : ${group.items.length ? group.items.join(", ") : "없음"}`)
       lines.push("")
     })
   } else {
-    lines.push("- 아직 예정사항이 없습니다.")
+    lines.push("당일업무 : 없음")
   }
 
   return lines.join("\n").trim()
+}
+
+function buildPlannedSummary(groups: Array<{ label: string; items: string[] }>) {
+  return groups.map((group) => ({
+    label: group.label,
+    items: group.items.map((item) => item.trim()).filter(Boolean),
+  }))
 }
 
 export function DailyReportPage({
@@ -152,6 +155,7 @@ export function DailyReportPage({
   presenceUsers = [],
   onSaveState,
 }: Props) {
+  const [selectedUserId, setSelectedUserId] = useState(currentUser.id)
   const [draft, setDraft] = useState({ reportBody: "", plannedTasks: "" })
   const [statusMessage, setStatusMessage] = useState("")
   const [isSaving, setIsSaving] = useState(false)
@@ -162,15 +166,15 @@ export function DailyReportPage({
     () => getDailyReportsByDate(reportState, currentDate, directoryUsers),
     [reportState, currentDate, directoryUsers],
   )
-  const currentEntry = useMemo(
-    () => todayEntries.find((entry) => entry.userId === currentUser.id) || null,
-    [todayEntries, currentUser.id],
+  const selectedEntry = useMemo(
+    () => todayEntries.find((entry) => entry.userId === selectedUserId) || null,
+    [todayEntries, selectedUserId],
   )
   const groupedEntries = useMemo(() => groupEntriesByTeam(todayEntries), [todayEntries])
   const previewEntries = useMemo(
     () =>
       todayEntries.map((entry) =>
-        entry.userId === currentUser.id
+        entry.userId === selectedUserId
           ? {
               ...entry,
               reportBody: draft.reportBody,
@@ -178,7 +182,7 @@ export function DailyReportPage({
             }
           : entry,
       ),
-    [todayEntries, currentUser.id, draft.plannedTasks, draft.reportBody],
+    [todayEntries, selectedUserId, draft.plannedTasks, draft.reportBody],
   )
   const previewTeamOneEntries = useMemo(
     () => previewEntries.filter((entry) => entry.teamName === "본부" || entry.teamName === "인포Biz1팀"),
@@ -192,32 +196,62 @@ export function DailyReportPage({
   const previewTeamTwoGroupedEntries = useMemo(() => groupEntriesByTeam(previewTeamTwoEntries), [previewTeamTwoEntries])
   const previewTeamOnePlannedGroups = useMemo(() => groupPlannedTasksByTeam(previewTeamOneEntries), [previewTeamOneEntries])
   const previewTeamTwoPlannedGroups = useMemo(() => groupPlannedTasksByTeam(previewTeamTwoEntries), [previewTeamTwoEntries])
+  const previewTeamOnePlannedSummary = useMemo(
+    () =>
+      buildPlannedSummary([
+        {
+          label: "인포Biz1팀",
+          items: previewTeamOnePlannedGroups.flatMap((group) => group.items),
+        },
+      ]),
+    [previewTeamOnePlannedGroups],
+  )
+  const previewTeamTwoPlannedSummary = useMemo(
+    () =>
+      buildPlannedSummary([
+        {
+          label: "인포Biz2팀",
+          items: previewTeamTwoPlannedGroups.flatMap((group) => group.items),
+        },
+      ]),
+    [previewTeamTwoPlannedGroups],
+  )
   const statusCounts = useMemo(() => countDailyReportStatus(todayEntries), [todayEntries])
-  const currentEntryStatus = useMemo(
-    () => resolveDailyReportStatus(currentEntry || { reportBody: "", plannedTasks: "", submittedAt: null }),
-    [currentEntry],
+  const selectedEntryStatus = useMemo(
+    () => resolveDailyReportStatus(selectedEntry || { reportBody: "", plannedTasks: "", submittedAt: null }),
+    [selectedEntry],
   )
   const currentPresence = useMemo(
     () => presenceUsers.find((user) => user.userId === currentUser.id)?.status || "offline",
     [presenceUsers, currentUser.id],
   )
+  const selectedDirectoryUser = useMemo(
+    () => directoryUsers.find((user) => user.id === selectedUserId) || null,
+    [directoryUsers, selectedUserId],
+  )
   const statusRef = useRef<HTMLDivElement | null>(null)
   const documentRef = useRef<HTMLDivElement | null>(null)
-  const teamOneMarkdownDocument = useMemo(
-    () => buildTeamMarkdownDocument("1팀 업무일지", currentDate, previewTeamOneGroupedEntries, previewTeamOnePlannedGroups),
-    [currentDate, previewTeamOneGroupedEntries, previewTeamOnePlannedGroups],
+  const teamOneDocument = useMemo(
+    () => buildTeamClipboardDocument("인포Biz본부", currentDate, previewTeamOneGroupedEntries, previewTeamOnePlannedSummary),
+    [currentDate, previewTeamOneGroupedEntries, previewTeamOnePlannedSummary],
   )
-  const teamTwoMarkdownDocument = useMemo(
-    () => buildTeamMarkdownDocument("2팀 업무일지", currentDate, previewTeamTwoGroupedEntries, previewTeamTwoPlannedGroups),
-    [currentDate, previewTeamTwoGroupedEntries, previewTeamTwoPlannedGroups],
+  const teamTwoDocument = useMemo(
+    () => buildTeamClipboardDocument("인포Biz본부", currentDate, previewTeamTwoGroupedEntries, previewTeamTwoPlannedSummary),
+    [currentDate, previewTeamTwoGroupedEntries, previewTeamTwoPlannedSummary],
   )
 
   useEffect(() => {
+    if (!todayEntries.some((entry) => entry.userId === selectedUserId)) {
+      setSelectedUserId(currentUser.id)
+    }
+  }, [currentUser.id, selectedUserId, todayEntries])
+
+  useEffect(() => {
     setDraft({
-      reportBody: currentEntry?.reportBody || "",
-      plannedTasks: currentEntry?.plannedTasks || "",
+      reportBody: selectedEntry?.reportBody || "",
+      plannedTasks: selectedEntry?.plannedTasks || "",
     })
-  }, [currentEntry?.reportBody, currentEntry?.plannedTasks])
+  }, [selectedEntry?.reportBody, selectedEntry?.plannedTasks, selectedUserId])
 
   useEffect(() => {
     const target = focus === "status" ? statusRef.current : documentRef.current
@@ -226,21 +260,21 @@ export function DailyReportPage({
   }, [focus])
 
   async function commitReport(mode: "draft" | "submit") {
-    if (!currentEntry) return
+    if (!selectedEntry) return
     setStatusMessage("")
     setIsSaving(true)
     try {
       const now = new Date().toISOString()
       const nextEntry: DailyReportEntry = {
-        ...currentEntry,
+        ...selectedEntry,
         reportBody: draft.reportBody.trim(),
         plannedTasks: draft.plannedTasks.trim(),
-        submittedAt: mode === "submit" ? now : currentEntry.submittedAt,
+        submittedAt: mode === "submit" ? now : selectedEntry.submittedAt,
         updatedAt: now,
       }
       const nextState = upsertDailyReportEntry(reportState, nextEntry)
       await onSaveState(nextState)
-      setStatusMessage(mode === "submit" ? "업무일지를 제출했습니다." : "업무일지를 저장했습니다.")
+      setStatusMessage(mode === "submit" ? `${nextEntry.userName} 업무일지를 제출했습니다.` : `${nextEntry.userName} 업무일지를 저장했습니다.`)
     } catch {
       setStatusMessage("저장 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.")
     } finally {
@@ -250,7 +284,7 @@ export function DailyReportPage({
 
   async function handleCopyDocument(target: "team1" | "team2") {
     try {
-      await navigator.clipboard.writeText(target === "team1" ? teamOneMarkdownDocument : teamTwoMarkdownDocument)
+      await navigator.clipboard.writeText(target === "team1" ? teamOneDocument : teamTwoDocument)
       setCopiedTarget(target)
       window.setTimeout(() => setCopiedTarget((current) => (current === target ? null : current)), 1800)
     } catch {
@@ -363,7 +397,17 @@ export function DailyReportPage({
                     const status = resolveDailyReportStatus(entry)
                     const presence = presenceUsers.find((user) => user.userId === entry.userId)?.status || "offline"
                     return (
-                      <div key={entry.userId} className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3.5">
+                      <button
+                        key={entry.userId}
+                        type="button"
+                        onClick={() => {
+                          setSelectedUserId(entry.userId)
+                          setMobileSection("write")
+                        }}
+                        className={`w-full rounded-[20px] border px-4 py-3.5 text-left transition ${
+                          selectedUserId === entry.userId ? "border-blue-200 bg-blue-50/70" : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
+                        }`}
+                      >
                         <div className="flex items-center gap-3">
                           <span className={`h-2.5 w-2.5 rounded-full ${getStatusDot(status)}`} />
                           <div className="min-w-0">
@@ -378,7 +422,7 @@ export function DailyReportPage({
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </button>
                     )
                   })}
                 </div>
@@ -397,7 +441,7 @@ export function DailyReportPage({
               <div className="flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">내 업무 {myTaskCount}개</span>
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">예정사항 {myPlannedCount}개</span>
-                <span className={`rounded-full border px-3 py-1.5 ${getStatusTone(currentEntryStatus)}`}>{getStatusLabel(currentEntryStatus)}</span>
+                <span className={`rounded-full border px-3 py-1.5 ${getStatusTone(selectedEntryStatus)}`}>{getStatusLabel(selectedEntryStatus)}</span>
               </div>
             </div>
 
@@ -408,16 +452,18 @@ export function DailyReportPage({
             ) : null}
 
             <div className="mt-8 space-y-6">
-              {currentEntry ? (
+              {selectedEntry ? (
                 <div className={`${mobileSection === "write" ? "block" : "hidden"} rounded-[24px] border border-blue-100 bg-blue-50/30 p-5 sm:p-6 xl:block`}>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <div className="text-[16px] font-black tracking-[-0.03em] text-slate-950">{currentUser.name}</div>
-                      <div className="mt-1 text-[12px] text-slate-500">{currentUser.teamName} · 맨 위에서 바로 작성합니다.</div>
+                      <div className="text-[16px] font-black tracking-[-0.03em] text-slate-950">{selectedEntry.userName}</div>
+                      <div className="mt-1 text-[12px] text-slate-500">
+                        {(selectedDirectoryUser?.teamName || selectedEntry.teamName)} · 제출현황에서 이름을 누르면 바로 이 사람 일지를 입력합니다.
+                      </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getStatusTone(currentEntryStatus)}`}>
-                        {getStatusLabel(currentEntryStatus)}
+                      <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getStatusTone(selectedEntryStatus)}`}>
+                        {getStatusLabel(selectedEntryStatus)}
                       </span>
                       <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-500">
                         업무 {myTaskCount} · 예정 {myPlannedCount}
@@ -471,7 +517,7 @@ export function DailyReportPage({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-[16px] font-black tracking-[-0.03em] text-slate-950">팀 문서 미리보기</div>
-                    <div className="mt-1 text-[12px] text-slate-500">팀별 문서를 그대로 복사해 AI나 메신저에 붙여넣기 좋게 정리합니다.</div>
+                    <div className="mt-1 text-[12px] text-slate-500">기존 일일보고 취합 양식처럼 본문은 사람별로, 예정사항은 맨 하단 당일업무로 정리합니다.</div>
                   </div>
                   <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] text-slate-500">1팀 = 본부장 + 인포Biz1팀</span>
                 </div>
@@ -491,7 +537,33 @@ export function DailyReportPage({
                         {copiedTarget === "team1" ? "복사됨" : "1팀 복사"}
                       </button>
                     </div>
-                    <pre className="mt-4 max-h-[420px] overflow-auto rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-4 text-[11.5px] leading-6 text-slate-800 sm:max-h-[520px] sm:text-[12px]">{teamOneMarkdownDocument}</pre>
+                    <div className="mt-4 max-h-[420px] overflow-auto rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-4 sm:max-h-[520px]">
+                      <div className="text-[15px] font-black text-slate-950">인포Biz본부 일일 업무보고</div>
+                      <div className="mt-1 text-[12px] text-slate-500">{formatReportDate(currentDate)}</div>
+                      <div className="mt-5 space-y-5 text-[12px] leading-6 text-slate-800">
+                        {previewTeamOneGroupedEntries.map((group) => (
+                          <div key={group.teamName}>
+                            <div className="font-black text-slate-950">{getDailyDocumentSectionTitle(group.teamName)}</div>
+                            <div className="mt-2 space-y-3">
+                              {group.entries.map((entry) => (
+                                <div key={`${group.teamName}-${entry.userId}`} className="space-y-1.5">
+                                  <div className="font-bold text-slate-900">&lt;{entry.userName}&gt;</div>
+                                  <div className="whitespace-pre-wrap text-slate-700">{entry.reportBody || "-"}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        <div className="rounded-[14px] border border-blue-100 bg-white px-4 py-3">
+                          <div className="font-bold text-slate-900">&lt;당일업무&gt;</div>
+                          <div className="mt-2 whitespace-pre-wrap text-slate-700">
+                            {previewTeamOnePlannedSummary.length
+                              ? previewTeamOnePlannedSummary.map((group) => `${group.label} : ${group.items.join(", ")}`).join("\n")
+                              : "인포Biz1팀 : 없음"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <div className="rounded-[22px] border border-slate-200 bg-white p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -508,7 +580,33 @@ export function DailyReportPage({
                         {copiedTarget === "team2" ? "복사됨" : "2팀 복사"}
                       </button>
                     </div>
-                    <pre className="mt-4 max-h-[420px] overflow-auto rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-4 text-[11.5px] leading-6 text-slate-800 sm:max-h-[520px] sm:text-[12px]">{teamTwoMarkdownDocument}</pre>
+                    <div className="mt-4 max-h-[420px] overflow-auto rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-4 sm:max-h-[520px]">
+                      <div className="text-[15px] font-black text-slate-950">인포Biz본부 일일 업무보고</div>
+                      <div className="mt-1 text-[12px] text-slate-500">{formatReportDate(currentDate)}</div>
+                      <div className="mt-5 space-y-5 text-[12px] leading-6 text-slate-800">
+                        {previewTeamTwoGroupedEntries.map((group) => (
+                          <div key={group.teamName}>
+                            <div className="font-black text-slate-950">{getDailyDocumentSectionTitle(group.teamName)}</div>
+                            <div className="mt-2 space-y-3">
+                              {group.entries.map((entry) => (
+                                <div key={`${group.teamName}-${entry.userId}`} className="space-y-1.5">
+                                  <div className="font-bold text-slate-900">&lt;{entry.userName}&gt;</div>
+                                  <div className="whitespace-pre-wrap text-slate-700">{entry.reportBody || "-"}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        <div className="rounded-[14px] border border-blue-100 bg-white px-4 py-3">
+                          <div className="font-bold text-slate-900">&lt;당일업무&gt;</div>
+                          <div className="mt-2 whitespace-pre-wrap text-slate-700">
+                            {previewTeamTwoPlannedSummary.length
+                              ? previewTeamTwoPlannedSummary.map((group) => `${group.label} : ${group.items.join(", ")}`).join("\n")
+                              : "인포Biz2팀 : 없음"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
