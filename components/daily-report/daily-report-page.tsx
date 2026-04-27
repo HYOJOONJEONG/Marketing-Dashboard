@@ -100,7 +100,7 @@ function getPresenceDot(status: PresenceUser["status"]) {
 }
 
 function getDailyDocumentSectionTitle(teamName: string) {
-  if (teamName === "본부") return "본부장"
+  if (teamName === "본부") return ""
   return teamName
 }
 
@@ -113,8 +113,11 @@ function buildTeamClipboardDocument(
   const lines: string[] = [`${departmentTitle} 일일 업무보고`, `${formatReportDate(date)}`, ""]
 
   groupedEntries.forEach((group) => {
-    lines.push(getDailyDocumentSectionTitle(group.teamName))
-    lines.push("")
+    const sectionTitle = getDailyDocumentSectionTitle(group.teamName)
+    if (sectionTitle) {
+      lines.push(sectionTitle)
+      lines.push("")
+    }
 
     group.entries.forEach((entry) => {
       lines.push(`<${entry.userName}>`)
@@ -178,9 +181,10 @@ function buildDailyWordHtml(
         )
         .join("")
 
+      const sectionTitle = getDailyDocumentSectionTitle(group.teamName)
       return `
         <section class="team-section">
-          <h2>${escapeHtml(getDailyDocumentSectionTitle(group.teamName))}</h2>
+          ${sectionTitle ? `<h2>${escapeHtml(sectionTitle)}</h2>` : ""}
           ${entriesHtml}
         </section>
       `
@@ -479,9 +483,6 @@ export function DailyReportPage({
     }
   }
 
-  const myTaskCount = splitLines(draft.reportBody).length
-  const myPlannedCount = splitLines(draft.plannedTasks).length
-
   return (
     <div className="space-y-8 lg:space-y-10">
       <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-6 shadow-sm lg:px-8 lg:py-7">
@@ -614,8 +615,6 @@ export function DailyReportPage({
                 <div className="text-[18px] font-black tracking-[-0.04em] text-slate-950">업무일지 문서</div>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">내 업무 {myTaskCount}개</span>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">예정사항 {myPlannedCount}개</span>
                 <span className={`rounded-full border px-3 py-1.5 ${getStatusTone(selectedEntryStatus)}`}>{getStatusLabel(selectedEntryStatus)}</span>
               </div>
             </div>
@@ -637,9 +636,6 @@ export function DailyReportPage({
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getStatusTone(selectedEntryStatus)}`}>
                         {getStatusLabel(selectedEntryStatus)}
-                      </span>
-                      <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-500">
-                        업무 {myTaskCount} · 예정 {myPlannedCount}
                       </span>
                     </div>
                   </div>
@@ -711,8 +707,10 @@ export function DailyReportPage({
                       <div className="mt-5 space-y-5 text-[12px] leading-6 text-slate-800">
                         {previewTeamOneGroupedEntries.map((group) => (
                           <div key={group.teamName}>
-                            <div className="font-black text-slate-950">{getDailyDocumentSectionTitle(group.teamName)}</div>
-                            <div className="mt-2 space-y-3">
+                            {getDailyDocumentSectionTitle(group.teamName) ? (
+                              <div className="font-black text-slate-950">{getDailyDocumentSectionTitle(group.teamName)}</div>
+                            ) : null}
+                            <div className={`${getDailyDocumentSectionTitle(group.teamName) ? "mt-2" : ""} space-y-3`}>
                               {group.entries.map((entry) => (
                                 <div key={`${group.teamName}-${entry.userId}`} className="space-y-1.5">
                                   <div className="font-bold text-slate-900">&lt;{entry.userName}&gt;</div>
@@ -753,8 +751,10 @@ export function DailyReportPage({
                       <div className="mt-5 space-y-5 text-[12px] leading-6 text-slate-800">
                         {previewTeamTwoGroupedEntries.map((group) => (
                           <div key={group.teamName}>
-                            <div className="font-black text-slate-950">{getDailyDocumentSectionTitle(group.teamName)}</div>
-                            <div className="mt-2 space-y-3">
+                            {getDailyDocumentSectionTitle(group.teamName) ? (
+                              <div className="font-black text-slate-950">{getDailyDocumentSectionTitle(group.teamName)}</div>
+                            ) : null}
+                            <div className={`${getDailyDocumentSectionTitle(group.teamName) ? "mt-2" : ""} space-y-3`}>
                               {group.entries.map((entry) => (
                                 <div key={`${group.teamName}-${entry.userId}`} className="space-y-1.5">
                                   <div className="font-bold text-slate-900">&lt;{entry.userName}&gt;</div>
