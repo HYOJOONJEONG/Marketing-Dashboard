@@ -44,6 +44,8 @@ function normalizeTerminationRows(rows: any[], sectionLabel: string) {
     departmentName: normalizeText(row?.departmentName),
     reason: normalizeText(row?.reason),
     receivedDate: normalizeText(row?.receivedDate),
+    startDate: normalizeText(row?.startDate),
+    endDate: normalizeText(row?.endDate),
     terminationDate: normalizeText(row?.terminationDate || row?.endDate),
     reflectedDate: normalizeText(row?.reflectedDate),
     penalty: Number(row?.penalty || 0),
