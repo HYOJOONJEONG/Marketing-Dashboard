@@ -2999,9 +2999,7 @@ export function DashboardShell({
       )
       .join("")
 
-    const detailYears = [2026, 2025, 2024, 2022]
-    const detailedSectionsHtml = detailYears
-      .map((year) => {
+    const buildYearDetailTable = (year: number, compact = false) => {
         const yearRows = integratedRows
           .filter((row: any) => Number(row?.year) === year && String(row?.status || "미정") === "미회수")
           .sort((a: any, b: any) => {
@@ -3043,9 +3041,9 @@ export function DashboardShell({
             `
 
         return `
-          <div class="detail-section detail-year-block">
-            <h2 class="section-title">${year}년 미회수 계약서 상세 현황</h2>
-            <table class="detail-table" aria-label="${year}년 미회수 계약서 상세 현황">
+          <div class="${compact ? "detail-year-mini" : "detail-section detail-year-block"}">
+            <h2 class="${compact ? "mini-section-title" : "section-title"}">${year}년 미회수 계약서 목록</h2>
+            <table class="detail-table ${compact ? "compact-table" : ""}" aria-label="${year}년 미회수 계약서 목록">
               <thead>
                 <tr>
                   <th style="width: 7%">NO</th>
@@ -3061,11 +3059,13 @@ export function DashboardShell({
             </table>
           </div>
         `
-      })
-      .join("")
+      }
+
+    const primaryDetailedHtml = buildYearDetailTable(2026, false)
+    const secondaryDetailedHtml = [2025, 2024, 2022].map((year) => buildYearDetailTable(year, true)).join("")
 
     const longTermUncollectedRows = longTermRows
-      .filter((row: any) => Number(row?.year) > 0 && Number(row?.year) <= 2014)
+      .filter((row: any) => Number(row?.year) > 0 && Number(row?.year) <= 2014 && String(row?.status || "미정") === "미회수")
       .sort((a: any, b: any) => {
         const yearDiff = Number(b?.year || 0) - Number(a?.year || 0)
         if (yearDiff !== 0) return yearDiff
@@ -3184,6 +3184,21 @@ export function DashboardShell({
           .detail-year-block {
             margin-top: 12px;
           }
+          .detail-mini-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+          }
+          .detail-year-mini {
+            min-width: 0;
+          }
+          .mini-section-title {
+            margin: 0 0 6px;
+            font-size: 12px;
+            font-weight: 800;
+            color: #0b1f44;
+          }
           .summary-table,
           .detail-table {
             width: 100%;
@@ -3212,6 +3227,13 @@ export function DashboardShell({
           .detail-table td:nth-child(3),
           .detail-table td:nth-child(5) {
             text-align: left;
+          }
+          .compact-table {
+            font-size: 10px;
+          }
+          .compact-table th,
+          .compact-table td {
+            padding: 5px 4px;
           }
           .empty-cell {
             height: 72px;
@@ -3259,7 +3281,11 @@ export function DashboardShell({
             </table>
           </div>
 
-          ${detailedSectionsHtml}
+          ${primaryDetailedHtml}
+
+          <div class="detail-mini-grid">
+            ${secondaryDetailedHtml}
+          </div>
 
           <div class="footer-note">인포Biz본부 주간 계약서 회수 보고서</div>
 
