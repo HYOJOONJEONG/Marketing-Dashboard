@@ -3146,11 +3146,15 @@ export function DashboardShell({
             width: 100%;
             box-sizing: border-box;
           }
+          .page-one {
+            min-height: 268mm;
+            display: flex;
+            flex-direction: column;
+          }
           .header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            gap: 16px;
             gap: 10px;
             margin-bottom: 5px;
           }
@@ -3256,6 +3260,36 @@ export function DashboardShell({
             font-size: 8px;
             color: #64748b;
           }
+          .page-one .summary-section,
+          .page-one .detail-section {
+            margin-top: 7px;
+          }
+          .page-one .section-title {
+            margin: 0 0 4px;
+            font-size: 13px;
+          }
+          .page-one .summary-table,
+          .page-one .detail-table {
+            font-size: 9.2px;
+          }
+          .page-one .summary-table th,
+          .page-one .summary-table td,
+          .page-one .detail-table th,
+          .page-one .detail-table td {
+            padding: 3px 3px;
+            line-height: 1.2;
+          }
+          .page-one .semi-compact-table {
+            font-size: 9px;
+          }
+          .page-one .semi-compact-table th,
+          .page-one .semi-compact-table td {
+            padding: 3px 3px;
+          }
+          .page-one .footer-note {
+            margin-top: auto;
+            padding-top: 8px;
+          }
           .page-break {
             break-before: page;
             page-break-before: always;
@@ -3266,34 +3300,36 @@ export function DashboardShell({
       </head>
       <body>
         <div class="sheet">
-          <div class="header">
-            <div class="title-block">
-              <h1 class="title">주간 계약서 회수현황</h1>
+          <div class="page-one">
+            <div class="header">
+              <div class="title-block">
+                <h1 class="title">주간 계약서 회수현황</h1>
+              </div>
+              <div class="meta">
+                <div class="dept">인포Biz본부</div>
+                <div class="date">${escapeHtml(formatDateDottedWithWeekday(reportDate))}</div>
+              </div>
             </div>
-            <div class="meta">
-              <div class="dept">인포Biz본부</div>
-              <div class="date">${escapeHtml(formatDateDottedWithWeekday(reportDate))}</div>
+
+            <div class="summary-section">
+              <h2 class="section-title">연도별 회수 요약</h2>
+              <table class="summary-table" aria-label="연도별 회수 요약">
+                <thead>
+                  <tr>
+                    <th style="width: 25%">연도</th>
+                    <th style="width: 25%">총건수</th>
+                    <th style="width: 25%">회수</th>
+                    <th style="width: 25%">미회수</th>
+                  </tr>
+                </thead>
+                <tbody>${summaryHtml}</tbody>
+              </table>
             </div>
+
+            ${detailedSectionsHtml}
+
+            <div class="footer-note">인포Biz본부 주간 계약서 회수 보고서</div>
           </div>
-
-          <div class="summary-section">
-            <h2 class="section-title">연도별 회수 요약</h2>
-            <table class="summary-table" aria-label="연도별 회수 요약">
-              <thead>
-                <tr>
-                  <th style="width: 25%">연도</th>
-                  <th style="width: 25%">총건수</th>
-                  <th style="width: 25%">회수</th>
-                  <th style="width: 25%">미회수</th>
-                </tr>
-              </thead>
-              <tbody>${summaryHtml}</tbody>
-            </table>
-          </div>
-
-          ${detailedSectionsHtml}
-
-          <div class="footer-note">인포Biz본부 주간 계약서 회수 보고서</div>
 
           <div class="detail-section page-break">
             <h2 class="section-title">장기미회수 계약서 현황 (${formatNumber(longTermUncollectedRows.length)}건)</h2>
