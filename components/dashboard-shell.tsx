@@ -3062,7 +3062,7 @@ export function DashboardShell({
       }
 
     const detailedSectionsHtml = [2026, 2025, 2024, 2022]
-      .map((year, index) => buildYearDetailTable(year, index !== 0))
+      .map((year) => buildYearDetailTable(year, false))
       .join("")
 
     const longTermUncollectedRows = longTermRows
