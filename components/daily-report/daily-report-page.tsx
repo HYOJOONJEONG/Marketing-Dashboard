@@ -205,63 +205,69 @@ function buildDailyWordHtml(
       body {
         font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
         margin: 0;
-        padding: 36px 40px;
+        padding: 34px 42px;
         color: #0f172a;
-        line-height: 1.75;
-        font-size: 12pt;
+        line-height: 1.68;
+        font-size: 11pt;
         background: #ffffff;
       }
       .page {
-        max-width: 800px;
+        max-width: 760px;
         margin: 0 auto;
+      }
+      .header {
+        margin-bottom: 24px;
       }
       h1 {
         margin: 0;
-        font-size: 22pt;
+        text-align: center;
+        font-size: 20pt;
         font-weight: 700;
       }
       .date {
-        margin-top: 10px;
-        font-size: 11pt;
-        color: #475569;
+        margin-top: 8px;
+        text-align: right;
+        font-size: 10.5pt;
+        color: #334155;
       }
       .team-section {
-        margin-top: 28px;
+        margin-top: 26px;
       }
       .team-section h2 {
-        margin: 0 0 14px;
-        font-size: 14pt;
+        margin: 0 0 12px;
+        font-size: 13pt;
         font-weight: 700;
       }
       .entry {
-        margin-bottom: 16px;
+        margin-bottom: 14px;
       }
       .entry-name {
-        margin-bottom: 6px;
+        margin-bottom: 4px;
         font-weight: 700;
       }
       .entry-body {
         white-space: normal;
       }
       .planned-block {
-        margin-top: 30px;
-        padding-top: 16px;
-        border-top: 1px solid #cbd5e1;
+        margin-top: 28px;
+        padding-top: 14px;
       }
       .planned-title {
-        margin: 0 0 10px;
+        margin: 0 0 8px;
         font-size: 13pt;
         font-weight: 700;
       }
       .planned-line {
-        margin-bottom: 6px;
+        margin-bottom: 4px;
       }
     </style>
   </head>
   <body>
     <div class="page">
-      <h1>${escapeHtml(departmentTitle)} 일일 업무보고</h1>
-      <div class="date">${escapeHtml(formatReportDate(date))}</div>
+      <div class="header">
+        <h1>${escapeHtml(departmentTitle)} 일일 업무보고</h1>
+        <div class="date">${escapeHtml(formatReportDate(date))}</div>
+      </div>
       ${sections}
       <section class="planned-block">
         <div class="planned-title">&lt;당일업무&gt;</div>
@@ -486,7 +492,6 @@ export function DailyReportPage({
                 Daily Report
               </span>
               <span className="text-[12px] font-semibold text-slate-500">{formatDisplayDate(currentDate)}</span>
-              {lastUpdatedText ? <span className="text-[12px] text-slate-400">Last update: {lastUpdatedText}</span> : null}
             </div>
             <h2 className="mt-3 text-[24px] font-black tracking-[-0.04em] text-slate-950">업무일지 협업 보드</h2>
             <div className="mt-4 flex flex-wrap items-center gap-2.5 text-[13px] text-slate-600">
@@ -572,7 +577,6 @@ export function DailyReportPage({
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-[17px] font-black tracking-[-0.04em] text-slate-950">제출 현황</div>
-              <div className="mt-2 text-[12px] text-slate-500">오늘 제출 상태를 팀 순서대로 확인합니다.</div>
             </div>
             <UsersRound className="h-5 w-5 text-blue-500" />
           </div>
@@ -624,7 +628,6 @@ export function DailyReportPage({
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="text-[18px] font-black tracking-[-0.04em] text-slate-950">업무일지 문서</div>
-                <div className="mt-2 text-[12px] text-slate-500">내 입력은 위에서 바로 수정하고, 아래 문서는 팀 단위로 한 번에 복사할 수 있게 정리합니다.</div>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">내 업무 {myTaskCount}개</span>
@@ -645,9 +648,7 @@ export function DailyReportPage({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <div className="text-[16px] font-black tracking-[-0.03em] text-slate-950">{selectedEntry.userName}</div>
-                      <div className="mt-1 text-[12px] text-slate-500">
-                        {(selectedDirectoryUser?.teamName || selectedEntry.teamName)} · 제출현황에서 이름을 누르면 바로 이 사람 일지를 입력합니다.
-                      </div>
+                      <div className="mt-1 text-[12px] text-slate-500">{selectedDirectoryUser?.teamName || selectedEntry.teamName}</div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getStatusTone(selectedEntryStatus)}`}>
@@ -703,18 +704,13 @@ export function DailyReportPage({
 
               <div className={`${mobileSection === "docs" ? "block" : "hidden"} rounded-[24px] border border-slate-200 bg-slate-50/50 p-5 sm:p-6 xl:block`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[16px] font-black tracking-[-0.03em] text-slate-950">팀 문서 미리보기</div>
-                    <div className="mt-1 text-[12px] text-slate-500">기존 일일보고 취합 양식처럼 본문은 사람별로, 예정사항은 맨 하단 당일업무로 정리합니다.</div>
-                  </div>
-                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] text-slate-500">1팀 = 본부장 + 인포Biz1팀</span>
+                  <div className="text-[16px] font-black tracking-[-0.03em] text-slate-950">팀 문서 미리보기</div>
                 </div>
                 <div className="mt-5 grid gap-4 lg:gap-5 xl:grid-cols-2">
                   <div className="rounded-[22px] border border-slate-200 bg-white p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-[14px] font-black tracking-[-0.03em] text-slate-950">1팀 문서</div>
-                        <div className="mt-1 text-[12px] text-slate-500">본부장과 1팀 데이터를 함께 복사합니다.</div>
                       </div>
                       <button
                         type="button"
@@ -725,9 +721,9 @@ export function DailyReportPage({
                         {copiedTarget === "team1" ? "복사됨" : "1팀 복사"}
                       </button>
                     </div>
-                    <div className="mt-4 max-h-[420px] overflow-auto rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-4 sm:max-h-[520px]">
-                      <div className="text-[15px] font-black text-slate-950">인포Biz본부 일일 업무보고</div>
-                      <div className="mt-1 text-[12px] text-slate-500">{formatReportDate(currentDate)}</div>
+                    <div className="mt-4 max-h-[420px] overflow-auto rounded-[18px] border border-slate-200 bg-white px-5 py-5 sm:max-h-[520px]">
+                      <div className="text-center text-[16px] font-black text-slate-950">인포Biz본부 일일 업무보고</div>
+                      <div className="mt-2 text-right text-[12px] text-slate-500">{formatReportDate(currentDate)}</div>
                       <div className="mt-5 space-y-5 text-[12px] leading-6 text-slate-800">
                         {previewTeamOneGroupedEntries.map((group) => (
                           <div key={group.teamName}>
@@ -742,7 +738,7 @@ export function DailyReportPage({
                             </div>
                           </div>
                         ))}
-                        <div className="rounded-[14px] border border-blue-100 bg-white px-4 py-3">
+                        <div className="border-t border-slate-200 pt-4">
                           <div className="font-bold text-slate-900">&lt;당일업무&gt;</div>
                           <div className="mt-2 whitespace-pre-wrap text-slate-700">
                             {previewTeamOnePlannedSummary.length
@@ -757,7 +753,6 @@ export function DailyReportPage({
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-[14px] font-black tracking-[-0.03em] text-slate-950">2팀 문서</div>
-                        <div className="mt-1 text-[12px] text-slate-500">2팀 데이터만 따로 복사합니다.</div>
                       </div>
                       <button
                         type="button"
@@ -768,9 +763,9 @@ export function DailyReportPage({
                         {copiedTarget === "team2" ? "복사됨" : "2팀 복사"}
                       </button>
                     </div>
-                    <div className="mt-4 max-h-[420px] overflow-auto rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-4 sm:max-h-[520px]">
-                      <div className="text-[15px] font-black text-slate-950">인포Biz본부 일일 업무보고</div>
-                      <div className="mt-1 text-[12px] text-slate-500">{formatReportDate(currentDate)}</div>
+                    <div className="mt-4 max-h-[420px] overflow-auto rounded-[18px] border border-slate-200 bg-white px-5 py-5 sm:max-h-[520px]">
+                      <div className="text-center text-[16px] font-black text-slate-950">인포Biz본부 일일 업무보고</div>
+                      <div className="mt-2 text-right text-[12px] text-slate-500">{formatReportDate(currentDate)}</div>
                       <div className="mt-5 space-y-5 text-[12px] leading-6 text-slate-800">
                         {previewTeamTwoGroupedEntries.map((group) => (
                           <div key={group.teamName}>
@@ -785,7 +780,7 @@ export function DailyReportPage({
                             </div>
                           </div>
                         ))}
-                        <div className="rounded-[14px] border border-blue-100 bg-white px-4 py-3">
+                        <div className="border-t border-slate-200 pt-4">
                           <div className="font-bold text-slate-900">&lt;당일업무&gt;</div>
                           <div className="mt-2 whitespace-pre-wrap text-slate-700">
                             {previewTeamTwoPlannedSummary.length
