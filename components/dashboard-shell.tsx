@@ -1147,7 +1147,7 @@ export function DashboardShell({
   })
   const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null)
   const [editingCollectionDraft, setEditingCollectionDraft] = useState<any>({})
-  const [collectionYearFilter, setCollectionYearFilter] = useState<number | "all">(initialData?.collection?.yearFilter || 2026)
+  const [collectionYearFilter, setCollectionYearFilter] = useState<number | "all">(getUpcomingThursday().getFullYear() || 2026)
   const [collectionStatusFilter, setCollectionStatusFilter] = useState<string>(initialData?.collection?.statusFilter || "all")
   const [collectionSort, setCollectionSort] = useState<{
     key: "year" | "companyName" | "departmentName" | "idCode" | "industry" | "claimMonth" | "receiptDate" | "reflectedDate" | "status"
@@ -2026,7 +2026,7 @@ export function DashboardShell({
   useEffect(() => {
     const serverCollection = data?.collection || {}
     setCollectionTab("integrated")
-    setCollectionYearFilter(serverCollection?.yearFilter || 2026)
+    setCollectionYearFilter(getUpcomingThursday().getFullYear() || 2026)
     setCollectionStatusFilter(serverCollection?.statusFilter || "all")
     setCollectionSort(serverCollection?.sort || { key: "year", dir: "desc" })
     try {
@@ -2975,12 +2975,18 @@ export function DashboardShell({
     ]
 
     const summary = summaryBuckets.map((bucket) => {
-      const rows = integratedRows.filter((row: any) => bucket.match(Number(row?.year)))
-      const collected = rows.filter((row: any) => String(row?.status || "미정") === "회수").length
-      const uncollected = rows.filter((row: any) => String(row?.status || "미정") === "미회수").length
+      const sourceRows =
+        bucket.key === "legacy"
+          ? longTermRows.filter((row: any) => String(row?.status || "미정") === "미회수")
+          : integratedRows.filter((row: any) => bucket.match(Number(row?.year)))
+      const collected =
+        bucket.key === "legacy"
+          ? 0
+          : sourceRows.filter((row: any) => String(row?.status || "미정") === "회수").length
+      const uncollected = sourceRows.filter((row: any) => String(row?.status || "미정") === "미회수").length
       return {
         year: bucket.label,
-        total: rows.length,
+        total: bucket.key === "legacy" ? uncollected : sourceRows.length,
         collected,
         uncollected,
       }
