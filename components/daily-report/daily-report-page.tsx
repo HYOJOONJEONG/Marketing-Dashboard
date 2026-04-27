@@ -145,6 +145,133 @@ function buildPlannedSummary(groups: Array<{ label: string; items: string[] }>) 
   }))
 }
 
+function escapeHtml(value: string) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+function formatMultilineHtml(value: string) {
+  const safe = escapeHtml(value || "-")
+  return safe.replace(/\r?\n/g, "<br />")
+}
+
+function buildDailyWordHtml(
+  departmentTitle: string,
+  date: string,
+  groupedEntries: Array<{ teamName: string; entries: DailyReportEntry[] }>,
+  plannedSummary: Array<{ label: string; items: string[] }>,
+) {
+  const sections = groupedEntries
+    .map((group) => {
+      const entriesHtml = group.entries
+        .map(
+          (entry) => `
+            <div class="entry">
+              <div class="entry-name">&lt;${escapeHtml(entry.userName)}&gt;</div>
+              <div class="entry-body">${formatMultilineHtml(entry.reportBody || "-")}</div>
+            </div>
+          `,
+        )
+        .join("")
+
+      return `
+        <section class="team-section">
+          <h2>${escapeHtml(getDailyDocumentSectionTitle(group.teamName))}</h2>
+          ${entriesHtml}
+        </section>
+      `
+    })
+    .join("")
+
+  const plannedHtml = plannedSummary.length
+    ? plannedSummary
+        .map(
+          (group) =>
+            `<div class="planned-line">${escapeHtml(group.label)} : ${escapeHtml(group.items.length ? group.items.join(", ") : "없음")}</div>`,
+        )
+        .join("")
+    : `<div class="planned-line">당일업무 : 없음</div>`
+
+  return `<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>${escapeHtml(departmentTitle)} 일일 업무보고</title>
+    <style>
+      body {
+        font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+        margin: 0;
+        padding: 36px 40px;
+        color: #0f172a;
+        line-height: 1.75;
+        font-size: 12pt;
+        background: #ffffff;
+      }
+      .page {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      h1 {
+        margin: 0;
+        font-size: 22pt;
+        font-weight: 700;
+      }
+      .date {
+        margin-top: 10px;
+        font-size: 11pt;
+        color: #475569;
+      }
+      .team-section {
+        margin-top: 28px;
+      }
+      .team-section h2 {
+        margin: 0 0 14px;
+        font-size: 14pt;
+        font-weight: 700;
+      }
+      .entry {
+        margin-bottom: 16px;
+      }
+      .entry-name {
+        margin-bottom: 6px;
+        font-weight: 700;
+      }
+      .entry-body {
+        white-space: normal;
+      }
+      .planned-block {
+        margin-top: 30px;
+        padding-top: 16px;
+        border-top: 1px solid #cbd5e1;
+      }
+      .planned-title {
+        margin: 0 0 10px;
+        font-size: 13pt;
+        font-weight: 700;
+      }
+      .planned-line {
+        margin-bottom: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>${escapeHtml(departmentTitle)} 일일 업무보고</h1>
+      <div class="date">${escapeHtml(formatReportDate(date))}</div>
+      ${sections}
+      <section class="planned-block">
+        <div class="planned-title">&lt;당일업무&gt;</div>
+        ${plannedHtml}
+      </section>
+    </div>
+  </body>
+</html>`
+}
+
 export function DailyReportPage({
   currentUser,
   directoryUsers,
@@ -194,6 +321,7 @@ export function DailyReportPage({
   )
   const previewTeamOneGroupedEntries = useMemo(() => groupEntriesByTeam(previewTeamOneEntries), [previewTeamOneEntries])
   const previewTeamTwoGroupedEntries = useMemo(() => groupEntriesByTeam(previewTeamTwoEntries), [previewTeamTwoEntries])
+  const previewAllGroupedEntries = useMemo(() => groupEntriesByTeam(previewEntries), [previewEntries])
   const previewTeamOnePlannedGroups = useMemo(() => groupPlannedTasksByTeam(previewTeamOneEntries), [previewTeamOneEntries])
   const previewTeamTwoPlannedGroups = useMemo(() => groupPlannedTasksByTeam(previewTeamTwoEntries), [previewTeamTwoEntries])
   const previewTeamOnePlannedSummary = useMemo(
@@ -215,6 +343,20 @@ export function DailyReportPage({
         },
       ]),
     [previewTeamTwoPlannedGroups],
+  )
+  const previewHeadquartersPlannedSummary = useMemo(
+    () =>
+      buildPlannedSummary([
+        {
+          label: "인포Biz1팀",
+          items: previewTeamOnePlannedGroups.flatMap((group) => group.items),
+        },
+        {
+          label: "인포Biz2팀",
+          items: previewTeamTwoPlannedGroups.flatMap((group) => group.items),
+        },
+      ]),
+    [previewTeamOnePlannedGroups, previewTeamTwoPlannedGroups],
   )
   const statusCounts = useMemo(() => countDailyReportStatus(todayEntries), [todayEntries])
   const selectedEntryStatus = useMemo(
@@ -239,6 +381,10 @@ export function DailyReportPage({
     () => buildTeamClipboardDocument("인포Biz본부", currentDate, previewTeamTwoGroupedEntries, previewTeamTwoPlannedSummary),
     [currentDate, previewTeamTwoGroupedEntries, previewTeamTwoPlannedSummary],
   )
+  const headquartersWordHtml = useMemo(
+    () => buildDailyWordHtml("인포Biz본부", currentDate, previewAllGroupedEntries, previewHeadquartersPlannedSummary),
+    [currentDate, previewAllGroupedEntries, previewHeadquartersPlannedSummary],
+  )
 
   useEffect(() => {
     if (!todayEntries.some((entry) => entry.userId === selectedUserId)) {
@@ -258,6 +404,22 @@ export function DailyReportPage({
     setMobileSection(focus === "status" ? "status" : "write")
     target?.scrollIntoView({ block: "start", behavior: "smooth" })
   }, [focus])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const nextDateKey = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date())
+      if (nextDateKey !== currentDate) {
+        window.location.reload()
+      }
+    }, 60000)
+
+    return () => window.clearInterval(timer)
+  }, [currentDate])
 
   async function commitReport(mode: "draft" | "submit") {
     if (!selectedEntry) return
@@ -289,6 +451,25 @@ export function DailyReportPage({
       window.setTimeout(() => setCopiedTarget((current) => (current === target ? null : current)), 1800)
     } catch {
       setStatusMessage("문서 복사에 실패했습니다. 다시 시도해주세요.")
+    }
+  }
+
+  function handleDownloadHeadquartersWord() {
+    try {
+      const blob = new Blob(["\ufeff", headquartersWordHtml], {
+        type: "application/msword;charset=utf-8",
+      })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement("a")
+      const compactDate = currentDate.replace(/-/g, "")
+      anchor.href = url
+      anchor.download = `인포Biz본부_일일업무보고_${compactDate}.doc`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch {
+      setStatusMessage("Word 파일 생성에 실패했습니다. 다시 시도해주세요.")
     }
   }
 
@@ -324,6 +505,13 @@ export function DailyReportPage({
           </div>
 
           <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+            <button
+              type="button"
+              onClick={handleDownloadHeadquartersWord}
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-[14px] font-bold text-white transition hover:bg-slate-800 sm:w-auto"
+            >
+              본부 전체 Word
+            </button>
             <button
               type="button"
               onClick={() => void handleCopyDocument("team1")}

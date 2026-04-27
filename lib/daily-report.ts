@@ -87,6 +87,30 @@ export function sortDailyDirectoryUsers<T extends { teamOrder?: number; displayO
   })
 }
 
+export function ensureDailyDirectoryUsers(users: DailyDirectoryUser[]) {
+  const nextUsers = [...users]
+  const teamTwoUser = nextUsers.find((user) => safeString(user.teamName) === "인포Biz2팀")
+  const hasOtherEntry = nextUsers.some(
+    (user) => safeString(user.teamName) === "인포Biz2팀" && safeString(user.name) === "기타",
+  )
+
+  if (teamTwoUser && !hasOtherEntry) {
+    nextUsers.push({
+      id: "daily-other-infobiz2",
+      loginId: "daily-other-infobiz2",
+      name: "기타",
+      title: null,
+      teamId: teamTwoUser.teamId,
+      teamName: teamTwoUser.teamName,
+      teamOrder: teamTwoUser.teamOrder,
+      displayOrder: getDailyDisplayOrder("기타"),
+      avatarEmoji: null,
+    })
+  }
+
+  return sortDailyDirectoryUsers(nextUsers)
+}
+
 export function createEmptyDailyReportState(): DailyReportState {
   return {
     reports: [],
