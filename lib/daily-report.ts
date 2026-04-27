@@ -59,6 +59,7 @@ const USER_ORDER: Record<string, number> = {
   김대일: 4,
   박대일: 4,
   기타: 5,
+  직원동정: 6,
 }
 
 function safeString(value: unknown) {
@@ -93,6 +94,9 @@ export function ensureDailyDirectoryUsers(users: DailyDirectoryUser[]) {
   const hasOtherEntry = nextUsers.some(
     (user) => safeString(user.teamName) === "인포Biz2팀" && safeString(user.name) === "기타",
   )
+  const hasEmployeeUpdateEntry = nextUsers.some(
+    (user) => safeString(user.teamName) === "인포Biz2팀" && safeString(user.name) === "직원동정",
+  )
 
   if (teamTwoUser && !hasOtherEntry) {
     nextUsers.push({
@@ -104,6 +108,20 @@ export function ensureDailyDirectoryUsers(users: DailyDirectoryUser[]) {
       teamName: teamTwoUser.teamName,
       teamOrder: teamTwoUser.teamOrder,
       displayOrder: getDailyDisplayOrder("기타"),
+      avatarEmoji: null,
+    })
+  }
+
+  if (teamTwoUser && !hasEmployeeUpdateEntry) {
+    nextUsers.push({
+      id: "daily-staff-update-infobiz2",
+      loginId: "daily-staff-update-infobiz2",
+      name: "직원동정",
+      title: null,
+      teamId: teamTwoUser.teamId,
+      teamName: teamTwoUser.teamName,
+      teamOrder: teamTwoUser.teamOrder,
+      displayOrder: getDailyDisplayOrder("직원동정"),
       avatarEmoji: null,
     })
   }
