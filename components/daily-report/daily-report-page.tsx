@@ -105,7 +105,7 @@ function isEmployeeUpdateName(name: string) {
 
 function getDailyDocumentSectionTitle(teamName: string) {
   if (teamName === "본부") return ""
-  return teamName
+  return `<${teamName}>`
 }
 
 function buildTeamClipboardDocument(
@@ -143,10 +143,9 @@ function buildTeamClipboardDocument(
     lines.push("당일업무 : 없음")
   }
 
-  if (employeeUpdate?.trim()) {
-    lines.push("<직원동정>")
-    lines.push(employeeUpdate.trim())
-  }
+  lines.push("")
+  lines.push("<직원동정>")
+  lines.push(employeeUpdate?.trim() || "-")
 
   return lines.join("\n").trim()
 }
@@ -236,13 +235,13 @@ function buildDailyWordHtml(
       h1 {
         margin: 0;
         text-align: center;
-        font-size: 20pt;
+        font-size: 10pt;
         font-weight: 700;
       }
       .date {
         margin-top: 8px;
         text-align: right;
-        font-size: 10.5pt;
+        font-size: 10pt;
         color: #334155;
       }
       .team-section {
@@ -250,7 +249,7 @@ function buildDailyWordHtml(
       }
       .team-section h2 {
         margin: 0 0 12px;
-        font-size: 12pt;
+        font-size: 10pt;
         font-weight: 700;
         text-decoration: underline;
       }
@@ -274,7 +273,7 @@ function buildDailyWordHtml(
       .major-title,
       .planned-title {
         margin: 0 0 8px;
-        font-size: 12pt;
+        font-size: 10pt;
         font-weight: 700;
         text-decoration: underline;
       }
@@ -286,7 +285,7 @@ function buildDailyWordHtml(
       }
       .employee-title {
         margin: 0 0 6px;
-        font-size: 12pt;
+        font-size: 10pt;
         font-weight: 700;
         text-decoration: underline;
       }
@@ -306,14 +305,10 @@ function buildDailyWordHtml(
       <section class="planned-block">
         <div class="planned-title"><strong><u>&lt;당일업무&gt;</u></strong></div>
         ${plannedHtml}
-        ${
-          employeeUpdate?.trim()
-            ? `<div class="employee-block">
+        <div class="employee-block">
         <div class="employee-title"><strong><u>&lt;직원동정&gt;</u></strong></div>
-        <div>${formatMultilineHtml(employeeUpdate.trim())}</div>
-      </div>`
-            : ""
-        }
+        <div>${formatMultilineHtml(employeeUpdate?.trim() || "-")}</div>
+      </div>
       </section>
     </div>
   </body>
@@ -879,12 +874,10 @@ export function DailyReportPage({
                               ? previewTeamTwoPlannedSummary.map((group) => `${group.label} : ${group.items.join(", ")}`).join("\n")
                               : "인포Biz2팀 : 없음"}
                           </div>
-                          {previewEmployeeUpdateEntry?.reportBody?.trim() ? (
-                            <div className="mt-4 border-t border-slate-200 pt-4">
+                          <div className="mt-4 border-t border-slate-200 pt-4">
                             <div className="font-bold underline decoration-slate-400 underline-offset-4 text-slate-900">&lt;직원동정&gt;</div>
-                            <div className="mt-2 whitespace-pre-wrap text-slate-700">{previewEmployeeUpdateEntry.reportBody.trim()}</div>
-                            </div>
-                          ) : null}
+                            <div className="mt-2 whitespace-pre-wrap text-slate-700">{previewEmployeeUpdateEntry?.reportBody?.trim() || "-"}</div>
+                          </div>
                         </div>
                       </div>
                     </div>
