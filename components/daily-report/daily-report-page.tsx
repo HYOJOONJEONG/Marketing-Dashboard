@@ -103,6 +103,10 @@ function isEmployeeUpdateName(name: string) {
   return String(name || "").trim() === "직원동정"
 }
 
+function isMajorWorkName(name: string) {
+  return String(name || "").trim() === "일일 주요 업무"
+}
+
 function getDailyDocumentSectionTitle(teamName: string) {
   if (teamName === "본부") return ""
   return `<${teamName}>`
@@ -113,9 +117,10 @@ function buildTeamClipboardDocument(
   date: string,
   groupedEntries: Array<{ teamName: string; entries: DailyReportEntry[] }>,
   plannedSummary: Array<{ label: string; items: string[] }>,
+  majorContent?: string,
   employeeUpdate?: string,
 ) {
-  const lines: string[] = [`${departmentTitle} 일일 업무보고`, `${formatReportDate(date)}`, "", "<일일 주요 업무>", "-", ""]
+  const lines: string[] = [`${departmentTitle} 일일 업무보고`, `${formatReportDate(date)}`, "", "<일일 주요 업무>", majorContent?.trim() || "-", ""]
 
   groupedEntries.forEach((group) => {
     const sectionTitle = getDailyDocumentSectionTitle(group.teamName)
@@ -176,6 +181,7 @@ function buildDailyWordHtml(
   date: string,
   groupedEntries: Array<{ teamName: string; entries: DailyReportEntry[] }>,
   plannedSummary: Array<{ label: string; items: string[] }>,
+  majorContent?: string,
   employeeUpdate?: string,
 ) {
   const sections = groupedEntries
@@ -194,7 +200,7 @@ function buildDailyWordHtml(
       const sectionTitle = getDailyDocumentSectionTitle(group.teamName)
       return `
         <section class="team-section">
-          ${sectionTitle ? `<h2><strong><u>${escapeHtml(sectionTitle)}</u></strong></h2>` : ""}
+          ${sectionTitle ? `<div class="team-title" style="margin:0 0 12px; font-size:10pt; font-weight:700; text-decoration:underline;"><strong><u>${escapeHtml(sectionTitle)}</u></strong></div>` : ""}
           ${entriesHtml}
         </section>
       `
@@ -217,7 +223,7 @@ function buildDailyWordHtml(
     <title>${escapeHtml(departmentTitle)} 일일 업무보고</title>
     <style>
       body {
-        font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+        font-family: "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
         margin: 0;
         padding: 34px 42px;
         color: #0f172a;
@@ -232,12 +238,6 @@ function buildDailyWordHtml(
       .header {
         margin-bottom: 24px;
       }
-      h1 {
-        margin: 0;
-        text-align: center;
-        font-size: 10pt;
-        font-weight: 700;
-      }
       .date {
         margin-top: 8px;
         text-align: right;
@@ -246,12 +246,6 @@ function buildDailyWordHtml(
       }
       .team-section {
         margin-top: 26px;
-      }
-      .team-section h2 {
-        margin: 0 0 12px;
-        font-size: 10pt;
-        font-weight: 700;
-        text-decoration: underline;
       }
       .entry {
         margin-bottom: 14px;
@@ -291,23 +285,23 @@ function buildDailyWordHtml(
       }
     </style>
   </head>
-  <body style="font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; font-size: 10pt;">
+  <body style="font-family: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; font-size: 10pt; mso-bidi-font-size: 10.0pt;">
     <div class="page">
       <div class="header">
-        <h1>${escapeHtml(departmentTitle)} 일일 업무보고</h1>
-        <div class="date">${escapeHtml(formatReportDate(date))}</div>
+        <div style="margin:0; text-align:center; font-size:10pt; font-weight:700;">${escapeHtml(departmentTitle)} 일일 업무보고</div>
+        <div class="date" style="margin-top:8px; text-align:right; font-size:10pt; color:#334155;">${escapeHtml(formatReportDate(date))}</div>
       </div>
       <section class="major-block">
-        <div class="major-title"><strong><u>&lt;일일 주요 업무&gt;</u></strong></div>
-        <div>-</div>
+        <div class="major-title" style="margin:0 0 8px; font-size:10pt; font-weight:700; text-decoration:underline;"><strong><u>&lt;일일 주요 업무&gt;</u></strong></div>
+        <div style="font-size:10pt;">${formatMultilineHtml(majorContent?.trim() || "-")}</div>
       </section>
       ${sections}
       <section class="planned-block">
-        <div class="planned-title"><strong><u>&lt;당일업무&gt;</u></strong></div>
+        <div class="planned-title" style="margin:0 0 8px; font-size:10pt; font-weight:700; text-decoration:underline;"><strong><u>&lt;당일업무&gt;</u></strong></div>
         ${plannedHtml}
         <div class="employee-block">
-        <div class="employee-title"><strong><u>&lt;직원동정&gt;</u></strong></div>
-        <div>${formatMultilineHtml(employeeUpdate?.trim() || "-")}</div>
+        <div class="employee-title" style="margin:0 0 6px; font-size:10pt; font-weight:700; text-decoration:underline;"><strong><u>&lt;직원동정&gt;</u></strong></div>
+        <div style="font-size:10pt;">${formatMultilineHtml(employeeUpdate?.trim() || "-")}</div>
       </div>
       </section>
     </div>
@@ -337,14 +331,17 @@ export function DailyReportPage({
     [reportState, currentDate, directoryUsers],
   )
   const countableEntries = useMemo(
-    () => todayEntries.filter((entry) => !isEmployeeUpdateName(entry.userName)),
+    () => todayEntries.filter((entry) => !isEmployeeUpdateName(entry.userName) && !isMajorWorkName(entry.userName)),
     [todayEntries],
   )
   const selectedEntry = useMemo(
     () => todayEntries.find((entry) => entry.userId === selectedUserId) || null,
     [todayEntries, selectedUserId],
   )
-  const groupedEntries = useMemo(() => groupEntriesByTeam(todayEntries), [todayEntries])
+  const groupedEntries = useMemo(
+    () => groupEntriesByTeam(todayEntries.filter((entry) => !isEmployeeUpdateName(entry.userName) && !isMajorWorkName(entry.userName))),
+    [todayEntries],
+  )
   const previewEntries = useMemo(
     () =>
       todayEntries.map((entry) =>
@@ -359,7 +356,7 @@ export function DailyReportPage({
     [todayEntries, selectedUserId, draft.plannedTasks, draft.reportBody],
   )
   const previewTeamOneEntries = useMemo(
-    () => previewEntries.filter((entry) => entry.teamName === "본부" || entry.teamName === "인포Biz1팀"),
+    () => previewEntries.filter((entry) => (entry.teamName === "본부" || entry.teamName === "인포Biz1팀") && !isMajorWorkName(entry.userName)),
     [previewEntries],
   )
   const previewTeamTwoEntries = useMemo(
@@ -370,10 +367,14 @@ export function DailyReportPage({
     () => previewEntries.find((entry) => entry.teamName === "인포Biz2팀" && isEmployeeUpdateName(entry.userName)) || null,
     [previewEntries],
   )
+  const previewMajorEntry = useMemo(
+    () => previewEntries.find((entry) => entry.teamName === "본부" && isMajorWorkName(entry.userName)) || null,
+    [previewEntries],
+  )
   const previewTeamOneGroupedEntries = useMemo(() => groupEntriesByTeam(previewTeamOneEntries), [previewTeamOneEntries])
   const previewTeamTwoGroupedEntries = useMemo(() => groupEntriesByTeam(previewTeamTwoEntries), [previewTeamTwoEntries])
   const previewAllGroupedEntries = useMemo(
-    () => groupEntriesByTeam(previewEntries.filter((entry) => !isEmployeeUpdateName(entry.userName))),
+    () => groupEntriesByTeam(previewEntries.filter((entry) => !isEmployeeUpdateName(entry.userName) && !isMajorWorkName(entry.userName))),
     [previewEntries],
   )
   const previewTeamOnePlannedGroups = useMemo(() => groupPlannedTasksByTeam(previewTeamOneEntries), [previewTeamOneEntries])
@@ -421,6 +422,10 @@ export function DailyReportPage({
     () => isEmployeeUpdateName(selectedEntry?.userName || ""),
     [selectedEntry?.userName],
   )
+  const isSelectedMajorWork = useMemo(
+    () => isMajorWorkName(selectedEntry?.userName || ""),
+    [selectedEntry?.userName],
+  )
   const currentPresence = useMemo(
     () => presenceUsers.find((user) => user.userId === currentUser.id)?.status || "offline",
     [presenceUsers, currentUser.id],
@@ -432,30 +437,32 @@ export function DailyReportPage({
   const statusRef = useRef<HTMLDivElement | null>(null)
   const documentRef = useRef<HTMLDivElement | null>(null)
   const teamOneDocument = useMemo(
-    () => buildTeamClipboardDocument("인포Biz본부", currentDate, previewTeamOneGroupedEntries, previewTeamOnePlannedSummary),
-    [currentDate, previewTeamOneGroupedEntries, previewTeamOnePlannedSummary],
+    () => buildTeamClipboardDocument("인포Biz본부", currentDate, previewTeamOneGroupedEntries, previewTeamOnePlannedSummary, previewMajorEntry?.reportBody || ""),
+    [currentDate, previewMajorEntry?.reportBody, previewTeamOneGroupedEntries, previewTeamOnePlannedSummary],
   )
   const teamTwoDocument = useMemo(
     () =>
-      buildTeamClipboardDocument(
-        "인포Biz본부",
-        currentDate,
-        previewTeamTwoGroupedEntries,
-        previewTeamTwoPlannedSummary,
-        previewEmployeeUpdateEntry?.reportBody || "",
-      ),
+        buildTeamClipboardDocument(
+          "인포Biz본부",
+          currentDate,
+          previewTeamTwoGroupedEntries,
+          previewTeamTwoPlannedSummary,
+          "",
+          previewEmployeeUpdateEntry?.reportBody || "",
+        ),
     [currentDate, previewEmployeeUpdateEntry?.reportBody, previewTeamTwoGroupedEntries, previewTeamTwoPlannedSummary],
   )
   const headquartersWordHtml = useMemo(
     () =>
-      buildDailyWordHtml(
-        "인포Biz본부",
-        currentDate,
-        previewAllGroupedEntries,
-        previewHeadquartersPlannedSummary,
-        previewEmployeeUpdateEntry?.reportBody || "",
-      ),
-    [currentDate, previewAllGroupedEntries, previewEmployeeUpdateEntry?.reportBody, previewHeadquartersPlannedSummary],
+        buildDailyWordHtml(
+          "인포Biz본부",
+          currentDate,
+          previewAllGroupedEntries,
+          previewHeadquartersPlannedSummary,
+          previewMajorEntry?.reportBody || "",
+          previewEmployeeUpdateEntry?.reportBody || "",
+        ),
+    [currentDate, previewAllGroupedEntries, previewEmployeeUpdateEntry?.reportBody, previewHeadquartersPlannedSummary, previewMajorEntry?.reportBody],
   )
 
   useEffect(() => {
@@ -725,20 +732,22 @@ export function DailyReportPage({
                     </div>
                   </div>
                   <div className="mt-5 grid gap-4">
-                    <label className="grid gap-2.5">
-                      <span className="text-[12px] font-semibold text-slate-500">{isSelectedEmployeeUpdate ? "직원동정 내용" : "업무일지 본문"}</span>
-                      <textarea
-                        value={draft.reportBody}
-                        onChange={(event) => setDraft((prev) => ({ ...prev, reportBody: event.target.value }))}
-                        rows={10}
-                        className="min-h-[300px] w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 sm:min-h-[260px]"
-                        placeholder={isSelectedEmployeeUpdate ? "직원동정 내용을 입력해주세요." : "금일 진행한 업무를 입력해주세요."}
-                      />
-                    </label>
-                    {!isSelectedEmployeeUpdate ? <label className="grid gap-2.5">
-                      <span className="text-[12px] font-semibold text-slate-500">예정사항</span>
-                      <textarea
-                        value={draft.plannedTasks}
+                      <label className="grid gap-2.5">
+                        <span className="text-[12px] font-semibold text-slate-500">
+                          {isSelectedEmployeeUpdate ? "직원동정 내용" : isSelectedMajorWork ? "일일 주요 업무" : "업무일지 본문"}
+                        </span>
+                        <textarea
+                          value={draft.reportBody}
+                          onChange={(event) => setDraft((prev) => ({ ...prev, reportBody: event.target.value }))}
+                          rows={10}
+                          className="min-h-[300px] w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 sm:min-h-[260px]"
+                          placeholder={isSelectedEmployeeUpdate ? "직원동정 내용을 입력해주세요." : isSelectedMajorWork ? "일일 주요 업무를 입력해주세요." : "금일 진행한 업무를 입력해주세요."}
+                        />
+                      </label>
+                      {!isSelectedEmployeeUpdate && !isSelectedMajorWork ? <label className="grid gap-2.5">
+                        <span className="text-[12px] font-semibold text-slate-500">예정사항</span>
+                        <textarea
+                          value={draft.plannedTasks}
                         onChange={(event) => setDraft((prev) => ({ ...prev, plannedTasks: event.target.value }))}
                         rows={6}
                         className="min-h-[180px] w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
@@ -850,7 +859,7 @@ export function DailyReportPage({
                       <div className="mt-5 space-y-5 text-[12px] leading-6 text-slate-800">
                         <div className="space-y-1.5">
                           <div className="font-black underline decoration-slate-400 underline-offset-4 text-slate-950">&lt;일일 주요 업무&gt;</div>
-                          <div className="text-slate-700">-</div>
+                          <div className="whitespace-pre-wrap text-slate-700">{previewMajorEntry?.reportBody?.trim() || "-"}</div>
                         </div>
                         {previewTeamTwoGroupedEntries.map((group) => (
                           <div key={group.teamName}>
