@@ -417,7 +417,7 @@ export function DailyReportPage({
   )
   const statusCounts = useMemo(() => countDailyReportStatus(countableEntries), [countableEntries])
   const selectedEntryStatus = useMemo(
-    () => resolveDailyReportStatus(selectedEntry || { reportBody: "", plannedTasks: "", submittedAt: null }),
+    () => resolveDailyReportStatus(selectedEntry || { reportBody: "", plannedTasks: "", submittedAt: null, statusOverride: null }),
     [selectedEntry],
   )
   const isSelectedEmployeeUpdate = useMemo(
@@ -507,6 +507,7 @@ export function DailyReportPage({
         reportBody: draft.reportBody.trim(),
         plannedTasks: draft.plannedTasks.trim(),
         submittedAt: mode === "submit" ? now : selectedEntry.submittedAt,
+        statusOverride: mode === "submit" ? null : selectedEntry.statusOverride ?? null,
         updatedAt: now,
       }
       const nextState = upsertDailyReportEntry(reportState, nextEntry)
@@ -527,14 +528,12 @@ export function DailyReportPage({
       const now = new Date().toISOString()
       const nextEntry: DailyReportEntry = {
         ...selectedEntry,
-        reportBody: "",
-        plannedTasks: "",
         submittedAt: null,
+        statusOverride: "empty",
         updatedAt: now,
       }
       const nextState = upsertDailyReportEntry(reportState, nextEntry)
       await onSaveState(nextState)
-      setDraft({ reportBody: "", plannedTasks: "" })
       setStatusMessage(`${nextEntry.userName} 업무일지 제출을 취소했습니다.`)
     } catch {
       setStatusMessage("제출 취소 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.")

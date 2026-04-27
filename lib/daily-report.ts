@@ -24,6 +24,7 @@ export type DailyReportEntry = {
   reportBody: string
   plannedTasks: string
   submittedAt: string | null
+  statusOverride?: "empty" | null
   updatedAt: string
 }
 
@@ -156,6 +157,7 @@ export function normalizeDailyReportState(raw: any, directoryUsers: DailyDirecto
       reportBody: safeString(existing?.reportBody),
       plannedTasks: safeString(existing?.plannedTasks),
       submittedAt: safeString(existing?.submittedAt) || null,
+      statusOverride: safeString(existing?.statusOverride) === "empty" ? "empty" : null,
       updatedAt: safeString(existing?.updatedAt) || now,
     } satisfies DailyReportEntry
   })
@@ -174,6 +176,7 @@ export function normalizeDailyReportState(raw: any, directoryUsers: DailyDirecto
       reportBody: safeString(row?.reportBody),
       plannedTasks: safeString(row?.plannedTasks),
       submittedAt: safeString(row?.submittedAt) || null,
+      statusOverride: safeString(row?.statusOverride) === "empty" ? "empty" : null,
       updatedAt: safeString(row?.updatedAt) || now,
     }))
 
@@ -196,8 +199,11 @@ export function getDailyReportsByDate(state: DailyReportState, date: string, dir
   )
 }
 
-export function resolveDailyReportStatus(entry: Pick<DailyReportEntry, "reportBody" | "plannedTasks" | "submittedAt">): DailyReportStatus {
+export function resolveDailyReportStatus(
+  entry: Pick<DailyReportEntry, "reportBody" | "plannedTasks" | "submittedAt" | "statusOverride">,
+): DailyReportStatus {
   if (safeString(entry.submittedAt)) return "complete"
+  if (entry.statusOverride === "empty") return "empty"
   if (safeString(entry.reportBody) || safeString(entry.plannedTasks)) return "draft"
   return "empty"
 }
