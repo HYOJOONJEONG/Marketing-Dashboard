@@ -1300,7 +1300,10 @@ export function DashboardShell({
       if (result.changed) needsManagerBackfill = true
       return result.sheet
     })
-    if (!needsPrune && !needsMove && !needsManagerBackfill) return
+    if (!needsPrune && !needsMove && !needsManagerBackfill) {
+      normalizedTerminationOnceRef.current = true
+      return
+    }
     normalizedTerminationOnceRef.current = true
     const nextActiveSheet = normalizedSheets[0]
     startTransition(async () => {
@@ -3039,6 +3042,7 @@ export function DashboardShell({
     if (!popup) return
 
     popup.document.title = fileTitle
+    popup.document.open()
     popup.document.write(`
       <!doctype html>
       <html lang="ko">
@@ -3216,6 +3220,12 @@ export function DashboardShell({
       </html>
     `)
     popup.document.close()
+    popup.onload = () => {
+      popup.focus()
+      popup.setTimeout(() => {
+        popup.print()
+      }, 300)
+    }
   }
 
 
