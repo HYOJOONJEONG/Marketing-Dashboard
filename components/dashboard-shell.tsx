@@ -1272,6 +1272,7 @@ export function DashboardShell({
     [termination.sheets],
   )
   const normalizedTerminationOnceRef = useRef(false)
+  const previousViewRef = useRef<ViewKey | null>(null)
 
   useEffect(() => {
     if (normalizedTerminationOnceRef.current) return
@@ -1313,6 +1314,14 @@ export function DashboardShell({
       })
     })
   }, [data, termination, startTransition])
+  useEffect(() => {
+    const previousView = previousViewRef.current
+    if (view === "collection" && previousView !== "collection" && collectionTab === "integrated") {
+      setCollectionYearFilter(2026)
+      setCollectionStatusFilter("all")
+    }
+    previousViewRef.current = view
+  }, [view, collectionTab])
   const includedContracts = useMemo(() => contracts.filter((row: any) => row.includedInWeekly), [contracts])
   useEffect(() => {
     if (!currentUser?.name) return
@@ -2938,8 +2947,12 @@ export function DashboardShell({
       </html>
     `)
     popup.document.close()
-    popup.focus()
-    popup.print()
+    popup.onload = () => {
+      popup.focus()
+      popup.setTimeout(() => {
+        popup.print()
+      }, 250)
+    }
   }
 
   function handleCollectionIntegratedPrint() {
@@ -3191,12 +3204,18 @@ export function DashboardShell({
 
           <div class="footer-note">인포Biz본부 주간 계약서 회수 보고서</div>
         </div>
+        <script>
+          window.addEventListener("load", function () {
+            setTimeout(function () {
+              window.focus();
+              window.print();
+            }, 250);
+          });
+        </script>
       </body>
       </html>
     `)
     popup.document.close()
-    popup.focus()
-    popup.print()
   }
 
 
