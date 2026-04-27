@@ -35,6 +35,34 @@ function formatValue(value: unknown, fallback = "-") {
   return text || fallback
 }
 
+function formatMonthDisplay(value: unknown, fallback = "-") {
+  const text = String(value ?? "").trim()
+  if (!text) return fallback
+
+  const dottedMatch = text.match(/^(\d{4})\.(\d{1,2})$/)
+  if (dottedMatch) {
+    const year = dottedMatch[1].slice(-2)
+    const month = dottedMatch[2].padStart(2, "0")
+    return `${year}년 ${month}월`
+  }
+
+  const koreanMatch = text.match(/^(\d{2,4})년\s*(\d{1,2})월$/)
+  if (koreanMatch) {
+    const year = koreanMatch[1].slice(-2)
+    const month = koreanMatch[2].padStart(2, "0")
+    return `${year}년 ${month}월`
+  }
+
+  const compactMatch = text.match(/^(\d{2,4})(\d{2})$/)
+  if (compactMatch) {
+    const year = compactMatch[1].slice(-2)
+    const month = compactMatch[2]
+    return `${year}년 ${month}월`
+  }
+
+  return text
+}
+
 function terminationBadgeClass(label: string) {
   if (label === "해지 진행") {
     return "border-orange-200 bg-orange-50 text-orange-700"
@@ -492,8 +520,8 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                           <td className="px-4 py-3">{formatValue(row.departmentName)}</td>
                           <td className="px-4 py-3">{formatValue(row.customerId)}</td>
                           <td className="px-4 py-3">{formatValue(row.reason)}</td>
-                          <td className="px-4 py-3">{formatValue(row.startDate)}</td>
-                          <td className="px-4 py-3">{formatValue(row.endDate)}</td>
+                          <td className="px-4 py-3">{formatMonthDisplay(row.startDate)}</td>
+                          <td className="px-4 py-3">{formatMonthDisplay(row.endDate)}</td>
                         </tr>
                       ))
                     ) : (
