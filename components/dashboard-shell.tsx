@@ -2986,23 +2986,6 @@ export function DashboardShell({
       }
     })
 
-    const uncollectedRows = integratedRows
-      .filter((row: any) => Number(row?.year) === currentYearNumber && String(row?.status || "미정") === "미회수")
-      .sort((a: any, b: any) => {
-        const monthDiff = parseContractMonthKey(a?.claimMonth) - parseContractMonthKey(b?.claimMonth)
-        if (monthDiff !== 0) return monthDiff
-        return String(a?.companyName || "").localeCompare(String(b?.companyName || ""), "ko")
-      })
-      .map((row: any, index: number) => ({
-        no: index + 1,
-        company: String(row?.companyName || ""),
-        department: String(row?.departmentName || ""),
-        id: String(row?.idCode || ""),
-        industry: String(row?.industry || ""),
-        billingMonth: String(row?.claimMonth || ""),
-        status: String(row?.status || "미정"),
-      }))
-
     const summaryHtml = summary
       .map(
         (item) => `
@@ -3016,28 +2999,70 @@ export function DashboardShell({
       )
       .join("")
 
-    const rowsHtml =
-      uncollectedRows.length > 0
-        ? uncollectedRows
-            .map(
-              (row) => `
+    const detailYears = [2026, 2025, 2024, 2022]
+    const detailedSectionsHtml = detailYears
+      .map((year) => {
+        const yearRows = integratedRows
+          .filter((row: any) => Number(row?.year) === year && String(row?.status || "미정") === "미회수")
+          .sort((a: any, b: any) => {
+            const monthDiff = parseContractMonthKey(a?.claimMonth) - parseContractMonthKey(b?.claimMonth)
+            if (monthDiff !== 0) return monthDiff
+            return String(a?.companyName || "").localeCompare(String(b?.companyName || ""), "ko")
+          })
+          .map((row: any, index: number) => ({
+            no: index + 1,
+            company: String(row?.companyName || ""),
+            department: String(row?.departmentName || ""),
+            id: String(row?.idCode || ""),
+            industry: String(row?.industry || ""),
+            billingMonth: String(row?.claimMonth || ""),
+            status: String(row?.status || "미정"),
+          }))
+
+        const rowsHtml =
+          yearRows.length > 0
+            ? yearRows
+                .map(
+                  (row) => `
+                    <tr>
+                      <td>${formatNumber(row.no)}</td>
+                      <td>${escapeHtml(row.company)}</td>
+                      <td>${escapeHtml(row.department)}</td>
+                      <td>${escapeHtml(row.id)}</td>
+                      <td>${escapeHtml(row.industry)}</td>
+                      <td>${escapeHtml(row.billingMonth)}</td>
+                      <td>${escapeHtml(row.status)}</td>
+                    </tr>
+                  `,
+                )
+                .join("")
+            : `
+              <tr>
+                <td colspan="7" class="empty-cell">${year}년 미회수 계약서가 없습니다.</td>
+              </tr>
+            `
+
+        return `
+          <div class="detail-section detail-year-block">
+            <h2 class="section-title">${year}년 미회수 계약서 상세 현황</h2>
+            <table class="detail-table" aria-label="${year}년 미회수 계약서 상세 현황">
+              <thead>
                 <tr>
-                  <td>${formatNumber(row.no)}</td>
-                  <td>${escapeHtml(row.company)}</td>
-                  <td>${escapeHtml(row.department)}</td>
-                  <td>${escapeHtml(row.id)}</td>
-                  <td>${escapeHtml(row.industry)}</td>
-                  <td>${escapeHtml(row.billingMonth)}</td>
-                  <td>${escapeHtml(row.status)}</td>
+                  <th style="width: 7%">NO</th>
+                  <th style="width: 22%">회사명</th>
+                  <th style="width: 18%">부서명</th>
+                  <th style="width: 12%">ID</th>
+                  <th style="width: 14%">업종</th>
+                  <th style="width: 15%">청구일</th>
+                  <th style="width: 12%">상태</th>
                 </tr>
-              `,
-            )
-            .join("")
-        : `
-          <tr>
-            <td colspan="7" class="empty-cell">현재 기준 미회수 계약서가 없습니다.</td>
-          </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
         `
+      })
+      .join("")
 
     const longTermUncollectedRows = longTermRows
       .filter((row: any) => Number(row?.year) > 0 && Number(row?.year) <= 2014)
@@ -3131,12 +3156,6 @@ export function DashboardShell({
             font-weight: 800;
             color: #0b1f44;
           }
-          .subtitle {
-            margin-top: 6px;
-            font-size: 13px;
-            color: #475569;
-            font-weight: 600;
-          }
           .meta {
             text-align: right;
             white-space: nowrap;
@@ -3161,6 +3180,9 @@ export function DashboardShell({
             font-size: 16px;
             font-weight: 800;
             color: #0b1f44;
+          }
+          .detail-year-block {
+            margin-top: 12px;
           }
           .summary-table,
           .detail-table {
@@ -3215,7 +3237,6 @@ export function DashboardShell({
           <div class="header">
             <div class="title-block">
               <h1 class="title">주간 계약서 회수현황</h1>
-              <div class="subtitle">${escapeHtml(formatDateDotted(previousDate))} 계약서 회수 현황</div>
             </div>
             <div class="meta">
               <div class="dept">인포Biz본부</div>
@@ -3238,23 +3259,7 @@ export function DashboardShell({
             </table>
           </div>
 
-          <div class="detail-section">
-            <h2 class="section-title">${currentYearNumber}년 미회수 계약서 목록</h2>
-            <table class="detail-table" aria-label="미회수 계약서 목록">
-              <thead>
-                <tr>
-                  <th style="width: 7%">NO</th>
-                  <th style="width: 22%">회사명</th>
-                  <th style="width: 18%">부서명</th>
-                  <th style="width: 12%">ID</th>
-                  <th style="width: 14%">업종</th>
-                  <th style="width: 15%">청구일</th>
-                  <th style="width: 12%">상태</th>
-                </tr>
-              </thead>
-              <tbody>${rowsHtml}</tbody>
-            </table>
-          </div>
+          ${detailedSectionsHtml}
 
           <div class="footer-note">인포Biz본부 주간 계약서 회수 보고서</div>
 
