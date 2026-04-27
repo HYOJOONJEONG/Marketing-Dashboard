@@ -87,6 +87,59 @@ function getPresenceDot(status: PresenceUser["status"]) {
   return "bg-slate-300"
 }
 
+function getDailyDocumentSectionTitle(teamName: string) {
+  if (teamName === "본부") return "본부장"
+  return teamName
+}
+
+function buildTeamMarkdownDocument(
+  title: string,
+  date: string,
+  groupedEntries: Array<{ teamName: string; entries: DailyReportEntry[] }>,
+  plannedGroups: Array<{ teamName: string; items: string[] }>,
+) {
+  const lines: string[] = [`# ${title}`, `${formatDisplayDate(date)}`, ""]
+
+  groupedEntries.forEach((group) => {
+    lines.push(`## ${getDailyDocumentSectionTitle(group.teamName)}`)
+    lines.push("")
+
+    group.entries.forEach((entry) => {
+      lines.push(`### ${entry.userName}`)
+      lines.push("")
+      lines.push(entry.reportBody?.trim() || "-")
+      lines.push("")
+      lines.push("예정사항")
+      const plannedLines = splitLines(entry.plannedTasks)
+      if (plannedLines.length) {
+        plannedLines.forEach((line) => lines.push(`- ${line}`))
+      } else {
+        lines.push("- 없음")
+      }
+      lines.push("")
+    })
+  })
+
+  lines.push("## 당일업무")
+  lines.push("")
+
+  if (plannedGroups.length) {
+    plannedGroups.forEach((group) => {
+      lines.push(`### ${getDailyDocumentSectionTitle(group.teamName)}`)
+      if (group.items.length) {
+        group.items.forEach((item) => lines.push(`- ${item}`))
+      } else {
+        lines.push("- 없음")
+      }
+      lines.push("")
+    })
+  } else {
+    lines.push("- 아직 예정사항이 없습니다.")
+  }
+
+  return lines.join("\n").trim()
+}
+
 export function DailyReportPage({
   currentUser,
   directoryUsers,
@@ -100,7 +153,7 @@ export function DailyReportPage({
   const [draft, setDraft] = useState({ reportBody: "", plannedTasks: "" })
   const [statusMessage, setStatusMessage] = useState("")
   const [isSaving, setIsSaving] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copiedTarget, setCopiedTarget] = useState<"team1" | "team2" | null>(null)
 
   const todayEntries = useMemo(
     () => getDailyReportsByDate(reportState, currentDate, directoryUsers),
@@ -124,8 +177,18 @@ export function DailyReportPage({
       ),
     [todayEntries, currentUser.id, draft.plannedTasks, draft.reportBody],
   )
-  const previewGroupedEntries = useMemo(() => groupEntriesByTeam(previewEntries), [previewEntries])
-  const previewPlannedGroups = useMemo(() => groupPlannedTasksByTeam(previewEntries), [previewEntries])
+  const previewTeamOneEntries = useMemo(
+    () => previewEntries.filter((entry) => entry.teamName === "본부" || entry.teamName === "인포Biz1팀"),
+    [previewEntries],
+  )
+  const previewTeamTwoEntries = useMemo(
+    () => previewEntries.filter((entry) => entry.teamName === "인포Biz2팀"),
+    [previewEntries],
+  )
+  const previewTeamOneGroupedEntries = useMemo(() => groupEntriesByTeam(previewTeamOneEntries), [previewTeamOneEntries])
+  const previewTeamTwoGroupedEntries = useMemo(() => groupEntriesByTeam(previewTeamTwoEntries), [previewTeamTwoEntries])
+  const previewTeamOnePlannedGroups = useMemo(() => groupPlannedTasksByTeam(previewTeamOneEntries), [previewTeamOneEntries])
+  const previewTeamTwoPlannedGroups = useMemo(() => groupPlannedTasksByTeam(previewTeamTwoEntries), [previewTeamTwoEntries])
   const statusCounts = useMemo(() => countDailyReportStatus(todayEntries), [todayEntries])
   const currentEntryStatus = useMemo(
     () => resolveDailyReportStatus(currentEntry || { reportBody: "", plannedTasks: "", submittedAt: null }),
@@ -137,47 +200,14 @@ export function DailyReportPage({
   )
   const statusRef = useRef<HTMLDivElement | null>(null)
   const documentRef = useRef<HTMLDivElement | null>(null)
-  const markdownDocument = useMemo(() => {
-    const lines: string[] = [`# 업무일지`, `${formatDisplayDate(currentDate)}`, ""]
-
-    previewGroupedEntries.forEach((group) => {
-      lines.push(`## ${group.teamName}`)
-      lines.push("")
-
-      group.entries.forEach((entry) => {
-        lines.push(`### ${entry.userName}`)
-        lines.push("")
-        lines.push(entry.reportBody?.trim() || "-")
-        lines.push("")
-        lines.push("예정사항")
-        const plannedLines = splitLines(entry.plannedTasks)
-        if (plannedLines.length) {
-          plannedLines.forEach((line) => lines.push(`- ${line}`))
-        } else {
-          lines.push("- 없음")
-        }
-        lines.push("")
-      })
-    })
-
-    lines.push("## 당일업무")
-    lines.push("")
-    if (previewPlannedGroups.length) {
-      previewPlannedGroups.forEach((group) => {
-        lines.push(`### ${group.teamName}`)
-        if (group.items.length) {
-          group.items.forEach((item) => lines.push(`- ${item}`))
-        } else {
-          lines.push("- 없음")
-        }
-        lines.push("")
-      })
-    } else {
-      lines.push("- 아직 예정사항이 없습니다.")
-    }
-
-    return lines.join("\n").trim()
-  }, [currentDate, previewGroupedEntries, previewPlannedGroups])
+  const teamOneMarkdownDocument = useMemo(
+    () => buildTeamMarkdownDocument("1팀 업무일지", currentDate, previewTeamOneGroupedEntries, previewTeamOnePlannedGroups),
+    [currentDate, previewTeamOneGroupedEntries, previewTeamOnePlannedGroups],
+  )
+  const teamTwoMarkdownDocument = useMemo(
+    () => buildTeamMarkdownDocument("2팀 업무일지", currentDate, previewTeamTwoGroupedEntries, previewTeamTwoPlannedGroups),
+    [currentDate, previewTeamTwoGroupedEntries, previewTeamTwoPlannedGroups],
+  )
 
   useEffect(() => {
     setDraft({
@@ -214,11 +244,11 @@ export function DailyReportPage({
     }
   }
 
-  async function handleCopyDocument() {
+  async function handleCopyDocument(target: "team1" | "team2") {
     try {
-      await navigator.clipboard.writeText(markdownDocument)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1800)
+      await navigator.clipboard.writeText(target === "team1" ? teamOneMarkdownDocument : teamTwoMarkdownDocument)
+      setCopiedTarget(target)
+      window.setTimeout(() => setCopiedTarget((current) => (current === target ? null : current)), 1800)
     } catch {
       setStatusMessage("문서 복사에 실패했습니다. 다시 시도해주세요.")
     }
@@ -258,11 +288,19 @@ export function DailyReportPage({
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={() => void handleCopyDocument()}
+              onClick={() => void handleCopyDocument("team1")}
               className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-bold text-slate-700 transition hover:bg-slate-50"
             >
-              {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-              {copied ? "복사됨" : "문서 복사"}
+              {copiedTarget === "team1" ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+              {copiedTarget === "team1" ? "1팀 복사됨" : "1팀 문서 복사"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleCopyDocument("team2")}
+              className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-bold text-slate-700 transition hover:bg-slate-50"
+            >
+              {copiedTarget === "team2" ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+              {copiedTarget === "team2" ? "2팀 복사됨" : "2팀 문서 복사"}
             </button>
           </div>
         </div>
@@ -394,18 +432,46 @@ export function DailyReportPage({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-[16px] font-black tracking-[-0.03em] text-slate-950">팀 문서 미리보기</div>
-                    <div className="mt-1 text-[12px] text-slate-500">마크다운 문서처럼 정리된 형태라 그대로 복사해서 전달하기 좋습니다.</div>
+                    <div className="mt-1 text-[12px] text-slate-500">팀별 문서를 그대로 복사해 AI나 메신저에 붙여넣기 좋게 정리합니다.</div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleCopyDocument()}
-                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-                    {copied ? "복사됨" : "전체 복사"}
-                  </button>
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] text-slate-500">1팀 = 본부장 + 인포Biz1팀</span>
                 </div>
-                <pre className="mt-5 overflow-x-auto rounded-[22px] border border-slate-200 bg-white px-5 py-5 text-[13px] leading-7 text-slate-800">{markdownDocument}</pre>
+                <div className="mt-5 grid gap-5 xl:grid-cols-2">
+                  <div className="rounded-[22px] border border-slate-200 bg-white p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[14px] font-black tracking-[-0.03em] text-slate-950">1팀 문서</div>
+                        <div className="mt-1 text-[12px] text-slate-500">본부장과 1팀 데이터를 함께 복사합니다.</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyDocument("team1")}
+                        className="inline-flex h-9 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 text-[12px] font-bold text-slate-700 transition hover:bg-slate-50"
+                      >
+                        {copiedTarget === "team1" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copiedTarget === "team1" ? "복사됨" : "1팀 복사"}
+                      </button>
+                    </div>
+                    <pre className="mt-4 max-h-[520px] overflow-auto rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-4 text-[12px] leading-6 text-slate-800">{teamOneMarkdownDocument}</pre>
+                  </div>
+                  <div className="rounded-[22px] border border-slate-200 bg-white p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[14px] font-black tracking-[-0.03em] text-slate-950">2팀 문서</div>
+                        <div className="mt-1 text-[12px] text-slate-500">2팀 데이터만 따로 복사합니다.</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyDocument("team2")}
+                        className="inline-flex h-9 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 text-[12px] font-bold text-slate-700 transition hover:bg-slate-50"
+                      >
+                        {copiedTarget === "team2" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copiedTarget === "team2" ? "복사됨" : "2팀 복사"}
+                      </button>
+                    </div>
+                    <pre className="mt-4 max-h-[520px] overflow-auto rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-4 text-[12px] leading-6 text-slate-800">{teamTwoMarkdownDocument}</pre>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
