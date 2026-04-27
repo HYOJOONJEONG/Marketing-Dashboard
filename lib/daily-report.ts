@@ -47,7 +47,6 @@ const TEAM_ORDER: Record<string, number> = {
 }
 
 const USER_ORDER: Record<string, number> = {
-  "일일 주요 업무": 0,
   이상철: 1,
   신무길: 1,
   이홍민: 2,
@@ -61,7 +60,6 @@ const USER_ORDER: Record<string, number> = {
   김대일: 4,
   박대일: 4,
   기타: 5,
-  직원동정: 6,
 }
 
 function safeString(value: unknown) {
@@ -92,31 +90,10 @@ export function sortDailyDirectoryUsers<T extends { teamOrder?: number; displayO
 
 export function ensureDailyDirectoryUsers(users: DailyDirectoryUser[]) {
   const nextUsers = [...users]
-  const headquarterUser = nextUsers.find((user) => safeString(user.teamName) === "본부")
   const teamTwoUser = nextUsers.find((user) => safeString(user.teamName) === "인포Biz2팀")
-  const hasMajorEntry = nextUsers.some(
-    (user) => safeString(user.teamName) === "본부" && safeString(user.name) === "일일 주요 업무",
-  )
   const hasOtherEntry = nextUsers.some(
     (user) => safeString(user.teamName) === "인포Biz2팀" && safeString(user.name) === "기타",
   )
-  const hasEmployeeUpdateEntry = nextUsers.some(
-    (user) => safeString(user.teamName) === "인포Biz2팀" && safeString(user.name) === "직원동정",
-  )
-
-  if (headquarterUser && !hasMajorEntry) {
-    nextUsers.push({
-      id: "daily-major-headquarters",
-      loginId: "daily-major-headquarters",
-      name: "일일 주요 업무",
-      title: null,
-      teamId: headquarterUser.teamId,
-      teamName: headquarterUser.teamName,
-      teamOrder: headquarterUser.teamOrder,
-      displayOrder: getDailyDisplayOrder("일일 주요 업무"),
-      avatarEmoji: null,
-    })
-  }
 
   if (teamTwoUser && !hasOtherEntry) {
     nextUsers.push({
@@ -128,20 +105,6 @@ export function ensureDailyDirectoryUsers(users: DailyDirectoryUser[]) {
       teamName: teamTwoUser.teamName,
       teamOrder: teamTwoUser.teamOrder,
       displayOrder: getDailyDisplayOrder("기타"),
-      avatarEmoji: null,
-    })
-  }
-
-  if (teamTwoUser && !hasEmployeeUpdateEntry) {
-    nextUsers.push({
-      id: "daily-staff-update-infobiz2",
-      loginId: "daily-staff-update-infobiz2",
-      name: "직원동정",
-      title: null,
-      teamId: teamTwoUser.teamId,
-      teamName: teamTwoUser.teamName,
-      teamOrder: teamTwoUser.teamOrder,
-      displayOrder: getDailyDisplayOrder("직원동정"),
       avatarEmoji: null,
     })
   }
