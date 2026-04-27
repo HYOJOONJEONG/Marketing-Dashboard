@@ -331,7 +331,7 @@ export function DailyReportPage({
     [reportState, currentDate, directoryUsers],
   )
   const countableEntries = useMemo(
-    () => todayEntries.filter((entry) => !isEmployeeUpdateName(entry.userName) && !isMajorWorkName(entry.userName)),
+    () => todayEntries.filter((entry) => entry.userName !== "기타"),
     [todayEntries],
   )
   const selectedEntry = useMemo(
@@ -339,7 +339,7 @@ export function DailyReportPage({
     [todayEntries, selectedUserId],
   )
   const groupedEntries = useMemo(
-    () => groupEntriesByTeam(todayEntries.filter((entry) => !isEmployeeUpdateName(entry.userName) && !isMajorWorkName(entry.userName))),
+    () => groupEntriesByTeam(todayEntries.filter((entry) => entry.userName !== "기타")),
     [todayEntries],
   )
   const previewEntries = useMemo(
@@ -594,11 +594,6 @@ export function DailyReportPage({
               </span>
               <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">{currentUser.role}</span>
               <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-blue-700">{currentUser.teamName}</span>
-              <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-emerald-700">
-                전체 {countableEntries.length}명 / 제출 {statusCounts.complete}명
-              </span>
-              <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600">작성중 {statusCounts.draft}명</span>
-              <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600">미작성 {statusCounts.empty}명</span>
             </div>
           </div>
 
@@ -654,6 +649,9 @@ export function DailyReportPage({
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-[17px] font-black tracking-[-0.04em] text-slate-950">제출 현황</div>
+              <div className="mt-1 text-[12px] text-slate-500">
+                작성대상 {countableEntries.length}건 · 미작성 {statusCounts.empty}건
+              </div>
             </div>
             <UsersRound className="h-5 w-5 text-blue-500" />
           </div>
