@@ -1172,7 +1172,7 @@ export function DashboardShell({
     key: "year" | "companyName" | "departmentName" | "idCode" | "industry" | "claimMonth" | "receiptDate" | "reflectedDate" | "status"
     dir: "asc" | "desc"
   }>(initialData?.collection?.sort || { key: "year", dir: "desc" })
-  const [dailyReportFocus, setDailyReportFocus] = useState<"today" | "status" | "ai">("today")
+  const [dailyReportFocus, setDailyReportFocus] = useState<"today" | "status">("today")
   const [selectedDeliveryHistoryDate, setSelectedDeliveryHistoryDate] = useState<string>("")
   const [historyStack, setHistoryStack] = useState<any[]>([])
   const pendingSaveRef = useRef<number | null>(null)
@@ -4492,18 +4492,6 @@ export function DashboardShell({
                         }`}
                       >
                         제출 현황
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDailyReportFocus("ai")
-                          setView("daily-report")
-                        }}
-                        className={`ml-4 flex h-10 w-[calc(100%-1rem)] items-center rounded-2xl px-4 text-left text-[14px] font-semibold ${
-                          view === "daily-report" && dailyReportFocus === "ai" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"
-                        }`}
-                      >
-                        AI 요약
                       </button>
                     </>
                   ) : null}

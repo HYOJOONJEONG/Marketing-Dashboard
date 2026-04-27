@@ -1,19 +1,17 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { BrainCircuit, CheckCircle2, Clock3, FileDown, FileText, Loader2, Sparkles, UsersRound } from "lucide-react"
+import { CheckCircle2, Clock3, FileDown, FileText, UsersRound } from "lucide-react"
 import {
   countDailyReportStatus,
   DailyDirectoryUser,
   DailyReportEntry,
   DailyReportState,
   getDailyReportsByDate,
-  getLatestDailySummary,
   groupEntriesByTeam,
   groupPlannedTasksByTeam,
   resolveDailyReportStatus,
   upsertDailyReportEntry,
-  upsertDailyReportSummary,
 } from "@/lib/daily-report"
 
 type PresenceUser = {
@@ -34,7 +32,7 @@ type Props = {
   directoryUsers: DailyDirectoryUser[]
   reportState: DailyReportState
   currentDate: string
-  focus?: "today" | "status" | "ai"
+  focus?: "today" | "status"
   lastUpdatedText?: string
   presenceUsers?: PresenceUser[]
   onSaveState: (nextState: DailyReportState) => Promise<void> | void
@@ -103,10 +101,8 @@ export function DailyReportPage({
 }: Props) {
   const [draft, setDraft] = useState({ reportBody: "", plannedTasks: "" })
   const [viewMode, setViewMode] = useState<DailyViewMode>("original")
-  const [summaryText, setSummaryText] = useState("")
-  const [summaryMessage, setSummaryMessage] = useState("")
+  const [statusMessage, setStatusMessage] = useState("")
   const [isSaving, setIsSaving] = useState(false)
-  const [isSummarizing, setIsSummarizing] = useState(false)
 
   const todayEntries = useMemo(
     () => getDailyReportsByDate(reportState, currentDate, directoryUsers),
@@ -119,8 +115,6 @@ export function DailyReportPage({
   const groupedEntries = useMemo(() => groupEntriesByTeam(todayEntries), [todayEntries])
   const plannedGroups = useMemo(() => groupPlannedTasksByTeam(todayEntries), [todayEntries])
   const statusCounts = useMemo(() => countDailyReportStatus(todayEntries), [todayEntries])
-  const allSubmitted = todayEntries.length > 0 && todayEntries.every((entry) => resolveDailyReportStatus(entry) === "complete")
-  const latestSummary = useMemo(() => getLatestDailySummary(reportState, currentDate), [reportState, currentDate])
   const currentEntryStatus = useMemo(
     () => resolveDailyReportStatus(currentEntry || { reportBody: "", plannedTasks: "", submittedAt: null }),
     [currentEntry],
@@ -131,7 +125,16 @@ export function DailyReportPage({
   )
   const statusRef = useRef<HTMLDivElement | null>(null)
   const documentRef = useRef<HTMLDivElement | null>(null)
-  const aiRef = useRef<HTMLDivElement | null>(null)
+  const otherGroupedEntries = useMemo(
+    () =>
+      groupedEntries
+        .map((group) => ({
+          ...group,
+          entries: group.entries.filter((entry) => entry.userId !== currentUser.id),
+        }))
+        .filter((group) => group.entries.length > 0),
+    [groupedEntries, currentUser.id],
+  )
 
   useEffect(() => {
     setDraft({
@@ -141,18 +144,13 @@ export function DailyReportPage({
   }, [currentEntry?.reportBody, currentEntry?.plannedTasks])
 
   useEffect(() => {
-    setSummaryText(latestSummary)
-  }, [latestSummary])
-
-  useEffect(() => {
-    const target =
-      focus === "status" ? statusRef.current : focus === "ai" ? aiRef.current : documentRef.current
+    const target = focus === "status" ? statusRef.current : documentRef.current
     target?.scrollIntoView({ block: "start", behavior: "smooth" })
   }, [focus])
 
   async function commitReport(mode: "draft" | "submit") {
     if (!currentEntry) return
-    setSummaryMessage("")
+    setStatusMessage("")
     setIsSaving(true)
     try {
       const now = new Date().toISOString()
@@ -165,45 +163,11 @@ export function DailyReportPage({
       }
       const nextState = upsertDailyReportEntry(reportState, nextEntry)
       await onSaveState(nextState)
-      setSummaryMessage(mode === "submit" ? "업무일지를 제출했습니다." : "업무일지를 저장했습니다.")
+      setStatusMessage(mode === "submit" ? "업무일지를 제출했습니다." : "업무일지를 저장했습니다.")
     } catch {
-      setSummaryMessage("저장 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.")
+      setStatusMessage("저장 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.")
     } finally {
       setIsSaving(false)
-    }
-  }
-
-  async function handleSummarize() {
-    if (!allSubmitted) return
-    setIsSummarizing(true)
-    setSummaryMessage("")
-    try {
-      const response = await fetch("/api/ai/summarize", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          date: currentDate,
-          reports: todayEntries,
-        }),
-      })
-      const json = await response.json().catch(() => null)
-      if (!response.ok || !json?.ok) {
-        throw new Error(json?.error || "AI 요약에 실패했습니다.")
-      }
-      const content = String(json.summary || "").trim()
-      setSummaryText(content)
-      const nextState = upsertDailyReportSummary(reportState, {
-        date: currentDate,
-        content,
-        createdAt: new Date().toISOString(),
-        createdBy: currentUser.id,
-      })
-      await onSaveState(nextState)
-      setSummaryMessage("AI 요약을 업데이트했습니다.")
-    } catch (error) {
-      setSummaryMessage(error instanceof Error ? error.message : "AI 요약에 실패했습니다.")
-    } finally {
-      setIsSummarizing(false)
     }
   }
 
@@ -237,19 +201,6 @@ export function DailyReportPage({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={handleSummarize}
-              disabled={!allSubmitted || isSummarizing}
-              className={`inline-flex h-11 items-center gap-2 rounded-2xl px-4 text-[14px] font-bold transition ${
-                allSubmitted
-                  ? "bg-slate-950 text-white hover:bg-slate-800"
-                  : "border border-slate-200 bg-slate-100 text-slate-400"
-              }`}
-            >
-              {isSummarizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
-              AI
-            </button>
             <button
               type="button"
               onClick={() => window.alert("PDF 다운로드는 다음 단계에서 연결됩니다.")}
@@ -302,34 +253,6 @@ export function DailyReportPage({
         <div className="rounded-[30px] border border-slate-200 bg-white px-8 py-8 shadow-sm lg:px-8 lg:py-8">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[14px] font-semibold text-slate-500">AI 요약 상태</div>
-              <div className="mt-2 text-[28px] font-black tracking-[-0.05em] text-slate-950">
-                {allSubmitted ? "준비 완료" : "대기 중"}
-              </div>
-            </div>
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-50 text-violet-700">
-              <Sparkles className="h-5 w-5" />
-            </span>
-          </div>
-          <div className="mt-7 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-5 py-5">
-              <div className="text-[12px] font-semibold text-slate-500">전체 제출 상태</div>
-              <div className="mt-2 text-[20px] font-black tracking-[-0.04em] text-slate-950">
-                {allSubmitted ? "전원 제출" : `${statusCounts.empty + statusCounts.draft}명 남음`}
-              </div>
-            </div>
-            <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-5 py-5">
-              <div className="text-[12px] font-semibold text-slate-500">현재 상태</div>
-              <div className="mt-2 text-[20px] font-black tracking-[-0.04em] text-slate-950">
-                {summaryText ? "요약 생성됨" : "요약 전"}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-[30px] border border-slate-200 bg-white px-8 py-8 shadow-sm lg:px-8 lg:py-8">
-          <div className="flex items-center justify-between gap-3">
-            <div>
               <div className="text-[14px] font-semibold text-slate-500">내 업무</div>
               <div className="mt-2 text-[28px] font-black tracking-[-0.05em] text-slate-950">{myTaskCount}</div>
             </div>
@@ -349,7 +272,7 @@ export function DailyReportPage({
           </div>
         </div>
 
-        <div className="rounded-[30px] border border-slate-200 bg-white px-8 py-8 shadow-sm lg:px-8 lg:py-8">
+        <div className="rounded-[30px] border border-slate-200 bg-white px-8 py-8 shadow-sm lg:col-span-2 lg:px-8 lg:py-8">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-[14px] font-semibold text-slate-500">내 작성 상태</div>
@@ -368,7 +291,7 @@ export function DailyReportPage({
         </div>
       </section>
 
-      <section className="grid gap-6 xl:gap-8 xl:grid-cols-[320px_minmax(0,1fr)_400px] 2xl:grid-cols-[340px_minmax(0,1fr)_420px]">
+      <section className="grid gap-6 xl:gap-8 xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)]">
         <aside ref={statusRef} className="rounded-[30px] border border-slate-200 bg-white p-8 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -437,20 +360,74 @@ export function DailyReportPage({
               </div>
             </div>
 
-            {summaryMessage ? (
+            {statusMessage ? (
               <div className="mt-8 rounded-[22px] border border-slate-200 bg-slate-50 px-5 py-4 text-[13px] text-slate-700">
-                {summaryMessage}
+                {statusMessage}
               </div>
             ) : null}
 
             <div className="mt-10 space-y-10">
               {viewMode === "original" ? (
-                groupedEntries.map((group) => (
+                <>
+                  {currentEntry ? (
+                    <div className="rounded-[26px] border border-blue-100 bg-blue-50/40 p-7 lg:p-8">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-[17px] font-black tracking-[-0.03em] text-slate-950">{currentUser.name}</div>
+                          <div className="mt-2 text-[12px] text-slate-500">{currentUser.teamName} · 오늘 가장 먼저 작성할 수 있도록 맨 위에 고정됩니다.</div>
+                        </div>
+                        <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getStatusTone(currentEntryStatus)}`}>
+                          {getStatusLabel(currentEntryStatus)}
+                        </span>
+                      </div>
+                      <div className="mt-7 grid gap-6">
+                        <label className="grid gap-3">
+                          <span className="text-[12px] font-semibold text-slate-500">업무일지 본문</span>
+                          <textarea
+                            value={draft.reportBody}
+                            onChange={(event) => setDraft((prev) => ({ ...prev, reportBody: event.target.value }))}
+                            rows={7}
+                            className="w-full rounded-3xl border border-slate-200 bg-white px-5 py-5 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                            placeholder="금일 진행한 업무를 입력해주세요."
+                          />
+                        </label>
+                        <label className="grid gap-3">
+                          <span className="text-[12px] font-semibold text-slate-500">예정사항</span>
+                          <textarea
+                            value={draft.plannedTasks}
+                            onChange={(event) => setDraft((prev) => ({ ...prev, plannedTasks: event.target.value }))}
+                            rows={6}
+                            className="w-full rounded-3xl border border-slate-200 bg-white px-5 py-5 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                            placeholder="내일 예정 업무 또는 follow-up을 입력해주세요."
+                          />
+                        </label>
+                        <div className="flex flex-wrap items-center justify-end gap-3 pt-3">
+                          <button
+                            type="button"
+                            onClick={() => void commitReport("draft")}
+                            disabled={isSaving}
+                            className="inline-flex h-10 items-center rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                          >
+                            임시저장
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void commitReport("submit")}
+                            disabled={isSaving}
+                            className="inline-flex h-10 items-center rounded-2xl bg-blue-600 px-4 text-[13px] font-bold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                          >
+                            {isSaving ? "저장 중..." : "제출 완료"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {otherGroupedEntries.map((group) => (
                   <div key={group.teamName} className="rounded-[26px] border border-slate-200 bg-slate-50/70 p-7 lg:p-8">
                     <div className="text-[17px] font-black tracking-[-0.03em] text-slate-950">{group.teamName}</div>
                     <div className="mt-8 space-y-6">
                       {group.entries.map((entry) => {
-                        const isMe = entry.userId === currentUser.id
                         const status = resolveDailyReportStatus(entry)
                         return (
                           <div key={entry.userId} className="rounded-[24px] border border-slate-200 bg-white p-7 shadow-sm">
@@ -461,74 +438,32 @@ export function DailyReportPage({
                                   {getStatusLabel(status)}
                                 </span>
                               </div>
-                              {isMe && entry.submittedAt ? (
+                              {entry.submittedAt ? (
                                 <div className="text-[11px] text-slate-400">제출 {new Date(entry.submittedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</div>
                               ) : null}
                             </div>
 
-                            {isMe ? (
-                              <div className="mt-7 grid gap-6">
-                                <label className="grid gap-3">
-                                  <span className="text-[12px] font-semibold text-slate-500">업무일지 본문</span>
-                                  <textarea
-                                    value={draft.reportBody}
-                                    onChange={(event) => setDraft((prev) => ({ ...prev, reportBody: event.target.value }))}
-                                    rows={6}
-                                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-5 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                                    placeholder="금일 진행한 업무를 입력해주세요."
-                                  />
-                                </label>
-                                <label className="grid gap-3">
-                                  <span className="text-[12px] font-semibold text-slate-500">예정사항</span>
-                                  <textarea
-                                    value={draft.plannedTasks}
-                                    onChange={(event) => setDraft((prev) => ({ ...prev, plannedTasks: event.target.value }))}
-                                    rows={5}
-                                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-5 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                                    placeholder="내일 예정 업무 또는 follow-up을 입력해주세요."
-                                  />
-                                </label>
-                                <div className="flex flex-wrap items-center justify-end gap-3 pt-3">
-                                  <button
-                                    type="button"
-                                    onClick={() => void commitReport("draft")}
-                                    disabled={isSaving}
-                                    className="inline-flex h-10 items-center rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-                                  >
-                                    임시저장
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => void commitReport("submit")}
-                                    disabled={isSaving}
-                                    className="inline-flex h-10 items-center rounded-2xl bg-blue-600 px-4 text-[13px] font-bold text-white transition hover:bg-blue-700 disabled:opacity-60"
-                                  >
-                                    {isSaving ? "저장 중..." : "제출 완료"}
-                                  </button>
+                            <div className="mt-7 grid gap-5">
+                              <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-5">
+                                <div className="text-[11px] font-semibold text-slate-500">업무일지 본문</div>
+                                <div className="mt-3 whitespace-pre-wrap text-[14px] leading-7 text-slate-800">
+                                  {entry.reportBody || "아직 작성된 내용이 없습니다."}
                                 </div>
                               </div>
-                            ) : (
-                              <div className="mt-7 grid gap-5">
-                                <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-5">
-                                  <div className="text-[11px] font-semibold text-slate-500">업무일지 본문</div>
-                                  <div className="mt-3 whitespace-pre-wrap text-[14px] leading-7 text-slate-800">
-                                    {entry.reportBody || "아직 작성된 내용이 없습니다."}
-                                  </div>
-                                </div>
-                                <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-5">
-                                  <div className="text-[11px] font-semibold text-slate-500">예정사항</div>
-                                  <div className="mt-3 whitespace-pre-wrap text-[14px] leading-7 text-slate-800">
-                                    {entry.plannedTasks || "아직 예정사항이 없습니다."}
-                                  </div>
+                              <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-5">
+                                <div className="text-[11px] font-semibold text-slate-500">예정사항</div>
+                                <div className="mt-3 whitespace-pre-wrap text-[14px] leading-7 text-slate-800">
+                                  {entry.plannedTasks || "아직 예정사항이 없습니다."}
                                 </div>
                               </div>
-                            )}
+                            </div>
                           </div>
                         )
                       })}
                     </div>
                   </div>
-                ))
+                  ))}
+                </>
               ) : null}
 
               {viewMode === "team" ? (
@@ -586,44 +521,6 @@ export function DailyReportPage({
           </section>
         </div>
 
-        <aside ref={aiRef} className="rounded-[30px] border border-blue-100 bg-[linear-gradient(180deg,#fbfdff_0%,#f5f9ff_100%)] p-8 shadow-[0_18px_50px_rgba(15,23,42,0.08)] lg:p-9">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[18px] font-black tracking-[-0.04em] text-slate-950">AI 요약</div>
-              <div className="mt-2 text-[12px] text-slate-500">전원 제출이 완료되면 보고용 요약을 바로 만들 수 있습니다.</div>
-            </div>
-            <Sparkles className="h-5 w-5 text-blue-500" />
-          </div>
-
-          <div className="mt-8 rounded-[24px] border border-blue-100 bg-white/90 px-6 py-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[13px] font-semibold text-slate-500">제출 상태</div>
-                <div className="mt-2 text-[18px] font-black tracking-[-0.03em] text-slate-950">
-                  {allSubmitted ? "AI 요약 가능" : `${statusCounts.empty + statusCounts.draft}명 추가 제출 필요`}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleSummarize}
-                disabled={!allSubmitted || isSummarizing}
-                className={`inline-flex h-10 items-center gap-2 rounded-2xl px-4 text-[13px] font-bold transition ${
-                  allSubmitted ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-slate-200 text-slate-400"
-                }`}
-              >
-                {isSummarizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
-                요약 생성
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-8 rounded-[24px] border border-blue-100 bg-white p-6">
-            <div className="text-[13px] font-semibold text-slate-500">보고용 요약</div>
-            <div className="mt-5 min-h-[420px] whitespace-pre-wrap rounded-[24px] border border-slate-200 bg-slate-50 px-6 py-6 text-[14px] leading-8 text-slate-800">
-              {summaryText || "아직 생성된 AI 요약이 없습니다. 팀원 전원 제출 후 AI 버튼을 눌러주세요."}
-            </div>
-          </div>
-        </aside>
       </section>
     </div>
   )
