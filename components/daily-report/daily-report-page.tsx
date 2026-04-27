@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Check, Copy, UsersRound } from "lucide-react"
+import { Check, Copy, FileText, UsersRound } from "lucide-react"
 import {
   countDailyReportStatus,
   DailyDirectoryUser,
@@ -586,13 +586,14 @@ export function DailyReportPage({
           </div>
 
           <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
-            <button
-              type="button"
-              onClick={handleDownloadHeadquartersWord}
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-[14px] font-bold text-white transition hover:bg-slate-800 sm:w-auto"
-            >
-              본부 전체 Word
-            </button>
+              <button
+                type="button"
+                onClick={handleDownloadHeadquartersWord}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-white px-4 text-[14px] font-bold text-sky-700 transition hover:border-sky-300 hover:bg-sky-50 sm:w-auto"
+              >
+                <FileText className="h-4 w-4" />
+                본부 전체 Word
+              </button>
           </div>
         </div>
       </section>
