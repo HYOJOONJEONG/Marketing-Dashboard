@@ -144,7 +144,6 @@ function buildTeamClipboardDocument(
   }
 
   if (employeeUpdate?.trim()) {
-    lines.push("")
     lines.push("<직원동정>")
     lines.push(employeeUpdate.trim())
   }
@@ -196,7 +195,7 @@ function buildDailyWordHtml(
       const sectionTitle = getDailyDocumentSectionTitle(group.teamName)
       return `
         <section class="team-section">
-          ${sectionTitle ? `<h2>${escapeHtml(sectionTitle)}</h2>` : ""}
+          ${sectionTitle ? `<h2><strong><u>${escapeHtml(sectionTitle)}</u></strong></h2>` : ""}
           ${entriesHtml}
         </section>
       `
@@ -279,40 +278,43 @@ function buildDailyWordHtml(
         font-weight: 700;
         text-decoration: underline;
       }
+      .planned-line {
+        margin-bottom: 4px;
+      }
+      .employee-block {
+        margin-top: 10px;
+      }
       .employee-title {
-        margin: 0 0 8px;
+        margin: 0 0 6px;
         font-size: 12pt;
         font-weight: 700;
         text-decoration: underline;
       }
-      .planned-line {
-        margin-bottom: 4px;
-      }
     </style>
   </head>
-  <body>
+  <body style="font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; font-size: 10pt;">
     <div class="page">
       <div class="header">
         <h1>${escapeHtml(departmentTitle)} 일일 업무보고</h1>
         <div class="date">${escapeHtml(formatReportDate(date))}</div>
       </div>
       <section class="major-block">
-        <div class="major-title">&lt;일일 주요 업무&gt;</div>
+        <div class="major-title"><strong><u>&lt;일일 주요 업무&gt;</u></strong></div>
         <div>-</div>
       </section>
       ${sections}
       <section class="planned-block">
-        <div class="planned-title">&lt;당일업무&gt;</div>
+        <div class="planned-title"><strong><u>&lt;당일업무&gt;</u></strong></div>
         ${plannedHtml}
-      </section>
-      ${
-        employeeUpdate?.trim()
-          ? `<section class="planned-block">
-        <div class="employee-title">&lt;직원동정&gt;</div>
+        ${
+          employeeUpdate?.trim()
+            ? `<div class="employee-block">
+        <div class="employee-title"><strong><u>&lt;직원동정&gt;</u></strong></div>
         <div>${formatMultilineHtml(employeeUpdate.trim())}</div>
-      </section>`
-          : ""
-      }
+      </div>`
+            : ""
+        }
+      </section>
     </div>
   </body>
 </html>`
@@ -749,16 +751,6 @@ export function DailyReportPage({
                       />
                     </label> : null}
                     <div className="sticky bottom-3 z-10 -mx-1 mt-2 flex flex-col gap-2 rounded-[22px] border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur sm:static sm:mx-0 sm:flex-row sm:justify-end sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
-                      {selectedEntryStatus === "complete" ? (
-                        <button
-                          type="button"
-                          onClick={() => void handleCancelSubmission()}
-                          disabled={isSaving}
-                          className="inline-flex h-11 items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-4 text-[13px] font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60 sm:h-10"
-                        >
-                          제출취소
-                        </button>
-                      ) : null}
                       <button
                         type="button"
                         onClick={() => void commitReport("draft")}
@@ -775,6 +767,16 @@ export function DailyReportPage({
                       >
                         {isSaving ? "저장 중..." : "제출 완료"}
                       </button>
+                      {selectedEntryStatus === "complete" ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleCancelSubmission()}
+                          disabled={isSaving}
+                          className="inline-flex h-11 items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-4 text-[13px] font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60 sm:h-10"
+                        >
+                          제출취소
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -877,13 +879,13 @@ export function DailyReportPage({
                               ? previewTeamTwoPlannedSummary.map((group) => `${group.label} : ${group.items.join(", ")}`).join("\n")
                               : "인포Biz2팀 : 없음"}
                           </div>
-                        </div>
-                        {previewEmployeeUpdateEntry?.reportBody?.trim() ? (
-                          <div className="border-t border-slate-200 pt-4">
+                          {previewEmployeeUpdateEntry?.reportBody?.trim() ? (
+                            <div className="mt-4 border-t border-slate-200 pt-4">
                             <div className="font-bold underline decoration-slate-400 underline-offset-4 text-slate-900">&lt;직원동정&gt;</div>
                             <div className="mt-2 whitespace-pre-wrap text-slate-700">{previewEmployeeUpdateEntry.reportBody.trim()}</div>
-                          </div>
-                        ) : null}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   </div>
