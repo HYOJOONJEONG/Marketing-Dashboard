@@ -3043,7 +3043,7 @@ export function DashboardShell({
         return `
           <div class="${compact ? "detail-year-mini" : "detail-section detail-year-block"}">
             <h2 class="${compact ? "mini-section-title" : "section-title"}">${year}년 미회수 계약서 목록</h2>
-            <table class="detail-table ${compact ? "compact-table" : ""}" aria-label="${year}년 미회수 계약서 목록">
+            <table class="detail-table ${compact ? "compact-table" : "semi-compact-table"}" aria-label="${year}년 미회수 계약서 목록">
               <thead>
                 <tr>
                   <th style="width: 7%">NO</th>
@@ -3065,7 +3065,7 @@ export function DashboardShell({
     const secondaryDetailedHtml = [2025, 2024, 2022].map((year) => buildYearDetailTable(year, true)).join("")
 
     const longTermUncollectedRows = longTermRows
-      .filter((row: any) => Number(row?.year) > 0 && Number(row?.year) <= 2014 && String(row?.status || "미정") === "미회수")
+      .filter((row: any) => String(row?.status || "미정") === "미회수")
       .sort((a: any, b: any) => {
         const yearDiff = Number(b?.year || 0) - Number(a?.year || 0)
         if (yearDiff !== 0) return yearDiff
@@ -3121,7 +3121,7 @@ export function DashboardShell({
         <style>
           @page {
             size: A4 portrait;
-            margin: 14mm 12mm 14mm;
+            margin: 10mm 9mm 10mm;
           }
           html, body {
             margin: 0;
@@ -3144,14 +3144,14 @@ export function DashboardShell({
             justify-content: space-between;
             align-items: flex-start;
             gap: 16px;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
           }
           .title-block {
             min-width: 0;
           }
           .title {
             margin: 0;
-            font-size: 25px;
+            font-size: 22px;
             line-height: 1.15;
             font-weight: 800;
             color: #0b1f44;
@@ -3161,41 +3161,41 @@ export function DashboardShell({
             white-space: nowrap;
           }
           .meta .dept {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 700;
             color: #0b1f44;
           }
           .meta .date {
-            margin-top: 4px;
-            font-size: 12px;
+            margin-top: 2px;
+            font-size: 11px;
             color: #475569;
             font-weight: 600;
           }
           .summary-section,
           .detail-section {
-            margin-top: 14px;
+            margin-top: 8px;
           }
           .section-title {
-            margin: 0 0 8px;
-            font-size: 16px;
+            margin: 0 0 4px;
+            font-size: 14px;
             font-weight: 800;
             color: #0b1f44;
           }
           .detail-year-block {
-            margin-top: 12px;
+            margin-top: 8px;
           }
           .detail-mini-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 10px;
-            margin-top: 12px;
+            gap: 8px;
+            margin-top: 8px;
           }
           .detail-year-mini {
             min-width: 0;
           }
           .mini-section-title {
-            margin: 0 0 6px;
-            font-size: 12px;
+            margin: 0 0 4px;
+            font-size: 11px;
             font-weight: 800;
             color: #0b1f44;
           }
@@ -3204,14 +3204,14 @@ export function DashboardShell({
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
-            font-size: 12px;
+            font-size: 10px;
           }
           .summary-table th,
           .summary-table td,
           .detail-table th,
           .detail-table td {
             border: 1px solid #cfd8e3;
-            padding: 8px 7px;
+            padding: 4px 4px;
             vertical-align: middle;
             text-align: center;
             word-break: keep-all;
@@ -3228,22 +3228,29 @@ export function DashboardShell({
           .detail-table td:nth-child(5) {
             text-align: left;
           }
+          .semi-compact-table {
+            font-size: 9.5px;
+          }
+          .semi-compact-table th,
+          .semi-compact-table td {
+            padding: 4px 3px;
+          }
           .compact-table {
-            font-size: 10px;
+            font-size: 9px;
           }
           .compact-table th,
           .compact-table td {
-            padding: 5px 4px;
+            padding: 3px 2px;
           }
           .empty-cell {
-            height: 72px;
+            height: 36px;
             color: #64748b;
             text-align: center !important;
           }
           .footer-note {
-            margin-top: 10px;
+            margin-top: 6px;
             text-align: right;
-            font-size: 10px;
+            font-size: 9px;
             color: #64748b;
           }
           .page-break {
@@ -3290,8 +3297,8 @@ export function DashboardShell({
           <div class="footer-note">인포Biz본부 주간 계약서 회수 보고서</div>
 
           <div class="detail-section page-break">
-            <h2 class="section-title">14년도 이전 계약서 미회수 현황 (아래표)</h2>
-            <table class="detail-table" aria-label="14년도 이전 계약서 미회수 현황">
+            <h2 class="section-title">장기미회수 계약서 현황 (${formatNumber(longTermUncollectedRows.length)}건)</h2>
+            <table class="detail-table compact-table" aria-label="장기미회수 계약서 현황">
               <thead>
                 <tr>
                   <th style="width: 6%">구분</th>
