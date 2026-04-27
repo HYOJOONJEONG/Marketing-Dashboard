@@ -38,6 +38,8 @@ type Props = {
   onSaveState: (nextState: DailyReportState) => Promise<void> | void
 }
 
+type MobileDailySection = "write" | "status" | "docs"
+
 function getStatusTone(status: ReturnType<typeof resolveDailyReportStatus>) {
   if (status === "complete") return "border-emerald-200 bg-emerald-50 text-emerald-700"
   if (status === "draft") return "border-amber-200 bg-amber-50 text-amber-700"
@@ -154,6 +156,7 @@ export function DailyReportPage({
   const [statusMessage, setStatusMessage] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [copiedTarget, setCopiedTarget] = useState<"team1" | "team2" | null>(null)
+  const [mobileSection, setMobileSection] = useState<MobileDailySection>("write")
 
   const todayEntries = useMemo(
     () => getDailyReportsByDate(reportState, currentDate, directoryUsers),
@@ -218,6 +221,7 @@ export function DailyReportPage({
 
   useEffect(() => {
     const target = focus === "status" ? statusRef.current : documentRef.current
+    setMobileSection(focus === "status" ? "status" : "write")
     target?.scrollIntoView({ block: "start", behavior: "smooth" })
   }, [focus])
 
@@ -285,11 +289,11 @@ export function DailyReportPage({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
             <button
               type="button"
               onClick={() => void handleCopyDocument("team1")}
-              className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-bold text-slate-700 transition hover:bg-slate-50"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-bold text-slate-700 transition hover:bg-slate-50 sm:w-auto"
             >
               {copiedTarget === "team1" ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
               {copiedTarget === "team1" ? "1팀 복사됨" : "1팀 문서 복사"}
@@ -297,7 +301,7 @@ export function DailyReportPage({
             <button
               type="button"
               onClick={() => void handleCopyDocument("team2")}
-              className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-bold text-slate-700 transition hover:bg-slate-50"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-bold text-slate-700 transition hover:bg-slate-50 sm:w-auto"
             >
               {copiedTarget === "team2" ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
               {copiedTarget === "team2" ? "2팀 복사됨" : "2팀 문서 복사"}
@@ -306,8 +310,43 @@ export function DailyReportPage({
         </div>
       </section>
 
+      <section className="xl:hidden">
+        <div className="grid grid-cols-3 gap-2 rounded-[24px] border border-slate-200 bg-white p-2 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setMobileSection("write")}
+            className={`rounded-2xl px-3 py-3 text-[13px] font-bold transition ${
+              mobileSection === "write" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600"
+            }`}
+          >
+            작성
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileSection("status")}
+            className={`rounded-2xl px-3 py-3 text-[13px] font-bold transition ${
+              mobileSection === "status" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600"
+            }`}
+          >
+            제출현황
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileSection("docs")}
+            className={`rounded-2xl px-3 py-3 text-[13px] font-bold transition ${
+              mobileSection === "docs" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600"
+            }`}
+          >
+            팀문서
+          </button>
+        </div>
+      </section>
+
       <section className="grid gap-6 xl:gap-8 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
-        <aside ref={statusRef} className="rounded-[26px] border border-slate-200 bg-white p-6 shadow-sm">
+        <aside
+          ref={statusRef}
+          className={`${mobileSection === "status" ? "block" : "hidden"} order-2 rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6 xl:order-1 xl:block`}
+        >
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-[17px] font-black tracking-[-0.04em] text-slate-950">제출 현황</div>
@@ -348,8 +387,8 @@ export function DailyReportPage({
           </div>
         </aside>
 
-        <div ref={documentRef} className="space-y-8">
-          <section className="rounded-[26px] border border-slate-200 bg-white p-6 shadow-sm lg:p-7">
+        <div ref={documentRef} className="order-1 space-y-8 xl:order-2">
+          <section className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:p-7">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="text-[18px] font-black tracking-[-0.04em] text-slate-950">업무일지 문서</div>
@@ -370,7 +409,7 @@ export function DailyReportPage({
 
             <div className="mt-8 space-y-6">
               {currentEntry ? (
-                <div className="rounded-[24px] border border-blue-100 bg-blue-50/30 p-6">
+                <div className={`${mobileSection === "write" ? "block" : "hidden"} rounded-[24px] border border-blue-100 bg-blue-50/30 p-5 sm:p-6 xl:block`}>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <div className="text-[16px] font-black tracking-[-0.03em] text-slate-950">{currentUser.name}</div>
@@ -391,7 +430,7 @@ export function DailyReportPage({
                       <textarea
                         value={draft.reportBody}
                         onChange={(event) => setDraft((prev) => ({ ...prev, reportBody: event.target.value }))}
-                        rows={6}
+                        rows={8}
                         className="w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
                         placeholder="금일 진행한 업무를 입력해주세요."
                       />
@@ -401,17 +440,17 @@ export function DailyReportPage({
                       <textarea
                         value={draft.plannedTasks}
                         onChange={(event) => setDraft((prev) => ({ ...prev, plannedTasks: event.target.value }))}
-                        rows={4}
+                        rows={5}
                         className="w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
                         placeholder="내일 예정 업무 또는 follow-up을 입력해주세요."
                       />
                     </label>
-                    <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+                    <div className="sticky bottom-3 z-10 -mx-1 mt-2 flex flex-col gap-2 rounded-[22px] border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur sm:static sm:mx-0 sm:flex-row sm:justify-end sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
                       <button
                         type="button"
                         onClick={() => void commitReport("draft")}
                         disabled={isSaving}
-                        className="inline-flex h-10 items-center rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                        className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 sm:h-10"
                       >
                         임시저장
                       </button>
@@ -419,7 +458,7 @@ export function DailyReportPage({
                         type="button"
                         onClick={() => void commitReport("submit")}
                         disabled={isSaving}
-                        className="inline-flex h-10 items-center rounded-2xl bg-blue-600 px-4 text-[13px] font-bold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                        className="inline-flex h-11 items-center justify-center rounded-2xl bg-blue-600 px-4 text-[13px] font-bold text-white transition hover:bg-blue-700 disabled:opacity-60 sm:h-10"
                       >
                         {isSaving ? "저장 중..." : "제출 완료"}
                       </button>
@@ -428,7 +467,7 @@ export function DailyReportPage({
                 </div>
               ) : null}
 
-              <div className="rounded-[24px] border border-slate-200 bg-slate-50/50 p-6">
+              <div className={`${mobileSection === "docs" ? "block" : "hidden"} rounded-[24px] border border-slate-200 bg-slate-50/50 p-5 sm:p-6 xl:block`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-[16px] font-black tracking-[-0.03em] text-slate-950">팀 문서 미리보기</div>
@@ -436,7 +475,7 @@ export function DailyReportPage({
                   </div>
                   <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] text-slate-500">1팀 = 본부장 + 인포Biz1팀</span>
                 </div>
-                <div className="mt-5 grid gap-5 xl:grid-cols-2">
+                <div className="mt-5 grid gap-4 lg:gap-5 xl:grid-cols-2">
                   <div className="rounded-[22px] border border-slate-200 bg-white p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
@@ -452,7 +491,7 @@ export function DailyReportPage({
                         {copiedTarget === "team1" ? "복사됨" : "1팀 복사"}
                       </button>
                     </div>
-                    <pre className="mt-4 max-h-[520px] overflow-auto rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-4 text-[12px] leading-6 text-slate-800">{teamOneMarkdownDocument}</pre>
+                    <pre className="mt-4 max-h-[420px] overflow-auto rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-4 text-[11.5px] leading-6 text-slate-800 sm:max-h-[520px] sm:text-[12px]">{teamOneMarkdownDocument}</pre>
                   </div>
                   <div className="rounded-[22px] border border-slate-200 bg-white p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -469,7 +508,7 @@ export function DailyReportPage({
                         {copiedTarget === "team2" ? "복사됨" : "2팀 복사"}
                       </button>
                     </div>
-                    <pre className="mt-4 max-h-[520px] overflow-auto rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-4 text-[12px] leading-6 text-slate-800">{teamTwoMarkdownDocument}</pre>
+                    <pre className="mt-4 max-h-[420px] overflow-auto rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-4 text-[11.5px] leading-6 text-slate-800 sm:max-h-[520px] sm:text-[12px]">{teamTwoMarkdownDocument}</pre>
                   </div>
                 </div>
               </div>
