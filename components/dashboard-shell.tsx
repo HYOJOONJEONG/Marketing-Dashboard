@@ -2960,6 +2960,7 @@ export function DashboardShell({
 
   function handleCollectionIntegratedPrint() {
     const integratedRows = Array.isArray(collection?.integrated) ? collection.integrated : []
+    const longTermRows = Array.isArray(collection?.longTerm) ? collection.longTerm : []
     const currentYearNumber = Number(currentYear) || new Date().getFullYear()
     const reportDate = String(displayBaseDate || formatDateDashed(getUpcomingThursday()))
     const previousDate = shiftDashedDate(reportDate, -1)
@@ -3035,6 +3036,54 @@ export function DashboardShell({
         : `
           <tr>
             <td colspan="7" class="empty-cell">현재 기준 미회수 계약서가 없습니다.</td>
+          </tr>
+        `
+
+    const longTermUncollectedRows = longTermRows
+      .filter((row: any) => Number(row?.year) > 0 && Number(row?.year) <= 2014)
+      .sort((a: any, b: any) => {
+        const yearDiff = Number(b?.year || 0) - Number(a?.year || 0)
+        if (yearDiff !== 0) return yearDiff
+        const monthDiff = parseContractMonthKey(a?.claimMonth) - parseContractMonthKey(b?.claimMonth)
+        if (monthDiff !== 0) return monthDiff
+        return String(a?.companyName || "").localeCompare(String(b?.companyName || ""), "ko")
+      })
+      .map((row: any, index: number) => ({
+        no: index + 1,
+        company: String(row?.companyName || ""),
+        department: String(row?.departmentName || ""),
+        id: String(row?.idCode || ""),
+        industry: String(row?.industry || ""),
+        billingMonth: String(row?.claimMonth || ""),
+        collected: String(row?.status || "") === "회수" ? "회수" : "",
+        uncollected: String(row?.status || "") === "회수" ? "" : "미회수",
+        note: String(row?.note || row?.specialNote || ""),
+        managerNote: String(row?.managerNote || row?.reviewNote || ""),
+      }))
+
+    const longTermRowsHtml =
+      longTermUncollectedRows.length > 0
+        ? longTermUncollectedRows
+            .map(
+              (row) => `
+                <tr>
+                  <td>${formatNumber(row.no)}</td>
+                  <td>${escapeHtml(row.company)}</td>
+                  <td>${escapeHtml(row.department)}</td>
+                  <td>${escapeHtml(row.id)}</td>
+                  <td>${escapeHtml(row.industry)}</td>
+                  <td>${escapeHtml(row.billingMonth)}</td>
+                  <td>${escapeHtml(row.collected)}</td>
+                  <td>${escapeHtml(row.uncollected)}</td>
+                  <td>${escapeHtml(row.note)}</td>
+                  <td>${escapeHtml(row.managerNote)}</td>
+                </tr>
+              `,
+            )
+            .join("")
+        : `
+          <tr>
+            <td colspan="10" class="empty-cell">14년도 이전 장기 미회수 계약서가 없습니다.</td>
           </tr>
         `
 
@@ -3153,6 +3202,12 @@ export function DashboardShell({
             font-size: 10px;
             color: #64748b;
           }
+          .page-break {
+            break-before: page;
+            page-break-before: always;
+            margin-top: 0;
+            padding-top: 0;
+          }
         </style>
       </head>
       <body>
@@ -3202,6 +3257,27 @@ export function DashboardShell({
           </div>
 
           <div class="footer-note">인포Biz본부 주간 계약서 회수 보고서</div>
+
+          <div class="detail-section page-break">
+            <h2 class="section-title">14년도 이전 계약서 미회수 현황 (아래표)</h2>
+            <table class="detail-table" aria-label="14년도 이전 계약서 미회수 현황">
+              <thead>
+                <tr>
+                  <th style="width: 6%">구분</th>
+                  <th style="width: 15%">회사명</th>
+                  <th style="width: 15%">부서명</th>
+                  <th style="width: 10%">ID</th>
+                  <th style="width: 10%">업종</th>
+                  <th style="width: 10%">청구일</th>
+                  <th style="width: 6%">회수</th>
+                  <th style="width: 8%">미회수</th>
+                  <th style="width: 10%">특이사항</th>
+                  <th style="width: 10%">담당자 확인 후 특이사항</th>
+                </tr>
+              </thead>
+              <tbody>${longTermRowsHtml}</tbody>
+            </table>
+          </div>
         </div>
         <script>
           window.addEventListener("load", function () {
