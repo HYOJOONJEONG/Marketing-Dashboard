@@ -811,6 +811,33 @@ function formatDateDashed(date: Date) {
   return `${year}-${month}-${day}`
 }
 
+function shiftDashedDate(value: unknown, diffDays: number) {
+  const text = String(value ?? "")
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return text
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  if (Number.isNaN(date.getTime())) return text
+  date.setDate(date.getDate() + diffDays)
+  return formatDateDashed(date)
+}
+
+function formatDateDotted(value: unknown) {
+  const text = String(value ?? "")
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return text
+  return `${match[1]}.${match[2]}.${match[3]}`
+}
+
+function formatDateDottedWithWeekday(value: unknown) {
+  const text = String(value ?? "")
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return text
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  if (Number.isNaN(date.getTime())) return text
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"]
+  return `${match[1]}.${match[2]}.${match[3]}(${weekdays[date.getDay()]})`
+}
+
 function calcHint(text: string) {
   return (
     <span
@@ -2906,6 +2933,263 @@ export function DashboardShell({
             </div>
             <div class="footer-note">인포Biz본부 계약서 전달 기록</div>
           </div>
+        </div>
+      </body>
+      </html>
+    `)
+    popup.document.close()
+    popup.focus()
+    popup.print()
+  }
+
+  function handleCollectionIntegratedPrint() {
+    const integratedRows = Array.isArray(collection?.integrated) ? collection.integrated : []
+    const currentYearNumber = Number(currentYear) || new Date().getFullYear()
+    const reportDate = String(displayBaseDate || formatDateDashed(getUpcomingThursday()))
+    const previousDate = shiftDashedDate(reportDate, -1)
+    const fileDate = reportDate.replace(/[^\d]/g, "")
+    const fileTitle = `계약서_회수현황_${fileDate || "report"}`
+    const summaryBuckets = [
+      { key: "26", label: "26년", match: (year: number) => year === 2026 },
+      { key: "25", label: "25년", match: (year: number) => year === 2025 },
+      { key: "24", label: "24년", match: (year: number) => year === 2024 },
+      { key: "22", label: "22년", match: (year: number) => year === 2022 },
+      { key: "legacy", label: "14년 이전", match: (year: number) => year > 0 && year <= 2014 },
+    ]
+
+    const summary = summaryBuckets.map((bucket) => {
+      const rows = integratedRows.filter((row: any) => bucket.match(Number(row?.year)))
+      const collected = rows.filter((row: any) => String(row?.status || "미정") === "회수").length
+      const uncollected = rows.filter((row: any) => String(row?.status || "미정") === "미회수").length
+      return {
+        year: bucket.label,
+        total: rows.length,
+        collected,
+        uncollected,
+      }
+    })
+
+    const uncollectedRows = integratedRows
+      .filter((row: any) => Number(row?.year) === currentYearNumber && String(row?.status || "미정") === "미회수")
+      .sort((a: any, b: any) => {
+        const monthDiff = parseContractMonthKey(a?.claimMonth) - parseContractMonthKey(b?.claimMonth)
+        if (monthDiff !== 0) return monthDiff
+        return String(a?.companyName || "").localeCompare(String(b?.companyName || ""), "ko")
+      })
+      .map((row: any, index: number) => ({
+        no: index + 1,
+        company: String(row?.companyName || ""),
+        department: String(row?.departmentName || ""),
+        id: String(row?.idCode || ""),
+        industry: String(row?.industry || ""),
+        billingMonth: String(row?.claimMonth || ""),
+        status: String(row?.status || "미정"),
+      }))
+
+    const summaryHtml = summary
+      .map(
+        (item) => `
+          <tr>
+            <td>${escapeHtml(item.year)}</td>
+            <td>${formatNumber(item.total)}건</td>
+            <td>${formatNumber(item.collected)}건</td>
+            <td>${formatNumber(item.uncollected)}건</td>
+          </tr>
+        `,
+      )
+      .join("")
+
+    const rowsHtml =
+      uncollectedRows.length > 0
+        ? uncollectedRows
+            .map(
+              (row) => `
+                <tr>
+                  <td>${formatNumber(row.no)}</td>
+                  <td>${escapeHtml(row.company)}</td>
+                  <td>${escapeHtml(row.department)}</td>
+                  <td>${escapeHtml(row.id)}</td>
+                  <td>${escapeHtml(row.industry)}</td>
+                  <td>${escapeHtml(row.billingMonth)}</td>
+                  <td>${escapeHtml(row.status)}</td>
+                </tr>
+              `,
+            )
+            .join("")
+        : `
+          <tr>
+            <td colspan="7" class="empty-cell">현재 기준 미회수 계약서가 없습니다.</td>
+          </tr>
+        `
+
+    const popup = window.open("", "_blank", "noopener,noreferrer,width=960,height=1280")
+    if (!popup) return
+
+    popup.document.title = fileTitle
+    popup.document.write(`
+      <!doctype html>
+      <html lang="ko">
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(fileTitle)}</title>
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 14mm 12mm 14mm;
+          }
+          html, body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            color: #0f172a;
+            font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          body {
+            padding: 0;
+          }
+          .sheet {
+            width: 100%;
+            box-sizing: border-box;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 12px;
+          }
+          .title-block {
+            min-width: 0;
+          }
+          .title {
+            margin: 0;
+            font-size: 25px;
+            line-height: 1.15;
+            font-weight: 800;
+            color: #0b1f44;
+          }
+          .subtitle {
+            margin-top: 6px;
+            font-size: 13px;
+            color: #475569;
+            font-weight: 600;
+          }
+          .meta {
+            text-align: right;
+            white-space: nowrap;
+          }
+          .meta .dept {
+            font-size: 13px;
+            font-weight: 700;
+            color: #0b1f44;
+          }
+          .meta .date {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #475569;
+            font-weight: 600;
+          }
+          .summary-section,
+          .detail-section {
+            margin-top: 14px;
+          }
+          .section-title {
+            margin: 0 0 8px;
+            font-size: 16px;
+            font-weight: 800;
+            color: #0b1f44;
+          }
+          .summary-table,
+          .detail-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 12px;
+          }
+          .summary-table th,
+          .summary-table td,
+          .detail-table th,
+          .detail-table td {
+            border: 1px solid #cfd8e3;
+            padding: 8px 7px;
+            vertical-align: middle;
+            text-align: center;
+            word-break: keep-all;
+          }
+          .summary-table th,
+          .detail-table th {
+            background: #eef4ff;
+            color: #0b1f44;
+            font-weight: 800;
+          }
+          .summary-table td:first-child,
+          .detail-table td:nth-child(2),
+          .detail-table td:nth-child(3),
+          .detail-table td:nth-child(5) {
+            text-align: left;
+          }
+          .empty-cell {
+            height: 72px;
+            color: #64748b;
+            text-align: center !important;
+          }
+          .footer-note {
+            margin-top: 10px;
+            text-align: right;
+            font-size: 10px;
+            color: #64748b;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="sheet">
+          <div class="header">
+            <div class="title-block">
+              <h1 class="title">주간 계약서 회수현황</h1>
+              <div class="subtitle">${escapeHtml(formatDateDotted(previousDate))} 계약서 회수 현황</div>
+            </div>
+            <div class="meta">
+              <div class="dept">인포Biz본부</div>
+              <div class="date">${escapeHtml(formatDateDottedWithWeekday(reportDate))}</div>
+            </div>
+          </div>
+
+          <div class="summary-section">
+            <h2 class="section-title">연도별 회수 요약</h2>
+            <table class="summary-table" aria-label="연도별 회수 요약">
+              <thead>
+                <tr>
+                  <th style="width: 25%">연도</th>
+                  <th style="width: 25%">총건수</th>
+                  <th style="width: 25%">회수</th>
+                  <th style="width: 25%">미회수</th>
+                </tr>
+              </thead>
+              <tbody>${summaryHtml}</tbody>
+            </table>
+          </div>
+
+          <div class="detail-section">
+            <h2 class="section-title">${currentYearNumber}년 미회수 계약서 목록</h2>
+            <table class="detail-table" aria-label="미회수 계약서 목록">
+              <thead>
+                <tr>
+                  <th style="width: 7%">NO</th>
+                  <th style="width: 22%">회사명</th>
+                  <th style="width: 18%">부서명</th>
+                  <th style="width: 12%">ID</th>
+                  <th style="width: 14%">업종</th>
+                  <th style="width: 15%">청구일</th>
+                  <th style="width: 12%">상태</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+
+          <div class="footer-note">인포Biz본부 주간 계약서 회수 보고서</div>
         </div>
       </body>
       </html>
@@ -5616,20 +5900,34 @@ export function DashboardShell({
               ) : (
                 <>
               <div className={`${cardClass} p-4`}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => setCollectionYearFilter("all")} className={`rounded-2xl px-3 py-2 text-[13px] font-semibold ${collectionYearFilter === "all" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>전체</button>
-                  {availableYears.map((year: number) => (
-                    <button key={year} type="button" onClick={() => setCollectionYearFilter(year)} className={`rounded-2xl px-3 py-2 text-[13px] font-semibold ${collectionYearFilter === year ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>{year}년</button>
-                  ))}
-                  <div className="mx-1 h-6 w-px bg-slate-200" />
-                  {[
-                    ["all", "전체"],
-                    ["회수", "회수"],
-                    ["미회수", "미회수"],
-                    ["미정", "미정"],
-                  ].map(([value, label]) => (
-                    <button key={value} type="button" onClick={() => setCollectionStatusFilter(value)} className={`rounded-2xl px-3 py-2 text-[13px] font-semibold ${collectionStatusFilter === value ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>{label}</button>
-                  ))}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={() => setCollectionYearFilter("all")} className={`rounded-2xl px-3 py-2 text-[13px] font-semibold ${collectionYearFilter === "all" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>전체</button>
+                    {availableYears.map((year: number) => (
+                      <button key={year} type="button" onClick={() => setCollectionYearFilter(year)} className={`rounded-2xl px-3 py-2 text-[13px] font-semibold ${collectionYearFilter === year ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>{year}년</button>
+                    ))}
+                    <div className="mx-1 h-6 w-px bg-slate-200" />
+                    {[
+                      ["all", "전체"],
+                      ["회수", "회수"],
+                      ["미회수", "미회수"],
+                      ["미정", "미정"],
+                    ].map(([value, label]) => (
+                      <button key={value} type="button" onClick={() => setCollectionStatusFilter(value)} className={`rounded-2xl px-3 py-2 text-[13px] font-semibold ${collectionStatusFilter === value ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>{label}</button>
+                    ))}
+                  </div>
+                  {collectionTab === "integrated" && (
+                    <button
+                      type="button"
+                      onClick={handleCollectionIntegratedPrint}
+                      title="PDF 다운로드"
+                      aria-label="PDF 다운로드"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-rose-100 bg-white px-3 text-[12px] font-bold text-rose-600 shadow-sm hover:bg-rose-50"
+                    >
+                      <PdfIcon className="h-4 w-4" />
+                      <span>PDF 다운로드</span>
+                    </button>
+                  )}
                 </div>
               </div>
               <div className={`${cardClass} p-4`}>
