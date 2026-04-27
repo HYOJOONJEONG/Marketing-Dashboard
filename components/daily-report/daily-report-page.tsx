@@ -592,35 +592,35 @@ export function DailyReportPage({
   }
 
   return (
-    <div className="space-y-8 lg:space-y-10">
-      <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-6 shadow-sm lg:px-8 lg:py-7">
-        <div className="flex flex-wrap items-start justify-between gap-6">
+    <div className="space-y-5 lg:space-y-6">
+      <section className="rounded-[24px] border border-slate-200 bg-white px-5 py-4 shadow-sm lg:px-6 lg:py-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-blue-700">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-700">
                 Daily Report
               </span>
               <span className="text-[12px] font-semibold text-slate-500">{formatDisplayDate(currentDate)}</span>
             </div>
-            <h2 className="mt-3 text-[24px] font-black tracking-[-0.04em] text-slate-950">데일리 업무일지</h2>
-            <div className="mt-4 flex flex-wrap items-center gap-2.5 text-[13px] text-slate-600">
-              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+            <h2 className="mt-2 text-[20px] font-black tracking-[-0.04em] text-slate-950">데일리 업무일지</h2>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-slate-600">
+              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
                 <span className={`h-2.5 w-2.5 rounded-full ${getPresenceDot(currentPresence)}`} />
                 {currentUser.name}
               </span>
-              <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">{currentUser.role}</span>
-              <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-blue-700">{currentUser.teamName}</span>
+              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">{currentUser.role}</span>
+              <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700">{currentUser.teamName}</span>
             </div>
-            <div className="mt-3 text-[12px] font-medium text-slate-500">
+            <div className="mt-2 text-[11px] font-medium text-slate-500">
               매일 자정 초기화 됩니다 (남은시간 : {timeUntilReset})
             </div>
           </div>
 
-          <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <button
                 type="button"
                 onClick={handleDownloadHeadquartersWord}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-white px-4 text-[14px] font-bold text-sky-700 transition hover:border-sky-300 hover:bg-sky-50 sm:w-auto"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-white px-3.5 text-[13px] font-bold text-sky-700 transition hover:border-sky-300 hover:bg-sky-50 sm:w-auto"
               >
                 <FileText className="h-4 w-4" />
                 본부 전체 Word

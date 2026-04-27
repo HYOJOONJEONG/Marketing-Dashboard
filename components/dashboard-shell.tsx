@@ -4803,7 +4803,7 @@ export function DashboardShell({
         </aside>
 
         <main className="min-w-0 flex-1 px-3 py-3 sm:px-4 sm:py-4 lg:px-5 lg:py-5">
-            <div className={`${cardClass} dashboard-header mb-5 flex items-start justify-between px-5 py-4`}>
+            <div className={`${cardClass} dashboard-header ${view === "daily-report" ? "mb-3 px-5 py-3" : "mb-5 px-5 py-4"} flex items-start justify-between`}>
             <div className="flex items-start gap-3">
               <button
                 type="button"
@@ -4814,10 +4814,12 @@ export function DashboardShell({
                 <Menu className="h-5 w-5" />
               </button>
               <div>
-              <h1 className="mt-2 text-[20px] font-black tracking-[-0.04em] text-slate-950">{viewTitles[view]}</h1>
-              <div className="mt-1 text-[12px] font-semibold text-slate-500">
-                Last update: {formatLastUpdated(currentMenuUpdatedAt)}
-              </div>
+              <h1 className={`${view === "daily-report" ? "mt-1 text-[18px]" : "mt-2 text-[20px]"} font-black tracking-[-0.04em] text-slate-950`}>{viewTitles[view]}</h1>
+              {view !== "daily-report" ? (
+                <div className="mt-1 text-[12px] font-semibold text-slate-500">
+                  Last update: {formatLastUpdated(currentMenuUpdatedAt)}
+                </div>
+              ) : null}
             </div>
             </div>
             <div className="dashboard-header-actions flex items-center gap-3">
