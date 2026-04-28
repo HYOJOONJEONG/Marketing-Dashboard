@@ -897,12 +897,11 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                             placeholder="연락처"
                             className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                           />
-                          <textarea
+                          <input
                             value={entry.note}
                             onChange={(event) => updateTestIdEntry(entry.id, "note", event.target.value)}
-                            rows={2}
                             placeholder="비고"
-                            className="min-h-[72px] rounded-[20px] border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                           />
                           <div className="flex items-start justify-end">
                             <button
