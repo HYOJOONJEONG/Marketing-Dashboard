@@ -47,11 +47,12 @@ function getSeoulNow() {
 }
 
 function getTimeUntilSeoulMidnight() {
-  const seoulNow = getSeoulNow()
-  const nextMidnight = new Date(seoulNow.getTime())
-  nextMidnight.setUTCHours(24, 0, 0, 0)
-  const diffMs = Math.max(0, nextMidnight.getTime() - seoulNow.getTime())
-  const totalSeconds = Math.floor(diffMs / 1000)
+  const dayMs = 24 * 60 * 60 * 1000
+  const seoulOffsetMs = 9 * 60 * 60 * 1000
+  const seoulNowMs = Date.now() + seoulOffsetMs
+  const elapsedTodayMs = ((seoulNowMs % dayMs) + dayMs) % dayMs
+  const remainingMs = dayMs - elapsedTodayMs
+  const totalSeconds = Math.floor(remainingMs / 1000)
   const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0")
   const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0")
   const seconds = String(totalSeconds % 60).padStart(2, "0")
