@@ -3,7 +3,7 @@
 import type { ReactNode } from "react"
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, OctagonAlert, UserRound } from "lucide-react"
+import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, OctagonAlert, UserRound } from "lucide-react"
 import type { UserTestIdEntry } from "@/lib/auth/model"
 
 type Props = {
@@ -402,7 +402,13 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             {profileMessage ? <div className="mt-3 text-sm text-slate-500">{profileMessage}</div> : null}
           </section>
 
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <MetricCard
+              title="나의 시험아이디"
+              value={testIdEntries.length}
+              tone="bg-sky-50 text-sky-700"
+              icon={<Hash className="h-5 w-5" />}
+            />
             <MetricCard
               title="내 신규계약"
               value={data.myContracts.length}
