@@ -2439,7 +2439,10 @@ export function DashboardShell({
         },
       }
 
-      await persist(nextData)
+      await persist(nextData, {
+        immediate: true,
+        updatedViews: ["weekly-selection", "contracts", "collection"],
+      })
       setCollectionTab("integrated")
       setCollectionYearFilter(currentYear)
       setCollectionStatusFilter("all")
