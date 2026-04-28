@@ -852,61 +852,71 @@ export function PersonalDashboard({ currentUser, data }: Props) {
 
               {testIdMessage ? <div className="mt-3 text-sm text-slate-500">{testIdMessage}</div> : null}
 
-              <div className="mt-5 space-y-3">
+              <div className="mt-5 overflow-x-auto rounded-[24px] border border-slate-200">
                 {testIdEntries.length ? (
-                  testIdEntries.map((entry) => (
-                    <div key={entry.id} className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-[16px] font-black text-slate-950">{entry.testId}</div>
-                        <button
-                          type="button"
-                          onClick={() => removeTestIdEntry(entry.id)}
-                          className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
-                        >
-                          삭제
-                        </button>
-                      </div>
-
-                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                        <input
-                          value={entry.companyName}
-                          onChange={(event) => updateTestIdEntry(entry.id, "companyName", event.target.value)}
-                          placeholder="회사명"
-                          className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                        />
-                        <input
-                          value={entry.departmentName}
-                          onChange={(event) => updateTestIdEntry(entry.id, "departmentName", event.target.value)}
-                          placeholder="부서"
-                          className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                        />
-                        <input
-                          value={entry.assigneeName}
-                          onChange={(event) => updateTestIdEntry(entry.id, "assigneeName", event.target.value)}
-                          placeholder="담당자"
-                          className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                        />
-                        <input
-                          value={entry.contact}
-                          onChange={(event) => updateTestIdEntry(entry.id, "contact", event.target.value)}
-                          placeholder="연락처"
-                          className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                        />
-                      </div>
-
-                      <textarea
-                        value={entry.note}
-                        onChange={(event) => updateTestIdEntry(entry.id, "note", event.target.value)}
-                        rows={4}
-                        placeholder="비고"
-                        className="mt-3 min-h-[120px] w-full rounded-[20px] border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                      />
+                  <div className="min-w-[980px]">
+                    <div className="grid grid-cols-[120px_170px_170px_140px_160px_minmax(240px,1fr)_88px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[12px] font-bold text-slate-500">
+                      <div>시험아이디</div>
+                      <div>회사명</div>
+                      <div>부서</div>
+                      <div>담당자</div>
+                      <div>연락처</div>
+                      <div>비고</div>
+                      <div>관리</div>
                     </div>
-                  ))
-                ) : (
-                  <div className="rounded-[24px] border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">
-                    등록된 시험아이디가 없습니다.
+                    <div className="divide-y divide-slate-200">
+                      {testIdEntries.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="grid grid-cols-[120px_170px_170px_140px_160px_minmax(240px,1fr)_88px] gap-3 px-4 py-3"
+                        >
+                          <div className="flex items-center text-[13px] font-black text-slate-950">{entry.testId}</div>
+                          <input
+                            value={entry.companyName}
+                            onChange={(event) => updateTestIdEntry(entry.id, "companyName", event.target.value)}
+                            placeholder="회사명"
+                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <input
+                            value={entry.departmentName}
+                            onChange={(event) => updateTestIdEntry(entry.id, "departmentName", event.target.value)}
+                            placeholder="부서"
+                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <input
+                            value={entry.assigneeName}
+                            onChange={(event) => updateTestIdEntry(entry.id, "assigneeName", event.target.value)}
+                            placeholder="담당자"
+                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <input
+                            value={entry.contact}
+                            onChange={(event) => updateTestIdEntry(entry.id, "contact", event.target.value)}
+                            placeholder="연락처"
+                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <textarea
+                            value={entry.note}
+                            onChange={(event) => updateTestIdEntry(entry.id, "note", event.target.value)}
+                            rows={2}
+                            placeholder="비고"
+                            className="min-h-[72px] rounded-[20px] border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <div className="flex items-start justify-end">
+                            <button
+                              type="button"
+                              onClick={() => removeTestIdEntry(entry.id)}
+                              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                ) : (
+                  <div className="px-4 py-8 text-center text-sm text-slate-400">등록된 시험아이디가 없습니다.</div>
                 )}
               </div>
 
