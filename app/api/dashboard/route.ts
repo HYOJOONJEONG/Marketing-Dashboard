@@ -1,6 +1,6 @@
 import path from "path"
 import { NextResponse } from "next/server"
-import { buildPermissionIndex, filterContractsForUser, hasPermission } from "@/lib/auth/permissions"
+import { buildPermissionIndex, filterContractsForUser, getContractAccessScope, hasPermission } from "@/lib/auth/permissions"
 import { getRequestIp, requireApiPermission } from "@/lib/auth/server"
 import { appendActivityLog, updateAuthState } from "@/lib/auth/store"
 import { resolveRequestSession } from "@/lib/auth/session"
@@ -31,6 +31,23 @@ const DASHBOARD_EDIT_KEYS = [
   "collectionManagement",
   "terminationManagement",
 ] as const
+
+function isOwnedContractForUser(contract: any, user: any) {
+  const createdBy = String(contract?.createdBy || "").trim()
+  const recommenderUserId = String(contract?.recommenderUserId || "").trim()
+  const recommender = String(contract?.recommender || "").trim()
+  return createdBy === user.id || recommenderUserId === user.id || recommender === user.name
+}
+
+function mergeContractsForScope(existingContracts: any[], incomingContracts: any[], user: any, scope: ReturnType<typeof getContractAccessScope>) {
+  if (scope === "all") return incomingContracts
+  if (scope === "team") {
+    const preserved = existingContracts.filter((contract) => String(contract?.teamId || "") !== user.teamId)
+    return [...incomingContracts, ...preserved]
+  }
+  const preserved = existingContracts.filter((contract) => !isOwnedContractForUser(contract, user))
+  return [...incomingContracts, ...preserved]
+}
 
 export async function GET() {
   const session = await resolveRequestSession()
@@ -83,7 +100,21 @@ export async function PUT(request: Request) {
   }
 
   try {
-    await writeDashboardState(body, {
+    const existingData = (await readDashboardState<any>(DATA_PATH)) || (await readDashboardState<any>(FALLBACK_PATH)) || EMPTY_DASHBOARD
+    const scope = getContractAccessScope(session.user, permissions)
+    const nextContracts = mergeContractsForScope(
+      Array.isArray(existingData?.contracts) ? existingData.contracts : [],
+      Array.isArray(body?.contracts) ? body.contracts : [],
+      session.user,
+      scope,
+    )
+    const nextBody = {
+      ...existingData,
+      ...body,
+      contracts: nextContracts,
+    }
+
+    await writeDashboardState(nextBody, {
       menuLabel: "Dashboard",
       changeLabel: "Save dashboard state",
     })
