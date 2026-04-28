@@ -166,7 +166,7 @@ function buildHash(prevHash: string, key: string, actor: string, action: string,
 
 export async function GET(request: Request) {
   try {
-    if (!isAuthorized(request)) {
+    if (!(await isAuthorized(request))) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 })
     }
 
@@ -232,7 +232,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    if (!isAuthorized(request)) {
+    if (!(await isAuthorized(request))) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 })
     }
 

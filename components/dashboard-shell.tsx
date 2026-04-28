@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import React, { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronDown, KeyRound, LogOut, Menu, UserRound, X } from "lucide-react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
@@ -20,6 +20,26 @@ type ViewKey =
   | "collection"
   | "option-dashboard"
   | "termination"
+
+const VIEW_STATE_KEYS: Record<ViewKey, string[]> = {
+  "daily-report": ["dailyReport", "ui"],
+  "weekly-report": ["weeklyReport", "currentYear", "years", "availableYears", "paidOptionSourceColumns", "ui"],
+  "contracts": ["contracts", "currentYear", "years", "availableYears", "ui"],
+  "weekly-selection": ["contracts", "weeklyReport", "ui"],
+  "manual-input": ["weeklyReport", "currentYear", "years", "availableYears", "paidOptionSourceColumns", "ui"],
+  "collection": ["collection", "currentYear", "years", "availableYears", "ui"],
+  "option-dashboard": ["ui"],
+  "termination": ["termination", "ui"],
+}
+
+function pickTopLevelState(source: any, keys: string[]) {
+  return Object.fromEntries(keys.map((key) => [key, source?.[key]]))
+}
+
+function collectStateKeysForViews(views: ViewKey[]) {
+  return Array.from(new Set(views.flatMap((viewKey) => VIEW_STATE_KEYS[viewKey] || [])))
+}
+
 type CollectionTabKey = "integrated" | "long-term" | "delivery"
 type SectionKey = "dailyReport" | "performance" | "termination"
 
@@ -1118,6 +1138,10 @@ export function DashboardShell({
   const router = useRouter()
   const [data, setData] = useState<any>(initialData)
   const [view, setView] = useState<ViewKey>(initialView)
+  const isContractsView = view === "contracts"
+  const isWeeklySelectionView = view === "weekly-selection"
+  const isCollectionView = view === "collection"
+  const isTerminationView = view === "termination"
   const [collectionTab, setCollectionTab] = useState<CollectionTabKey>(initialCollectionTab)
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({ dailyReport: true, performance: true, termination: true })
   const [isPending, startTransition] = useTransition()
@@ -1155,6 +1179,7 @@ export function DashboardShell({
   const [editingContractId, setEditingContractId] = useState<string | null>(null)
   const [editingContractDraft, setEditingContractDraft] = useState<any>({})
   const [contractQuery, setContractQuery] = useState("")
+  const deferredContractQuery = useDeferredValue(contractQuery)
   const [contractStatusFilter, setContractStatusFilter] = useState("all")
   const [contractReplacementFilter, setContractReplacementFilter] = useState("all")
   const [contractMonthFilter, setContractMonthFilter] = useState("all")
@@ -1287,6 +1312,7 @@ export function DashboardShell({
     dir: "desc",
   })
   const [terminationQuery, setTerminationQuery] = useState("")
+  const deferredTerminationQuery = useDeferredValue(terminationQuery)
   const [terminationReasonFilter, setTerminationReasonFilter] = useState("all")
   const [terminationDateFilter, setTerminationDateFilter] = useState("all")
   const [holdSort, setHoldSort] = useState<{ key: "receivedDate" | "startDate" | "endDate"; dir: "asc" | "desc" }>({
@@ -1304,6 +1330,7 @@ export function DashboardShell({
   const [holdReceivedDateFilter, setHoldReceivedDateFilter] = useState("all")
   const [holdEndDateFilter, setHoldEndDateFilter] = useState("all")
   const [holdQuery, setHoldQuery] = useState("")
+  const deferredHoldQuery = useDeferredValue(holdQuery)
 
   const weeklyReport = data.weeklyReport || {}
   const dailyReportDate = getSeoulTodayKey()
@@ -1547,7 +1574,8 @@ export function DashboardShell({
     return ["all", ...Array.from(values)]
   }, [contracts])
   const filteredContracts = useMemo(() => {
-    const query = contractQuery.trim().toLowerCase()
+    if (!isContractsView) return []
+    const query = deferredContractQuery.trim().toLowerCase()
     return contracts.filter((row: any) => {
       if (contractStatusFilter !== "all" && row.documentStatus !== contractStatusFilter) return false
       if (contractReplacementFilter !== "all" && (row.replacementType || "신규") !== contractReplacementFilter) return false
@@ -1565,14 +1593,14 @@ export function DashboardShell({
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query))
     })
-  }, [contracts, contractQuery, contractStatusFilter, contractReplacementFilter, contractMonthFilter])
+  }, [contracts, deferredContractQuery, contractStatusFilter, contractReplacementFilter, contractMonthFilter, isContractsView])
   const sortedContracts = useMemo(
-    () => sortByKey(filteredContracts, contractSort.key, contractSort.dir),
-    [filteredContracts, contractSort],
+    () => (isContractsView ? sortByKey(filteredContracts, contractSort.key, contractSort.dir) : []),
+    [filteredContracts, contractSort, isContractsView],
   )
   const sortedWeeklySelectionContracts = useMemo(
-    () => sortByKey(contracts, weeklySelectionSort.key, weeklySelectionSort.dir),
-    [contracts, weeklySelectionSort],
+    () => (isWeeklySelectionView ? sortByKey(contracts, weeklySelectionSort.key, weeklySelectionSort.dir) : []),
+    [contracts, weeklySelectionSort, isWeeklySelectionView],
   )
 
   useEffect(() => {
@@ -1620,6 +1648,7 @@ export function DashboardShell({
   }, [weeklyReport, contracts, paidOptionSourceColumns])
 
   const contractMonthStats = useMemo(() => {
+    if (!isContractsView) return []
     const currentYearNumber = Number(currentYear) || 2026
     const monthCounts = new Map<number, number>()
     const years = new Set<number>([currentYearNumber])
@@ -1645,12 +1674,13 @@ export function DashboardShell({
           }
         }),
       )
-  }, [contracts, currentYear])
+  }, [contracts, currentYear, isContractsView])
   const currentMonthKey = useMemo(() => {
     const now = new Date()
     return now.getFullYear() * 100 + (now.getMonth() + 1)
   }, [])
   const contractRecommenderStats = useMemo(() => {
+    if (!isContractsView) return []
     const map = new Map<string, number>()
     contracts.forEach((row: any) => {
       const name = String(row.recommender || "").trim() || "미입력"
@@ -1676,7 +1706,7 @@ export function DashboardShell({
         }
         return a.label.localeCompare(b.label, "ko")
       })
-  }, [contracts])
+  }, [contracts, isContractsView])
   const contractStatsRowCount = useMemo(() => (contractMonthStats.length > 12 ? 3 : 2), [contractMonthStats.length])
   const contractMonthColumns = contractStatsRowCount === 3 ? 8 : 6
   const contractRecommenderColumns = contractStatsRowCount === 3 ? 3 : 4
@@ -1769,17 +1799,19 @@ export function DashboardShell({
     )
   }, [deliveryHistoryOptions])
   const filteredCollectionRows = useMemo(() => {
+    if (!isCollectionView) return []
     return collectionRows.filter((row: any) => {
       const yearOk = collectionYearFilter === "all" ? true : Number(row.year) === Number(collectionYearFilter)
       const statusOk = collectionStatusFilter === "all" ? true : (row.status || "미정") === collectionStatusFilter
       return yearOk && statusOk
     })
-  }, [collectionRows, collectionStatusFilter, collectionYearFilter])
+  }, [collectionRows, collectionStatusFilter, collectionYearFilter, isCollectionView])
   const sortedCollectionRows = useMemo(
-    () => sortByKey(filteredCollectionRows, collectionSort.key, collectionSort.dir),
-    [filteredCollectionRows, collectionSort],
+    () => (isCollectionView ? sortByKey(filteredCollectionRows, collectionSort.key, collectionSort.dir) : []),
+    [filteredCollectionRows, collectionSort, isCollectionView],
   )
   const collectionIndustrySummary = useMemo(() => {
+    if (!isCollectionView) return []
     const sourceRows = collectionRows.filter((row: any) => (
       collectionYearFilter === "all" ? true : Number(row.year) === Number(collectionYearFilter)
     ))
@@ -1804,8 +1836,14 @@ export function DashboardShell({
       { total: 0, recovered: 0, missing: 0 },
     )
     return [...rows, { industry: "합계", total: totals.total, recovered: totals.recovered, missing: totals.missing }]
-  }, [collectionRows, collectionYearFilter])
+  }, [collectionRows, collectionYearFilter, isCollectionView])
   const collectionIndustryMatrix = useMemo(() => {
+    if (!isCollectionView) {
+      return {
+        headers: [],
+        rows: [],
+      }
+    }
     const rows = collectionIndustrySummary || []
     const headers = rows.map((row: any) => row.industry)
     return {
@@ -1816,7 +1854,7 @@ export function DashboardShell({
         { label: "미회수", values: rows.map((row: any) => row.missing) },
       ],
     }
-  }, [collectionIndustrySummary])
+  }, [collectionIndustrySummary, isCollectionView])
   const collectionTableColumns = [
     { label: "No." },
     { label: "연도", key: "year" as const },
@@ -1837,7 +1875,8 @@ export function DashboardShell({
     return collectionSort.dir === "asc" ? " ▲" : " ▼"
   }
   const filteredTerminationItemsBase = useMemo(() => {
-    const query = terminationQuery.trim().toLowerCase()
+    if (!isTerminationView) return []
+    const query = deferredTerminationQuery.trim().toLowerCase()
     const rows = selectedSheet?.items || []
     return rows.filter((row: any) => {
       if (terminationSort.key === "terminationDate" && !String(row.terminationDate || "").trim()) {
@@ -1858,63 +1897,67 @@ export function DashboardShell({
       return [row.companyName, row.departmentName, row.customerId, row.manager, row.reason]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query))
-    })
-  }, [selectedSheet, terminationQuery, terminationReasonFilter, terminationDateFilter, terminationSort.key])
+      })
+    }, [selectedSheet, deferredTerminationQuery, terminationReasonFilter, terminationDateFilter, terminationSort.key, isTerminationView])
   const terminationReasonOptions = useMemo(() => {
     const base = reportTerminationColumnsStatic.slice(0, -1)
     return ["all", ...base, "기타"]
   }, [])
-  const terminationDateOptions = useMemo(() => {
-    const dates = new Set<string>()
-    ;(selectedSheet?.items || []).forEach((row: any) => {
-      const value = normalizeDate(row.terminationDate)
-      if (value) dates.add(value)
-    })
-    return ["all", ...Array.from(dates).sort().reverse()]
-  }, [selectedSheet])
-  const terminationItems = useMemo(
-    () => sortByKey(filteredTerminationItemsBase, terminationSort.key, terminationSort.dir),
-    [filteredTerminationItemsBase, terminationSort],
-  )
-  const holdItems = useMemo(
-    () => sortByKey(selectedSheet?.holdItems || [], holdSort.key, holdSort.dir),
-    [selectedSheet, holdSort],
-  )
-  const filteredHoldItems = useMemo(() => {
-    const query = holdQuery.trim().toLowerCase()
-    return holdItems.filter((row: any) => {
-      if (holdReceivedDateFilter !== "all" && normalizeDate(row.receivedDate) !== holdReceivedDateFilter) return false
+    const terminationDateOptions = useMemo(() => {
+      if (!isTerminationView) return ["all"]
+      const dates = new Set<string>()
+      ;(selectedSheet?.items || []).forEach((row: any) => {
+        const value = normalizeDate(row.terminationDate)
+        if (value) dates.add(value)
+      })
+      return ["all", ...Array.from(dates).sort().reverse()]
+    }, [selectedSheet, isTerminationView])
+    const terminationItems = useMemo(
+      () => (isTerminationView ? sortByKey(filteredTerminationItemsBase, terminationSort.key, terminationSort.dir) : []),
+      [filteredTerminationItemsBase, terminationSort, isTerminationView],
+    )
+    const holdItems = useMemo(
+      () => (isTerminationView ? sortByKey(selectedSheet?.holdItems || [], holdSort.key, holdSort.dir) : []),
+      [selectedSheet, holdSort, isTerminationView],
+    )
+    const filteredHoldItems = useMemo(() => {
+      if (!isTerminationView) return []
+      const query = deferredHoldQuery.trim().toLowerCase()
+      return holdItems.filter((row: any) => {
+        if (holdReceivedDateFilter !== "all" && normalizeDate(row.receivedDate) !== holdReceivedDateFilter) return false
       if (holdEndDateFilter !== "all" && normalizeDate(row.endDate) !== holdEndDateFilter) return false
       if (!query) return true
-      return [row.companyName, row.departmentName, row.customerId, row.manager, row.reason]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query))
-    })
-  }, [holdItems, holdReceivedDateFilter, holdEndDateFilter, holdQuery])
-  const holdReceivedDateOptions = useMemo(() => {
-    const dates = new Set<string>()
-    holdItems.forEach((row: any) => {
-      const value = normalizeDate(row.receivedDate)
-      if (value) dates.add(value)
-    })
-    return ["all", ...Array.from(dates).sort().reverse()]
-  }, [holdItems])
-  const holdEndDateOptions = useMemo(() => {
-    const dates = new Set<string>()
-    holdItems.forEach((row: any) => {
-      const value = normalizeDate(row.endDate)
-      if (value) dates.add(value)
-    })
-    return ["all", ...Array.from(dates).sort().reverse()]
-  }, [holdItems])
-  const confirmedTerminationItems = useMemo(
-    () => sortByKey(selectedSheet?.confirmedItems || [], terminationSort.key, terminationSort.dir),
-    [selectedSheet, terminationSort],
-  )
-  const releasedHoldItems = useMemo(
-    () => sortByKey(selectedSheet?.releasedHoldItems || [], holdSort.key, holdSort.dir),
-    [selectedSheet, holdSort],
-  )
+        return [row.companyName, row.departmentName, row.customerId, row.manager, row.reason]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query))
+      })
+    }, [holdItems, holdReceivedDateFilter, holdEndDateFilter, deferredHoldQuery, isTerminationView])
+    const holdReceivedDateOptions = useMemo(() => {
+      if (!isTerminationView) return ["all"]
+      const dates = new Set<string>()
+      holdItems.forEach((row: any) => {
+        const value = normalizeDate(row.receivedDate)
+        if (value) dates.add(value)
+      })
+      return ["all", ...Array.from(dates).sort().reverse()]
+    }, [holdItems, isTerminationView])
+    const holdEndDateOptions = useMemo(() => {
+      if (!isTerminationView) return ["all"]
+      const dates = new Set<string>()
+      holdItems.forEach((row: any) => {
+        const value = normalizeDate(row.endDate)
+        if (value) dates.add(value)
+      })
+      return ["all", ...Array.from(dates).sort().reverse()]
+    }, [holdItems, isTerminationView])
+    const confirmedTerminationItems = useMemo(
+      () => (isTerminationView ? sortByKey(selectedSheet?.confirmedItems || [], terminationSort.key, terminationSort.dir) : []),
+      [selectedSheet, terminationSort, isTerminationView],
+    )
+    const releasedHoldItems = useMemo(
+      () => (isTerminationView ? sortByKey(selectedSheet?.releasedHoldItems || [], holdSort.key, holdSort.dir) : []),
+      [selectedSheet, holdSort, isTerminationView],
+    )
   useEffect(() => {
     setSelectedConfirmedIds((prev) => prev.filter((id) => confirmedTerminationItems.some((row: any) => row.id === id)))
   }, [confirmedTerminationItems])
@@ -2005,7 +2048,13 @@ export function DashboardShell({
       },
     }
     const serialized = JSON.stringify(nextDataWithMeta)
-    await queueDashboardUpdate(serialized)
+    const changedKeys = collectStateKeysForViews(viewsToCommit)
+    const payload = JSON.stringify({
+      partial: true,
+      changedKeys,
+      data: pickTopLevelState(nextDataWithMeta, changedKeys),
+    })
+    await queueDashboardUpdate(payload)
     setData(nextDataWithMeta)
     pendingDataRef.current = nextDataWithMeta
     try {

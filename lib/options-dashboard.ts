@@ -34,7 +34,7 @@ async function getDatabase() {
     try {
       const buffer = await fs.readFile(DB_PATH)
       const SQL = await initSqlJs({
-        locateFile: (file) => path.join(process.cwd(), "node_modules", "sql.js", "dist", file),
+        locateFile: (file: string) => path.join(process.cwd(), "node_modules", "sql.js", "dist", file),
       })
       return new SQL.Database(new Uint8Array(buffer))
     } catch (error) {

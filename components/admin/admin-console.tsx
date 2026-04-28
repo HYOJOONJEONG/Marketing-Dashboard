@@ -9,6 +9,7 @@ type Props = {
     name: string
     role: string
     teamName: string
+    avatarEmoji?: string | null
     color: { bg: string; text: string; border: string; hex: string }
   }
   permissions: Record<string, Record<string, boolean>>

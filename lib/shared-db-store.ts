@@ -12,11 +12,22 @@ const KV_REST_API_URL = process.env.KV_REST_API_URL?.trim() || ""
 const KV_REST_API_TOKEN = process.env.KV_REST_API_TOKEN?.trim() || ""
 const REDIS_URL = process.env.REDIS_URL?.trim() || ""
 const SHARED_DB_READ_ONLY = process.env.SHARED_DB_READ_ONLY === "1"
-const SHARED_DB_REQUIRE_CENTRAL = process.env.SHARED_DB_REQUIRE_CENTRAL === "1" || process.env.VERCEL === "1"
+const SHARED_DB_REQUIRE_CENTRAL = process.env.SHARED_DB_REQUIRE_CENTRAL === "1"
 const SHARED_DB_ALLOW_SEED = process.env.SHARED_DB_ALLOW_SEED !== "0"
+const CENTRAL_DB_TIMEOUT_MS = Number(process.env.CENTRAL_DB_TIMEOUT_MS || (process.env.VERCEL === "1" ? 5000 : 1500))
 
 const STORE_KEYS = {
   dashboard: "dashboard_state",
+  dashboardUi: "dashboard_ui",
+  dashboardCurrentYear: "dashboard_current_year",
+  dashboardYears: "dashboard_years",
+  dashboardAvailableYears: "dashboard_available_years",
+  dashboardDailyReport: "dashboard_daily_report",
+  dashboardWeeklyReport: "dashboard_weekly_report",
+  dashboardContracts: "dashboard_contracts",
+  dashboardCollection: "dashboard_collection",
+  dashboardTermination: "dashboard_termination",
+  dashboardPaidOptionSourceColumns: "dashboard_paid_option_source_columns",
   options: "options_mock",
   auth: "auth_system",
 } as const
@@ -27,6 +38,21 @@ type WriteAuditMeta = {
   menuLabel?: string
   changeLabel?: string
 }
+
+const DASHBOARD_SLICE_KEYS = {
+  ui: STORE_KEYS.dashboardUi,
+  currentYear: STORE_KEYS.dashboardCurrentYear,
+  years: STORE_KEYS.dashboardYears,
+  availableYears: STORE_KEYS.dashboardAvailableYears,
+  dailyReport: STORE_KEYS.dashboardDailyReport,
+  weeklyReport: STORE_KEYS.dashboardWeeklyReport,
+  contracts: STORE_KEYS.dashboardContracts,
+  collection: STORE_KEYS.dashboardCollection,
+  termination: STORE_KEYS.dashboardTermination,
+  paidOptionSourceColumns: STORE_KEYS.dashboardPaidOptionSourceColumns,
+} as const
+
+type DashboardTopLevelKey = keyof typeof DASHBOARD_SLICE_KEYS
 
 type StoreShape = {
   kv_store: Record<string, { value: string; updated_at: string }>
@@ -96,6 +122,19 @@ function buildCentralApiHeaders(extra?: Record<string, string>) {
   return Object.keys(authHeaders).length ? authHeaders : undefined
 }
 
+async function fetchWithTimeout(input: string, init?: RequestInit) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), CENTRAL_DB_TIMEOUT_MS)
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 function resolveStorePath() {
   const envPath = process.env.SHARED_DB_PATH?.trim()
   if (!envPath) return DEFAULT_STORE_PATH
@@ -160,6 +199,15 @@ function parseJsonObject<T>(raw: string | null): T | null {
   }
 }
 
+function parseJsonValue<T>(raw: string | null): T | null {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw.replace(/^\uFEFF/, "")) as T
+  } catch {
+    return null
+  }
+}
+
 async function readRawValue(key: SharedKey) {
   if (kvConfigured() && !CENTRAL_DB_API_URL) {
     const value = await kvCommand<string | null>(["GET", kvValueKey(key)])
@@ -172,32 +220,42 @@ async function readRawValue(key: SharedKey) {
   }
 
   if (CENTRAL_DB_API_URL) {
-    const baseUrl = CENTRAL_DB_API_URL.replace(/\/$/, "")
-    const sharedUrl = `${baseUrl}/api/shared-kv?key=${encodeURIComponent(key)}`
-    const sharedResp = await fetch(sharedUrl, {
-      headers: buildCentralApiHeaders(),
-      cache: "no-store",
-    })
-    if (sharedResp.ok) {
-      const json = await sharedResp.json().catch(() => null)
-      if (json?.ok && json.value != null) return String(json.value)
-    }
+    try {
+      const baseUrl = CENTRAL_DB_API_URL.replace(/\/$/, "")
+      const sharedUrl = `${baseUrl}/api/shared-kv?key=${encodeURIComponent(key)}`
+      const sharedResp = await fetchWithTimeout(sharedUrl, {
+        headers: buildCentralApiHeaders(),
+        cache: "no-store",
+      })
+      if (sharedResp.ok) {
+        const json = await sharedResp.json().catch(() => null)
+        if (json?.ok && json.value != null) return String(json.value)
+      }
 
-    // Backward-compatible read-only mode for the current production app,
-    // which exposes dashboard/options APIs but may not expose /api/shared-kv yet.
-    const legacyPathByKey: Record<SharedKey, string> = {
-      [STORE_KEYS.dashboard]: "/api/dashboard",
-      [STORE_KEYS.options]: "/api/options",
-      [STORE_KEYS.auth]: "/api/auth/session",
+      // Backward-compatible read-only mode for the current production app,
+      // which exposes dashboard/options APIs but may not expose /api/shared-kv yet.
+      const legacyPathByKey: Partial<Record<SharedKey, string>> = {
+        [STORE_KEYS.dashboard]: "/api/dashboard",
+        [STORE_KEYS.options]: "/api/options",
+        [STORE_KEYS.auth]: "/api/auth/session",
+      }
+      const legacyPath = legacyPathByKey[key]
+      if (legacyPath) {
+        const legacyResp = await fetchWithTimeout(`${baseUrl}${legacyPath}`, {
+          headers: buildCentralApiHeaders(),
+          cache: "no-store",
+        })
+        if (legacyResp.ok) {
+          const legacyJson = await legacyResp.json().catch(() => null)
+          if (legacyJson != null) return JSON.stringify(legacyJson)
+        }
+      }
+    } catch (error) {
+      if (SHARED_DB_REQUIRE_CENTRAL) {
+        throw error
+      }
     }
-    const legacyResp = await fetch(`${baseUrl}${legacyPathByKey[key]}`, {
-      headers: buildCentralApiHeaders(),
-      cache: "no-store",
-    })
-    if (!legacyResp.ok) return null
-    const legacyJson = await legacyResp.json().catch(() => null)
-    if (legacyJson == null) return null
-    return JSON.stringify(legacyJson)
+    if (SHARED_DB_REQUIRE_CENTRAL) return null
   }
 
   const store = await loadStore()
@@ -224,24 +282,30 @@ async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta)
   }
 
   if (CENTRAL_DB_API_URL) {
-    const url = `${CENTRAL_DB_API_URL.replace(/\/$/, "")}/api/shared-kv`
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(buildCentralApiHeaders({ "content-type": "application/json" }) || {}),
-      },
-      body: JSON.stringify({
-        key,
-        value: raw,
-        actor: CENTRAL_DB_SOURCE,
-        menuLabel,
-        changeLabel,
-      }),
-      cache: "no-store",
-    })
-    if (!resp.ok) throw new Error(`central db write failed (${resp.status})`)
-    return
+    try {
+      const url = `${CENTRAL_DB_API_URL.replace(/\/$/, "")}/api/shared-kv`
+      const resp = await fetchWithTimeout(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(buildCentralApiHeaders({ "content-type": "application/json" }) || {}),
+        },
+        body: JSON.stringify({
+          key,
+          value: raw,
+          actor: CENTRAL_DB_SOURCE,
+          menuLabel,
+          changeLabel,
+        }),
+        cache: "no-store",
+      })
+      if (!resp.ok) throw new Error(`central db write failed (${resp.status})`)
+      return
+    } catch (error) {
+      if (SHARED_DB_REQUIRE_CENTRAL) {
+        throw error
+      }
+    }
   }
 
   writeQueue = writeQueue.then(async () => {
@@ -285,19 +349,47 @@ async function seedFromFileIfMissing<T>(key: SharedKey, filePath: string): Promi
   }
 }
 
-export async function readDashboardState<T>(fallbackFilePath?: string): Promise<T | null> {
-  const raw = await readRawValue(STORE_KEYS.dashboard)
-  const parsed = parseJsonObject<T>(raw)
-  if (parsed) return parsed
-  if (!fallbackFilePath) return null
-  return seedFromFileIfMissing<T>(STORE_KEYS.dashboard, fallbackFilePath)
+async function readDashboardSlices<T>(): Promise<T | null> {
+  const entries = await Promise.all(
+    Object.entries(DASHBOARD_SLICE_KEYS).map(async ([sliceKey, storeKey]) => {
+      const raw = await readRawValue(storeKey)
+      const parsed = parseJsonValue<unknown>(raw)
+      return parsed === null ? null : [sliceKey, parsed] as const
+    }),
+  )
+  const filtered = entries.filter(Boolean) as Array<readonly [string, unknown]>
+  if (!filtered.length) return null
+  return Object.fromEntries(filtered) as T
 }
 
-export async function writeDashboardState(value: unknown, meta?: WriteAuditMeta) {
+export async function readDashboardState<T>(fallbackFilePath?: string): Promise<T | null> {
+  const raw = await readRawValue(STORE_KEYS.dashboard)
+  const base = parseJsonObject<Record<string, unknown>>(raw)
+    || (fallbackFilePath ? await seedFromFileIfMissing<Record<string, unknown>>(STORE_KEYS.dashboard, fallbackFilePath) : null)
+  const sliced = await readDashboardSlices<T>()
+  if (base && sliced && typeof sliced === "object" && !Array.isArray(sliced)) {
+    return { ...base, ...(sliced as Record<string, unknown>) } as T
+  }
+  if (base) return base as T
+  if (sliced) return sliced
+  return null
+}
+
+export async function writeDashboardState(value: unknown, meta?: WriteAuditMeta, changedKeys?: DashboardTopLevelKey[]) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Dashboard state must be a JSON object.")
   }
-  await writeRawValue(STORE_KEYS.dashboard, JSON.stringify(value, null, 2), meta)
+  const source = value as Record<string, unknown>
+  const targetKeys = Array.isArray(changedKeys) && changedKeys.length
+    ? changedKeys.filter((key, index, array) => array.indexOf(key) === index)
+    : (Object.keys(DASHBOARD_SLICE_KEYS) as DashboardTopLevelKey[])
+
+  await Promise.all(
+    targetKeys.map((key) => {
+      const storeKey = DASHBOARD_SLICE_KEYS[key]
+      return writeRawValue(storeKey, JSON.stringify(source[key] ?? null, null, 2), meta)
+    }),
+  )
 }
 
 export async function readOptionsMock<T>(fallbackFilePath?: string): Promise<T | null> {

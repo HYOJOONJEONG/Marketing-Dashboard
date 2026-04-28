@@ -32,6 +32,21 @@ const DASHBOARD_EDIT_KEYS = [
   "terminationManagement",
 ] as const
 
+const DASHBOARD_STATE_SLICE_KEYS = [
+  "ui",
+  "currentYear",
+  "years",
+  "availableYears",
+  "dailyReport",
+  "weeklyReport",
+  "contracts",
+  "collection",
+  "termination",
+  "paidOptionSourceColumns",
+] as const
+
+type DashboardStateSliceKey = (typeof DASHBOARD_STATE_SLICE_KEYS)[number]
+
 function isOwnedContractForUser(contract: any, user: any) {
   const createdBy = String(contract?.createdBy || "").trim()
   const recommenderUserId = String(contract?.recommenderUserId || "").trim()
@@ -101,23 +116,28 @@ export async function PUT(request: Request) {
 
   try {
     const existingData = (await readDashboardState<any>(DATA_PATH)) || (await readDashboardState<any>(FALLBACK_PATH)) || EMPTY_DASHBOARD
+    const isPartial = Boolean(body?.partial && body?.data && typeof body.data === "object" && !Array.isArray(body.data))
+    const incomingBody = isPartial ? body.data : body
+    const changedKeys = (
+      Array.isArray(body?.changedKeys) ? body.changedKeys : []
+    ).filter((key: unknown): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))
     const scope = getContractAccessScope(session.user, permissions)
     const nextContracts = mergeContractsForScope(
       Array.isArray(existingData?.contracts) ? existingData.contracts : [],
-      Array.isArray(body?.contracts) ? body.contracts : [],
+      Array.isArray(incomingBody?.contracts) ? incomingBody.contracts : [],
       session.user,
       scope,
     )
     const nextBody = {
       ...existingData,
-      ...body,
-      contracts: nextContracts,
+      ...incomingBody,
+      ...(Array.isArray(incomingBody?.contracts) ? { contracts: nextContracts } : {}),
     }
 
     await writeDashboardState(nextBody, {
       menuLabel: "Dashboard",
       changeLabel: "Save dashboard state",
-    })
+    }, isPartial && changedKeys.length ? changedKeys : undefined)
     await updateAuthState((state) => {
       appendActivityLog(state, {
         actorUserId: session.user.id,
@@ -207,7 +227,7 @@ export async function POST(request: Request) {
     await writeDashboardState(nextData, {
       menuLabel: "신규계약 리스트",
       changeLabel: "Register contract",
-    })
+    }, ["contracts", "ui"])
     await updateAuthState((state) => {
       appendActivityLog(state, {
         actorUserId: auth.context.user.id,
