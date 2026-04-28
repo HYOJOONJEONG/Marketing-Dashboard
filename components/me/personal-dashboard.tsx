@@ -453,6 +453,155 @@ export function PersonalDashboard({ currentUser, data }: Props) {
           </section>
 
           <section className="space-y-5">
+            <div className={`${cardClass} ${mobileSection === "testIds" ? "block" : "hidden"} lg:block`}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">1. 시험아이디 관리</h3>
+                  <p className="mt-1 text-sm text-slate-500">개별 등록 또는 연속 등록 후 회사명, 부서, 담당자, 연락처, 비고를 기록할 수 있습니다.</p>
+                </div>
+                <div className="rounded-2xl bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700">
+                  {testIdEntries.length}건
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTestIdMode("single")}
+                  className={`rounded-2xl px-4 py-2 text-sm font-bold transition ${testIdMode === "single" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
+                >
+                  개별등록
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTestIdMode("bulk")}
+                  className={`rounded-2xl px-4 py-2 text-sm font-bold transition ${testIdMode === "bulk" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
+                >
+                  여러개 등록
+                </button>
+              </div>
+
+              {testIdMode === "single" ? (
+                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                  <input
+                    value={singleTestId}
+                    onChange={(event) => setSingleTestId(event.target.value)}
+                    placeholder="예: E260403"
+                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addTestIds([singleTestId])}
+                    className="inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700"
+                  >
+                    등록
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                  <input
+                    value={bulkStartId}
+                    onChange={(event) => setBulkStartId(event.target.value)}
+                    placeholder="시작 아이디 예: E260403"
+                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  />
+                  <input
+                    value={bulkEndId}
+                    onChange={(event) => setBulkEndId(event.target.value)}
+                    placeholder="끝 아이디 예: E260408"
+                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addTestIds(buildRangeTestIds(bulkStartId, bulkEndId))}
+                    className="inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700"
+                  >
+                    여러개 등록
+                  </button>
+                </div>
+              )}
+
+              {testIdMessage ? <div className="mt-3 text-sm text-slate-500">{testIdMessage}</div> : null}
+
+              <div className="mt-5 overflow-x-auto rounded-[24px] border border-slate-200">
+                {testIdEntries.length ? (
+                  <div className="min-w-[980px]">
+                    <div className="grid grid-cols-[120px_170px_170px_140px_160px_minmax(240px,1fr)_88px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[12px] font-bold text-slate-500">
+                      <div>시험아이디</div>
+                      <div>회사명</div>
+                      <div>부서</div>
+                      <div>담당자</div>
+                      <div>연락처</div>
+                      <div>비고</div>
+                      <div>관리</div>
+                    </div>
+                    <div className="divide-y divide-slate-200">
+                      {testIdEntries.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="grid grid-cols-[120px_170px_170px_140px_160px_minmax(240px,1fr)_88px] gap-3 px-4 py-3"
+                        >
+                          <div className="flex items-center text-[13px] font-black text-slate-950">{entry.testId}</div>
+                          <input
+                            value={entry.companyName}
+                            onChange={(event) => updateTestIdEntry(entry.id, "companyName", event.target.value)}
+                            placeholder="회사명"
+                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <input
+                            value={entry.departmentName}
+                            onChange={(event) => updateTestIdEntry(entry.id, "departmentName", event.target.value)}
+                            placeholder="부서"
+                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <input
+                            value={entry.assigneeName}
+                            onChange={(event) => updateTestIdEntry(entry.id, "assigneeName", event.target.value)}
+                            placeholder="담당자"
+                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <input
+                            value={entry.contact}
+                            onChange={(event) => updateTestIdEntry(entry.id, "contact", event.target.value)}
+                            placeholder="연락처"
+                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <input
+                            value={entry.note}
+                            onChange={(event) => updateTestIdEntry(entry.id, "note", event.target.value)}
+                            placeholder="비고"
+                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <div className="flex items-start justify-end">
+                            <button
+                              type="button"
+                              onClick={() => removeTestIdEntry(entry.id)}
+                              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="px-4 py-8 text-center text-sm text-slate-400">등록된 시험아이디가 없습니다.</div>
+                )}
+              </div>
+
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={saveTestIdEntries}
+                  disabled={isPending}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  {isPending ? "저장 중..." : "시험아이디 저장"}
+                </button>
+              </div>
+            </div>
+
             <div className={`${cardClass} ${mobileSection === "contracts" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -784,154 +933,6 @@ export function PersonalDashboard({ currentUser, data }: Props) {
               </div>
             </div>
 
-            <div className={`${cardClass} ${mobileSection === "testIds" ? "block" : "hidden"} lg:block`}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">1. 시험아이디 관리</h3>
-                  <p className="mt-1 text-sm text-slate-500">개별 등록 또는 연속 등록 후 회사명, 부서, 담당자, 연락처, 비고를 기록할 수 있습니다.</p>
-                </div>
-                <div className="rounded-2xl bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700">
-                  {testIdEntries.length}건
-                </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTestIdMode("single")}
-                  className={`rounded-2xl px-4 py-2 text-sm font-bold transition ${testIdMode === "single" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
-                >
-                  개별등록
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTestIdMode("bulk")}
-                  className={`rounded-2xl px-4 py-2 text-sm font-bold transition ${testIdMode === "bulk" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
-                >
-                  여러개 등록
-                </button>
-              </div>
-
-              {testIdMode === "single" ? (
-                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-                  <input
-                    value={singleTestId}
-                    onChange={(event) => setSingleTestId(event.target.value)}
-                    placeholder="예: E260403"
-                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => addTestIds([singleTestId])}
-                    className="inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700"
-                  >
-                    등록
-                  </button>
-                </div>
-              ) : (
-                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                  <input
-                    value={bulkStartId}
-                    onChange={(event) => setBulkStartId(event.target.value)}
-                    placeholder="시작 아이디 예: E260403"
-                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                  />
-                  <input
-                    value={bulkEndId}
-                    onChange={(event) => setBulkEndId(event.target.value)}
-                    placeholder="끝 아이디 예: E260408"
-                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => addTestIds(buildRangeTestIds(bulkStartId, bulkEndId))}
-                    className="inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700"
-                  >
-                    여러개 등록
-                  </button>
-                </div>
-              )}
-
-              {testIdMessage ? <div className="mt-3 text-sm text-slate-500">{testIdMessage}</div> : null}
-
-              <div className="mt-5 overflow-x-auto rounded-[24px] border border-slate-200">
-                {testIdEntries.length ? (
-                  <div className="min-w-[980px]">
-                    <div className="grid grid-cols-[120px_170px_170px_140px_160px_minmax(240px,1fr)_88px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[12px] font-bold text-slate-500">
-                      <div>시험아이디</div>
-                      <div>회사명</div>
-                      <div>부서</div>
-                      <div>담당자</div>
-                      <div>연락처</div>
-                      <div>비고</div>
-                      <div>관리</div>
-                    </div>
-                    <div className="divide-y divide-slate-200">
-                      {testIdEntries.map((entry) => (
-                        <div
-                          key={entry.id}
-                          className="grid grid-cols-[120px_170px_170px_140px_160px_minmax(240px,1fr)_88px] gap-3 px-4 py-3"
-                        >
-                          <div className="flex items-center text-[13px] font-black text-slate-950">{entry.testId}</div>
-                          <input
-                            value={entry.companyName}
-                            onChange={(event) => updateTestIdEntry(entry.id, "companyName", event.target.value)}
-                            placeholder="회사명"
-                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                          />
-                          <input
-                            value={entry.departmentName}
-                            onChange={(event) => updateTestIdEntry(entry.id, "departmentName", event.target.value)}
-                            placeholder="부서"
-                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                          />
-                          <input
-                            value={entry.assigneeName}
-                            onChange={(event) => updateTestIdEntry(entry.id, "assigneeName", event.target.value)}
-                            placeholder="담당자"
-                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                          />
-                          <input
-                            value={entry.contact}
-                            onChange={(event) => updateTestIdEntry(entry.id, "contact", event.target.value)}
-                            placeholder="연락처"
-                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                          />
-                          <input
-                            value={entry.note}
-                            onChange={(event) => updateTestIdEntry(entry.id, "note", event.target.value)}
-                            placeholder="비고"
-                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                          />
-                          <div className="flex items-start justify-end">
-                            <button
-                              type="button"
-                              onClick={() => removeTestIdEntry(entry.id)}
-                              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
-                            >
-                              삭제
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="px-4 py-8 text-center text-sm text-slate-400">등록된 시험아이디가 없습니다.</div>
-                )}
-              </div>
-
-              <div className="mt-5 flex justify-end">
-                <button
-                  type="button"
-                  onClick={saveTestIdEntries}
-                  disabled={isPending}
-                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-bold text-white disabled:opacity-60"
-                >
-                  {isPending ? "저장 중..." : "시험아이디 저장"}
-                </button>
-              </div>
-            </div>
           </section>
         </div>
       </div>
