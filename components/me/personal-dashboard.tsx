@@ -131,13 +131,16 @@ function normalizeTestId(value: string) {
   return match ? `E${match[1]}` : ""
 }
 
-function buildSequentialTestIds(startId: string, count: number) {
-  const normalized = normalizeTestId(startId)
-  if (!normalized) return []
-  const digits = normalized.slice(1)
-  const base = Number(digits)
-  if (!Number.isFinite(base)) return []
-  return Array.from({ length: Math.max(0, count) }, (_, index) => `E${String(base + index).padStart(6, "0")}`)
+function buildRangeTestIds(startId: string, endId: string) {
+  const normalizedStart = normalizeTestId(startId)
+  const normalizedEnd = normalizeTestId(endId)
+  if (!normalizedStart || !normalizedEnd) return []
+
+  const start = Number(normalizedStart.slice(1))
+  const end = Number(normalizedEnd.slice(1))
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return []
+
+  return Array.from({ length: end - start + 1 }, (_, index) => `E${String(start + index).padStart(6, "0")}`)
 }
 
 export function PersonalDashboard({ currentUser, data }: Props) {
@@ -153,7 +156,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
   const [testIdMode, setTestIdMode] = useState<"single" | "bulk">("single")
   const [singleTestId, setSingleTestId] = useState("")
   const [bulkStartId, setBulkStartId] = useState("")
-  const [bulkCount, setBulkCount] = useState(6)
+  const [bulkEndId, setBulkEndId] = useState("")
   const [testIdMessage, setTestIdMessage] = useState("")
 
   const pendingDocuments = useMemo(() => {
@@ -226,6 +229,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
     })
     setSingleTestId("")
     setBulkStartId("")
+    setBulkEndId("")
     setTestIdMessage(`${normalizedIds.length}건의 시험아이디를 목록에 추가했습니다.`)
   }
 
@@ -825,7 +829,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                   </button>
                 </div>
               ) : (
-                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_120px_auto]">
+                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                   <input
                     value={bulkStartId}
                     onChange={(event) => setBulkStartId(event.target.value)}
@@ -833,16 +837,14 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                     className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                   />
                   <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    value={bulkCount}
-                    onChange={(event) => setBulkCount(Math.max(1, Number(event.target.value) || 1))}
+                    value={bulkEndId}
+                    onChange={(event) => setBulkEndId(event.target.value)}
+                    placeholder="끝 아이디 예: E260408"
                     className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                   />
                   <button
                     type="button"
-                    onClick={() => addTestIds(buildSequentialTestIds(bulkStartId, bulkCount))}
+                    onClick={() => addTestIds(buildRangeTestIds(bulkStartId, bulkEndId))}
                     className="inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700"
                   >
                     여러개 등록
