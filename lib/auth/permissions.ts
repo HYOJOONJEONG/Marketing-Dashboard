@@ -88,7 +88,11 @@ export function filterContractsForUser<T extends Record<string, any>>(
     return contracts.filter((contract) => String(contract?.teamId || "") === user.teamId)
   }
   return contracts.filter(
-    (contract) =>
-      String(contract?.createdBy || "") === user.id || String(contract?.recommenderUserId || "") === user.id,
+    (contract) => {
+      const createdBy = String(contract?.createdBy || "").trim()
+      const recommenderUserId = String(contract?.recommenderUserId || "").trim()
+      const recommender = String(contract?.recommender || "").trim()
+      return createdBy === user.id || recommenderUserId === user.id || recommender === user.name
+    },
   )
 }
