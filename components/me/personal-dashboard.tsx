@@ -456,7 +456,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             <div className={`${cardClass} ${mobileSection === "contracts" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">1. 내 신규계약 리스트</h3>
+                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">2. 내 신규계약 리스트</h3>
                   <p className="mt-1 text-sm text-slate-500">이름 기준으로 등록된 신규계약을 월별 흐름까지 함께 보여줍니다.</p>
                 </div>
                 <div className="rounded-2xl bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600">
@@ -545,7 +545,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             <div className={`${cardClass} ${mobileSection === "pending" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">2. 내 이름으로 된 계약서 미회수 현황</h3>
+                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">3. 내 이름으로 된 계약서 미회수 현황</h3>
                   <p className="mt-1 text-sm text-slate-500">선택한 담당 업종 기준으로 미회수 계약서만 모아 보여줍니다.</p>
                 </div>
                 <div className="rounded-2xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
@@ -627,7 +627,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             <div className={`${cardClass} ${mobileSection === "termination" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">3. 나의 해지 리스트</h3>
+                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">4. 나의 해지 리스트</h3>
                   <p className="mt-1 text-sm text-slate-500">해지 예정인 계약건만 보여줍니다.</p>
                 </div>
                 <div className="rounded-2xl bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700">
@@ -706,7 +706,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             <div className={`${cardClass} ${mobileSection === "hold" ? "block" : "hidden"} lg:block`}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">4. 나의 청구보류 리스트</h3>
+                    <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">5. 나의 청구보류 리스트</h3>
                   <p className="mt-1 text-sm text-slate-500">현재 내 이름으로 관리 중인 청구보류 건의 시작일과 종료일을 함께 보여줍니다.</p>
                   </div>
                 <div className="rounded-2xl bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
@@ -787,7 +787,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             <div className={`${cardClass} ${mobileSection === "testIds" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">5. 시험아이디 관리</h3>
+                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">1. 시험아이디 관리</h3>
                   <p className="mt-1 text-sm text-slate-500">개별 등록 또는 연속 등록 후 회사명, 부서, 담당자, 연락처, 비고를 기록할 수 있습니다.</p>
                 </div>
                 <div className="rounded-2xl bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700">
