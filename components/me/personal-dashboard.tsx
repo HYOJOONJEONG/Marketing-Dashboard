@@ -27,6 +27,8 @@ type Props = {
   }
 }
 
+type MobileMyPageSection = "contracts" | "pending" | "termination" | "hold"
+
 const cardClass = "rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
 const avatarOptions = ["😀", "😎", "🧑‍💼", "📈", "💼", "🦊", "🐯", "⭐", "🚀", "🧠", "🫶", "🔥", "🐻", "🐼", "🦁", "🐸", "🌈", "⚡", "🎯", "🎧", "☕", "🍀", "🪐", "🎨"]
 
@@ -97,6 +99,28 @@ function MetricCard({
   )
 }
 
+function MobileDataCard({
+  title,
+  rows,
+}: {
+  title: string
+  rows: Array<{ label: string; value: ReactNode }>
+}) {
+  return (
+    <div className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+      <div className="text-[14px] font-bold text-slate-950">{title}</div>
+      <div className="mt-3 space-y-2.5">
+        {rows.map((row) => (
+          <div key={row.label} className="rounded-2xl bg-slate-50 px-3.5 py-3">
+            <div className="text-[11px] font-semibold text-slate-400">{row.label}</div>
+            <div className="mt-1 text-[14px] font-semibold text-slate-800">{row.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function PersonalDashboard({ currentUser, data }: Props) {
   const router = useRouter()
   const [profileMessage, setProfileMessage] = useState("")
@@ -105,6 +129,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
   const [isIndustryOpen, setIsIndustryOpen] = useState(false)
   const [isAvatarOpen, setIsAvatarOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [mobileSection, setMobileSection] = useState<MobileMyPageSection>("contracts")
 
   const pendingDocuments = useMemo(() => {
     return (data.pendingDocumentSource || []).filter((row) => {
@@ -149,12 +174,12 @@ export function PersonalDashboard({ currentUser, data }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef6ff_0%,#f8fbff_36%,#f3f6fb_100%)] px-4 py-3">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef6ff_0%,#f8fbff_36%,#f3f6fb_100%)] px-3 py-3 sm:px-4">
       <div className="mx-auto max-w-[1680px]">
         <div className="space-y-4">
           <section className={`${cardClass} relative z-20 overflow-visible p-4`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
                 <div
                   className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border ${currentUser.color.border} ${currentUser.color.bg} text-[22px] shadow-sm`}
                 >
@@ -172,11 +197,11 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                 <button
                   type="button"
                   onClick={() => router.push("/")}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none"
                 >
                   <ArrowLeft className="h-4 w-4 text-slate-400" />
                   대시보드 돌아가기
@@ -188,13 +213,13 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                       setIsAvatarOpen(false)
                       setIsIndustryOpen((prev) => !prev)
                     }}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none"
                   >
                     담당 업종 선택
                     <ChevronDown className={`h-4 w-4 text-slate-400 transition ${isIndustryOpen ? "rotate-180" : ""}`} />
                   </button>
                   {isIndustryOpen ? (
-                    <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[300px] rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+                    <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)] sm:left-auto sm:right-0 sm:w-[300px]">
                       <div className="mb-2 text-xs font-semibold text-slate-400">미회수 현황 집계 기준</div>
                       <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
                         {(data.industryOptions || []).map((industry) => {
@@ -228,13 +253,13 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                       setIsIndustryOpen(false)
                       setIsAvatarOpen((prev) => !prev)
                     }}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none"
                   >
                     <UserRound className="h-4 w-4 text-slate-400" />
                     아바타 변경
                   </button>
                   {isAvatarOpen ? (
-                    <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[304px] rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+                    <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)] sm:left-auto sm:right-0 sm:w-[304px]">
                       <div className="mb-3 text-xs font-semibold text-slate-400">아바타 선택</div>
                       <div className="flex flex-wrap gap-2">
                         {avatarOptions.map((avatar) => {
@@ -271,7 +296,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                   type="button"
                   onClick={saveProfile}
                   disabled={isPending}
-                  className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-60"
+                  className="inline-flex h-10 flex-1 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-60 sm:flex-none"
                 >
                   {isPending ? "저장 중..." : "프로필 저장"}
                 </button>
@@ -280,7 +305,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             {profileMessage ? <div className="mt-3 text-sm text-slate-500">{profileMessage}</div> : null}
           </section>
 
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               title="내 신규계약"
               value={data.myContracts.length}
@@ -307,8 +332,30 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             />
           </section>
 
+          <section className="lg:hidden">
+            <div className="grid grid-cols-2 gap-2 rounded-[24px] border border-slate-200 bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+              {[
+                { key: "contracts", label: "신규계약" },
+                { key: "pending", label: "미회수" },
+                { key: "termination", label: "해지" },
+                { key: "hold", label: "청구보류" },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setMobileSection(item.key as MobileMyPageSection)}
+                  className={`rounded-2xl px-3 py-3 text-[13px] font-bold transition ${
+                    mobileSection === item.key ? "bg-blue-600 text-white shadow-sm" : "bg-slate-50 text-slate-600"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </section>
+
           <section className="space-y-5">
-            <div className={cardClass}>
+            <div className={`${cardClass} ${mobileSection === "contracts" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">1. 내 신규계약 리스트</h3>
@@ -340,7 +387,29 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                 )}
               </div>
 
-              <div className="mt-5 overflow-x-auto rounded-[24px] border border-slate-200">
+              <div className="mt-5 space-y-3 lg:hidden">
+                {data.myContracts.length ? (
+                  data.myContracts.slice(0, 20).map((row) => (
+                    <MobileDataCard
+                      key={row.id}
+                      title={formatValue(row.companyName)}
+                      rows={[
+                        { label: "부서", value: formatValue(row.departmentName) },
+                        { label: "ID", value: formatValue(row.idCode) },
+                        { label: "업종", value: formatValue(row.industryGroup || row.industry) },
+                        { label: "계약월", value: formatValue(row.contractMonth) },
+                        { label: "계약서 상태", value: formatValue(row.documentStatus) },
+                      ]}
+                    />
+                  ))
+                ) : (
+                  <div className="rounded-[24px] border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">
+                    등록된 신규계약이 없습니다.
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 hidden overflow-x-auto rounded-[24px] border border-slate-200 lg:block">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
@@ -375,7 +444,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
               </div>
             </div>
 
-            <div className={cardClass}>
+            <div className={`${cardClass} ${mobileSection === "pending" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">2. 내 이름으로 된 계약서 미회수 현황</h3>
@@ -398,7 +467,29 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                 )}
               </div>
 
-              <div className="mt-5 overflow-x-auto rounded-[24px] border border-slate-200">
+              <div className="mt-5 space-y-3 lg:hidden">
+                {pendingDocuments.length ? (
+                  pendingDocuments.map((row) => (
+                    <MobileDataCard
+                      key={row.id}
+                      title={formatValue(row.companyName)}
+                      rows={[
+                        { label: "부서", value: formatValue(row.departmentName) },
+                        { label: "ID", value: formatValue(row.idCode) },
+                        { label: "업종", value: formatValue(row.industryGroup || row.industry) },
+                        { label: "청구월", value: formatValue(row.claimMonth) },
+                        { label: "상태", value: formatValue(row.status) },
+                      ]}
+                    />
+                  ))
+                ) : (
+                  <div className="rounded-[24px] border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">
+                    {selectedIndustryLabels.length ? "미회수 계약서가 없습니다." : "담당 업종을 선택해주세요."}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 hidden overflow-x-auto rounded-[24px] border border-slate-200 lg:block">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
@@ -435,7 +526,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
           </section>
 
           <section className="space-y-5">
-            <div className={cardClass}>
+            <div className={`${cardClass} ${mobileSection === "termination" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">3. 나의 해지 리스트</h3>
@@ -446,7 +537,36 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                 </div>
               </div>
 
-              <div className="mt-5 overflow-x-auto rounded-[24px] border border-slate-200">
+              <div className="mt-5 space-y-3 lg:hidden">
+                {data.myTerminationRows.length ? (
+                  data.myTerminationRows.map((row) => (
+                    <MobileDataCard
+                      key={row.id}
+                      title={formatValue(row.companyName)}
+                      rows={[
+                        {
+                          label: "구분",
+                          value: (
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${terminationBadgeClass(row.sectionLabel)}`}>
+                              {row.sectionLabel}
+                            </span>
+                          ),
+                        },
+                        { label: "부서", value: formatValue(row.departmentName) },
+                        { label: "고객번호", value: formatValue(row.customerId) },
+                        { label: "사유", value: formatValue(row.reason) },
+                        { label: "해지일", value: formatValue(row.terminationDate) },
+                      ]}
+                    />
+                  ))
+                ) : (
+                  <div className="rounded-[24px] border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">
+                    배정된 해지 리스트가 없습니다.
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 hidden overflow-x-auto rounded-[24px] border border-slate-200 lg:block">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
@@ -485,7 +605,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
               </div>
             </div>
 
-            <div className={cardClass}>
+            <div className={`${cardClass} ${mobileSection === "hold" ? "block" : "hidden"} lg:block`}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">4. 나의 청구보류 리스트</h3>
@@ -496,7 +616,37 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                 </div>
               </div>
 
-              <div className="mt-5 overflow-x-auto rounded-[24px] border border-slate-200">
+              <div className="mt-5 space-y-3 lg:hidden">
+                {data.myHoldRows.length ? (
+                  data.myHoldRows.map((row) => (
+                    <MobileDataCard
+                      key={row.id}
+                      title={formatValue(row.companyName)}
+                      rows={[
+                        {
+                          label: "구분",
+                          value: (
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${terminationBadgeClass(row.sectionLabel)}`}>
+                              {row.sectionLabel}
+                            </span>
+                          ),
+                        },
+                        { label: "부서", value: formatValue(row.departmentName) },
+                        { label: "고객번호", value: formatValue(row.customerId) },
+                        { label: "사유", value: formatValue(row.reason) },
+                        { label: "시작일", value: formatMonthDisplay(row.startDate) },
+                        { label: "종료일", value: formatMonthDisplay(row.endDate) },
+                      ]}
+                    />
+                  ))
+                ) : (
+                  <div className="rounded-[24px] border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">
+                    배정된 청구보류 리스트가 없습니다.
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 hidden overflow-x-auto rounded-[24px] border border-slate-200 lg:block">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
