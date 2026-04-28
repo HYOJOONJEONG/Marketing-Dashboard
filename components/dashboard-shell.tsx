@@ -1974,7 +1974,7 @@ export function DashboardShell({
     [selectedSheet],
   )
   const visibleWeeklyBillingHoldCount = useMemo(
-    () => (selectedSheet?.holdItems || []).filter((row: any) => !isNextMonthBillingCarryover(row.endDate)).length,
+    () => (selectedSheet?.holdItems || []).length,
     [selectedSheet],
   )
   const reasonSummary = useMemo(() => {
@@ -2777,17 +2777,20 @@ export function DashboardShell({
   }
 
   function persistCollectionDelivery(nextDelivery: any) {
-    persist({
-      ...data,
-      collection: {
-        ...collection,
-        delivery: nextDelivery,
-        tab: collectionTab,
-        yearFilter: collectionYearFilter,
-        statusFilter: collectionStatusFilter,
-        sort: collectionSort,
+    return persist(
+      {
+        ...data,
+        collection: {
+          ...collection,
+          delivery: nextDelivery,
+          tab: collectionTab,
+          yearFilter: collectionYearFilter,
+          statusFilter: collectionStatusFilter,
+          sort: collectionSort,
+        },
       },
-    })
+      { immediate: true, updatedViews: ["collection"] },
+    )
   }
 
   function buildCollectionDeliverySnapshot() {
@@ -2813,7 +2816,7 @@ export function DashboardShell({
     }
   }
 
-  function handleCollectionDeliverySaveHistory() {
+  async function handleCollectionDeliverySaveHistory() {
     const snapshot = buildCollectionDeliverySnapshot()
     if (!snapshot) {
       window.alert("전달 일자를 먼저 입력해 주세요.")
@@ -2825,13 +2828,14 @@ export function DashboardShell({
         (entry: any) => normalizeDate(entry.deliveredDate) !== snapshot.deliveredDate,
       ),
     ]
-    persistCollectionDelivery({
+    await persistCollectionDelivery({
       ...collectionDelivery,
       deliveredDate: snapshot.deliveredDate,
+      rows: snapshot.rows,
       history: nextHistory,
     })
     setSelectedDeliveryHistoryDate(snapshot.deliveredDate)
-    window.alert(`${snapshot.deliveredDate} 주차 리스트로 저장되었습니다.`)
+    window.alert(`${snapshot.deliveredDate} 리스트로 저장되었습니다.`)
   }
 
   function applyCollectionDeliveryHistory(target: any, selectedDate: string) {
@@ -2953,14 +2957,42 @@ export function DashboardShell({
     })
   }
 
-  function handleCollectionDeliveryOpenNewPage() {
-    if (!window.confirm("현재 전달 리스트 입력 내용을 모두 비우고 새 페이지를 열까요? 저장된 주차는 유지됩니다.")) return
-    persistCollectionDelivery({
+  async function handleCollectionDeliveryOpenNewPage() {
+    const today = normalizeDate(getSeoulTodayKey())
+    if (!window.confirm(`현재 입력 중인 전달 리스트를 저장본에 보존하고 ${today} 새 페이지를 열까요?`)) return
+
+    const hasCurrentContent =
+      collectionDelivery.rows.some((row: any) =>
+        [
+          row.companyName,
+          row.departmentName,
+          row.idCode,
+          row.recommender,
+          row.contractMonth,
+          row.recoveredCount,
+          row.note,
+        ].some((value) => String(value || "").trim()),
+      ) ||
+      String(collectionDelivery.managerConfirm || "").trim() ||
+      String(collectionDelivery.senderConfirm || "").trim()
+
+    const currentSnapshot = hasCurrentContent ? buildCollectionDeliverySnapshot() : null
+    const nextHistory = currentSnapshot
+      ? [
+          currentSnapshot,
+          ...(collectionDelivery.history || []).filter(
+            (entry: any) => normalizeDate(entry.deliveredDate) !== currentSnapshot.deliveredDate,
+          ),
+        ]
+      : collectionDelivery.history || []
+
+    await persistCollectionDelivery({
       ...collectionDelivery,
-      deliveredDate: "",
+      deliveredDate: today,
       managerConfirm: "",
       senderConfirm: "",
       rows: [],
+      history: nextHistory,
     })
     setSelectedDeliveryHistoryDate("")
   }
@@ -5717,7 +5749,7 @@ export function DashboardShell({
                             onChange={() => toggleWeeklySelection(row.id)}
                           />
                         </td>
-                        <td className={tdClass}>{row.no || index + 1}</td>
+                        <td className={tdClass}>{index + 1}</td>
                         <td className={`${tdClass} whitespace-nowrap`}>{row.companyName}</td>
                         <td className={`${tdClass} whitespace-nowrap`}>{row.departmentName}</td>
                         <td className={tdClass}>{row.idCode}</td>
