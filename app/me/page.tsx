@@ -47,6 +47,7 @@ export default async function MyPage() {
         avatarEmoji: auth.user.avatarEmoji || null,
         color: getUserColorToken(auth.user.id),
         assignedIndustries: auth.user.assignedIndustries || [],
+        testIdEntries: auth.user.testIdEntries || [],
       }}
       data={{ ...personalData, industryOptions }}
     />

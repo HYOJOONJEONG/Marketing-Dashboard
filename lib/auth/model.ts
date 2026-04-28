@@ -57,6 +57,18 @@ export type UserPermissionOverrideRecord = {
   allowed: boolean
 }
 
+export type UserTestIdEntry = {
+  id: string
+  testId: string
+  companyName: string
+  departmentName: string
+  assigneeName: string
+  contact: string
+  note: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type UserRecord = {
   id: string
   loginId: string
@@ -64,6 +76,7 @@ export type UserRecord = {
   title?: string | null
   avatarEmoji?: string | null
   assignedIndustries?: string[]
+  testIdEntries?: UserTestIdEntry[]
   displayOrder?: number
   role: RoleKey
   teamId: string

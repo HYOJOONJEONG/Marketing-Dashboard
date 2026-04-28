@@ -6,6 +6,7 @@ import {
   PresenceSessionRecord,
   RoleKey,
   TeamRecord,
+  UserTestIdEntry,
   UserRecord,
   getUserColorToken,
 } from "@/lib/auth/model"
@@ -65,6 +66,27 @@ function normalizeIdentityValue(value: string) {
     .trim()
     .replace(/\s+/g, "")
     .toLowerCase()
+}
+
+function normalizeTestIdEntries(entries: unknown): UserTestIdEntry[] {
+  if (!Array.isArray(entries)) return []
+  return entries
+    .map((entry) => {
+      const testId = String((entry as any)?.testId || "").trim().toUpperCase()
+      if (!testId) return null
+      return {
+        id: String((entry as any)?.id || `test-id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`).trim(),
+        testId,
+        companyName: String((entry as any)?.companyName || "").trim(),
+        departmentName: String((entry as any)?.departmentName || "").trim(),
+        assigneeName: String((entry as any)?.assigneeName || "").trim(),
+        contact: String((entry as any)?.contact || "").trim(),
+        note: String((entry as any)?.note || "").trim(),
+        createdAt: String((entry as any)?.createdAt || nowIso()).trim(),
+        updatedAt: String((entry as any)?.updatedAt || nowIso()).trim(),
+      } satisfies UserTestIdEntry
+    })
+    .filter((entry): entry is UserTestIdEntry => Boolean(entry))
 }
 
 const USER_TITLE_BY_NAME: Record<string, string> = {
@@ -136,6 +158,7 @@ function createSeedUsers(now: string, teams: TeamRecord[]): UserRecord[] {
     title: getUserTitle(user.name, user.role),
     avatarEmoji: null,
     assignedIndustries: [],
+    testIdEntries: [],
     displayOrder: displayOrderByName[user.name] || 99,
     role: user.role,
     teamId: String(teamIdByName.get(user.team) || teams[0]?.id || ""),
@@ -307,6 +330,7 @@ function normalizeUserTitles(state: AuthState) {
     title: user.title || getUserTitle(user.name, user.role),
     avatarEmoji: user.avatarEmoji ? String(user.avatarEmoji).trim() : null,
     assignedIndustries: normalizeAssignedIndustries(user.assignedIndustries),
+    testIdEntries: normalizeTestIdEntries(user.testIdEntries),
     displayOrder: Number(user.displayOrder ?? displayOrderByName[user.name] ?? 99),
     teamId: user.teamId || String([...teamMap.keys()][0] || ""),
   }))
@@ -374,6 +398,7 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
       existing.assignedIndustries = Array.isArray(existing.assignedIndustries)
         ? normalizeAssignedIndustries(existing.assignedIndustries)
         : []
+      existing.testIdEntries = normalizeTestIdEntries(existing.testIdEntries)
       existing.updatedAt = now
       return
     }
@@ -385,6 +410,7 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
       title: getUserTitle(seedUser.name, seedUser.role),
       avatarEmoji: null,
       assignedIndustries: [],
+      testIdEntries: [],
       displayOrder: displayOrderByName[seedUser.name] || 99,
       role: seedUser.role,
       teamId,
@@ -593,6 +619,7 @@ export function toSafeUser(user: UserRecord, state: AuthState) {
     title: user.title || getUserTitle(user.name, user.role),
     avatarEmoji: user.avatarEmoji ? String(user.avatarEmoji).trim() : null,
     assignedIndustries: normalizeAssignedIndustries(user.assignedIndustries),
+    testIdEntries: normalizeTestIdEntries(user.testIdEntries),
     role: user.role,
     teamId: user.teamId,
     teamName: getTeamName(state, user.teamId),

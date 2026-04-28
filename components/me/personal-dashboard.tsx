@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, OctagonAlert, UserRound } from "lucide-react"
+import type { UserTestIdEntry } from "@/lib/auth/model"
 
 type Props = {
   currentUser: {
@@ -14,6 +15,7 @@ type Props = {
     avatarEmoji?: string | null
     color: { bg: string; text: string; border: string; hex: string }
     assignedIndustries?: string[]
+    testIdEntries?: UserTestIdEntry[]
   }
   data: {
     myContracts: any[]
@@ -27,7 +29,7 @@ type Props = {
   }
 }
 
-type MobileMyPageSection = "contracts" | "pending" | "termination" | "hold"
+type MobileMyPageSection = "contracts" | "pending" | "termination" | "hold" | "testIds"
 
 const cardClass = "rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
 const avatarOptions = ["😀", "😎", "🧑‍💼", "📈", "💼", "🦊", "🐯", "⭐", "🚀", "🧠", "🫶", "🔥", "🐻", "🐼", "🦁", "🐸", "🌈", "⚡", "🎯", "🎧", "☕", "🍀", "🪐", "🎨"]
@@ -121,6 +123,23 @@ function MobileDataCard({
   )
 }
 
+function normalizeTestId(value: string) {
+  const match = String(value || "")
+    .trim()
+    .toUpperCase()
+    .match(/^E?(\d{6})$/)
+  return match ? `E${match[1]}` : ""
+}
+
+function buildSequentialTestIds(startId: string, count: number) {
+  const normalized = normalizeTestId(startId)
+  if (!normalized) return []
+  const digits = normalized.slice(1)
+  const base = Number(digits)
+  if (!Number.isFinite(base)) return []
+  return Array.from({ length: Math.max(0, count) }, (_, index) => `E${String(base + index).padStart(6, "0")}`)
+}
+
 export function PersonalDashboard({ currentUser, data }: Props) {
   const router = useRouter()
   const [profileMessage, setProfileMessage] = useState("")
@@ -130,6 +149,12 @@ export function PersonalDashboard({ currentUser, data }: Props) {
   const [isAvatarOpen, setIsAvatarOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [mobileSection, setMobileSection] = useState<MobileMyPageSection>("contracts")
+  const [testIdEntries, setTestIdEntries] = useState<UserTestIdEntry[]>(currentUser.testIdEntries || [])
+  const [testIdMode, setTestIdMode] = useState<"single" | "bulk">("single")
+  const [singleTestId, setSingleTestId] = useState("")
+  const [bulkStartId, setBulkStartId] = useState("")
+  const [bulkCount, setBulkCount] = useState(6)
+  const [testIdMessage, setTestIdMessage] = useState("")
 
   const pendingDocuments = useMemo(() => {
     return (data.pendingDocumentSource || []).filter((row) => {
@@ -169,6 +194,74 @@ export function PersonalDashboard({ currentUser, data }: Props) {
       setSelectedIndustries(Array.isArray(payload?.assignedIndustries) ? payload.assignedIndustries : selectedIndustries)
       setSelectedAvatar(String(payload?.avatarEmoji || "").trim())
       setProfileMessage("내 프로필 설정이 저장되었습니다.")
+      router.refresh()
+    })
+  }
+
+  const addTestIds = (ids: string[]) => {
+    const normalizedIds = ids.map(normalizeTestId).filter(Boolean)
+    if (!normalizedIds.length) {
+      setTestIdMessage("시험아이디 형식을 확인해주세요. 예: E260403")
+      return
+    }
+    setTestIdEntries((prev) => {
+      const existingMap = new Map(prev.map((entry) => [entry.testId, entry]))
+      const now = new Date().toISOString()
+      normalizedIds.forEach((testId) => {
+        if (!existingMap.has(testId)) {
+          existingMap.set(testId, {
+            id: `test-id-${testId}-${Math.random().toString(36).slice(2, 8)}`,
+            testId,
+            companyName: "",
+            departmentName: "",
+            assigneeName: currentUser.name,
+            contact: "",
+            note: "",
+            createdAt: now,
+            updatedAt: now,
+          })
+        }
+      })
+      return [...existingMap.values()].sort((a, b) => a.testId.localeCompare(b.testId, "ko"))
+    })
+    setSingleTestId("")
+    setBulkStartId("")
+    setTestIdMessage(`${normalizedIds.length}건의 시험아이디를 목록에 추가했습니다.`)
+  }
+
+  const updateTestIdEntry = (entryId: string, field: keyof UserTestIdEntry, value: string) => {
+    setTestIdEntries((prev) =>
+      prev.map((entry) =>
+        entry.id === entryId
+          ? {
+              ...entry,
+              [field]: value,
+              updatedAt: new Date().toISOString(),
+            }
+          : entry,
+      ),
+    )
+  }
+
+  const removeTestIdEntry = (entryId: string) => {
+    setTestIdEntries((prev) => prev.filter((entry) => entry.id !== entryId))
+  }
+
+  const saveTestIdEntries = () => {
+    setTestIdMessage("")
+    startTransition(async () => {
+      const response = await fetch("/api/auth/profile", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ testIdEntries }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || !payload?.ok) {
+        setTestIdMessage(payload?.error || "시험아이디 저장에 실패했습니다.")
+        return
+      }
+      setTestIdEntries(Array.isArray(payload?.testIdEntries) ? payload.testIdEntries : testIdEntries)
+      setTestIdMessage("시험아이디 관리 항목이 저장되었습니다.")
       router.refresh()
     })
   }
@@ -334,12 +427,13 @@ export function PersonalDashboard({ currentUser, data }: Props) {
 
           <section className="lg:hidden">
             <div className="grid grid-cols-2 gap-2 rounded-[24px] border border-slate-200 bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-              {[
-                { key: "contracts", label: "신규계약" },
-                { key: "pending", label: "미회수" },
-                { key: "termination", label: "해지" },
-                { key: "hold", label: "청구보류" },
-              ].map((item) => (
+                {[
+                  { key: "contracts", label: "신규계약" },
+                  { key: "pending", label: "미회수" },
+                  { key: "termination", label: "해지" },
+                  { key: "hold", label: "청구보류" },
+                  { key: "testIds", label: "시험ID" },
+                ].map((item) => (
                 <button
                   key={item.key}
                   type="button"
@@ -683,6 +777,148 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                     )}
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            <div className={`${cardClass} ${mobileSection === "testIds" ? "block" : "hidden"} lg:block`}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">5. 시험아이디 관리</h3>
+                  <p className="mt-1 text-sm text-slate-500">개별 등록 또는 연속 등록 후 회사명, 부서, 담당자, 연락처, 비고를 기록할 수 있습니다.</p>
+                </div>
+                <div className="rounded-2xl bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700">
+                  {testIdEntries.length}건
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTestIdMode("single")}
+                  className={`rounded-2xl px-4 py-2 text-sm font-bold transition ${testIdMode === "single" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
+                >
+                  개별등록
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTestIdMode("bulk")}
+                  className={`rounded-2xl px-4 py-2 text-sm font-bold transition ${testIdMode === "bulk" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
+                >
+                  여러개 등록
+                </button>
+              </div>
+
+              {testIdMode === "single" ? (
+                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                  <input
+                    value={singleTestId}
+                    onChange={(event) => setSingleTestId(event.target.value)}
+                    placeholder="예: E260403"
+                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addTestIds([singleTestId])}
+                    className="inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700"
+                  >
+                    등록
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_120px_auto]">
+                  <input
+                    value={bulkStartId}
+                    onChange={(event) => setBulkStartId(event.target.value)}
+                    placeholder="시작 아이디 예: E260403"
+                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={bulkCount}
+                    onChange={(event) => setBulkCount(Math.max(1, Number(event.target.value) || 1))}
+                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addTestIds(buildSequentialTestIds(bulkStartId, bulkCount))}
+                    className="inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700"
+                  >
+                    여러개 등록
+                  </button>
+                </div>
+              )}
+
+              {testIdMessage ? <div className="mt-3 text-sm text-slate-500">{testIdMessage}</div> : null}
+
+              <div className="mt-5 space-y-3">
+                {testIdEntries.length ? (
+                  testIdEntries.map((entry) => (
+                    <div key={entry.id} className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-[16px] font-black text-slate-950">{entry.testId}</div>
+                        <button
+                          type="button"
+                          onClick={() => removeTestIdEntry(entry.id)}
+                          className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                        >
+                          삭제
+                        </button>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <input
+                          value={entry.companyName}
+                          onChange={(event) => updateTestIdEntry(entry.id, "companyName", event.target.value)}
+                          placeholder="회사명"
+                          className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                        />
+                        <input
+                          value={entry.departmentName}
+                          onChange={(event) => updateTestIdEntry(entry.id, "departmentName", event.target.value)}
+                          placeholder="부서"
+                          className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                        />
+                        <input
+                          value={entry.assigneeName}
+                          onChange={(event) => updateTestIdEntry(entry.id, "assigneeName", event.target.value)}
+                          placeholder="담당자"
+                          className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                        />
+                        <input
+                          value={entry.contact}
+                          onChange={(event) => updateTestIdEntry(entry.id, "contact", event.target.value)}
+                          placeholder="연락처"
+                          className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </div>
+
+                      <textarea
+                        value={entry.note}
+                        onChange={(event) => updateTestIdEntry(entry.id, "note", event.target.value)}
+                        rows={4}
+                        placeholder="비고"
+                        className="mt-3 min-h-[120px] w-full rounded-[20px] border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-[24px] border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">
+                    등록된 시험아이디가 없습니다.
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={saveTestIdEntries}
+                  disabled={isPending}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  {isPending ? "저장 중..." : "시험아이디 저장"}
+                </button>
               </div>
             </div>
           </section>
