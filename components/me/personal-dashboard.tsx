@@ -217,7 +217,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             testId,
             companyName: "",
             departmentName: "",
-            assigneeName: currentUser.name,
+            assigneeName: "",
             contact: "",
             note: "",
             createdAt: now,
