@@ -2020,6 +2020,8 @@ export function DashboardShell({
     const now = Date.now()
     const updatedViews = options.updatedViews?.length ? options.updatedViews : [view]
     const serialized = JSON.stringify(nextData)
+    const previousData = cloneData(pendingDataRef.current || data)
+    const previousSerialized = JSON.stringify(previousData)
     setData(nextData)
     pendingDataRef.current = nextData
     markViewsDirty(updatedViews)
@@ -2035,7 +2037,17 @@ export function DashboardShell({
     if (options.immediate) {
       pendingPayloadRef.current = null
       pendingSaveRef.current = null
-      savePromise = commitDashboardData(nextData, updatedViews)
+      savePromise = commitDashboardData(nextData, updatedViews).catch((error) => {
+        setData(previousData)
+        pendingDataRef.current = previousData
+        try {
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(LOCAL_STORAGE_KEY, previousSerialized)
+          }
+        } catch {}
+        window.alert("저장에 실패해서 이전 상태로 되돌렸습니다. 잠시 후 다시 시도해주세요.")
+        throw error
+      })
     }
     if (now - lastHistoryAtRef.current > 500) {
       const snapshot = () => {
@@ -2429,50 +2441,54 @@ export function DashboardShell({
     if (!window.confirm("신규 계약 리스트에서 삭제가 됩니다.\n계약서통합관리로 이동할까요?")) return
 
     startTransition(async () => {
-      const baseDate = normalizeDate(weeklyReport?.baseDate || new Date().toISOString().slice(0, 10))
-      const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
-      const existingRows = collection.integrated || []
-      const existingKeys = new Set(
-        existingRows.map((row: any) => `${row.idCode || ""}|${row.claimMonth || ""}|${row.companyName || ""}`),
-      )
+      try {
+        const baseDate = normalizeDate(weeklyReport?.baseDate || new Date().toISOString().slice(0, 10))
+        const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
+        const existingRows = collection.integrated || []
+        const existingKeys = new Set(
+          existingRows.map((row: any) => `${row.idCode || ""}|${row.claimMonth || ""}|${row.companyName || ""}`),
+        )
 
-      const movedRows = includedContracts
-        .filter((row: any) => !existingKeys.has(`${row.idCode || ""}|${row.contractMonth || ""}|${row.companyName || ""}`))
-        .map((row: any, index: number) => ({
-          id: `collection-${Date.now()}-${index}`,
-          year: currentYear,
-          companyName: row.companyName || "",
-          departmentName: row.departmentName || "",
-          idCode: row.idCode || "",
-          industry: row.industry || "",
-          claimMonth: row.contractMonth || "",
-          receiptDate: row.documentStatus === "회수" ? baseDate : "",
-          reflectedDate,
-          status: row.documentStatus || "미회수",
-        }))
+        const movedRows = includedContracts
+          .filter((row: any) => !existingKeys.has(`${row.idCode || ""}|${row.contractMonth || ""}|${row.companyName || ""}`))
+          .map((row: any, index: number) => ({
+            id: `collection-${Date.now()}-${index}`,
+            year: currentYear,
+            companyName: row.companyName || "",
+            departmentName: row.departmentName || "",
+            idCode: row.idCode || "",
+            industry: row.industry || "",
+            claimMonth: row.contractMonth || "",
+            receiptDate: row.documentStatus === "회수" ? baseDate : "",
+            reflectedDate,
+            status: row.documentStatus || "미회수",
+          }))
 
-      const selectedIds = new Set(includedContracts.map((row: any) => row.id))
-      const nextContracts = contracts.filter((row: any) => !selectedIds.has(row.id))
-      const nextData = {
-        ...data,
-        contracts: nextContracts,
-        collection: {
-          ...collection,
-          integrated: [...movedRows, ...existingRows],
-          yearFilter: currentYear,
-          statusFilter: "all",
-          sort: collectionSort,
-        },
+        const selectedIds = new Set(includedContracts.map((row: any) => row.id))
+        const nextContracts = contracts.filter((row: any) => !selectedIds.has(row.id))
+        const nextData = {
+          ...data,
+          contracts: nextContracts,
+          collection: {
+            ...collection,
+            integrated: [...movedRows, ...existingRows],
+            yearFilter: currentYear,
+            statusFilter: "all",
+            sort: collectionSort,
+          },
+        }
+
+        await persist(nextData, {
+          immediate: true,
+          updatedViews: ["weekly-selection", "contracts", "collection"],
+        })
+        setCollectionTab("integrated")
+        setCollectionYearFilter(currentYear)
+        setCollectionStatusFilter("all")
+        setView("collection")
+      } catch (error) {
+        console.error("Failed to move weekly selection to collection.", error)
       }
-
-      await persist(nextData, {
-        immediate: true,
-        updatedViews: ["weekly-selection", "contracts", "collection"],
-      })
-      setCollectionTab("integrated")
-      setCollectionYearFilter(currentYear)
-      setCollectionStatusFilter("all")
-      setView("collection")
     })
   }
 
