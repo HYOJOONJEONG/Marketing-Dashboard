@@ -1831,7 +1831,7 @@ export function DashboardShell({
     })
     return [...byDate.entries()]
       .sort((a, b) => parseDateKey(b[0]) - parseDateKey(a[0]))
-      .map(([date, entry]) => ({ value: date, label: `${date} 주차`, entry }))
+      .map(([date, entry]) => ({ value: date, label: date, entry }))
   }, [collectionDelivery.history])
   useEffect(() => {
     if (!deliveryHistoryOptions.length) {
@@ -2936,7 +2936,7 @@ export function DashboardShell({
       window.alert("선택한 전달일자 히스토리를 찾을 수 없습니다.")
       return
     }
-    if (!skipConfirm && !window.confirm(`${selectedDate} 주차 리스트를 불러올까요?`)) return
+    if (!skipConfirm && !window.confirm(`${selectedDate} 리스트를 불러올까요?`)) return
     await applyCollectionDeliveryHistory(target, selectedDate)
   }
 
@@ -2949,7 +2949,7 @@ export function DashboardShell({
   async function handleCollectionDeliveryDeleteHistory(dateKey?: string) {
     const selectedDate = normalizeDate(dateKey || selectedDeliveryHistoryDate)
     if (!selectedDate) {
-      window.alert("삭제할 저장 주차를 선택해 주세요.")
+      window.alert("삭제할 저장 일자를 선택해 주세요.")
       return
     }
     const workingDelivery = cloneCollectionDeliveryState(activeCollectionDelivery || collectionDelivery)
@@ -2957,10 +2957,10 @@ export function DashboardShell({
       (entry: any) => normalizeDate(entry.deliveredDate) === selectedDate,
     )
     if (!target) {
-      window.alert("선택한 저장 주차를 찾을 수 없습니다.")
+      window.alert("선택한 저장 일자를 찾을 수 없습니다.")
       return
     }
-    if (!window.confirm(`${selectedDate} 주차 저장본을 삭제할까요? 현재 화면 내용은 유지됩니다.`)) return
+    if (!window.confirm(`${selectedDate} 저장본을 삭제할까요? 현재 화면 내용은 유지됩니다.`)) return
     const nextHistory = (workingDelivery.history || []).filter(
       (entry: any) => normalizeDate(entry.deliveredDate) !== selectedDate,
     )
@@ -2972,7 +2972,7 @@ export function DashboardShell({
     setDeliveryDraft(cloneCollectionDeliveryState(nextDelivery))
     await flushCollectionDeliveryDraft(nextDelivery)
     setSelectedDeliveryHistoryDate(normalizeDate(nextHistory[0]?.deliveredDate || ""))
-    window.alert(`${selectedDate} 주차 저장본을 삭제했습니다.`)
+    window.alert(`${selectedDate} 저장본을 삭제했습니다.`)
   }
 
   function handleCollectionDeliveryMetaChange(field: "title" | "deliveredDate" | "managerConfirm" | "senderConfirm", value: string) {
@@ -3035,8 +3035,6 @@ export function DashboardShell({
 
   async function handleCollectionDeliveryOpenNewPage() {
     const today = normalizeDate(getSeoulTodayKey())
-    if (!window.confirm(`현재 입력 중인 전달 리스트를 저장본에 보존하고 ${today} 새 페이지를 열까요?`)) return
-
     const workingDelivery = cloneCollectionDeliveryState(activeCollectionDelivery || collectionDelivery)
     const hasCurrentContent =
       workingDelivery.rows.some((row: any) =>
@@ -3053,7 +3051,17 @@ export function DashboardShell({
       String(workingDelivery.managerConfirm || "").trim() ||
       String(workingDelivery.senderConfirm || "").trim()
 
-    const currentSnapshot = hasCurrentContent ? buildCollectionDeliverySnapshot(workingDelivery) : null
+    const shouldSaveCurrent = hasCurrentContent
+      ? window.confirm(
+          `현재 페이지를 일단 저장할까요?\n\n확인: ${today} 일자 리스트로 저장 후 새 페이지 열기\n취소: 저장하지 않고 새 페이지 열기`,
+        )
+      : false
+    const currentSnapshot = shouldSaveCurrent
+      ? buildCollectionDeliverySnapshot({
+          ...workingDelivery,
+          deliveredDate: today,
+        })
+      : null
     const nextHistory = currentSnapshot
       ? [
           currentSnapshot,
@@ -6326,7 +6334,7 @@ export function DashboardShell({
                   <div className="flex flex-wrap gap-2">
                     {renderChip(`전달 항목 ${formatNumber(activeCollectionDelivery.rows.length)}건`, "blue")}
                     {renderChip(`전달 일자 ${activeCollectionDelivery.deliveredDate || "-"}`, "gray")}
-                    {renderChip(`저장 주차 ${formatNumber(deliveryHistoryOptions.length)}건`, "gray")}
+                    {renderChip(`저장 일자 ${formatNumber(deliveryHistoryOptions.length)}건`, "gray")}
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-2">
@@ -6350,7 +6358,7 @@ export function DashboardShell({
                         disabled={deliveryHistoryOptions.length === 0}
                       >
                         {deliveryHistoryOptions.length === 0 ? (
-                          <option value="">저장된 주차 없음</option>
+                          <option value="">저장된 일자 없음</option>
                         ) : (
                           deliveryHistoryOptions.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -6376,7 +6384,7 @@ export function DashboardShell({
                             : "border-slate-200 bg-slate-100 text-slate-400"
                         }`}
                       >
-                        주차 삭제
+                        일자 삭제
                       </button>
                       <button
                         type="button"
