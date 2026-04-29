@@ -1230,6 +1230,7 @@ export function DashboardShell({
   const [historyStack, setHistoryStack] = useState<any[]>([])
   const pendingSaveRef = useRef<number | null>(null)
   const pendingDeliveryDraftSaveRef = useRef<number | null>(null)
+  const deliveryDraftRef = useRef<any>(null)
   const isSyncingDeliveryDraftRef = useRef(false)
   const pendingPayloadRef = useRef<string | null>(null)
   const pendingDataRef = useRef<any | null>(null)
@@ -1361,30 +1362,14 @@ export function DashboardShell({
   useEffect(() => {
     if (normalizedTerminationOnceRef.current) return
     if (!termination.sheets || termination.sheets.length === 0) return
-    const activeSheet = termination.sheets[0]
-    const selectedItems = (activeSheet.items || []).filter((row: any) => row.selected)
     const needsPrune = termination.sheets.length > 1
-    const needsMove = selectedItems.length > 0
     let needsManagerBackfill = false
-    const normalizedSheets = (termination.sheets || []).map((sheet: any, index: number) => {
-      const sourceSheet =
-        index === 0
-          ? {
-              ...sheet,
-              items: needsMove ? (sheet.items || []).filter((row: any) => !row.selected) : sheet.items || [],
-              confirmedItems: needsMove
-                ? [
-                    ...selectedItems.map((row: any) => ({ ...row, selected: true })),
-                    ...(sheet.confirmedItems || []),
-                  ]
-                : sheet.confirmedItems || [],
-            }
-          : sheet
-      const result = backfillTerminationSheetManagers(sourceSheet)
+    const normalizedSheets = (termination.sheets || []).map((sheet: any) => {
+      const result = backfillTerminationSheetManagers(sheet)
       if (result.changed) needsManagerBackfill = true
       return result.sheet
     })
-    if (!needsPrune && !needsMove && !needsManagerBackfill) {
+    if (!needsPrune && !needsManagerBackfill) {
       normalizedTerminationOnceRef.current = true
       return
     }
@@ -1793,9 +1778,13 @@ export function DashboardShell({
   })
   const collectionDeliverySignature = useMemo(() => JSON.stringify(collectionDelivery), [collectionDelivery])
   useEffect(() => {
+    deliveryDraftRef.current = deliveryDraft
+  }, [deliveryDraft])
+  useEffect(() => {
+    if (collectionTab === "delivery" && deliveryDraftRef.current) return
     isSyncingDeliveryDraftRef.current = true
     setDeliveryDraft(cloneCollectionDeliveryState(collectionDelivery))
-  }, [collectionDeliverySignature])
+  }, [collectionDeliverySignature, collectionTab])
   useEffect(() => {
     if (collectionTab !== "delivery" || !deliveryDraft) return
     if (isSyncingDeliveryDraftRef.current) {
@@ -2218,7 +2207,6 @@ export function DashboardShell({
 
   useEffect(() => {
     const serverCollection = data?.collection || {}
-    setCollectionTab("integrated")
     setCollectionYearFilter(getUpcomingThursday().getFullYear() || 2026)
     setCollectionStatusFilter(serverCollection?.statusFilter || "all")
     setCollectionSort(serverCollection?.sort || { key: "year", dir: "desc" })
