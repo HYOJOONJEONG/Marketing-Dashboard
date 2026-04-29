@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, OctagonAlert, UserRound } from "lucide-react"
 import type { UserTestIdEntry } from "@/lib/auth/model"
@@ -151,13 +151,20 @@ export function PersonalDashboard({ currentUser, data }: Props) {
   const [isIndustryOpen, setIsIndustryOpen] = useState(false)
   const [isAvatarOpen, setIsAvatarOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
-  const [mobileSection, setMobileSection] = useState<MobileMyPageSection>("contracts")
+  const [mobileSection, setMobileSection] = useState<MobileMyPageSection>("testIds")
   const [testIdEntries, setTestIdEntries] = useState<UserTestIdEntry[]>(currentUser.testIdEntries || [])
   const [testIdMode, setTestIdMode] = useState<"single" | "bulk">("single")
   const [singleTestId, setSingleTestId] = useState("")
   const [bulkStartId, setBulkStartId] = useState("")
   const [bulkEndId, setBulkEndId] = useState("")
   const [testIdMessage, setTestIdMessage] = useState("")
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (window.innerWidth < 1024) {
+      setMobileSection("testIds")
+    }
+  }, [])
 
   const pendingDocuments = useMemo(() => {
     return (data.pendingDocumentSource || []).filter((row) => {
@@ -438,11 +445,11 @@ export function PersonalDashboard({ currentUser, data }: Props) {
           <section className="lg:hidden">
             <div className="grid grid-cols-2 gap-2 rounded-[24px] border border-slate-200 bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
                 {[
+                  { key: "testIds", label: "시험ID" },
                   { key: "contracts", label: "신규계약" },
                   { key: "pending", label: "미회수" },
                   { key: "termination", label: "해지" },
                   { key: "hold", label: "청구보류" },
-                  { key: "testIds", label: "시험ID" },
                 ].map((item) => (
                 <button
                   key={item.key}
