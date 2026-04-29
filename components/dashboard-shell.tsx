@@ -1226,8 +1226,11 @@ export function DashboardShell({
   }>(initialData?.collection?.sort || { key: "year", dir: "desc" })
   const [dailyReportFocus, setDailyReportFocus] = useState<"today" | "status">("today")
   const [selectedDeliveryHistoryDate, setSelectedDeliveryHistoryDate] = useState<string>("")
+  const [deliveryDraft, setDeliveryDraft] = useState<any>(null)
   const [historyStack, setHistoryStack] = useState<any[]>([])
   const pendingSaveRef = useRef<number | null>(null)
+  const pendingDeliveryDraftSaveRef = useRef<number | null>(null)
+  const isSyncingDeliveryDraftRef = useRef(false)
   const pendingPayloadRef = useRef<string | null>(null)
   const pendingDataRef = useRef<any | null>(null)
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
@@ -1769,6 +1772,49 @@ export function DashboardShell({
       history: normalizedHistory,
     }
   }, [collection?.delivery, currentYear, weeklyReport?.baseDate])
+  const cloneCollectionDeliveryState = (source: any) => ({
+    title: String(source?.title || `${currentYear}년 고객업무팀 계약서 전달 리스트`),
+    deliveredDate: String(source?.deliveredDate || ""),
+    managerConfirm: String(source?.managerConfirm || ""),
+    senderConfirm: String(source?.senderConfirm || ""),
+    rows: Array.isArray(source?.rows)
+      ? source.rows.map((row: any, index: number) => ({
+          id: row?.id || `delivery-row-${index + 1}`,
+          companyName: String(row?.companyName || ""),
+          departmentName: String(row?.departmentName || ""),
+          idCode: String(row?.idCode || ""),
+          recommender: String(row?.recommender || ""),
+          contractMonth: String(row?.contractMonth || ""),
+          recoveredCount: String(row?.recoveredCount || ""),
+          note: String(row?.note || ""),
+        }))
+      : [],
+    history: Array.isArray(source?.history) ? source.history.map((entry: any) => ({ ...entry })) : [],
+  })
+  const collectionDeliverySignature = useMemo(() => JSON.stringify(collectionDelivery), [collectionDelivery])
+  useEffect(() => {
+    isSyncingDeliveryDraftRef.current = true
+    setDeliveryDraft(cloneCollectionDeliveryState(collectionDelivery))
+  }, [collectionDeliverySignature])
+  useEffect(() => {
+    if (collectionTab !== "delivery" || !deliveryDraft) return
+    if (isSyncingDeliveryDraftRef.current) {
+      isSyncingDeliveryDraftRef.current = false
+      return
+    }
+    if (pendingDeliveryDraftSaveRef.current) {
+      window.clearTimeout(pendingDeliveryDraftSaveRef.current)
+    }
+    pendingDeliveryDraftSaveRef.current = window.setTimeout(() => {
+      void persistCollectionDelivery(cloneCollectionDeliveryState(deliveryDraft))
+    }, 500)
+    return () => {
+      if (pendingDeliveryDraftSaveRef.current) {
+        window.clearTimeout(pendingDeliveryDraftSaveRef.current)
+      }
+    }
+  }, [collectionTab, deliveryDraft])
+  const activeCollectionDelivery = deliveryDraft || collectionDelivery
   const deliveryHistoryOptions = useMemo(() => {
     const byDate = new Map<string, any>()
     ;(collectionDelivery.history || []).forEach((entry: any) => {
@@ -2793,17 +2839,27 @@ export function DashboardShell({
     )
   }
 
-  function buildCollectionDeliverySnapshot() {
-    const deliveredDate = normalizeDate(collectionDelivery.deliveredDate)
+  async function flushCollectionDeliveryDraft(nextDraft?: any) {
+    const source = cloneCollectionDeliveryState(nextDraft || activeCollectionDelivery || collectionDelivery)
+    if (pendingDeliveryDraftSaveRef.current) {
+      window.clearTimeout(pendingDeliveryDraftSaveRef.current)
+      pendingDeliveryDraftSaveRef.current = null
+    }
+    await persistCollectionDelivery(source)
+    return source
+  }
+
+  function buildCollectionDeliverySnapshot(source: any = activeCollectionDelivery || collectionDelivery) {
+    const deliveredDate = normalizeDate(source?.deliveredDate)
     if (!deliveredDate) return null
     return {
       id: `delivery-history-${Date.now()}`,
       deliveredDate,
-      title: collectionDelivery.title,
-      managerConfirm: collectionDelivery.managerConfirm,
-      senderConfirm: collectionDelivery.senderConfirm,
+      title: String(source?.title || ""),
+      managerConfirm: String(source?.managerConfirm || ""),
+      senderConfirm: String(source?.senderConfirm || ""),
       savedAt: new Date().toISOString(),
-      rows: collectionDelivery.rows.map((row: any, index: number) => ({
+      rows: (source?.rows || []).map((row: any, index: number) => ({
         id: row?.id || `delivery-history-row-${index + 1}`,
         companyName: String(row?.companyName || ""),
         departmentName: String(row?.departmentName || ""),
@@ -2817,31 +2873,36 @@ export function DashboardShell({
   }
 
   async function handleCollectionDeliverySaveHistory() {
-    const snapshot = buildCollectionDeliverySnapshot()
+    const workingDelivery = cloneCollectionDeliveryState(activeCollectionDelivery || collectionDelivery)
+    const snapshot = buildCollectionDeliverySnapshot(workingDelivery)
     if (!snapshot) {
       window.alert("전달 일자를 먼저 입력해 주세요.")
       return
     }
     const nextHistory = [
       snapshot,
-      ...(collectionDelivery.history || []).filter(
+      ...(workingDelivery.history || []).filter(
         (entry: any) => normalizeDate(entry.deliveredDate) !== snapshot.deliveredDate,
       ),
     ]
-    await persistCollectionDelivery({
-      ...collectionDelivery,
+    const nextDelivery = {
+      ...workingDelivery,
       deliveredDate: snapshot.deliveredDate,
       rows: snapshot.rows,
       history: nextHistory,
-    })
+    }
+    isSyncingDeliveryDraftRef.current = true
+    setDeliveryDraft(cloneCollectionDeliveryState(nextDelivery))
+    await flushCollectionDeliveryDraft(nextDelivery)
     setSelectedDeliveryHistoryDate(snapshot.deliveredDate)
     window.alert(`${snapshot.deliveredDate} 리스트로 저장되었습니다.`)
   }
 
-  function applyCollectionDeliveryHistory(target: any, selectedDate: string) {
-    persistCollectionDelivery({
-      ...collectionDelivery,
-      title: String(target.title || collectionDelivery.title),
+  async function applyCollectionDeliveryHistory(target: any, selectedDate: string) {
+    const baseDelivery = cloneCollectionDeliveryState(activeCollectionDelivery || collectionDelivery)
+    const nextDelivery = {
+      ...baseDelivery,
+      title: String(target.title || baseDelivery.title),
       deliveredDate: normalizeDate(target.deliveredDate || selectedDate),
       managerConfirm: String(target.managerConfirm || ""),
       senderConfirm: String(target.senderConfirm || ""),
@@ -2855,17 +2916,20 @@ export function DashboardShell({
         recoveredCount: String(row?.recoveredCount || ""),
         note: String(row?.note || ""),
       })),
-      history: collectionDelivery.history || [],
-    })
+      history: baseDelivery.history || [],
+    }
+    isSyncingDeliveryDraftRef.current = true
+    setDeliveryDraft(cloneCollectionDeliveryState(nextDelivery))
+    await flushCollectionDeliveryDraft(nextDelivery)
   }
 
-  function handleCollectionDeliveryLoadHistory(dateKey?: string, skipConfirm = false) {
+  async function handleCollectionDeliveryLoadHistory(dateKey?: string, skipConfirm = false) {
     const selectedDate = normalizeDate(dateKey || selectedDeliveryHistoryDate)
     if (!selectedDate) {
       window.alert("불러올 전달일자 히스토리를 선택해 주세요.")
       return
     }
-    const target = (collectionDelivery.history || []).find(
+    const target = ((activeCollectionDelivery || collectionDelivery)?.history || []).find(
       (entry: any) => normalizeDate(entry.deliveredDate) === selectedDate,
     )
     if (!target) {
@@ -2873,22 +2937,23 @@ export function DashboardShell({
       return
     }
     if (!skipConfirm && !window.confirm(`${selectedDate} 주차 리스트를 불러올까요?`)) return
-    applyCollectionDeliveryHistory(target, selectedDate)
+    await applyCollectionDeliveryHistory(target, selectedDate)
   }
 
   function handleCollectionDeliveryHistorySelect(nextDate: string) {
     setSelectedDeliveryHistoryDate(nextDate)
     if (!nextDate) return
-    handleCollectionDeliveryLoadHistory(nextDate, true)
+    void handleCollectionDeliveryLoadHistory(nextDate, true)
   }
 
-  function handleCollectionDeliveryDeleteHistory(dateKey?: string) {
+  async function handleCollectionDeliveryDeleteHistory(dateKey?: string) {
     const selectedDate = normalizeDate(dateKey || selectedDeliveryHistoryDate)
     if (!selectedDate) {
       window.alert("삭제할 저장 주차를 선택해 주세요.")
       return
     }
-    const target = (collectionDelivery.history || []).find(
+    const workingDelivery = cloneCollectionDeliveryState(activeCollectionDelivery || collectionDelivery)
+    const target = (workingDelivery.history || []).find(
       (entry: any) => normalizeDate(entry.deliveredDate) === selectedDate,
     )
     if (!target) {
@@ -2896,22 +2961,25 @@ export function DashboardShell({
       return
     }
     if (!window.confirm(`${selectedDate} 주차 저장본을 삭제할까요? 현재 화면 내용은 유지됩니다.`)) return
-    const nextHistory = (collectionDelivery.history || []).filter(
+    const nextHistory = (workingDelivery.history || []).filter(
       (entry: any) => normalizeDate(entry.deliveredDate) !== selectedDate,
     )
-    persistCollectionDelivery({
-      ...collectionDelivery,
+    const nextDelivery = {
+      ...workingDelivery,
       history: nextHistory,
-    })
+    }
+    isSyncingDeliveryDraftRef.current = true
+    setDeliveryDraft(cloneCollectionDeliveryState(nextDelivery))
+    await flushCollectionDeliveryDraft(nextDelivery)
     setSelectedDeliveryHistoryDate(normalizeDate(nextHistory[0]?.deliveredDate || ""))
     window.alert(`${selectedDate} 주차 저장본을 삭제했습니다.`)
   }
 
   function handleCollectionDeliveryMetaChange(field: "title" | "deliveredDate" | "managerConfirm" | "senderConfirm", value: string) {
-    persistCollectionDelivery({
-      ...collectionDelivery,
+    setDeliveryDraft((prev: any) => ({
+      ...cloneCollectionDeliveryState(prev || activeCollectionDelivery || collectionDelivery),
       [field]: field === "deliveredDate" ? normalizeDate(value) : value,
-    })
+    }))
   }
 
   function handleCollectionDeliveryRowChange(
@@ -2919,41 +2987,49 @@ export function DashboardShell({
     field: "companyName" | "departmentName" | "idCode" | "recommender" | "contractMonth" | "recoveredCount" | "note",
     value: string,
   ) {
-    const nextRows = collectionDelivery.rows.map((row: any) =>
-      row.id === rowId
-        ? { ...row, [field]: value }
-        : row,
-    )
-    persistCollectionDelivery({
-      ...collectionDelivery,
-      rows: nextRows,
+    setDeliveryDraft((prev: any) => {
+      const baseDelivery = cloneCollectionDeliveryState(prev || activeCollectionDelivery || collectionDelivery)
+      return {
+        ...baseDelivery,
+        rows: baseDelivery.rows.map((row: any) =>
+          row.id === rowId
+            ? { ...row, [field]: value }
+            : row,
+        ),
+      }
     })
   }
 
   function handleCollectionDeliveryAddRow() {
-    persistCollectionDelivery({
-      ...collectionDelivery,
-      rows: [
-        ...collectionDelivery.rows,
-        {
-          id: `delivery-row-${Date.now()}`,
-          companyName: "",
-          departmentName: "",
-          idCode: "",
-          recommender: "",
-          contractMonth: "",
-          recoveredCount: "",
-          note: "",
-        },
-      ],
+    setDeliveryDraft((prev: any) => {
+      const baseDelivery = cloneCollectionDeliveryState(prev || activeCollectionDelivery || collectionDelivery)
+      return {
+        ...baseDelivery,
+        rows: [
+          ...baseDelivery.rows,
+          {
+            id: `delivery-row-${Date.now()}`,
+            companyName: "",
+            departmentName: "",
+            idCode: "",
+            recommender: "",
+            contractMonth: "",
+            recoveredCount: "",
+            note: "",
+          },
+        ],
+      }
     })
   }
 
   function handleCollectionDeliveryDeleteRow(rowId: string) {
     if (!window.confirm("이 전달 항목을 삭제할까요?")) return
-    persistCollectionDelivery({
-      ...collectionDelivery,
-      rows: collectionDelivery.rows.filter((row: any) => row.id !== rowId),
+    setDeliveryDraft((prev: any) => {
+      const baseDelivery = cloneCollectionDeliveryState(prev || activeCollectionDelivery || collectionDelivery)
+      return {
+        ...baseDelivery,
+        rows: baseDelivery.rows.filter((row: any) => row.id !== rowId),
+      }
     })
   }
 
@@ -2961,8 +3037,9 @@ export function DashboardShell({
     const today = normalizeDate(getSeoulTodayKey())
     if (!window.confirm(`현재 입력 중인 전달 리스트를 저장본에 보존하고 ${today} 새 페이지를 열까요?`)) return
 
+    const workingDelivery = cloneCollectionDeliveryState(activeCollectionDelivery || collectionDelivery)
     const hasCurrentContent =
-      collectionDelivery.rows.some((row: any) =>
+      workingDelivery.rows.some((row: any) =>
         [
           row.companyName,
           row.departmentName,
@@ -2973,27 +3050,30 @@ export function DashboardShell({
           row.note,
         ].some((value) => String(value || "").trim()),
       ) ||
-      String(collectionDelivery.managerConfirm || "").trim() ||
-      String(collectionDelivery.senderConfirm || "").trim()
+      String(workingDelivery.managerConfirm || "").trim() ||
+      String(workingDelivery.senderConfirm || "").trim()
 
-    const currentSnapshot = hasCurrentContent ? buildCollectionDeliverySnapshot() : null
+    const currentSnapshot = hasCurrentContent ? buildCollectionDeliverySnapshot(workingDelivery) : null
     const nextHistory = currentSnapshot
       ? [
           currentSnapshot,
-          ...(collectionDelivery.history || []).filter(
+          ...(workingDelivery.history || []).filter(
             (entry: any) => normalizeDate(entry.deliveredDate) !== currentSnapshot.deliveredDate,
           ),
         ]
-      : collectionDelivery.history || []
+      : workingDelivery.history || []
 
-    await persistCollectionDelivery({
-      ...collectionDelivery,
+    const nextDelivery = {
+      ...workingDelivery,
       deliveredDate: today,
       managerConfirm: "",
       senderConfirm: "",
       rows: [],
       history: nextHistory,
-    })
+    }
+    isSyncingDeliveryDraftRef.current = true
+    setDeliveryDraft(cloneCollectionDeliveryState(nextDelivery))
+    await flushCollectionDeliveryDraft(nextDelivery)
     setSelectedDeliveryHistoryDate("")
   }
 
@@ -3003,7 +3083,8 @@ export function DashboardShell({
       window.alert("팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.")
       return
     }
-    const rowsHtml = collectionDelivery.rows
+    const printSource = activeCollectionDelivery || collectionDelivery
+    const rowsHtml = printSource.rows
       .map((row: any, index: number) => `
         <tr>
           <td>${index + 1}</td>
@@ -3020,7 +3101,7 @@ export function DashboardShell({
       <html lang="ko">
       <head>
         <meta charset="utf-8" />
-        <title>${escapeHtml(collectionDelivery.title)}</title>
+        <title>${escapeHtml(printSource.title)}</title>
         <style>
           @page { size: A4 portrait; margin: 12mm 10mm; }
           html, body {
@@ -3119,21 +3200,21 @@ export function DashboardShell({
           <div class="sheet">
             <div class="header">
               <div class="title-wrap">
-                <h1 class="title">${escapeHtml(collectionDelivery.title)}</h1>
+                <h1 class="title">${escapeHtml(printSource.title)}</h1>
                 <div class="subtitle">계약서 전달 확인용 문서</div>
               </div>
               <div class="meta">
                 <div class="meta-row">
                   <span class="meta-label">전달 일자 :</span>
-                  <span class="meta-value">${escapeHtml(collectionDelivery.deliveredDate)}</span>
+                    <span class="meta-value">${escapeHtml(printSource.deliveredDate)}</span>
                 </div>
                 <div class="meta-row">
                   <span class="meta-label">담당자 확인 :</span>
-                  <span class="meta-sign-line">${escapeHtml(collectionDelivery.managerConfirm)}</span>
+                    <span class="meta-sign-line">${escapeHtml(printSource.managerConfirm)}</span>
                 </div>
                 <div class="meta-row">
                   <span class="meta-label">전달자 확인 :</span>
-                  <span class="meta-sign-line">${escapeHtml(collectionDelivery.senderConfirm)}</span>
+                  <span class="meta-sign-line">${escapeHtml(printSource.senderConfirm)}</span>
                 </div>
               </div>
             </div>
@@ -6243,8 +6324,8 @@ export function DashboardShell({
                 </div>
                 {collectionTab === "delivery" ? (
                   <div className="flex flex-wrap gap-2">
-                    {renderChip(`전달 항목 ${formatNumber(collectionDelivery.rows.length)}건`, "blue")}
-                    {renderChip(`전달 일자 ${collectionDelivery.deliveredDate || "-"}`, "gray")}
+                    {renderChip(`전달 항목 ${formatNumber(activeCollectionDelivery.rows.length)}건`, "blue")}
+                    {renderChip(`전달 일자 ${activeCollectionDelivery.deliveredDate || "-"}`, "gray")}
                     {renderChip(`저장 주차 ${formatNumber(deliveryHistoryOptions.length)}건`, "gray")}
                   </div>
                 ) : (
@@ -6259,7 +6340,7 @@ export function DashboardShell({
               {collectionTab === "delivery" ? (
                 <div className={`${cardClass} p-5`}>
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <div className="break-keep text-[18px] font-bold text-slate-900">{collectionDelivery.title}</div>
+                    <div className="break-keep text-[18px] font-bold text-slate-900">{activeCollectionDelivery.title}</div>
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="flex flex-wrap items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1">
                       <select
@@ -6330,7 +6411,7 @@ export function DashboardShell({
                       <div className="text-[12px] font-medium text-slate-600">전달 일자</div>
                       <input
                         className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]"
-                        value={collectionDelivery.deliveredDate}
+                        value={activeCollectionDelivery.deliveredDate}
                         onChange={(e) => handleCollectionDeliveryMetaChange("deliveredDate", e.target.value)}
                         placeholder="YYYY.MM.DD"
                       />
@@ -6339,7 +6420,7 @@ export function DashboardShell({
                       <div className="text-[12px] font-medium text-slate-600">담당자 확인</div>
                       <input
                         className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]"
-                        value={collectionDelivery.managerConfirm}
+                        value={activeCollectionDelivery.managerConfirm}
                         onChange={(e) => handleCollectionDeliveryMetaChange("managerConfirm", e.target.value)}
                       />
                     </label>
@@ -6347,7 +6428,7 @@ export function DashboardShell({
                       <div className="text-[12px] font-medium text-slate-600">전달자 확인</div>
                       <input
                         className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]"
-                        value={collectionDelivery.senderConfirm}
+                        value={activeCollectionDelivery.senderConfirm}
                         onChange={(e) => handleCollectionDeliveryMetaChange("senderConfirm", e.target.value)}
                       />
                     </label>
@@ -6373,14 +6454,14 @@ export function DashboardShell({
                         </tr>
                       </thead>
                       <tbody>
-                        {collectionDelivery.rows.length === 0 ? (
+                        {activeCollectionDelivery.rows.length === 0 ? (
                           <tr>
                             <td colSpan={6} className={`${tdClass} py-8 text-slate-500`}>
                               전달 리스트 항목이 없습니다. 행 추가를 눌러 입력해 주세요.
                             </td>
                           </tr>
                         ) : (
-                          collectionDelivery.rows.map((row: any, index: number) => (
+                          activeCollectionDelivery.rows.map((row: any, index: number) => (
                             <tr key={row.id}>
                               <td className={tdClass}>{index + 1}</td>
                               <td className={tdClass}>

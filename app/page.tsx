@@ -37,6 +37,7 @@ export default async function Page({
     ...(data || { ui: {}, contracts: [], termination: {} }),
     contracts: filterContractsForUser((data?.contracts || []) as any[], auth.user, permissionIndex),
   }
+  const savedCollectionTab = safeData?.collection?.tab as "integrated" | "long-term" | "delivery" | undefined
   const directoryUsers = ensureDailyDirectoryUsers(
     sortDailyDirectoryUsers(
       auth.state.users
@@ -60,6 +61,9 @@ export default async function Page({
 
   const initialView =
     (params.view as any) ||
+    (savedCollectionTab === "delivery"
+      ? "collection"
+      : undefined) ||
     (hasPermission(permissionIndex, "dailyReport", "view")
       ? "daily-report"
       : hasPermission(permissionIndex, "weeklyReport", "view")
@@ -72,7 +76,7 @@ export default async function Page({
     <DashboardWorkspace
       initialData={safeData}
       initialView={initialView}
-      initialCollectionTab={(params.tab as any) || "integrated"}
+      initialCollectionTab={(params.tab as any) || savedCollectionTab || "integrated"}
       currentUser={{
         id: auth.user.id,
         name: auth.user.name,

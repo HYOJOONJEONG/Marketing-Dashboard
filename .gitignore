@@ -36,3 +36,4 @@ server.err.log
 新주간실적보고 2026.xlsm
 ~$*.xlsx
 .vercel
+data/shared-kv-store.json

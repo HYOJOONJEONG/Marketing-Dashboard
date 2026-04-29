@@ -40,23 +40,28 @@ type Props = {
 
 type MobileDailySection = "write" | "status" | "docs"
 
-function getSeoulNow() {
-  const now = new Date()
-  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000
-  return new Date(utcMs + 9 * 60 * 60 * 1000)
-}
-
 function getTimeUntilSeoulMidnight() {
-  const dayMs = 24 * 60 * 60 * 1000
-  const seoulOffsetMs = 9 * 60 * 60 * 1000
-  const seoulNowMs = Date.now() + seoulOffsetMs
-  const elapsedTodayMs = ((seoulNowMs % dayMs) + dayMs) % dayMs
-  const remainingMs = dayMs - elapsedTodayMs
-  const totalSeconds = Math.floor(remainingMs / 1000)
-  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0")
-  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0")
-  const seconds = String(totalSeconds % 60).padStart(2, "0")
-  return `${hours}:${minutes}:${seconds}`
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date())
+
+  const valueByType = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  const hours = Number(valueByType.hour ?? "0")
+  const minutes = Number(valueByType.minute ?? "0")
+  const seconds = Number(valueByType.second ?? "0")
+
+  const elapsedSeconds = hours * 3600 + minutes * 60 + seconds
+  const totalSeconds = 24 * 3600 - elapsedSeconds
+  const safeSeconds = totalSeconds <= 0 ? 0 : totalSeconds
+  const remainingHours = String(Math.floor(safeSeconds / 3600)).padStart(2, "0")
+  const remainingMinutes = String(Math.floor((safeSeconds % 3600) / 60)).padStart(2, "0")
+  const remainingSeconds = String(safeSeconds % 60).padStart(2, "0")
+
+  return `${remainingHours}:${remainingMinutes}:${remainingSeconds}`
 }
 
 function getStatusTone(status: ReturnType<typeof resolveDailyReportStatus>) {
