@@ -558,8 +558,10 @@ function buildTerminationOverviewRows(rows: any[]) {
 function buildWeeklyIndustryOverviewRows(rows: any[]) {
   return (Array.isArray(rows) && rows.length ? rows : weeklyIndustryOverviewRows).map((row: any, index: number) => ({
     label: sanitizeSummaryText(row?.label, weeklyIndustryOverviewRows[index]?.label || `행 ${index + 1}`),
-    values: Array.from({ length: reportIndustryColumnsStatic.length }, (_, valueIndex) =>
-      sanitizeSummaryText(row?.values?.[valueIndex], weeklyIndustryOverviewRows[index]?.values?.[valueIndex] || ""),
+    values: buildIndustryRowValuesWithTotal(
+      Array.from({ length: reportIndustryColumnsStatic.length }, (_, valueIndex) =>
+        sanitizeSummaryText(row?.values?.[valueIndex], weeklyIndustryOverviewRows[index]?.values?.[valueIndex] || ""),
+      ),
     ),
   }))
 }
@@ -628,6 +630,23 @@ function computeIndustryRowTotal(values: any[]) {
   if (!hasValue) return ""
   const sum = values.reduce((total, value) => total + parseLooseNumber(value), 0)
   return formatNumber(sum)
+}
+
+function normalizeIndustryRowValues(values: any[]) {
+  const source = Array.isArray(values) ? values : []
+  return Array.from({ length: reportIndustryColumnsStatic.length }, (_, index) =>
+    sanitizeSummaryText(source[index], ""),
+  )
+}
+
+function buildIndustryRowValuesWithTotal(values: any[]) {
+  const normalized = normalizeIndustryRowValues(values)
+  const editableValues = normalized.slice(0, reportIndustryColumnsStatic.length - 1)
+  const hasValue = editableValues.some((value) => String(value ?? "").trim() !== "")
+  const total = hasValue
+    ? String(editableValues.reduce((sum, value) => sum + parseLooseNumber(value), 0))
+    : ""
+  return [...editableValues, total]
 }
 
 function parseGoalMonthOrder(value: unknown) {
@@ -2515,12 +2534,14 @@ export function DashboardShell({
   }
 
   function updateManualWeeklyIndustryOverviewCell(rowIndex: number, valueIndex: number, value: string) {
+    if (valueIndex >= reportIndustryColumnsStatic.length - 1) return
     markManualInputDirty()
     updateManualDraft((prev: any) => {
       const weeklyIndustryOverviewRows = cloneData(prev.weeklyIndustryOverviewRows || [])
       if (!weeklyIndustryOverviewRows[rowIndex]) return prev
-      if (!Array.isArray(weeklyIndustryOverviewRows[rowIndex].values)) weeklyIndustryOverviewRows[rowIndex].values = []
+      weeklyIndustryOverviewRows[rowIndex].values = normalizeIndustryRowValues(weeklyIndustryOverviewRows[rowIndex].values)
       weeklyIndustryOverviewRows[rowIndex].values[valueIndex] = value
+      weeklyIndustryOverviewRows[rowIndex].values = buildIndustryRowValuesWithTotal(weeklyIndustryOverviewRows[rowIndex].values)
       return { ...prev, weeklyIndustryOverviewRows }
     })
   }
@@ -6370,9 +6391,10 @@ export function DashboardShell({
                       <tr key={`manual-weekly-industry-${row.label}`}>
                         <td className={`${tdClass} whitespace-nowrap text-center font-semibold`}>{row.label}</td>
                         {reportIndustryColumnsStatic.map((column, valueIndex) => {
+                          const normalizedValues = normalizeIndustryRowValues(row.values || [])
                           const isTotalColumn = column === "합계"
                           const totalValue = isTotalColumn
-                            ? computeIndustryRowTotal((row.values || []).slice(0, reportIndustryColumnsStatic.length - 1))
+                            ? computeIndustryRowTotal(normalizedValues.slice(0, reportIndustryColumnsStatic.length - 1))
                             : null
                           return (
                             <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
@@ -6383,7 +6405,7 @@ export function DashboardShell({
                                     ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" }
                                     : undefined
                                 }
-                                value={isTotalColumn ? String(totalValue ?? "") : String(row.values?.[valueIndex] ?? "")}
+                                value={isTotalColumn ? String(totalValue ?? "") : String(normalizedValues[valueIndex] ?? "")}
                                 onChange={(e) => updateManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, e.target.value)}
                                 readOnly={isTotalColumn}
                               />
