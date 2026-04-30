@@ -64,7 +64,14 @@ function mergeContractsForScope(existingContracts: any[], incomingContracts: any
   return [...incomingContracts, ...preserved]
 }
 
-export async function GET() {
+function buildDashboardResponse(data: any, session: any, permissions: any) {
+  return {
+    ...data,
+    contracts: filterContractsForUser(Array.isArray(data?.contracts) ? data.contracts : [], session.user, permissions),
+  }
+}
+
+export async function GET(request: Request) {
   const session = await resolveRequestSession()
   if (!session) {
     return NextResponse.json({ ok: false, error: "로그인이 필요합니다." }, { status: 401 })
@@ -74,19 +81,27 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "권한이 없습니다." }, { status: 403 })
   }
   try {
+    const url = new URL(request.url)
+    const slice = url.searchParams.get("slice") || ""
     const data = await readDashboardState<any>(DATA_PATH)
     if (data) {
-      return NextResponse.json({
-        ...data,
-        contracts: filterContractsForUser(Array.isArray(data.contracts) ? data.contracts : [], session.user, permissions),
-      })
+      if (slice === "dailyReport") {
+        return NextResponse.json({
+          dailyReport: data?.dailyReport || {},
+          ui: data?.ui || {},
+        })
+      }
+      return NextResponse.json(buildDashboardResponse(data, session, permissions))
     }
 
     const fallbackData = await readDashboardState<any>(FALLBACK_PATH)
-    return NextResponse.json({
-      ...(fallbackData || EMPTY_DASHBOARD),
-      contracts: filterContractsForUser(Array.isArray(fallbackData?.contracts) ? fallbackData.contracts : [], session.user, permissions),
-    })
+    if (slice === "dailyReport") {
+      return NextResponse.json({
+        dailyReport: fallbackData?.dailyReport || {},
+        ui: fallbackData?.ui || {},
+      })
+    }
+    return NextResponse.json(buildDashboardResponse(fallbackData || EMPTY_DASHBOARD, session, permissions))
   } catch (error) {
     console.error("Failed to read dashboard state.", error)
     return NextResponse.json(EMPTY_DASHBOARD)

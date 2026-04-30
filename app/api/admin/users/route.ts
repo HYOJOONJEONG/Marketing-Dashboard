@@ -8,6 +8,7 @@ import {
   updateAuthState,
 } from "@/lib/auth/store"
 import { normalizeAssignedIndustries } from "@/lib/industry-groups"
+import { RoleKey, UserRecord } from "@/lib/auth/model"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -37,17 +38,17 @@ export async function POST(request: Request) {
     }
     const now = new Date().toISOString()
     const passwordData = password ? createIndividualPassword(password) : null
-    const nextUser = {
+    const nextUser: UserRecord = {
       id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       loginId,
       name,
       title,
       assignedIndustries,
-      role: role as any,
+      role: role as RoleKey,
       teamId,
       active: true,
       deletedAt: null,
-      authStrategy: passwordData ? "individual" : ("common" as const),
+      authStrategy: passwordData ? "individual" : "common",
       passwordHash: passwordData?.hash || null,
       passwordSalt: passwordData?.salt || null,
       createdAt: now,
@@ -161,7 +162,7 @@ export async function PATCH(request: Request) {
       sessionId: auth.context.sessionId,
       success: true,
     })
-  }).catch((error) => {
+  }, { preserveConcurrentSessions: false }).catch((error) => {
     throw error
   })
 

@@ -40,6 +40,13 @@ type Props = {
 
 type MobileDailySection = "write" | "status" | "docs"
 
+function normalizeClientDailyReportState(value: DailyReportState | null | undefined): DailyReportState {
+  return {
+    reports: Array.isArray(value?.reports) ? value.reports : [],
+    aiSummaries: Array.isArray(value?.aiSummaries) ? value.aiSummaries : [],
+  }
+}
+
 function getTimeUntilSeoulMidnight() {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Seoul",
@@ -294,7 +301,18 @@ export function DailyReportPage({
   presenceUsers = [],
   onSaveState,
 }: Props) {
-  const [selectedUserId, setSelectedUserId] = useState(currentUser.id)
+  const safeDirectoryUsers = useMemo(
+    () => (Array.isArray(directoryUsers) ? directoryUsers : []),
+    [directoryUsers],
+  )
+  const safePresenceUsers = useMemo(
+    () => (Array.isArray(presenceUsers) ? presenceUsers : []),
+    [presenceUsers],
+  )
+  const safeReportState = useMemo(() => normalizeClientDailyReportState(reportState), [reportState])
+  const fallbackUserId = currentUser?.id || safeDirectoryUsers[0]?.id || ""
+
+  const [selectedUserId, setSelectedUserId] = useState(fallbackUserId)
   const [draft, setDraft] = useState({ reportBody: "", plannedTasks: "" })
   const [statusMessage, setStatusMessage] = useState("")
   const [isSaving, setIsSaving] = useState(false)
@@ -303,8 +321,8 @@ export function DailyReportPage({
   const [timeUntilReset, setTimeUntilReset] = useState(() => getTimeUntilSeoulMidnight())
 
   const todayEntries = useMemo(
-    () => getDailyReportsByDate(reportState, currentDate, directoryUsers),
-    [reportState, currentDate, directoryUsers],
+    () => getDailyReportsByDate(safeReportState, currentDate, safeDirectoryUsers),
+    [safeReportState, currentDate, safeDirectoryUsers],
   )
   const countableEntries = useMemo(
     () => todayEntries.filter((entry) => entry.userName !== "기타"),
@@ -391,12 +409,12 @@ export function DailyReportPage({
     [selectedEntry],
   )
   const currentPresence = useMemo(
-    () => presenceUsers.find((user) => user.userId === currentUser.id)?.status || "offline",
-    [presenceUsers, currentUser.id],
+    () => safePresenceUsers.find((user) => user.userId === currentUser.id)?.status || "offline",
+    [safePresenceUsers, currentUser.id],
   )
   const selectedDirectoryUser = useMemo(
-    () => directoryUsers.find((user) => user.id === selectedUserId) || null,
-    [directoryUsers, selectedUserId],
+    () => safeDirectoryUsers.find((user) => user.id === selectedUserId) || null,
+    [safeDirectoryUsers, selectedUserId],
   )
   const statusRef = useRef<HTMLDivElement | null>(null)
   const documentRef = useRef<HTMLDivElement | null>(null)
@@ -416,9 +434,9 @@ export function DailyReportPage({
 
   useEffect(() => {
     if (!todayEntries.some((entry) => entry.userId === selectedUserId)) {
-      setSelectedUserId(currentUser.id)
+      setSelectedUserId(fallbackUserId)
     }
-  }, [currentUser.id, selectedUserId, todayEntries])
+  }, [fallbackUserId, selectedUserId, todayEntries])
 
   useEffect(() => {
     setDraft({
@@ -472,7 +490,7 @@ export function DailyReportPage({
           statusOverride: mode === "submit" ? null : null,
           updatedAt: now,
         }
-      const nextState = upsertDailyReportEntry(reportState, nextEntry)
+      const nextState = upsertDailyReportEntry(safeReportState, nextEntry)
       await onSaveState(nextState)
       setStatusMessage(mode === "submit" ? `${nextEntry.userName} 업무일지를 제출했습니다.` : `${nextEntry.userName} 업무일지를 저장했습니다.`)
     } catch {
@@ -494,7 +512,7 @@ export function DailyReportPage({
         statusOverride: "empty",
         updatedAt: now,
       }
-      const nextState = upsertDailyReportEntry(reportState, nextEntry)
+      const nextState = upsertDailyReportEntry(safeReportState, nextEntry)
       await onSaveState(nextState)
       setStatusMessage(`${nextEntry.userName} 업무일지 제출을 취소했습니다.`)
     } catch {
@@ -624,7 +642,7 @@ export function DailyReportPage({
                 <div className="space-y-4">
                   {group.entries.map((entry) => {
                     const status = resolveDailyReportStatus(entry)
-                    const presence = presenceUsers.find((user) => user.userId === entry.userId)?.status || "offline"
+                    const presence = safePresenceUsers.find((user) => user.userId === entry.userId)?.status || "offline"
                     return (
                       <button
                         key={entry.userId}

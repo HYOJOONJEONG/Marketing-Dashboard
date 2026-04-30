@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { NextResponse } from "next/server"
-import { PermissionAction, PermissionIndex, UserRecord } from "@/lib/auth/model"
+import { AuthState, PermissionAction, PermissionIndex, UserRecord } from "@/lib/auth/model"
 import { buildPermissionIndex, hasPermission } from "@/lib/auth/permissions"
 import { resolveRequestSession } from "@/lib/auth/session"
 import { getTeamName } from "@/lib/auth/store"
@@ -10,6 +10,7 @@ export type RequestAuthContext = {
   permissionIndex: PermissionIndex
   sessionId: string
   teamName: string
+  state: AuthState
 }
 
 export function getRequestIp(request: Request) {

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState, useTransition } from "react"
+import { StorageMemoryPanel } from "@/components/admin/storage-memory-panel"
 import { WorkspaceHeader } from "@/components/auth/workspace-header"
 
 type Props = {
@@ -20,6 +21,7 @@ const tabs = [
   { key: "teams", label: "팀관리" },
   { key: "permissions", label: "권한관리" },
   { key: "contracts", label: "계약관리" },
+  { key: "storage", label: "저장공간" },
   { key: "permissionLogs", label: "권한변경로그" },
   { key: "userLogs", label: "사용자변경로그" },
   { key: "activityLogs", label: "활동로그" },
@@ -212,7 +214,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
 
   return (
     <div className="min-h-screen bg-[#f6f8fc] px-4 py-4">
-      <WorkspaceHeader currentPage="관리자페이지" currentSection={currentTab} currentUser={currentUser} />
+      <WorkspaceHeader currentPage="관리자페이지" currentSection={currentTab} currentUser={currentUser} showDashboardButton />
 
       <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
@@ -603,6 +605,8 @@ export function AdminConsole({ currentUser, permissions }: Props) {
               </div>
             </section>
           )}
+
+          {currentTab === "storage" && <StorageMemoryPanel />}
 
           {currentTab === "permissionLogs" && (
             <LogTable title="권한변경로그" rows={bootstrap?.permissionChangeLogs || []} columns={["targetUserId", "menuKey", "action", "beforeValue", "afterValue", "changedAt"]} />

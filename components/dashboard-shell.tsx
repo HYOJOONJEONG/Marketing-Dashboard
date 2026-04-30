@@ -114,14 +114,15 @@ function formatLastUpdated(value: unknown) {
   if (!value) return "No updates yet"
   const date = new Date(String(value))
   if (Number.isNaN(date.getTime())) return "No updates yet"
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date)
+  const seoulDate = new Date(date.getTime() + 9 * 60 * 60 * 1000)
+  const year = seoulDate.getUTCFullYear()
+  const month = String(seoulDate.getUTCMonth() + 1).padStart(2, "0")
+  const day = String(seoulDate.getUTCDate()).padStart(2, "0")
+  const hour24 = seoulDate.getUTCHours()
+  const period = hour24 >= 12 ? "오후" : "오전"
+  const hour12 = hour24 % 12 || 12
+  const minute = String(seoulDate.getUTCMinutes()).padStart(2, "0")
+  return `${year}. ${month}. ${day}. ${period} ${String(hour12).padStart(2, "0")}:${minute}`
 }
 
 function getSeoulTodayKey() {
@@ -499,7 +500,7 @@ function buildPaidOptionInfoColumns(columns: any[]) {
   const source = Array.isArray(columns) && columns.length ? columns : paidOptionInfoColumns
   const baseByTitle = new Map<string, any>(
     paidOptionInfoColumns
-      .filter((column) => column.title !== "API")
+      .filter((column) => String(column.title) !== "API")
       .map((column) => [column.title, column]),
   )
   const sourceByTitle = new Map<string, any>()
@@ -626,7 +627,7 @@ function normalizeTerminationReason(reason: unknown) {
 
 function buildTerminationWeeklyCounts(items: any[]) {
   const columns = reportTerminationColumnsStatic.slice(0, -1)
-  const indexMap = new Map(columns.map((column, index) => [column, index]))
+  const indexMap = new Map<string, number>(columns.map((column, index) => [column, index]))
   const counts = Array.from({ length: columns.length }, () => 0)
   ;(items || []).forEach((item: any) => {
     const reason = normalizeTerminationReason(item?.reason)
@@ -798,6 +799,19 @@ function normalizeAdditionalSalesRows(rows: any[]) {
   }))
 }
 
+function getSavedAdditionalContractAmount(rows: any[]) {
+  return normalizeAdditionalSalesRows(rows || []).reduce((sum, row) => {
+    const label = String(row.label || "")
+    const note = String(row.note || "")
+    if (!label.includes("추가계약") && !note.includes("추가계약")) return sum
+    return sum + Math.max(0, parseLooseNumber(row.amount))
+  }, 0)
+}
+
+function getTotalAdditionalContractAmount(currentAmount: unknown, rows?: any[]) {
+  return Math.max(0, toNumber(currentAmount)) + getSavedAdditionalContractAmount(rows || [])
+}
+
 function buildAutoRevenueHeader(unitPrice: unknown, selectedCount: number, additionalContractCount: unknown) {
   const baseUnitPrice = toNumber(unitPrice) || 6160000
   const bonusRevenue = Math.max(0, toNumber(additionalContractCount))
@@ -835,20 +849,22 @@ function getRevenueRowMillionsByLabel(rows: any[], label: string) {
   return (targetRow?.months || []).reduce((sum: number, value: number) => sum + toNumber(value), 0)
 }
 
-function buildAnnualNetRevenueSubtitle(rows: any[], summary: any, unitPrice: unknown) {
+function buildAnnualNetRevenueSubtitle(rows: any[], summary: any, unitPrice: unknown, additionalContractCount?: unknown) {
   const totalMillions = getRevenueTotalMillions(rows)
   const salesMillions = getRevenueRowMillionsByLabel(rows, "매출순증")
   const nonSalesRevenue = (totalMillions - salesMillions) * 1000000
   const cumulativeNetUnits = toNumber(summary?.cumulativeNetUnits)
   const baseUnitPrice = toNumber(unitPrice) || 6160000
+  const bonusRevenue = Math.max(0, toNumber(additionalContractCount))
   const cumulativeNetRevenue = cumulativeNetUnits * baseUnitPrice
-  return `26년 순증 매출 (약 ${formatMoney(nonSalesRevenue + cumulativeNetRevenue)})`
+  return `26년 순증 매출 (약 ${formatMoney(nonSalesRevenue + cumulativeNetRevenue + bonusRevenue)})`
 }
 
-function buildAnnualCumulativeRevenueSubtitle(totalContracts: unknown, unitPrice: unknown) {
+function buildAnnualCumulativeRevenueSubtitle(totalContracts: unknown, unitPrice: unknown, additionalContractCount?: unknown) {
   const contractCount = Math.max(0, toNumber(totalContracts))
   const baseUnitPrice = toNumber(unitPrice) || 6160000
-  return `연간 누적 매출 (약 ${formatMoney(contractCount * baseUnitPrice)})`
+  const bonusRevenue = Math.max(0, toNumber(additionalContractCount))
+  return `연간 누적 매출 (약 ${formatMoney(contractCount * baseUnitPrice + bonusRevenue)})`
 }
 
 function buildRevenueNoteText(baseDate: unknown, unitPrice: unknown) {
@@ -856,7 +872,7 @@ function buildRevenueNoteText(baseDate: unknown, unitPrice: unknown) {
   const mmdd = normalized && normalized.length >= 10 ? normalized.slice(5, 10).replace(".", "/") : ""
   const baseUnitPrice = toNumber(unitPrice) || 6160000
   const dateLabel = mmdd ? ` (${mmdd} 기준)` : ""
-  return `※대당 연 ${formatNumber(baseUnitPrice)}원으로 매출을 산정${dateLabel} / 연간 순증 매출은 (누적순증 합계 × 단가) + ((합계 - 매출순증) × 1,000,000) 기준이며, 위약금 및 이전비는 월 단위로 계산하되 모든 금액 단위는 백만 원으로 표기.`
+  return `※대당 연 ${formatNumber(baseUnitPrice)}원으로 매출을 산정${dateLabel} / 연간 순증 매출은 (누적순증 합계 × 단가) + ((합계 - 매출순증) × 1,000,000) + 추가계약금액 기준이며, 연간 누적 매출도 추가계약금액을 포함해 계산. 위약금 및 이전비는 월 단위로 계산하되 모든 금액 단위는 백만 원으로 표기.`
 }
 
 function getUpcomingThursday(baseDate = new Date()) {
@@ -919,24 +935,31 @@ function buildRevenueDisplaySet(params: {
   subtitleTwo?: unknown
   revenueUnitPrice?: unknown
   additionalContractCount?: unknown
+  additionalSales?: any[]
   manualSummary?: any
   revenueRows?: any[]
   fallbackSelectedCount?: number
 }) {
   const selectedContractCount = Number(params.fallbackSelectedCount || 0)
+  const totalAdditionalContractAmount = getTotalAdditionalContractAmount(
+    params.additionalContractCount,
+    params.additionalSales || [],
+  )
   const computedHeader = buildAutoRevenueHeader(
     params.revenueUnitPrice,
     selectedContractCount,
-    params.additionalContractCount,
+    totalAdditionalContractAmount,
   )
   const computedSubtitleOne = buildAnnualNetRevenueSubtitle(
     params.revenueRows || [],
     params.manualSummary,
     params.revenueUnitPrice,
+    totalAdditionalContractAmount,
   )
   const computedSubtitleTwo = buildAnnualCumulativeRevenueSubtitle(
     params?.manualSummary?.totalContracts,
     params.revenueUnitPrice,
+    totalAdditionalContractAmount,
   )
   return {
     // Always use the current computed values so the weekly report behaves like
@@ -986,6 +1009,7 @@ function buildManualDraftFromWeekly(weekly: any, contracts: any[], paidOptionSou
     subtitleTwo: safeWeekly.subtitleTwo,
     revenueUnitPrice,
     additionalContractCount,
+    additionalSales: safeWeekly.additionalSales || [],
     manualSummary: summary,
     revenueRows: safeWeekly.revenueRows || [],
     fallbackSelectedCount: includedContractCount,
@@ -1596,24 +1620,26 @@ export function DashboardShell({
     const nextHeader = buildAutoRevenueHeader(
       manualDraft.revenueUnitPrice,
       weeklyNetAutoCount,
-      manualDraft.additionalContractCount,
+      getTotalAdditionalContractAmount(manualDraft.additionalContractCount, manualDraft.additionalSales || []),
     )
     setManualDraft((prev: any) => (
       prev.revenueHeaderText === nextHeader
         ? prev
         : { ...prev, revenueHeaderText: nextHeader }
     ))
-  }, [manualDraft.additionalContractCount, manualDraft.revenueUnitPrice, manualRevenueHeaderEdited, weeklyNetAutoCount])
+  }, [manualDraft.additionalContractCount, manualDraft.additionalSales, manualDraft.revenueUnitPrice, manualRevenueHeaderEdited, weeklyNetAutoCount])
 
   useEffect(() => {
     const nextSubtitleOne = buildAnnualNetRevenueSubtitle(
       manualDraft.revenueRows || [],
       manualDraft.manualSummary,
       manualDraft.revenueUnitPrice,
+      getTotalAdditionalContractAmount(manualDraft.additionalContractCount, manualDraft.additionalSales || []),
     )
     const nextSubtitleTwo = buildAnnualCumulativeRevenueSubtitle(
       manualDraft?.manualSummary?.totalContracts,
       manualDraft.revenueUnitPrice,
+      getTotalAdditionalContractAmount(manualDraft.additionalContractCount, manualDraft.additionalSales || []),
     )
     setManualDraft((prev: any) => {
       if (prev.subtitleOne === nextSubtitleOne && prev.subtitleTwo === nextSubtitleTwo) return prev
@@ -1628,6 +1654,8 @@ export function DashboardShell({
     manualDraft.manualSummary?.cumulativeNetUnits,
     manualDraft.manualSummary?.totalContracts,
     manualDraft.revenueUnitPrice,
+    manualDraft.additionalContractCount,
+    manualDraft.additionalSales,
   ])
 
   useEffect(() => {
@@ -2489,12 +2517,34 @@ export function DashboardShell({
     })
   }
 
+  function appendAdditionalContractAmountToSales() {
+    const amount = parseLooseNumber(manualDraft.additionalContractCount)
+    if (!amount) {
+      window.alert("추가 계약 금액을 입력해주세요.")
+      return
+    }
+    const todayLabel = formatDateDotted(getSeoulTodayKey())
+    setManualDraft((prev: any) => ({
+      ...prev,
+      additionalContractCount: "",
+      additionalSales: normalizeAdditionalSalesRows([
+        ...(prev.additionalSales || []),
+        {
+          label: `${todayLabel} 추가계약`,
+          amount: String(amount),
+          note: "",
+        },
+      ]),
+    }))
+    window.alert("추가매출에 반영했습니다.")
+  }
+
   function addAdditionalSaleRow() {
     setManualDraft((prev: any) => ({
       ...prev,
       additionalSales: [
         ...(prev.additionalSales || []),
-        { label: "", amount: "", note: "" },
+        { label: `${formatDateDotted(getSeoulTodayKey())} `, amount: "", note: "" },
       ],
     }))
   }
@@ -3312,7 +3362,7 @@ export function DashboardShell({
           yearRows.length > 0
             ? yearRows
                 .map(
-                  (row) => `
+                  (row: any) => `
                     <tr>
                       <td>${formatNumber(row.no)}</td>
                       <td>${escapeHtml(row.company)}</td>
@@ -3382,7 +3432,7 @@ export function DashboardShell({
       longTermUncollectedRows.length > 0
         ? longTermUncollectedRows
             .map(
-              (row) => `
+              (row: any) => `
                 <tr>
                   <td>${formatNumber(row.no)}</td>
                   <td>${escapeHtml(row.company)}</td>
@@ -4412,6 +4462,7 @@ export function DashboardShell({
     subtitleTwo: manualDraft.subtitleTwo,
     revenueUnitPrice: manualDraft.revenueUnitPrice,
     additionalContractCount: manualDraft.additionalContractCount,
+    additionalSales: manualDraft.additionalSales || [],
     manualSummary: autoManualSummary,
     revenueRows: manualDraft.revenueRows || [],
     fallbackSelectedCount: weeklyNetAutoCount,
@@ -4426,6 +4477,7 @@ export function DashboardShell({
     subtitleTwo: weeklyReport.subtitleTwo,
     revenueUnitPrice: weeklyReport.revenueUnitPrice,
     additionalContractCount: weeklyReport.additionalContractCount,
+    additionalSales: weeklyReport.additionalSales || [],
     manualSummary: autoWeeklyReportSummary,
     revenueRows: weeklyReport.revenueRows || [],
     fallbackSelectedCount: weeklyNetAutoCount,
@@ -5019,7 +5071,7 @@ export function DashboardShell({
               <div>
               <h1 className={`${view === "daily-report" ? "mt-1 text-[18px]" : "mt-2 text-[20px]"} font-black tracking-[-0.04em] text-slate-950`}>{viewTitles[view]}</h1>
               {view !== "daily-report" ? (
-                <div className="mt-1 text-[12px] font-semibold text-slate-500">
+                <div className="mt-1 text-[12px] font-semibold text-slate-500" suppressHydrationWarning>
                   Last update: {formatLastUpdated(currentMenuUpdatedAt)}
                 </div>
               ) : null}
@@ -5082,12 +5134,12 @@ export function DashboardShell({
                 teamName: currentUser?.teamName || "",
                 avatarEmoji: currentUser?.avatarEmoji || null,
               }}
-              directoryUsers={directoryUsers}
+              directoryUsers={Array.isArray(directoryUsers) ? directoryUsers : []}
               reportState={normalizedDailyReport}
               currentDate={dailyReportDate}
               focus={dailyReportFocus}
               lastUpdatedText={formatLastUpdated(currentMenuUpdatedAt)}
-              presenceUsers={presenceUsers.map((user) => ({
+              presenceUsers={(Array.isArray(presenceUsers) ? presenceUsers : []).map((user) => ({
                 userId: user.userId,
                 userName: user.userName,
                 teamName: user.teamName,
@@ -5873,7 +5925,7 @@ export function DashboardShell({
                     <div className={manualSectionTitleClass}>매출 자동계산 설정</div>
                   </div>
                 </div>
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_180px_220px]">
+                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_180px_280px]">
                   <label className="space-y-1.5">
                     <div className="text-[12px] font-semibold text-slate-500">
                       매출 헤더 <span className="text-amber-600">(자동계산)</span>
@@ -5897,18 +5949,27 @@ export function DashboardShell({
                       onChange={(e) => updateManualField("revenueUnitPrice", e.target.value)}
                     />
                   </label>
-                  <label className="space-y-1.5">
+                  <div className="space-y-1.5">
                     <div className="text-[12px] font-semibold text-slate-500">
                       추가 계약 금액
                     </div>
-                    <input
-                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[14px]"
-                      inputMode="numeric"
-                      placeholder="예: 1,000,000"
-                      value={formatNumericInputDisplay(manualDraft.additionalContractCount)}
-                      onChange={(e) => updateManualField("additionalContractCount", e.target.value)}
-                    />
-                  </label>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                      <input
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[14px]"
+                        inputMode="numeric"
+                        placeholder="예: 1,000,000"
+                        value={formatNumericInputDisplay(manualDraft.additionalContractCount)}
+                        onChange={(e) => updateManualField("additionalContractCount", e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={appendAdditionalContractAmountToSales}
+                        className="h-10 rounded-xl bg-blue-600 px-4 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(37,99,235,0.16)] hover:bg-blue-700"
+                      >
+                        저장
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <div className="grid gap-3 xl:grid-cols-2">
                     <label className="space-y-1.5">
@@ -5951,14 +6012,18 @@ export function DashboardShell({
                         const revenueTotalMonths = monthLabels.map((_, monthIndex) =>
                           baseRows.reduce((sum: number, row) => sum + toNumber(row.months?.[monthIndex]), 0),
                         )
+                        const rawRevenueRows = Array.isArray(manualDraft.revenueRows) ? manualDraft.revenueRows : []
                         return manualRevenueRows.map((row, rowIndex) => {
                           const isTotalRow = row.label === "합계"
-                          const displayMonths = isTotalRow ? revenueTotalMonths : (row.months || [])
-                          const total = (displayMonths || []).reduce((sum: number, value: number) => sum + toNumber(value), 0)
+                          const rawMonths = Array.isArray(rawRevenueRows[rowIndex]?.months) ? rawRevenueRows[rowIndex].months : []
+                          const displayMonths = isTotalRow
+                            ? revenueTotalMonths
+                            : monthLabels.map((_, monthIndex) => rawMonths[monthIndex] ?? row.months?.[monthIndex] ?? "")
+                          const total = (displayMonths || []).reduce((sum: number, value: unknown) => sum + toNumber(value), 0)
                         return (
                           <tr key={row.key || rowIndex}>
                             <td className={manualLabelCellClass}>{row.label}</td>
-                            {(displayMonths || []).map((monthValue: number, monthIndex: number) => (
+                            {(displayMonths || []).map((monthValue: unknown, monthIndex: number) => (
                               <td key={`${row.key}-${monthIndex}`} className={`${tdClass} p-1`}>
                                 <input
                                   className={`${manualTableInputClass} ${isTotalRow ? "font-semibold text-slate-900" : ""}`}

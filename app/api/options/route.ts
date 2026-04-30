@@ -295,7 +295,8 @@ export async function GET(req: Request) {
   const statusFilter = searchParams.get("status") || "all"
   const search = (searchParams.get("search") || "").toLowerCase()
   const activeOnly = searchParams.get("activeOnly") !== "0"
-  const cacheKey = `${basis}|${date}|${categoryFilter}|${statusFilter}|${search}|${activeOnly ? "1" : "0"}`
+  const includeRecords = searchParams.get("includeRecords") !== "0"
+  const cacheKey = `${basis}|${date}|${categoryFilter}|${statusFilter}|${search}|${activeOnly ? "1" : "0"}|${includeRecords ? "records" : "summary"}`
 
   const cachedResponse = getResponseCache.get(cacheKey)
   if (cachedResponse && cachedResponse.expiresAt > Date.now()) {
@@ -364,16 +365,16 @@ export async function GET(req: Request) {
         }
       })
 
-    const responsePayload = {
-      source: "mock",
-      basis,
-      date,
-      categories,
-      cards,
-      historyDates,
-      records,
-      views: { v_dashboard_card_counts: [], v_current_active_counts: [] },
-    }
+      const responsePayload = {
+        source: "mock",
+        basis,
+        date,
+        categories,
+        cards,
+        historyDates,
+        records: includeRecords ? records : [],
+        views: { v_dashboard_card_counts: [], v_current_active_counts: [] },
+      }
 
     getResponseCache.set(cacheKey, {
       expiresAt: Date.now() + GET_CACHE_TTL_MS,

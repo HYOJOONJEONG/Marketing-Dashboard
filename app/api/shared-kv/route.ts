@@ -14,6 +14,8 @@ const KV_REST_API_URL = process.env.KV_REST_API_URL?.trim() || ""
 const KV_REST_API_TOKEN = process.env.KV_REST_API_TOKEN?.trim() || ""
 const REDIS_URL = process.env.REDIS_URL?.trim() || ""
 const STORE_PATH = path.join(process.cwd(), "data", "shared-kv-store.json")
+const AUDIT_SNAPSHOT_LIMIT = Math.max(0, Number(process.env.SHARED_KV_AUDIT_SNAPSHOT_LIMIT || 20000))
+const AUDIT_RETAIN_LIMIT = Math.max(20, Math.min(500, Number(process.env.SHARED_KV_AUDIT_RETAIN_LIMIT || 200)))
 
 type KvRecord = {
   value: string
@@ -149,7 +151,7 @@ async function loadStore(): Promise<StoreShape> {
 
 async function saveStore(store: StoreShape) {
   await fs.mkdir(path.dirname(STORE_PATH), { recursive: true })
-  await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8")
+  await fs.writeFile(STORE_PATH, JSON.stringify(store), "utf8")
 }
 
 function nextAuditId(store: StoreShape) {
@@ -162,6 +164,18 @@ function lastHash(store: StoreShape) {
 
 function buildHash(prevHash: string, key: string, actor: string, action: string, size: number, now: string) {
   return crypto.createHash("sha256").update(`${prevHash}|${key}|${actor}|${action}|${size}|${now}`).digest("hex")
+}
+
+function makeAuditSnapshot(value: string) {
+  if (!AUDIT_SNAPSHOT_LIMIT) return ""
+  if (value.length > AUDIT_SNAPSHOT_LIMIT) return ""
+  return value
+}
+
+function trimAuditLog(store: StoreShape) {
+  if (store.kv_audit_log.length > AUDIT_RETAIN_LIMIT) {
+    store.kv_audit_log = store.kv_audit_log.slice(-AUDIT_RETAIN_LIMIT)
+  }
 }
 
 export async function GET(request: Request) {
@@ -299,7 +313,7 @@ export async function POST(request: Request) {
           summary: `${String(target.key)} > rollback #${logId}`,
           menu_label: "Audit log",
           change_label: "Rollback",
-          value_snapshot: snapshot,
+          value_snapshot: makeAuditSnapshot(snapshot),
           prev_hash: prevHash,
           row_hash: rowHash,
           created_at: now,
@@ -308,6 +322,7 @@ export async function POST(request: Request) {
         if (action === "delete_restore") {
           store.kv_audit_log = store.kv_audit_log.filter((row) => Number(row.id) !== logId)
         }
+        trimAuditLog(store)
         await saveStore(store)
       })
       await writeQueue
@@ -344,7 +359,7 @@ export async function POST(request: Request) {
         summary: `${menuLabel} > ${changeLabel}`,
         menu_label: menuLabel,
         change_label: changeLabel,
-        value_snapshot: value,
+        value_snapshot: makeAuditSnapshot(value),
         prev_hash: "",
         row_hash: rowHash,
         created_at: now,
@@ -353,12 +368,12 @@ export async function POST(request: Request) {
         await kvPipeline([
           ["SET", kvValueKey(key), value],
           ["LPUSH", KV_AUDIT_LIST_KEY, JSON.stringify(auditRow)],
-          ["LTRIM", KV_AUDIT_LIST_KEY, 0, 499],
+          ["LTRIM", KV_AUDIT_LIST_KEY, 0, AUDIT_RETAIN_LIMIT - 1],
         ])
       } else {
         await redisCommand(REDIS_URL, ["SET", kvValueKey(key), value])
         await redisCommand(REDIS_URL, ["LPUSH", KV_AUDIT_LIST_KEY, JSON.stringify(auditRow)])
-        await redisCommand(REDIS_URL, ["LTRIM", KV_AUDIT_LIST_KEY, 0, 499])
+        await redisCommand(REDIS_URL, ["LTRIM", KV_AUDIT_LIST_KEY, 0, AUDIT_RETAIN_LIMIT - 1])
       }
       return NextResponse.json({ ok: true })
     }
@@ -378,11 +393,12 @@ export async function POST(request: Request) {
         summary: `${menuLabel} > ${changeLabel}`,
         menu_label: menuLabel,
         change_label: changeLabel,
-        value_snapshot: value,
+        value_snapshot: makeAuditSnapshot(value),
         prev_hash: prevHash,
         row_hash: rowHash,
         created_at: now,
       })
+      trimAuditLog(store)
       await saveStore(store)
     })
     await writeQueue

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { ChevronDown, KeyRound, LogOut, Users, X } from "lucide-react"
+import { ChevronDown, KeyRound, LayoutDashboard, LogOut, Users, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 
 type Props = {
@@ -15,9 +15,10 @@ type Props = {
     avatarEmoji?: string | null
     color: { bg: string; text: string; border: string; hex: string }
   }
+  showDashboardButton?: boolean
 }
 
-export function WorkspaceHeader({ currentPage, currentSection, currentUser }: Props) {
+export function WorkspaceHeader({ currentPage, currentSection, currentUser, showDashboardButton = false }: Props) {
   const router = useRouter()
   const heartbeatIdRef = useRef(`conn-${Math.random().toString(36).slice(2, 10)}`)
   const [isPasswordOpen, setIsPasswordOpen] = useState(false)
@@ -169,6 +170,16 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser }: Pr
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          {showDashboardButton ? (
+            <button
+              type="button"
+              onClick={() => router.push("/")}
+              className="inline-flex h-10 items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              대시보드로 돌아가기
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => {

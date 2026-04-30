@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowUpRight, ArrowDownLeft, RefreshCw, Vote, MessageSquare } from "lucide-react"
+import { ArrowUpRight, ArrowDownLeft, RefreshCw, Vote, MessageSquare, History } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type ActivityType = "send" | "receive" | "swap" | "vote" | "comment"

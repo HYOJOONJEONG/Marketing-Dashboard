@@ -99,7 +99,6 @@ const USER_TITLE_BY_NAME: Record<string, string> = {
   윤옥수: "팀장",
   진효정: "과장",
   김다빈: "사원",
-  박대일: "사원",
   김대일: "사원",
   이상철: "본부장",
 }
@@ -114,7 +113,6 @@ const DEFAULT_DIRECTORY_USERS = [
   { name: "윤옥수", team: "인포Biz2팀", role: "team_manager" as RoleKey },
   { name: "진효정", team: "인포Biz2팀", role: "staff" as RoleKey },
   { name: "김다빈", team: "인포Biz2팀", role: "staff" as RoleKey },
-  { name: "박대일", team: "인포Biz2팀", role: "staff" as RoleKey },
   { name: "이상철", team: "본부", role: "director" as RoleKey },
 ] as const
 
@@ -148,7 +146,6 @@ function createSeedUsers(now: string, teams: TeamRecord[]): UserRecord[] {
     윤옥수: 1,
     진효정: 2,
     김다빈: 3,
-    박대일: 4,
     김대일: 4,
   }
   const seeded = DEFAULT_DIRECTORY_USERS.map((user) => ({
@@ -322,7 +319,6 @@ function normalizeUserTitles(state: AuthState) {
     진효정: 2,
     김다빈: 3,
     김대일: 4,
-    박대일: 4,
     기타: 5,
   }
   state.users = state.users.map((user) => ({
@@ -370,7 +366,6 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
     윤옥수: 1,
     진효정: 2,
     김다빈: 3,
-    박대일: 4,
     김대일: 4,
   }
 
@@ -459,17 +454,60 @@ async function writeAuthState(state: AuthState) {
   })
 }
 
-export async function updateAuthState(mutator: (draft: AuthState) => void | Promise<void>) {
+function timestampValue(value?: string | null) {
+  const time = new Date(String(value || "")).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+function mergeById<T extends { id: string; updatedAt?: string; createdAt?: string }>(base: T[], incoming: T[]) {
+  const index = new Map<string, T>()
+  ;[...base, ...incoming].forEach((item) => {
+    const existing = index.get(item.id)
+    if (!existing) {
+      index.set(item.id, item)
+      return
+    }
+    const existingTime = timestampValue(existing.updatedAt || existing.createdAt)
+    const itemTime = timestampValue(item.updatedAt || item.createdAt)
+    if (itemTime >= existingTime) index.set(item.id, item)
+  })
+  return Array.from(index.values())
+}
+
+function preserveConcurrentSessionState(draft: AuthState, latest: AuthState) {
+  const activeUserIds = new Set(draft.users.filter((user) => user.active && !user.deletedAt).map((user) => user.id))
+  draft.userSessions = mergeById(draft.userSessions || [], latest.userSessions || []).filter((session) => {
+    const expires = new Date(session.expiresAt).getTime()
+    return activeUserIds.has(session.userId) && Number.isFinite(expires) && expires > Date.now()
+  })
+  const sessionIds = new Set(draft.userSessions.map((session) => session.id))
+  draft.presenceSessions = mergeById(draft.presenceSessions || [], latest.presenceSessions || []).filter(
+    (session) => activeUserIds.has(session.userId) && sessionIds.has(session.sessionId),
+  )
+  draft.activityLogs = mergeById(draft.activityLogs || [], latest.activityLogs || [])
+    .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt))
+    .slice(0, 500)
+}
+
+export async function updateAuthState(
+  mutator: (draft: AuthState) => void | Promise<void>,
+  options: { preserveConcurrentSessions?: boolean } = {},
+) {
   let nextState: AuthState | null = null
+  const preserveSessions = options.preserveConcurrentSessions !== false
   authWriteQueue = authWriteQueue.then(async () => {
     const current = await readAuthState()
     const draft = JSON.parse(JSON.stringify(current)) as AuthState
     await mutator(draft)
+    if (preserveSessions) {
+      const latest = await readAuthState()
+      preserveConcurrentSessionState(draft, latest)
+    }
     nextState = draft
     await writeAuthState(draft)
   })
   await authWriteQueue
-  return nextState as AuthState
+  return nextState as unknown as AuthState
 }
 
 export function getRoleIdByName(state: AuthState, roleName: RoleKey) {

@@ -13,6 +13,24 @@ const SESSION_COOKIE = "infobiz_session"
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12
 const SESSION_SECRET = process.env.AUTH_SESSION_SECRET?.trim() || "local-dev-session-secret"
 
+function readBooleanEnv(value: string | undefined) {
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) return null
+  if (["1", "true", "yes", "on"].includes(normalized)) return true
+  if (["0", "false", "no", "off"].includes(normalized)) return false
+  return null
+}
+
+function shouldUseSecureCookie() {
+  const override = readBooleanEnv(process.env.AUTH_COOKIE_SECURE)
+  if (override !== null) return override
+
+  // Vercel is always HTTPS, while a self-hosted production server is often
+  // tested through http://IP:PORT. A Secure cookie on plain HTTP is ignored by
+  // browsers, which makes login appear to fail even when credentials are valid.
+  return process.env.VERCEL === "1"
+}
+
 function sign(value: string) {
   return crypto.createHmac("sha256", SESSION_SECRET).update(value).digest("hex")
 }
@@ -68,7 +86,7 @@ export async function createUserSession(user: UserRecord, requestMeta: { ipAddre
   cookieStore.set(SESSION_COOKIE, pack(sessionId), {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookie(),
     path: "/",
     expires: new Date(expiresAt),
   })
@@ -81,7 +99,7 @@ export async function clearUserSession(sessionId?: string | null) {
   cookieStore.set(SESSION_COOKIE, "", {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookie(),
     path: "/",
     expires: new Date(0),
   })
@@ -108,7 +126,7 @@ export async function clearUserSession(sessionId?: string | null) {
         success: true,
       })
     }
-  })
+  }, { preserveConcurrentSessions: false })
 }
 
 export async function resolveRequestSession() {

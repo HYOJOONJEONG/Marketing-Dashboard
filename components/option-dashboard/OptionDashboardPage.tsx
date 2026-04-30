@@ -13,7 +13,7 @@ export function OptionDashboardPage() {
   const [searchInput, setSearchInput] = useState("")
   const [search, setSearch] = useState("")
 
-  const { data, loading, error } = useOptionDashboardData({
+  const { data, loading, detailLoading, error } = useOptionDashboardData({
     basis,
     date,
     category: categoryFilter,
@@ -102,6 +102,9 @@ export function OptionDashboardPage() {
       </div>
 
       <div className={`${cardClass} p-5`}>
+        {detailLoading && !error ? (
+          <div className="mb-3 text-[12px] text-slate-500">상세 목록 불러오는 중...</div>
+        ) : null}
         <OptionDetailTable
           records={records}
           categories={categories}

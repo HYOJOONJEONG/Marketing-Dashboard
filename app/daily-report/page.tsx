@@ -5,7 +5,7 @@ import { DashboardWorkspace } from "@/components/auth/dashboard-workspace"
 import { buildPermissionIndex, filterContractsForUser } from "@/lib/auth/permissions"
 import { requirePageAuth } from "@/lib/auth/server"
 import { getUserColorToken } from "@/lib/auth/model"
-import { ensureDailyDirectoryUsers, sortDailyDirectoryUsers } from "@/lib/daily-report"
+import { createEmptyDailyReportState, ensureDailyDirectoryUsers, sortDailyDirectoryUsers } from "@/lib/daily-report"
 import { readDashboardState } from "@/lib/shared-db-store"
 
 const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
@@ -27,9 +27,30 @@ export default async function DailyReportPageRoute() {
   if (!auth) return <LoginPage />
 
   const permissionIndex = buildPermissionIndex(auth.state, auth.user)
+  const baseData = data && typeof data === "object" ? data : {}
+  const defaultData = {
+    ui: {},
+    contracts: [],
+    weeklyReport: {},
+    collection: { integrated: [], longTerm: [] },
+    termination: { sheets: [] },
+    paidOptions: {},
+    dailyReport: createEmptyDailyReportState(),
+    availableYears: [new Date().getFullYear()],
+  }
   const safeData = {
-    ...(data || { ui: {}, contracts: [], termination: {} }),
-    contracts: filterContractsForUser((data?.contracts || []) as any[], auth.user, permissionIndex),
+    ...defaultData,
+    ...baseData,
+    ui: baseData.ui || {},
+    contracts: filterContractsForUser(
+      Array.isArray(baseData.contracts) ? baseData.contracts : [],
+      auth.user,
+      permissionIndex,
+    ),
+    collection: baseData.collection || { integrated: [], longTerm: [] },
+    termination: baseData.termination || { sheets: [] },
+    paidOptions: baseData.paidOptions || {},
+    dailyReport: baseData.dailyReport || createEmptyDailyReportState(),
   }
   const directoryUsers = ensureDailyDirectoryUsers(
     sortDailyDirectoryUsers(

@@ -58,7 +58,6 @@ const USER_ORDER: Record<string, number> = {
   진효정: 2,
   김다빈: 3,
   김대일: 4,
-  박대일: 4,
   기타: 5,
 }
 
@@ -153,13 +152,13 @@ export function normalizeDailyReportState(raw: any, directoryUsers: DailyDirecto
         createdAt: safeString(row?.createdAt) || now,
         createdBy: safeString(row?.createdBy),
       }))
-      .filter((row) => row.date === date),
+      .filter((row: DailyReportEntry) => row.date === date),
   }
 }
 
 export function getDailyReportsByDate(state: DailyReportState, date: string, directoryUsers: DailyDirectoryUser[]) {
   return sortDailyDirectoryUsers(
-    normalizeDailyReportState(state, directoryUsers, date).reports.filter((row) => row.date === date),
+    normalizeDailyReportState(state, directoryUsers, date).reports.filter((row: DailyReportEntry) => row.date === date),
   )
 }
 

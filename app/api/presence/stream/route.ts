@@ -14,40 +14,49 @@ export async function GET() {
     return new Response("Unauthorized", { status: 401 })
   }
 
+  const abortController = new AbortController()
+  let timer: ReturnType<typeof setInterval> | null = null
+  let closed = false
   const stream = new ReadableStream({
     start(controller) {
-      let timer: ReturnType<typeof setInterval> | null = null
-
       const send = async () => {
-        const state = await readAuthState()
-        const onlineUsers = listOnlinePresence(state)
-        const presenceUsers = listPresenceUsers(state)
-        const currentUserPresence = presenceUsers.find((row) => row.userId === session.user.id)
-        const samePageUsers = presenceUsers.filter(
-          (user) =>
-            user.status !== "offline" &&
-            user.currentPage &&
-            user.currentPage === currentUserPresence?.currentPage,
-        )
-        const recentActivities = state.activityLogs.slice(0, 12)
-        controller.enqueue(
-          encode({
-            onlineUsers,
-            presenceUsers,
-            samePageUsers,
-            recentActivities,
-          }),
-        )
+        if (closed || abortController.signal.aborted) return
+        try {
+          const state = await readAuthState()
+          const onlineUsers = listOnlinePresence(state)
+          const presenceUsers = listPresenceUsers(state)
+          const currentUserPresence = presenceUsers.find((row) => row.userId === session.user.id)
+          const samePageUsers = presenceUsers.filter(
+            (user) =>
+              user.status !== "offline" &&
+              user.currentPage &&
+              user.currentPage === currentUserPresence?.currentPage,
+          )
+          const recentActivities = state.activityLogs.slice(0, 12)
+          if (closed || abortController.signal.aborted) return
+          controller.enqueue(
+            encode({
+              onlineUsers,
+              presenceUsers,
+              samePageUsers,
+              recentActivities,
+            }),
+          )
+        } catch {
+          closed = true
+          if (timer) clearInterval(timer)
+        }
       }
 
       void send()
       timer = setInterval(() => {
         void send()
       }, 5000)
-
-      return () => {
-        if (timer) clearInterval(timer)
-      }
+    },
+    cancel() {
+      closed = true
+      if (timer) clearInterval(timer)
+      abortController.abort()
     },
   })
 

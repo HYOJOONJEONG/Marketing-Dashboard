@@ -2,7 +2,7 @@
 
 import { Eye, EyeOff, Lock, UserRound } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useState } from "react"
 
 export function LoginPage() {
   const router = useRouter()
@@ -10,26 +10,42 @@ export function LoginPage() {
   const [loginId, setLoginId] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
-  const [isPending, startTransition] = useTransition()
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    setError("")
+    if (isSubmitting) return
 
-    startTransition(async () => {
+    setError("")
+    setIsSubmitting(true)
+
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 10000)
+
+    try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ loginId, password }),
+        signal: controller.signal,
       })
       const payload = await response.json().catch(() => null)
       if (!response.ok || !payload?.ok) {
         setError(payload?.error || "로그인에 실패했습니다.")
         return
       }
-      router.push("/daily-report")
+      router.replace("/daily-report")
       router.refresh()
-    })
+    } catch (loginError) {
+      setError(
+        loginError instanceof DOMException && loginError.name === "AbortError"
+          ? "로그인 응답이 지연되고 있습니다. 서버 상태를 확인한 뒤 다시 시도해주세요."
+          : "로그인 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+      )
+    } finally {
+      window.clearTimeout(timeoutId)
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -98,10 +114,10 @@ export function LoginPage() {
 
                 <button
                   type="submit"
-                  disabled={isPending}
+                  disabled={isSubmitting}
                   className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-slate-950 text-[15px] font-bold text-white shadow-[0_16px_40px_rgba(15,23,42,0.18)] transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isPending ? "로그인 중..." : "로그인"}
+                  {isSubmitting ? "로그인 중..." : "로그인"}
                 </button>
               </form>
             </div>

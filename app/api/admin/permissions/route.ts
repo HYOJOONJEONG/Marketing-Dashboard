@@ -6,6 +6,12 @@ import { MenuKey, PermissionAction } from "@/lib/auth/model"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+type PermissionUpdate = {
+  menuKey: string
+  action: string
+  allowed: boolean
+}
+
 export async function PUT(request: Request) {
   const auth = await requireApiPermission("permissionManagement", "edit")
   if (!auth.ok) return auth.response
@@ -14,21 +20,21 @@ export async function PUT(request: Request) {
   const mode = String(body?.mode || "role")
   const roleId = String(body?.roleId || "").trim()
   const userId = String(body?.userId || "").trim()
-  const updates = Array.isArray(body?.updates)
+  const updates: PermissionUpdate[] = Array.isArray(body?.updates)
     ? body.updates
         .map((item: any) => ({
           menuKey: String(item?.menuKey || "").trim(),
           action: String(item?.action || "").trim(),
           allowed: Boolean(item?.allowed),
         }))
-        .filter((item) => item.menuKey && item.action)
+        .filter((item: PermissionUpdate) => item.menuKey && item.action)
     : [
         {
           menuKey: String(body?.menuKey || "").trim(),
           action: String(body?.action || "").trim(),
           allowed: Boolean(body?.allowed),
         },
-      ].filter((item) => item.menuKey && item.action)
+      ].filter((item: PermissionUpdate) => item.menuKey && item.action)
 
   if (!updates.length) {
     return NextResponse.json({ ok: false, error: "변경할 권한이 없습니다." }, { status: 400 })

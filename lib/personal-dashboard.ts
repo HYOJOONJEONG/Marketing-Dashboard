@@ -115,14 +115,14 @@ export function buildPersonalDashboardData(user: UserRecord, data: any) {
   const myTerminationRows = sortByDateDesc(
     terminationSheets
       .flatMap((sheet: any) => normalizeTerminationRows(Array.isArray(sheet?.items) ? sheet.items : [], "해지 진행"))
-      .filter((row) => row.manager === user.name),
+      .filter((row: any) => row.manager === user.name),
     "terminationDate",
   )
 
   const myHoldRows = sortByDateDesc(
     terminationSheets
       .flatMap((sheet: any) => normalizeTerminationRows(Array.isArray(sheet?.holdItems) ? sheet.holdItems : [], "청구보류"))
-      .filter((row) => row.manager === user.name),
+      .filter((row: any) => row.manager === user.name),
     "terminationDate",
   )
 

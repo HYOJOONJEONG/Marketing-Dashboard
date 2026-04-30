@@ -8,13 +8,22 @@ const CENTRAL_DB_API_URL = process.env.CENTRAL_DB_API_URL?.trim() || ""
 const CENTRAL_DB_API_TOKEN = process.env.CENTRAL_DB_API_TOKEN?.trim() || ""
 const SHARED_KV_API_KEY = process.env.SHARED_KV_API_KEY?.trim() || CENTRAL_DB_API_TOKEN
 const CENTRAL_DB_SOURCE = process.env.CENTRAL_DB_SOURCE?.trim() || "unknown-client"
-const KV_REST_API_URL = process.env.KV_REST_API_URL?.trim() || ""
-const KV_REST_API_TOKEN = process.env.KV_REST_API_TOKEN?.trim() || ""
+const KV_REST_API_URL =
+  process.env.KV_REST_API_URL?.trim() ||
+  process.env.UPSTASH_REDIS_REST_URL?.trim() ||
+  ""
+const KV_REST_API_TOKEN =
+  process.env.KV_REST_API_TOKEN?.trim() ||
+  process.env.UPSTASH_REDIS_REST_TOKEN?.trim() ||
+  ""
 const REDIS_URL = process.env.REDIS_URL?.trim() || ""
 const SHARED_DB_READ_ONLY = process.env.SHARED_DB_READ_ONLY === "1"
 const SHARED_DB_REQUIRE_CENTRAL = process.env.SHARED_DB_REQUIRE_CENTRAL === "1"
 const SHARED_DB_ALLOW_SEED = process.env.SHARED_DB_ALLOW_SEED !== "0"
+const SHARED_DB_ALLOW_REMOTE_WRITE_FROM_LOCAL = process.env.SHARED_DB_ALLOW_REMOTE_WRITE_FROM_LOCAL === "1"
 const CENTRAL_DB_TIMEOUT_MS = Number(process.env.CENTRAL_DB_TIMEOUT_MS || (process.env.VERCEL === "1" ? 5000 : 1500))
+const AUDIT_SNAPSHOT_LIMIT = Math.max(0, Number(process.env.SHARED_KV_AUDIT_SNAPSHOT_LIMIT || 20000))
+const AUDIT_RETAIN_LIMIT = Math.max(20, Math.min(500, Number(process.env.SHARED_KV_AUDIT_RETAIN_LIMIT || 200)))
 
 const STORE_KEYS = {
   dashboard: "dashboard_state",
@@ -77,6 +86,47 @@ function ensureWritableStoreConfigured() {
   if (SHARED_DB_REQUIRE_CENTRAL && !CENTRAL_DB_API_URL && !kvConfigured() && !redisConfigured()) {
     throw new Error("Persistent DB is not configured for writes. Configure Redis or KV environment variables.")
   }
+}
+
+function shouldBlockRemoteWriteFromLocal() {
+  const isLocalRuntime = process.env.NODE_ENV !== "production" && process.env.VERCEL !== "1"
+  const hasRemoteWritableStore = Boolean(CENTRAL_DB_API_URL) || kvConfigured() || redisConfigured()
+  return isLocalRuntime && hasRemoteWritableStore && !SHARED_DB_ALLOW_REMOTE_WRITE_FROM_LOCAL
+}
+
+export function getSharedDbEnvironmentStatus() {
+  const isLocalRuntime = process.env.NODE_ENV !== "production" && process.env.VERCEL !== "1"
+  const hasCentralApi = Boolean(CENTRAL_DB_API_URL)
+  const hasKv = kvConfigured()
+  const hasRedis = redisConfigured()
+  const hasRemoteStore = hasCentralApi || hasKv || hasRedis
+  const writeBlockedFromLocal = shouldBlockRemoteWriteFromLocal()
+  const canWrite = !SHARED_DB_READ_ONLY && (!isLocalRuntime || !writeBlockedFromLocal)
+
+  return {
+    isLocalRuntime,
+    hasCentralApi,
+    hasKv,
+    hasRedis,
+    hasRemoteStore,
+    readOnly: SHARED_DB_READ_ONLY || writeBlockedFromLocal,
+    canWrite,
+    source: CENTRAL_DB_SOURCE,
+    label: isLocalRuntime
+      ? writeBlockedFromLocal || SHARED_DB_READ_ONLY
+        ? "로컬 읽기전용"
+        : "로컬 쓰기 가능"
+      : canWrite
+        ? "운영 DB 연결"
+        : "운영 읽기전용",
+    tone: isLocalRuntime
+      ? writeBlockedFromLocal || SHARED_DB_READ_ONLY
+        ? "safe"
+        : "warn"
+      : canWrite
+        ? "live"
+        : "muted",
+  } as const
 }
 
 function kvConfigured() {
@@ -159,7 +209,7 @@ async function loadStore(): Promise<StoreShape> {
 async function saveStore(store: StoreShape) {
   const storePath = resolveStorePath()
   await fs.mkdir(path.dirname(storePath), { recursive: true })
-  await fs.writeFile(storePath, JSON.stringify(store, null, 2), "utf8")
+  await fs.writeFile(storePath, JSON.stringify(store), "utf8")
 }
 
 function nextAuditId(store: StoreShape) {
@@ -172,6 +222,18 @@ function lastHash(store: StoreShape) {
 
 function buildHash(prevHash: string, key: string, actor: string, action: string, size: number, now: string) {
   return crypto.createHash("sha256").update(`${prevHash}|${key}|${actor}|${action}|${size}|${now}`).digest("hex")
+}
+
+function makeAuditSnapshot(value: string) {
+  if (!AUDIT_SNAPSHOT_LIMIT) return ""
+  if (value.length > AUDIT_SNAPSHOT_LIMIT) return ""
+  return value
+}
+
+function trimAuditLog(store: StoreShape) {
+  if (store.kv_audit_log.length > AUDIT_RETAIN_LIMIT) {
+    store.kv_audit_log = store.kv_audit_log.slice(-AUDIT_RETAIN_LIMIT)
+  }
 }
 
 function defaultMenuLabelByKey(key: SharedKey) {
@@ -271,6 +333,12 @@ async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta)
     throw new Error("Shared DB is mounted read-only in this environment.")
   }
 
+  if (shouldBlockRemoteWriteFromLocal()) {
+    throw new Error(
+      "Remote shared DB writes are blocked in local development. Set SHARED_DB_ALLOW_REMOTE_WRITE_FROM_LOCAL=1 only if you intentionally want local changes to affect the shared production data.",
+    )
+  }
+
   if (kvConfigured() && !CENTRAL_DB_API_URL) {
     await kvCommand(["SET", kvValueKey(key), raw])
     return
@@ -322,11 +390,12 @@ async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta)
       summary: `${menuLabel} > ${changeLabel}`,
       menu_label: menuLabel,
       change_label: changeLabel,
-      value_snapshot: raw,
+      value_snapshot: makeAuditSnapshot(raw),
       prev_hash: prevHash,
       row_hash: rowHash,
       created_at: now,
     })
+    trimAuditLog(store)
     await saveStore(store)
   })
   await writeQueue
@@ -387,7 +456,7 @@ export async function writeDashboardState(value: unknown, meta?: WriteAuditMeta,
   await Promise.all(
     targetKeys.map((key) => {
       const storeKey = DASHBOARD_SLICE_KEYS[key]
-      return writeRawValue(storeKey, JSON.stringify(source[key] ?? null, null, 2), meta)
+      return writeRawValue(storeKey, JSON.stringify(source[key] ?? null), meta)
     }),
   )
 }
@@ -404,7 +473,7 @@ export async function writeOptionsMock(value: unknown, meta?: WriteAuditMeta) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Options data must be a JSON object.")
   }
-  await writeRawValue(STORE_KEYS.options, JSON.stringify(value, null, 2), meta)
+  await writeRawValue(STORE_KEYS.options, JSON.stringify(value), meta)
 }
 
 export async function readAuthSystem<T>(fallbackValue?: T): Promise<T | null> {
@@ -418,5 +487,5 @@ export async function writeAuthSystem(value: unknown, meta?: WriteAuditMeta) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Auth system must be a JSON object.")
   }
-  await writeRawValue(STORE_KEYS.auth, JSON.stringify(value, null, 2), meta)
+  await writeRawValue(STORE_KEYS.auth, JSON.stringify(value), meta)
 }

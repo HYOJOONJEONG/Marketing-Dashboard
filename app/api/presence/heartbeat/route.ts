@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { resolveRequestSession } from "@/lib/auth/session"
-import { appendActivityLog, updateAuthState, upsertPresenceSession } from "@/lib/auth/store"
+import { updateAuthState, upsertPresenceSession } from "@/lib/auth/store"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -33,19 +33,6 @@ export async function POST(request: Request) {
       sessionId: session.sessionId,
       manualStatus,
       lastActivityAt,
-    })
-    appendActivityLog(state, {
-      actorUserId: session.user.id,
-      actorName: session.user.name,
-      actionType: "presence_heartbeat",
-      targetType: "presence",
-      targetId: connectionId,
-      pageKey: currentPage,
-      beforeValue: "",
-      afterValue: JSON.stringify({ currentSection, manualStatus }),
-      ipAddress: "browser",
-      sessionId: session.sessionId,
-      success: true,
     })
   })
 
