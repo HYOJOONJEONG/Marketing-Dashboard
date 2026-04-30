@@ -134,32 +134,6 @@ function getSeoulTodayKey() {
   }).format(new Date())
 }
 
-function getSeoulTodayParts() {
-  const todayKey = getSeoulTodayKey()
-  const match = todayKey.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (!match) return null
-  return {
-    year: Number(match[1]),
-    month: Number(match[2]),
-    day: Number(match[3]),
-  }
-}
-
-function isSeoulLastWeekOfMonth() {
-  const today = getSeoulTodayParts()
-  if (!today) return false
-  const lastDay = new Date(today.year, today.month, 0).getDate()
-  return today.day >= lastDay - 6
-}
-
-function isNextMonthBillingCarryover(endDate: unknown) {
-  if (!isSeoulLastWeekOfMonth()) return false
-  const today = getSeoulTodayParts()
-  const endMonth = parseContractMonthParts(endDate)
-  if (!today || !endMonth) return false
-  return endMonth.year === today.year && endMonth.month === today.month
-}
-
 function getTerminationManagerFallback(row: any) {
   const manager = String(row?.manager || "").trim()
   if (manager) return manager
@@ -7032,11 +7006,7 @@ export function DashboardShell({
                       <label className="space-y-1">
                         <div className="text-[12px] font-medium text-slate-600">종료일</div>
                         <input
-                          className={`h-10 w-full rounded-2xl border px-3 text-[14px] ${
-                            isNextMonthBillingCarryover(holdDraft.endDate)
-                              ? "border-blue-300 bg-blue-50 text-blue-700"
-                              : "border-slate-200 bg-white text-slate-900"
-                          }`}
+                          className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px] text-slate-900"
                           type="month"
                           value={holdDraft.endDate}
                           onChange={(e)=>updateHoldDraft("endDate", e.target.value)}
@@ -7392,9 +7362,8 @@ export function DashboardShell({
                     <tbody>
                       {filteredHoldItems.map((row: any, index: number) => {
                         const editing = editingHoldId === row.id
-                        const isCarryoverBilling = isNextMonthBillingCarryover(editing ? editingHoldDraft.endDate : row.endDate)
                         return (
-                        <tr key={row.id}>
+                          <tr key={row.id}>
                           <td className={`${tdClass} text-center`}>
                             <input
                               type="checkbox"
@@ -7435,7 +7404,7 @@ export function DashboardShell({
                             ) : row.reason}
                           </td>
                               <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="month" className="h-9 w-32 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.startDate || ""} onChange={(e)=>updateEditingHoldDraft("startDate", e.target.value)} /> : formatMonthLabel(row.startDate)}</td>
-                              <td className={`${tdClass} whitespace-nowrap tabular-nums ${isCarryoverBilling ? "bg-blue-50 font-semibold text-blue-700" : ""}`}>{editing ? <input type="month" className={`h-9 w-32 rounded-xl border px-3 text-[13px] ${isCarryoverBilling ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200"}`} value={editingHoldDraft.endDate || ""} onChange={(e)=>updateEditingHoldDraft("endDate", e.target.value)} /> : formatMonthLabel(row.endDate)}</td>
+                              <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="month" className="h-9 w-32 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.endDate || ""} onChange={(e)=>updateEditingHoldDraft("endDate", e.target.value)} /> : formatMonthLabel(row.endDate)}</td>
                           <td className={`${tdClass} text-center`}>
                             {editing ? (
                               <div className="flex items-center justify-center gap-2 whitespace-nowrap">
