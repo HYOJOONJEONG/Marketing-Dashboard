@@ -600,16 +600,17 @@ function normalizeTerminationReason(reason: unknown) {
 }
 
 function buildTerminationWeeklyCounts(items: any[]) {
+  const sourceItems = Array.isArray(items) ? items : []
   const columns = reportTerminationColumnsStatic.slice(0, -1)
   const indexMap = new Map<string, number>(columns.map((column, index) => [column, index]))
   const counts = Array.from({ length: columns.length }, () => 0)
-  ;(items || []).forEach((item: any) => {
+  sourceItems.forEach((item: any) => {
     const reason = normalizeTerminationReason(item?.reason)
     const index = reason ? indexMap.get(reason) : undefined
     if (index == null) return
     counts[index] += 1
   })
-  const total = counts.reduce((sum, value) => sum + value, 0)
+  const total = sourceItems.length
   return [...counts.map((value) => String(value)), String(total)]
 }
 
@@ -1290,6 +1291,14 @@ export function DashboardShell({
     canViewOptionDashboard ? "option-dashboard" : null,
     canViewTermination ? "termination" : null,
   ].filter(Boolean) as ViewKey[]
+
+  function updateManualDraft(updater: any) {
+    setManualDraft((prev: any) => {
+      const next = typeof updater === "function" ? updater(prev) : updater
+      manualDraftRef.current = next
+      return next
+    })
+  }
   const [terminationEntryMode, setTerminationEntryMode] = useState<"termination" | "hold">("termination")
   const [terminationDraft, setTerminationDraft] = useState<any>({
     receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
@@ -1547,12 +1556,18 @@ export function DashboardShell({
   )
   const weeklyNewContractAutoCount = includedContracts.length
   const weeklyNetAutoCount = weeklyNewContractAutoCount - weeklyTerminationAutoCount
-  const applyWeeklyAutoSummary = (summary: any = {}) => ({
-    ...summary,
-    weeklyNetUnits: weeklyNetAutoCount,
-    weeklyNewContracts: weeklyNewContractAutoCount,
-    weeklyTerminationContracts: weeklyTerminationAutoCount,
-  })
+  const applyWeeklyAutoSummary = (summary: any = {}) => {
+    const nextSummary = {
+      ...summary,
+      weeklyNetUnits: weeklyNetAutoCount,
+      weeklyNewContracts: weeklyNewContractAutoCount,
+      weeklyTerminationContracts: weeklyTerminationAutoCount,
+    }
+    nextSummary.newContractTotal = toNumber(nextSummary.competitorReplacement) + toNumber(nextSummary.newReplacement)
+    nextSummary.holdTotal = toNumber(nextSummary.holdPending) + toNumber(nextSummary.billingHold)
+    nextSummary.terminationTypeTotal = toNumber(nextSummary.contractTermination) + toNumber(nextSummary.competitorTermination)
+    return nextSummary
+  }
   const contractStatusOptions = useMemo(() => {
     const values = new Set<string>()
     contracts.forEach((row: any) => {
@@ -1611,7 +1626,7 @@ export function DashboardShell({
       weeklyNetAutoCount,
       getTotalAdditionalContractAmount(manualDraft.additionalContractCount, manualDraft.additionalSales || []),
     )
-    setManualDraft((prev: any) => (
+    updateManualDraft((prev: any) => (
       prev.revenueHeaderText === nextHeader
         ? prev
         : { ...prev, revenueHeaderText: nextHeader }
@@ -1628,7 +1643,7 @@ export function DashboardShell({
       manualDraft?.manualSummary?.totalContracts,
       manualDraft.revenueUnitPrice,
     )
-    setManualDraft((prev: any) => {
+    updateManualDraft((prev: any) => {
       if (prev.subtitleOne === nextSubtitleOne && prev.subtitleTwo === nextSubtitleTwo) return prev
       return {
         ...prev,
@@ -1644,7 +1659,7 @@ export function DashboardShell({
   ])
 
   useEffect(() => {
-    setManualDraft(buildManualDraftFromWeekly(weeklyReport, contracts, paidOptionSourceColumns))
+    updateManualDraft(buildManualDraftFromWeekly(weeklyReport, contracts, paidOptionSourceColumns))
     setManualRevenueHeaderEdited(false)
   }, [weeklyReport, contracts, paidOptionSourceColumns])
 
@@ -2330,10 +2345,10 @@ export function DashboardShell({
     }
     if (field === "revenueUnitPrice" || field === "additionalContractCount") {
       const digitsOnly = String(value ?? "").replace(/[^\d]/g, "")
-      setManualDraft((prev: any) => ({ ...prev, [field]: digitsOnly }))
+      updateManualDraft((prev: any) => ({ ...prev, [field]: digitsOnly }))
       return
     }
-    setManualDraft((prev: any) => ({ ...prev, [field]: value }))
+    updateManualDraft((prev: any) => ({ ...prev, [field]: value }))
   }
 
   function updateContractDraft(field: string, value: string) {
@@ -2361,7 +2376,7 @@ export function DashboardShell({
 
   function updateManualSummaryField(field: string, value: string) {
     markManualInputDirty()
-    setManualDraft((prev: any) => ({
+    updateManualDraft((prev: any) => ({
       ...prev,
       manualSummary: { ...prev.manualSummary, [field]: value },
     }))
@@ -2369,7 +2384,7 @@ export function DashboardShell({
 
   function updateManualRevenueCell(rowIndex: number, monthIndex: number, value: string) {
     markManualInputDirty()
-    setManualDraft((prev: any) => {
+    updateManualDraft((prev: any) => {
       const revenueRows = cloneData(prev.revenueRows || [])
       if (!revenueRows[rowIndex]) return prev
       if (!Array.isArray(revenueRows[rowIndex].months)) revenueRows[rowIndex].months = Array(12).fill(0)
@@ -2380,7 +2395,7 @@ export function DashboardShell({
 
   function updateManualGoalRow(rowIndex: number, field: string, value: string) {
     markManualInputDirty()
-    setManualDraft((prev: any) => {
+    updateManualDraft((prev: any) => {
       const goalRows = cloneData(prev.goalRows || [])
       if (!goalRows[rowIndex]) return prev
       goalRows[rowIndex][field] = value
@@ -2390,7 +2405,7 @@ export function DashboardShell({
 
   function updateManualIndustryRow(rowIndex: number, field: string, value: string) {
     markManualInputDirty()
-    setManualDraft((prev: any) => {
+    updateManualDraft((prev: any) => {
       const industryStats = cloneData(prev.industryStats || [])
       if (!industryStats[rowIndex]) return prev
       industryStats[rowIndex][field] = value
@@ -2400,7 +2415,7 @@ export function DashboardShell({
 
   function updateManualPaidOptionColumn(columnIndex: number, field: string, value: string) {
     markManualInputDirty()
-    setManualDraft((prev: any) => {
+    updateManualDraft((prev: any) => {
       const paidOptionInfoColumns = cloneData(prev.paidOptionInfoColumns || [])
       if (!paidOptionInfoColumns[columnIndex]) return prev
       paidOptionInfoColumns[columnIndex][field] = value
@@ -2410,7 +2425,7 @@ export function DashboardShell({
 
   function updateManualPaidOptionItem(columnIndex: number, itemIndex: number, value: string) {
     markManualInputDirty()
-    setManualDraft((prev: any) => {
+    updateManualDraft((prev: any) => {
       const paidOptionInfoColumns = cloneData(prev.paidOptionInfoColumns || [])
       if (!paidOptionInfoColumns[columnIndex]) return prev
       if (!Array.isArray(paidOptionInfoColumns[columnIndex].rows)) paidOptionInfoColumns[columnIndex].rows = []
@@ -2430,7 +2445,7 @@ export function DashboardShell({
 
   function updateManualPaidOptionRowCell(columnIndex: number, rowIndex: number, cellIndex: number, value: string) {
     markManualInputDirty()
-    setManualDraft((prev: any) => {
+    updateManualDraft((prev: any) => {
       const paidOptionInfoColumns = cloneData(prev.paidOptionInfoColumns || [])
       if (!paidOptionInfoColumns[columnIndex]) return prev
       if (!Array.isArray(paidOptionInfoColumns[columnIndex].rows)) paidOptionInfoColumns[columnIndex].rows = []
@@ -2451,7 +2466,7 @@ export function DashboardShell({
       const payload = await response.json()
       const nextColumns = applySeedTotalsToPaidOptionColumns(paidOptionSourceColumns, Array.isArray(payload?.cards) ? payload.cards : [])
       markManualInputDirty()
-      setManualDraft((prev: any) => ({
+      updateManualDraft((prev: any) => ({
         ...prev,
         paidOptionInfoColumns: cloneData(nextColumns),
       }))
@@ -2472,17 +2487,13 @@ export function DashboardShell({
     const combineValues = (base: string[], extra: string[]) => {
       const totalIndex = base.length - 1
       const combined = base.map((value, index) =>
-        index === totalIndex ? "0" : String(parseLooseNumber(value) + parseLooseNumber(extra[index])),
+        String(parseLooseNumber(value) + parseLooseNumber(extra[index])),
       )
-      const total = combined
-        .slice(0, totalIndex)
-        .reduce((sum, value) => sum + parseLooseNumber(value), 0)
-      combined[totalIndex] = String(total)
       return combined
     }
     const cumulativeValues = combineValues(confirmedValues, weeklyValues)
     markManualInputDirty()
-    setManualDraft((prev: any) => {
+    updateManualDraft((prev: any) => {
       const terminationOverviewRows = cloneData(prev.terminationOverviewRows || [])
       const weeklyIndex = terminationOverviewRows.findIndex((row: any) => row.label === "주간")
       const cumulativeIndex = terminationOverviewRows.findIndex((row: any) => row.label === "누적")
@@ -2495,7 +2506,7 @@ export function DashboardShell({
 
   function updateManualTerminationOverviewCell(rowIndex: number, valueIndex: number, value: string) {
     markManualInputDirty()
-    setManualDraft((prev: any) => {
+    updateManualDraft((prev: any) => {
       const terminationOverviewRows = cloneData(prev.terminationOverviewRows || [])
       if (!terminationOverviewRows[rowIndex]) return prev
       if (!Array.isArray(terminationOverviewRows[rowIndex].values)) terminationOverviewRows[rowIndex].values = []
@@ -2506,7 +2517,7 @@ export function DashboardShell({
 
   function updateManualWeeklyIndustryOverviewCell(rowIndex: number, valueIndex: number, value: string) {
     markManualInputDirty()
-    setManualDraft((prev: any) => {
+    updateManualDraft((prev: any) => {
       const weeklyIndustryOverviewRows = cloneData(prev.weeklyIndustryOverviewRows || [])
       if (!weeklyIndustryOverviewRows[rowIndex]) return prev
       if (!Array.isArray(weeklyIndustryOverviewRows[rowIndex].values)) weeklyIndustryOverviewRows[rowIndex].values = []
@@ -2517,7 +2528,7 @@ export function DashboardShell({
 
   function updateAdditionalSaleRow(rowIndex: number, field: string, value: string) {
     markManualInputDirty()
-    setManualDraft((prev: any) => {
+    updateManualDraft((prev: any) => {
       const additionalSales = normalizeAdditionalSalesRows(cloneData(prev.additionalSales || [])) as Array<Record<string, string>>
       additionalSales[rowIndex][field] = value
       return { ...prev, additionalSales }
@@ -2531,7 +2542,7 @@ export function DashboardShell({
       return
     }
     markManualInputDirty()
-    setManualDraft((prev: any) => ({
+    updateManualDraft((prev: any) => ({
       ...prev,
       additionalContractCount: "",
       additionalSales: normalizeAdditionalSalesRows([
@@ -2551,7 +2562,7 @@ export function DashboardShell({
 
   function addAdditionalSaleRow() {
     markManualInputDirty()
-    setManualDraft((prev: any) => ({
+    updateManualDraft((prev: any) => ({
       ...prev,
       additionalSales: [
         ...(prev.additionalSales || []),
@@ -2562,7 +2573,7 @@ export function DashboardShell({
 
   function deleteAdditionalSaleRow(rowIndex: number) {
     markManualInputDirty()
-    setManualDraft((prev: any) => ({
+    updateManualDraft((prev: any) => ({
       ...prev,
       additionalSales: normalizeAdditionalSalesRows((prev.additionalSales || []).filter((_: any, index: number) => index !== rowIndex)),
     }))
@@ -4522,7 +4533,14 @@ export function DashboardShell({
   const revenueNoteParts = splitRevenueNoteText(revenueNoteText)
   const manualGoalRows = buildGoalRows(manualDraft.goalRows || [])
   const manualSummary = autoManualSummary
-  const autoManualSummaryFields = new Set(["weeklyNetUnits", "weeklyNewContracts", "weeklyTerminationContracts"])
+  const autoManualSummaryFields = new Set([
+    "weeklyNetUnits",
+    "weeklyNewContracts",
+    "weeklyTerminationContracts",
+    "newContractTotal",
+    "holdTotal",
+    "terminationTypeTotal",
+  ])
   const monthLabels = Array.from({ length: 12 }, (_, index) => `${index + 1}월`)
   const summaryMatrixRows = [
     {
@@ -5301,7 +5319,7 @@ export function DashboardShell({
                         <th className={weeklyThClass} colSpan={4}>단말 교체 현황</th>
                       </tr>
                       <tr>
-                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.newContractTotal)}대</td>
+                        <td className={`${weeklyTdClass} bg-amber-50 font-semibold text-slate-900`}>{formatNumber(reportSummary?.newContractTotal)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.competitorReplacement)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.newReplacement)}대</td>
                         <td className={`${weeklyTdClass} px-3 text-center text-[13px] leading-snug whitespace-normal break-keep print-summary-detail-cell`} colSpan={4}>{reportSummary?.competitorStatus || ""}</td>
@@ -5315,7 +5333,7 @@ export function DashboardShell({
                         <th className={weeklyThClass} colSpan={4}>해지 진행 현황</th>
                       </tr>
                       <tr>
-                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.holdTotal)}대</td>
+                        <td className={`${weeklyTdClass} bg-amber-50 font-semibold text-slate-900`}>{formatNumber(reportSummary?.holdTotal)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.holdPending)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.billingHold)}대</td>
                         <td className={`${weeklyTdClass} px-3 text-center text-[13px] leading-snug whitespace-normal break-keep print-summary-detail-cell`} colSpan={4}>{reportSummary?.holdStatus || ""}</td>
@@ -5329,7 +5347,7 @@ export function DashboardShell({
                         <th className={weeklyThClass} colSpan={4}>타사 교체 현황</th>
                       </tr>
                       <tr>
-                        <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.terminationTypeTotal)}대</td>
+                        <td className={`${weeklyTdClass} bg-amber-50 font-semibold text-slate-900`}>{formatNumber(reportSummary?.terminationTypeTotal)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.contractTermination)}대</td>
                         <td className={`${weeklyTdClass} font-semibold`}>{formatNumber(reportSummary?.competitorTermination)}대</td>
                         <td className={`${weeklyTdClass} px-3 text-center text-[13px] leading-snug whitespace-normal break-keep print-summary-detail-cell`} colSpan={4}>{reportSummary?.competitorTerminationStatus || ""}</td>
@@ -6302,8 +6320,9 @@ export function DashboardShell({
                         <td className={`${tdClass} whitespace-nowrap text-center font-semibold`}>{row.label}</td>
                         {reportTerminationColumnsStatic.map((column, valueIndex) => {
                           const isTotalColumn = column === "합계"
+                          const storedTotalValue = row.values?.[valueIndex]
                           const totalValue = isTotalColumn
-                            ? computeTerminationRowTotal((row.values || []).slice(0, reportTerminationColumnsStatic.length - 1))
+                            ? String(storedTotalValue ?? "").trim() || computeTerminationRowTotal((row.values || []).slice(0, reportTerminationColumnsStatic.length - 1))
                             : null
                           return (
                             <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
