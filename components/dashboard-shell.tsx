@@ -1293,11 +1293,10 @@ export function DashboardShell({
   ].filter(Boolean) as ViewKey[]
 
   function updateManualDraft(updater: any) {
-    setManualDraft((prev: any) => {
-      const next = typeof updater === "function" ? updater(prev) : updater
-      manualDraftRef.current = next
-      return next
-    })
+    const previous = manualDraftRef.current || manualDraft
+    const next = typeof updater === "function" ? updater(previous) : updater
+    manualDraftRef.current = next
+    setManualDraft(next)
   }
   const [terminationEntryMode, setTerminationEntryMode] = useState<"termination" | "hold">("termination")
   const [terminationDraft, setTerminationDraft] = useState<any>({
