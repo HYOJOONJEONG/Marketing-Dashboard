@@ -1275,6 +1275,7 @@ export function DashboardShell({
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
   const lastHistoryAtRef = useRef<number>(0)
   const dirtyViewsRef = useRef<Partial<Record<ViewKey, boolean>>>({})
+  const manualDraftRef = useRef<any>(manualDraft)
   const manualDraftReadyRef = useRef(false)
   const flushPendingSave = useRef<() => void>(() => {})
   const heartbeatIdRef = useRef(`conn-${Math.random().toString(36).slice(2, 10)}`)
@@ -2235,7 +2236,16 @@ export function DashboardShell({
     dirtyViewsRef.current = dirtyViews
   }, [dirtyViews])
 
+  function markManualInputDirty() {
+    dirtyViewsRef.current = {
+      ...dirtyViewsRef.current,
+      "manual-input": true,
+    }
+    markViewsDirty(["manual-input"])
+  }
+
   useEffect(() => {
+    manualDraftRef.current = manualDraft
     if (!manualDraftReadyRef.current) {
       manualDraftReadyRef.current = true
       return
@@ -2340,6 +2350,7 @@ export function DashboardShell({
   }
 
   function updateManualField(field: string, value: string) {
+    markManualInputDirty()
     if (field === "revenueHeaderText") {
       setManualRevenueHeaderEdited(true)
     }
@@ -2375,6 +2386,7 @@ export function DashboardShell({
   }
 
   function updateManualSummaryField(field: string, value: string) {
+    markManualInputDirty()
     setManualDraft((prev: any) => ({
       ...prev,
       manualSummary: { ...prev.manualSummary, [field]: value },
@@ -2382,6 +2394,7 @@ export function DashboardShell({
   }
 
   function updateManualRevenueCell(rowIndex: number, monthIndex: number, value: string) {
+    markManualInputDirty()
     setManualDraft((prev: any) => {
       const revenueRows = cloneData(prev.revenueRows || [])
       if (!revenueRows[rowIndex]) return prev
@@ -2392,6 +2405,7 @@ export function DashboardShell({
   }
 
   function updateManualGoalRow(rowIndex: number, field: string, value: string) {
+    markManualInputDirty()
     setManualDraft((prev: any) => {
       const goalRows = cloneData(prev.goalRows || [])
       if (!goalRows[rowIndex]) return prev
@@ -2401,6 +2415,7 @@ export function DashboardShell({
   }
 
   function updateManualIndustryRow(rowIndex: number, field: string, value: string) {
+    markManualInputDirty()
     setManualDraft((prev: any) => {
       const industryStats = cloneData(prev.industryStats || [])
       if (!industryStats[rowIndex]) return prev
@@ -2410,6 +2425,7 @@ export function DashboardShell({
   }
 
   function updateManualPaidOptionColumn(columnIndex: number, field: string, value: string) {
+    markManualInputDirty()
     setManualDraft((prev: any) => {
       const paidOptionInfoColumns = cloneData(prev.paidOptionInfoColumns || [])
       if (!paidOptionInfoColumns[columnIndex]) return prev
@@ -2419,6 +2435,7 @@ export function DashboardShell({
   }
 
   function updateManualPaidOptionItem(columnIndex: number, itemIndex: number, value: string) {
+    markManualInputDirty()
     setManualDraft((prev: any) => {
       const paidOptionInfoColumns = cloneData(prev.paidOptionInfoColumns || [])
       if (!paidOptionInfoColumns[columnIndex]) return prev
@@ -2438,6 +2455,7 @@ export function DashboardShell({
   }
 
   function updateManualPaidOptionRowCell(columnIndex: number, rowIndex: number, cellIndex: number, value: string) {
+    markManualInputDirty()
     setManualDraft((prev: any) => {
       const paidOptionInfoColumns = cloneData(prev.paidOptionInfoColumns || [])
       if (!paidOptionInfoColumns[columnIndex]) return prev
@@ -2458,6 +2476,7 @@ export function DashboardShell({
       }
       const payload = await response.json()
       const nextColumns = applySeedTotalsToPaidOptionColumns(paidOptionSourceColumns, Array.isArray(payload?.cards) ? payload.cards : [])
+      markManualInputDirty()
       setManualDraft((prev: any) => ({
         ...prev,
         paidOptionInfoColumns: cloneData(nextColumns),
@@ -2488,6 +2507,7 @@ export function DashboardShell({
       return combined
     }
     const cumulativeValues = combineValues(confirmedValues, weeklyValues)
+    markManualInputDirty()
     setManualDraft((prev: any) => {
       const terminationOverviewRows = cloneData(prev.terminationOverviewRows || [])
       const weeklyIndex = terminationOverviewRows.findIndex((row: any) => row.label === "주간")
@@ -2500,6 +2520,7 @@ export function DashboardShell({
   }
 
   function updateManualTerminationOverviewCell(rowIndex: number, valueIndex: number, value: string) {
+    markManualInputDirty()
     setManualDraft((prev: any) => {
       const terminationOverviewRows = cloneData(prev.terminationOverviewRows || [])
       if (!terminationOverviewRows[rowIndex]) return prev
@@ -2510,6 +2531,7 @@ export function DashboardShell({
   }
 
   function updateManualWeeklyIndustryOverviewCell(rowIndex: number, valueIndex: number, value: string) {
+    markManualInputDirty()
     setManualDraft((prev: any) => {
       const weeklyIndustryOverviewRows = cloneData(prev.weeklyIndustryOverviewRows || [])
       if (!weeklyIndustryOverviewRows[rowIndex]) return prev
@@ -2520,6 +2542,7 @@ export function DashboardShell({
   }
 
   function updateAdditionalSaleRow(rowIndex: number, field: string, value: string) {
+    markManualInputDirty()
     setManualDraft((prev: any) => {
       const additionalSales = normalizeAdditionalSalesRows(cloneData(prev.additionalSales || [])) as Array<Record<string, string>>
       additionalSales[rowIndex][field] = value
@@ -2533,6 +2556,7 @@ export function DashboardShell({
       window.alert("추가 계약 금액을 입력해주세요.")
       return
     }
+    markManualInputDirty()
     setManualDraft((prev: any) => ({
       ...prev,
       additionalContractCount: "",
@@ -2552,6 +2576,7 @@ export function DashboardShell({
   }
 
   function addAdditionalSaleRow() {
+    markManualInputDirty()
     setManualDraft((prev: any) => ({
       ...prev,
       additionalSales: [
@@ -2562,6 +2587,7 @@ export function DashboardShell({
   }
 
   function deleteAdditionalSaleRow(rowIndex: number) {
+    markManualInputDirty()
     setManualDraft((prev: any) => ({
       ...prev,
       additionalSales: normalizeAdditionalSalesRows((prev.additionalSales || []).filter((_: any, index: number) => index !== rowIndex)),
@@ -4404,31 +4430,45 @@ export function DashboardShell({
 
   function handleManualUpdate() {
     startTransition(async () => {
+      const draft = manualDraftRef.current || manualDraft
+      const latestData = pendingDataRef.current || data
+      const latestWeeklyReport = latestData?.weeklyReport || weeklyReport
+      const draftSummary = applyWeeklyAutoSummary(draft.manualSummary || {})
+      const draftRevenueDisplay = buildRevenueDisplaySet({
+        revenueHeaderText: draft.revenueHeaderText,
+        subtitleOne: draft.subtitleOne,
+        subtitleTwo: draft.subtitleTwo,
+        revenueUnitPrice: draft.revenueUnitPrice,
+        additionalContractCount: draft.additionalContractCount,
+        additionalSales: draft.additionalSales || [],
+        manualSummary: draftSummary,
+        revenueRows: draft.revenueRows || [],
+        fallbackSelectedCount: weeklyNetAutoCount,
+      })
       const nextWeekly = {
-        ...weeklyReport,
+        ...latestWeeklyReport,
         // Persist the exact values currently shown in the manual input view so
         // weekly report behaves like an Excel cell reference.
-        revenueHeaderText: manualRevenueHeaderText,
-        revenueUnitPrice: toNumber(manualDraft.revenueUnitPrice),
-        additionalContractCount: toNumber(manualDraft.additionalContractCount),
-        subtitleOne: manualRevenueSubtitleOne,
-        subtitleTwo: manualRevenueSubtitleTwo,
-        revenueNoteText: manualDraft.revenueNoteText,
-        manualSummary: applyWeeklyAutoSummary(manualDraft.manualSummary),
-        revenueRows: cloneData(manualDraft.revenueRows || []),
-        goalRows: cloneData(manualDraft.goalRows || []),
-        industryStats: cloneData(manualDraft.industryStats || []),
-        paidOptionInfoColumns: cloneData(manualDraft.paidOptionInfoColumns || []),
-        terminationOverviewRows: cloneData(manualDraft.terminationOverviewRows || []),
-        weeklyIndustryOverviewRows: cloneData(manualDraft.weeklyIndustryOverviewRows || []),
-        additionalSales: normalizeAdditionalSalesRows(cloneData(manualDraft.additionalSales || [])),
+        revenueHeaderText: draftRevenueDisplay.header,
+        revenueUnitPrice: toNumber(draft.revenueUnitPrice),
+        additionalContractCount: toNumber(draft.additionalContractCount),
+        subtitleOne: draftRevenueDisplay.subtitleOne,
+        subtitleTwo: draftRevenueDisplay.subtitleTwo,
+        revenueNoteText: draft.revenueNoteText,
+        manualSummary: draftSummary,
+        revenueRows: cloneData(draft.revenueRows || []),
+        goalRows: cloneData(draft.goalRows || []),
+        industryStats: cloneData(draft.industryStats || []),
+        paidOptionInfoColumns: cloneData(draft.paidOptionInfoColumns || []),
+        terminationOverviewRows: cloneData(draft.terminationOverviewRows || []),
+        weeklyIndustryOverviewRows: cloneData(draft.weeklyIndustryOverviewRows || []),
+        additionalSales: normalizeAdditionalSalesRows(cloneData(draft.additionalSales || [])),
       }
       try {
         await persist(
-          { ...data, weeklyReport: nextWeekly },
+          { ...latestData, weeklyReport: nextWeekly },
           { immediate: true, updatedViews: ["manual-input", "weekly-report"] },
         )
-        setView("weekly-report")
       } catch {
         window.alert("Save failed. Please do not refresh; try Update again in a moment.")
       }
