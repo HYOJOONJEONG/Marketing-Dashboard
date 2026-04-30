@@ -791,19 +791,30 @@ function cloneData<T>(value: T): T {
 
 function normalizeAdditionalSalesRows(rows: any[]) {
   const list = Array.isArray(rows) ? rows : []
-  if (!list.length) return [{ label: "", amount: "", note: "" }]
-  return list.map((row) => ({
-    label: String(row?.label ?? ""),
-    amount: String(row?.amount ?? ""),
-    note: String(row?.note ?? ""),
-  }))
+  if (!list.length) return [{ idCode: "", company: "", amount: "", content: "", note: "", kind: "manual" }]
+  return list.map((row) => {
+    const legacyLabel = String(row?.label ?? "")
+    const content = String(row?.content ?? legacyLabel)
+    const note = String(row?.note ?? "")
+    const kind = String(row?.kind ?? "")
+    return {
+      idCode: String(row?.idCode ?? row?.id ?? ""),
+      company: String(row?.company ?? ""),
+      amount: String(row?.amount ?? ""),
+      content,
+      note,
+      kind: kind || (legacyLabel.includes("추가계약") || note.includes("추가계약") ? "additional-contract" : "manual"),
+    }
+  })
 }
 
 function getSavedAdditionalContractAmount(rows: any[]) {
   return normalizeAdditionalSalesRows(rows || []).reduce((sum, row) => {
-    const label = String(row.label || "")
+    const content = String(row.content || "")
     const note = String(row.note || "")
-    if (!label.includes("추가계약") && !note.includes("추가계약")) return sum
+    const isAdditionalContract =
+      row.kind === "additional-contract" || content.includes("추가계약") || note.includes("추가계약")
+    if (!isAdditionalContract) return sum
     return sum + Math.max(0, parseLooseNumber(row.amount))
   }, 0)
 }
@@ -849,22 +860,20 @@ function getRevenueRowMillionsByLabel(rows: any[], label: string) {
   return (targetRow?.months || []).reduce((sum: number, value: number) => sum + toNumber(value), 0)
 }
 
-function buildAnnualNetRevenueSubtitle(rows: any[], summary: any, unitPrice: unknown, additionalContractCount?: unknown) {
+function buildAnnualNetRevenueSubtitle(rows: any[], summary: any, unitPrice: unknown) {
   const totalMillions = getRevenueTotalMillions(rows)
   const salesMillions = getRevenueRowMillionsByLabel(rows, "매출순증")
   const nonSalesRevenue = (totalMillions - salesMillions) * 1000000
   const cumulativeNetUnits = toNumber(summary?.cumulativeNetUnits)
   const baseUnitPrice = toNumber(unitPrice) || 6160000
-  const bonusRevenue = Math.max(0, toNumber(additionalContractCount))
   const cumulativeNetRevenue = cumulativeNetUnits * baseUnitPrice
-  return `26년 순증 매출 (약 ${formatMoney(nonSalesRevenue + cumulativeNetRevenue + bonusRevenue)})`
+  return `26년 순증 매출 (약 ${formatMoney(nonSalesRevenue + cumulativeNetRevenue)})`
 }
 
-function buildAnnualCumulativeRevenueSubtitle(totalContracts: unknown, unitPrice: unknown, additionalContractCount?: unknown) {
+function buildAnnualCumulativeRevenueSubtitle(totalContracts: unknown, unitPrice: unknown) {
   const contractCount = Math.max(0, toNumber(totalContracts))
   const baseUnitPrice = toNumber(unitPrice) || 6160000
-  const bonusRevenue = Math.max(0, toNumber(additionalContractCount))
-  return `연간 누적 매출 (약 ${formatMoney(contractCount * baseUnitPrice + bonusRevenue)})`
+  return `연간 누적 매출 (약 ${formatMoney(contractCount * baseUnitPrice)})`
 }
 
 function buildRevenueNoteText(baseDate: unknown, unitPrice: unknown) {
@@ -872,7 +881,7 @@ function buildRevenueNoteText(baseDate: unknown, unitPrice: unknown) {
   const mmdd = normalized && normalized.length >= 10 ? normalized.slice(5, 10).replace(".", "/") : ""
   const baseUnitPrice = toNumber(unitPrice) || 6160000
   const dateLabel = mmdd ? ` (${mmdd} 기준)` : ""
-  return `※대당 연 ${formatNumber(baseUnitPrice)}원으로 매출을 산정${dateLabel} / 연간 순증 매출은 (누적순증 합계 × 단가) + ((합계 - 매출순증) × 1,000,000) + 추가계약금액 기준이며, 연간 누적 매출도 추가계약금액을 포함해 계산. 위약금 및 이전비는 월 단위로 계산하되 모든 금액 단위는 백만 원으로 표기.`
+  return `※대당 연 ${formatNumber(baseUnitPrice)}원으로 매출을 산정${dateLabel} / 주간 순증 매출은 추가계약금액을 포함하며, 연간 순증 매출은 (누적순증 합계 × 단가) + ((합계 - 매출순증) × 1,000,000) 기준입니다. 연간 누적 매출은 총 계약대수 × 단가 기준이며 위약금 및 이전비는 월 단위로 계산하되 모든 금액 단위는 백만 원으로 표기.`
 }
 
 function getUpcomingThursday(baseDate = new Date()) {
@@ -954,12 +963,10 @@ function buildRevenueDisplaySet(params: {
     params.revenueRows || [],
     params.manualSummary,
     params.revenueUnitPrice,
-    totalAdditionalContractAmount,
   )
   const computedSubtitleTwo = buildAnnualCumulativeRevenueSubtitle(
     params?.manualSummary?.totalContracts,
     params.revenueUnitPrice,
-    totalAdditionalContractAmount,
   )
   return {
     // Always use the current computed values so the weekly report behaves like
@@ -1634,12 +1641,10 @@ export function DashboardShell({
       manualDraft.revenueRows || [],
       manualDraft.manualSummary,
       manualDraft.revenueUnitPrice,
-      getTotalAdditionalContractAmount(manualDraft.additionalContractCount, manualDraft.additionalSales || []),
     )
     const nextSubtitleTwo = buildAnnualCumulativeRevenueSubtitle(
       manualDraft?.manualSummary?.totalContracts,
       manualDraft.revenueUnitPrice,
-      getTotalAdditionalContractAmount(manualDraft.additionalContractCount, manualDraft.additionalSales || []),
     )
     setManualDraft((prev: any) => {
       if (prev.subtitleOne === nextSubtitleOne && prev.subtitleTwo === nextSubtitleTwo) return prev
@@ -1654,8 +1659,6 @@ export function DashboardShell({
     manualDraft.manualSummary?.cumulativeNetUnits,
     manualDraft.manualSummary?.totalContracts,
     manualDraft.revenueUnitPrice,
-    manualDraft.additionalContractCount,
-    manualDraft.additionalSales,
   ])
 
   useEffect(() => {
@@ -2523,16 +2526,18 @@ export function DashboardShell({
       window.alert("추가 계약 금액을 입력해주세요.")
       return
     }
-    const todayLabel = formatDateDotted(getSeoulTodayKey())
     setManualDraft((prev: any) => ({
       ...prev,
       additionalContractCount: "",
       additionalSales: normalizeAdditionalSalesRows([
         ...(prev.additionalSales || []),
         {
-          label: `${todayLabel} 추가계약`,
+          idCode: "",
+          company: "",
           amount: String(amount),
+          content: "",
           note: "",
+          kind: "additional-contract",
         },
       ]),
     }))
@@ -2544,7 +2549,7 @@ export function DashboardShell({
       ...prev,
       additionalSales: [
         ...(prev.additionalSales || []),
-        { label: `${formatDateDotted(getSeoulTodayKey())} `, amount: "", note: "" },
+        { idCode: "", company: "", amount: "", content: "", note: "", kind: "manual" },
       ],
     }))
   }
@@ -6352,20 +6357,69 @@ export function DashboardShell({
                 </table>
               </div>
 
-              <div className="space-y-3 rounded-2xl border border-slate-200 p-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-[15px] font-bold text-slate-900">추가 매출</div>
-                  <button type="button" onClick={addAdditionalSaleRow} className="rounded-xl border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700">행 추가</button>
-                </div>
-                <div className="space-y-2">
-                  {normalizeAdditionalSalesRows(manualDraft.additionalSales || []).map((row: any, rowIndex: number) => (
-                    <div key={`manual-additional-${rowIndex}`} className="grid grid-cols-[1.3fr_1fr_1.5fr_auto] gap-2">
-                      <input className={manualTableTextInputClass} placeholder="항목" value={String(row.label ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "label", e.target.value)} />
-                      <input className={manualTableInputClass} placeholder="금액" value={String(row.amount ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "amount", e.target.value)} />
-                      <input className={manualTableTextInputClass} placeholder="비고" value={String(row.note ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "note", e.target.value)} />
-                      <button type="button" onClick={() => deleteAdditionalSaleRow(rowIndex)} className="rounded-xl border border-rose-200 px-3 py-1.5 text-[12px] font-semibold text-rose-600">삭제</button>
-                    </div>
-                  ))}
+              <div className="overflow-hidden rounded-2xl border border-slate-200">
+                <div className="overflow-x-auto">
+                  <table className={`${tableClass} min-w-[760px]`}>
+                    <colgroup>
+                      <col style={{ width: "56px" }} />
+                      <col style={{ width: "110px" }} />
+                      <col style={{ width: "160px" }} />
+                      <col style={{ width: "140px" }} />
+                      <col style={{ width: "180px" }} />
+                      <col />
+                      <col style={{ width: "72px" }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th colSpan={7} className={manualTableTitleRowClass}>
+                          <div className="flex items-center justify-between gap-3">
+                            <span>추가 매출</span>
+                            <button
+                              type="button"
+                              onClick={addAdditionalSaleRow}
+                              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold tracking-[-0.01em] text-slate-700 transition hover:bg-slate-50"
+                            >
+                              행 추가
+                            </button>
+                          </div>
+                        </th>
+                      </tr>
+                      <tr>
+                        <th className={manualHeaderCellClass}>No.</th>
+                        <th className={manualHeaderCellClass}>ID</th>
+                        <th className={manualHeaderCellClass}>회사</th>
+                        <th className={manualHeaderCellClass}>금액</th>
+                        <th className={manualHeaderCellClass}>내용</th>
+                        <th className={manualHeaderCellClass}>비고</th>
+                        <th className={manualHeaderCellClass}>관리</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {normalizeAdditionalSalesRows(manualDraft.additionalSales || []).map((row: any, rowIndex: number) => (
+                        <tr key={`manual-additional-${rowIndex}`} className="bg-white">
+                          <td className={`${tdClass} px-2 text-center font-semibold text-blue-700`}>{rowIndex + 1}</td>
+                          <td className={`${tdClass} p-1`}>
+                            <input className={manualTableTextInputClass} placeholder="ID" value={String(row.idCode ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "idCode", e.target.value)} />
+                          </td>
+                          <td className={`${tdClass} p-1`}>
+                            <input className={manualTableTextInputClass} placeholder="회사" value={String(row.company ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "company", e.target.value)} />
+                          </td>
+                          <td className={`${tdClass} p-1`}>
+                            <input className={manualTableInputClass} placeholder="금액" value={String(row.amount ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "amount", e.target.value)} />
+                          </td>
+                          <td className={`${tdClass} p-1`}>
+                            <input className={manualTableTextInputClass} placeholder="내용" value={String(row.content ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "content", e.target.value)} />
+                          </td>
+                          <td className={`${tdClass} p-1`}>
+                            <input className={manualTableTextInputClass} placeholder="비고" value={String(row.note ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "note", e.target.value)} />
+                          </td>
+                          <td className={`${tdClass} p-1 text-center`}>
+                            <button type="button" onClick={() => deleteAdditionalSaleRow(rowIndex)} className="inline-flex h-8 items-center rounded-full border border-rose-200 bg-white px-2.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50">삭제</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
