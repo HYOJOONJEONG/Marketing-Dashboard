@@ -762,6 +762,17 @@ function buildGoalRows(rows: any[]) {
   return normalizedRows
 }
 
+type EditableGoalField = "netTarget" | "targetContracts" | "quarterNetTarget" | "monthlyActual"
+const editableGoalFields = new Set<EditableGoalField>(["netTarget", "targetContracts", "quarterNetTarget", "monthlyActual"])
+
+function isEditableGoalField(field: string): field is EditableGoalField {
+  return editableGoalFields.has(field as EditableGoalField)
+}
+
+function buildEditableGoalRows(rows: any[]) {
+  return buildGoalRows(rows).map((row) => ({ ...row }))
+}
+
 function buildIndustryStats(rows: any[]) {
   const fallbackCategories = ["국내증권", "국내은행", "외국계", "자산운용", "보험사", "일반기업", "공사/정부", "연기금", "기타금융", "합계"]
   return (Array.isArray(rows) ? rows : []).map((row, index) => ({
@@ -2412,12 +2423,15 @@ export function DashboardShell({
   }
 
   function updateManualGoalRow(rowIndex: number, field: string, value: string) {
+    if (!isEditableGoalField(field)) return
+    if (rowIndex >= 12) return
+    if (field === "quarterNetTarget" && rowIndex % 3 !== 0) return
     markManualInputDirty()
     updateManualDraft((prev: any) => {
-      const goalRows = cloneData(prev.goalRows || [])
+      const goalRows = buildEditableGoalRows(prev.goalRows || [])
       if (!goalRows[rowIndex]) return prev
       goalRows[rowIndex][field] = value
-      return { ...prev, goalRows }
+      return { ...prev, goalRows: buildGoalRows(goalRows) }
     })
   }
 
@@ -4462,7 +4476,7 @@ export function DashboardShell({
         revenueNoteText: draft.revenueNoteText,
         manualSummary: draftSummary,
         revenueRows: cloneData(draft.revenueRows || []),
-        goalRows: cloneData(draft.goalRows || []),
+        goalRows: cloneData(buildGoalRows(draft.goalRows || [])),
         industryStats: cloneData(draft.industryStats || []),
         paidOptionInfoColumns: cloneData(draft.paidOptionInfoColumns || []),
         terminationOverviewRows: cloneData(draft.terminationOverviewRows || []),
