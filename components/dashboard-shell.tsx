@@ -848,6 +848,13 @@ function sumRevenueRowTotals(rows: any[]) {
 
 function getRevenueTotalMillions(rows: any[]) {
   const normalizedRows = buildRevenueRows(rows || [])
+  const baseRows = normalizedRows.filter((row) => String(row?.label || "").trim() !== "합계")
+  if (baseRows.length) {
+    return baseRows.reduce((sum, row) => {
+      const rowTotal = (row.months || []).reduce((rowSum: number, value: number) => rowSum + toNumber(value), 0)
+      return sum + rowTotal
+    }, 0)
+  }
   const totalRow =
     normalizedRows.find((row) => String(row?.label || "").trim() === "합계") ||
     normalizedRows[normalizedRows.length - 1]
@@ -867,7 +874,7 @@ function buildAnnualNetRevenueSubtitle(rows: any[], summary: any, unitPrice: unk
   const cumulativeNetUnits = toNumber(summary?.cumulativeNetUnits)
   const baseUnitPrice = toNumber(unitPrice) || 6160000
   const cumulativeNetRevenue = cumulativeNetUnits * baseUnitPrice
-  return `26년 순증 매출 (약 ${formatMoney(nonSalesRevenue + cumulativeNetRevenue)})`
+  return `26년 순증 매출 (약 ${formatMoney(Math.round(nonSalesRevenue + cumulativeNetRevenue))})`
 }
 
 function buildAnnualCumulativeRevenueSubtitle(totalContracts: unknown, unitPrice: unknown) {
