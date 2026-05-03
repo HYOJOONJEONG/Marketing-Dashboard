@@ -36,7 +36,18 @@ type MemoryDetail = {
   key: string
   label: string
   bytes: number
+  compactBytes?: number
+  wasteBytes?: number
   updatedAt: string
+}
+
+type AnalysisRow = {
+  key: string
+  label: string
+  bytes: number
+  count?: number
+  note: string
+  risk: "safe" | "review" | "keep"
 }
 
 const DATA_LABELS: Record<string, string> = {
@@ -53,6 +64,19 @@ const DATA_LABELS: Record<string, string> = {
   dashboard_paid_option_source_columns: "옵션 컬럼 설정",
   options_mock: "유료 옵션 정보",
   auth_system: "사용자/권한",
+}
+
+const DASHBOARD_SLICE_KEYS: Record<string, string> = {
+  ui: "dashboard_ui",
+  currentYear: "dashboard_current_year",
+  years: "dashboard_years",
+  availableYears: "dashboard_available_years",
+  dailyReport: "dashboard_daily_report",
+  weeklyReport: "dashboard_weekly_report",
+  contracts: "dashboard_contracts",
+  collection: "dashboard_collection",
+  termination: "dashboard_termination",
+  paidOptionSourceColumns: "dashboard_paid_option_source_columns",
 }
 
 function kvConfigured() {
@@ -84,6 +108,113 @@ function compactJsonString(value: string) {
     return JSON.stringify(JSON.parse(String(value || "").replace(/^\uFEFF/, "")))
   } catch {
     return String(value || "")
+  }
+}
+
+function parseJsonValue(value: string) {
+  try {
+    return JSON.parse(String(value || "").replace(/^\uFEFF/, ""))
+  } catch {
+    return null
+  }
+}
+
+function valueSize(value: unknown) {
+  return byteLength(JSON.stringify(value ?? null))
+}
+
+function buildAnalysis(valueByKey: Record<string, string>) {
+  const rows: AnalysisRow[] = []
+  const legacyRaw = valueByKey.dashboard_state || ""
+  const legacyDashboard = parseJsonValue(legacyRaw)
+  const legacyTopKeys =
+    legacyDashboard && typeof legacyDashboard === "object" && !Array.isArray(legacyDashboard)
+      ? Object.keys(legacyDashboard as Record<string, unknown>)
+      : []
+  const sliceEntries = Object.entries(DASHBOARD_SLICE_KEYS)
+  const existingSlices = sliceEntries.filter(([, storeKey]) => Boolean(valueByKey[storeKey]))
+  const missingSlices = sliceEntries
+    .filter(([sourceKey, storeKey]) => legacyTopKeys.includes(sourceKey) && !valueByKey[storeKey])
+    .map(([sourceKey]) => sourceKey)
+  const extraLegacyKeys = legacyTopKeys.filter((key) => !DASHBOARD_SLICE_KEYS[key])
+  const legacyCompactBytes = legacyRaw ? byteLength(compactJsonString(legacyRaw)) : 0
+  const legacyWasteBytes = Math.max(0, byteLength(legacyRaw) - legacyCompactBytes)
+
+  if (legacyRaw) {
+    rows.push({
+      key: "dashboard_state",
+      label: "구버전 전체 대시보드 저장본",
+      bytes: byteLength(legacyRaw),
+      note:
+        existingSlices.length > 0
+          ? `분리 저장본 ${existingSlices.length}개와 중복 가능성이 있습니다. 누락 ${missingSlices.length}개, 미지원 필드 ${extraLegacyKeys.length}개.`
+          : "아직 분리 저장본이 없어 바로 제거하면 안 됩니다.",
+      risk: extraLegacyKeys.length ? "review" : existingSlices.length ? "safe" : "keep",
+    })
+  }
+
+  if (legacyWasteBytes > 0) {
+    rows.push({
+      key: "json_compaction",
+      label: "JSON 공백/서식 압축 가능분",
+      bytes: legacyWasteBytes,
+      note: "데이터 삭제 없이 공백과 줄바꿈만 줄이는 안전 정리 대상입니다.",
+      risk: "safe",
+    })
+  }
+
+  if (legacyDashboard?.collection) {
+    const collection = legacyDashboard.collection
+    rows.push({
+      key: "collection.integrated",
+      label: "계약서통합관리 전체 리스트",
+      bytes: valueSize(collection.integrated),
+      count: Array.isArray(collection.integrated) ? collection.integrated.length : undefined,
+      note: "대부분 회수 완료 과거 계약서일 수 있습니다. 업무 조회 범위를 정한 뒤 별도 보관/삭제 후보입니다.",
+      risk: "review",
+    })
+    rows.push({
+      key: "collection.longTerm",
+      label: "장기미회수 계약서",
+      bytes: valueSize(collection.longTerm),
+      count: Array.isArray(collection.longTerm) ? collection.longTerm.length : undefined,
+      note: "미회수 관리 데이터라 기본 보존 대상입니다.",
+      risk: "keep",
+    })
+    rows.push({
+      key: "collection.delivery.history",
+      label: "계약서 전달리스트 히스토리",
+      bytes: valueSize(collection.delivery?.history || []),
+      count: Array.isArray(collection.delivery?.history) ? collection.delivery.history.length : 0,
+      note: "운영에서 누적될 수 있습니다. 최근 30~60일 보관 정책 후보입니다.",
+      risk: "review",
+    })
+  }
+
+  const options = parseJsonValue(valueByKey.options_mock || "")
+  if (options?.optionRecords) {
+    rows.push({
+      key: "options_mock.optionRecords",
+      label: "유료 옵션 상세 레코드",
+      bytes: valueSize(options.optionRecords),
+      count: Array.isArray(options.optionRecords) ? options.optionRecords.length : undefined,
+      note: "상세 목록 조회에 필요합니다. 카드 수치만 필요할 때만 축소 후보입니다.",
+      risk: "review",
+    })
+  }
+
+  return {
+    rows: rows.sort((a, b) => b.bytes - a.bytes),
+    legacyDashboard: {
+      exists: Boolean(legacyRaw),
+      bytes: byteLength(legacyRaw),
+      compactBytes: legacyCompactBytes,
+      wasteBytes: legacyWasteBytes,
+      existingSliceCount: existingSlices.length,
+      missingSlices,
+      extraLegacyKeys,
+      canMigrateAndPrune: Boolean(legacyRaw) && extraLegacyKeys.length === 0,
+    },
   }
 }
 
@@ -176,10 +307,14 @@ async function listPersistentValueKeys() {
 
 async function getPersistentStats() {
   const redisKeys = await listPersistentValueKeys()
-  const commands = redisKeys.map((key) => ["STRLEN", key])
+  const strlenCommands = redisKeys.map((key) => ["STRLEN", key])
+  const getCommands = redisKeys.map((key) => ["GET", key])
   const keySizes = kvConfigured()
-    ? await kvPipeline(commands)
-    : await Promise.all(commands.map((command) => redisCommand<number>(REDIS_URL, command)))
+    ? await kvPipeline(strlenCommands)
+    : await Promise.all(strlenCommands.map((command) => redisCommand<number>(REDIS_URL, command)))
+  const keyValues = kvConfigured()
+    ? await kvPipeline(getCommands)
+    : await Promise.all(getCommands.map((command) => redisCommand<string | null>(REDIS_URL, command)))
   const [auditCount, redisInfo, redisKeyCount] = await Promise.all([
     kvConfigured()
       ? runKvCommand<number>(["LLEN", KV_AUDIT_LIST_KEY]).catch(() => 0)
@@ -187,12 +322,19 @@ async function getPersistentStats() {
     getRedisInfo(),
     getRedisDbSize(),
   ])
+  const valueByKey: Record<string, string> = {}
   const details: MemoryDetail[] = redisKeys.map((redisKey, index) => {
     const key = stripKvValuePrefix(redisKey)
+    const rawValue = String(kvConfigured() ? keyValues[index]?.result || "" : keyValues[index] || "")
+    valueByKey[key] = rawValue
+    const compactBytes = rawValue ? byteLength(compactJsonString(rawValue)) : 0
+    const bytes = Number(kvConfigured() ? keySizes[index]?.result || 0 : keySizes[index] || 0)
     return {
       key,
       label: DATA_LABELS[key] || key,
-      bytes: Number(kvConfigured() ? keySizes[index]?.result || 0 : keySizes[index] || 0),
+      bytes,
+      compactBytes,
+      wasteBytes: Math.max(0, bytes - compactBytes),
       updatedAt: "",
     }
   })
@@ -213,6 +355,7 @@ async function getPersistentStats() {
     measuredBytes: redisInfo.usedMemory,
     estimatedBytes,
     details: details.sort((a, b) => b.bytes - a.bytes),
+    analysis: buildAnalysis(valueByKey),
     recommendations: buildRecommendations(usedBytes, auditBytes, limitBytes),
   }
 }
@@ -225,8 +368,11 @@ async function getLocalStats() {
     key,
     label: DATA_LABELS[key] || key,
     bytes: byteLength(String(row?.value || "")),
+    compactBytes: byteLength(compactJsonString(String(row?.value || ""))),
+    wasteBytes: Math.max(0, byteLength(String(row?.value || "")) - byteLength(compactJsonString(String(row?.value || "")))),
     updatedAt: String(row?.updated_at || ""),
   }))
+  const valueByKey = Object.fromEntries(entries.map(([key, row]) => [key, String(row?.value || "")]))
   const auditBytes = byteLength(JSON.stringify(auditRows))
   const usedBytes = raw ? byteLength(raw) : details.reduce((sum, item) => sum + item.bytes, 0) + auditBytes
   return {
@@ -241,6 +387,7 @@ async function getLocalStats() {
     measuredBytes: 0,
     estimatedBytes: usedBytes,
     details: details.sort((a, b) => b.bytes - a.bytes),
+    analysis: buildAnalysis(valueByKey),
     recommendations: buildRecommendations(usedBytes, auditBytes, MEMORY_LIMIT_BYTES),
   }
 }
@@ -296,6 +443,84 @@ async function compactPersistentStore() {
   return { beforeBytes, afterBytes, savedBytes: Math.max(0, beforeBytes - afterBytes) }
 }
 
+function buildDashboardSlicePayloads(legacyRaw: string, existingValues: Record<string, string>) {
+  const legacy = parseJsonValue(legacyRaw)
+  if (!legacy || typeof legacy !== "object" || Array.isArray(legacy)) {
+    throw new Error("legacy dashboard_state is not a valid object")
+  }
+  const legacyObject = legacy as Record<string, unknown>
+  const extraKeys = Object.keys(legacyObject).filter((key) => !DASHBOARD_SLICE_KEYS[key])
+  if (extraKeys.length) {
+    throw new Error(`unsupported legacy dashboard fields: ${extraKeys.join(", ")}`)
+  }
+  return Object.entries(DASHBOARD_SLICE_KEYS)
+    .filter(([sourceKey, storeKey]) => Object.prototype.hasOwnProperty.call(legacyObject, sourceKey) && !existingValues[storeKey])
+    .map(([sourceKey, storeKey]) => ({
+      storeKey,
+      value: JSON.stringify(legacyObject[sourceKey] ?? null),
+    }))
+}
+
+async function migrateAndPruneLocalLegacyDashboard() {
+  const { raw, store } = await readLocalStore()
+  const beforeBytes = byteLength(raw)
+  const kvStore = store.kv_store || {}
+  const legacyRaw = String(kvStore.dashboard_state?.value || "")
+  if (!legacyRaw) return { beforeBytes, afterBytes: beforeBytes, savedBytes: 0, migratedSlices: 0, deletedLegacy: false }
+
+  const existingValues = Object.fromEntries(Object.entries(kvStore).map(([key, row]) => [key, String(row?.value || "")]))
+  const payloads = buildDashboardSlicePayloads(legacyRaw, existingValues)
+  const now = new Date().toISOString()
+  payloads.forEach((item) => {
+    kvStore[item.storeKey] = { value: item.value, updated_at: now }
+  })
+  delete kvStore.dashboard_state
+  store.kv_store = kvStore
+  store.kv_audit_log = normalizeAuditRows(store.kv_audit_log || [])
+  const nextRaw = JSON.stringify(store)
+  await fs.mkdir(path.dirname(STORE_PATH), { recursive: true })
+  await fs.writeFile(STORE_PATH, nextRaw, "utf8")
+  const afterBytes = byteLength(nextRaw)
+  return {
+    beforeBytes,
+    afterBytes,
+    savedBytes: Math.max(0, beforeBytes - afterBytes),
+    migratedSlices: payloads.length,
+    deletedLegacy: true,
+  }
+}
+
+async function migrateAndPrunePersistentLegacyDashboard() {
+  const keys = Object.values(DASHBOARD_SLICE_KEYS)
+  const commands = [["GET", kvValueKey("dashboard_state")], ...keys.map((key) => ["GET", kvValueKey(key)])]
+  const results = kvConfigured()
+    ? await kvPipeline(commands)
+    : await Promise.all(commands.map((command) => redisCommand<string | null>(REDIS_URL, command)))
+  const legacyRaw = String(kvConfigured() ? results[0]?.result || "" : results[0] || "")
+  if (!legacyRaw) return { beforeBytes: 0, afterBytes: 0, savedBytes: 0, migratedSlices: 0, deletedLegacy: false }
+  const existingValues: Record<string, string> = {}
+  keys.forEach((key, index) => {
+    existingValues[key] = String(kvConfigured() ? results[index + 1]?.result || "" : results[index + 1] || "")
+  })
+  const payloads = buildDashboardSlicePayloads(legacyRaw, existingValues)
+  const writeCommands = payloads.map((item) => ["SET", kvValueKey(item.storeKey), item.value])
+  const deleteCommand = ["DEL", kvValueKey("dashboard_state")]
+  if (kvConfigured()) {
+    await kvPipeline([...writeCommands, deleteCommand])
+  } else {
+    for (const command of writeCommands) await redisCommand(REDIS_URL, command)
+    await redisCommand(REDIS_URL, deleteCommand)
+  }
+  const afterBytes = payloads.reduce((sum, item) => sum + byteLength(item.value), 0)
+  return {
+    beforeBytes: byteLength(legacyRaw),
+    afterBytes,
+    savedBytes: Math.max(0, byteLength(legacyRaw) - afterBytes),
+    migratedSlices: payloads.length,
+    deletedLegacy: true,
+  }
+}
+
 export async function GET() {
   try {
     const auth = await requireApiPermission("adminPage", "view")
@@ -312,10 +537,18 @@ export async function POST(request: Request) {
     const auth = await requireApiPermission("adminPage", "admin")
     if (!auth.ok) return auth.response
     const body = await request.json().catch(() => null)
-    if (String(body?.action || "") !== "compact") {
+    const action = String(body?.action || "")
+    if (action !== "compact" && action !== "migrateLegacyDashboard") {
       return NextResponse.json({ ok: false, error: "unsupported action" }, { status: 400 })
     }
-    const cleanup = persistentStoreConfigured() ? await compactPersistentStore() : await compactLocalStore()
+    const cleanup =
+      action === "migrateLegacyDashboard"
+        ? persistentStoreConfigured()
+          ? await migrateAndPrunePersistentLegacyDashboard()
+          : await migrateAndPruneLocalLegacyDashboard()
+        : persistentStoreConfigured()
+          ? await compactPersistentStore()
+          : await compactLocalStore()
     const stats = persistentStoreConfigured() ? await getPersistentStats() : await getLocalStats()
     return NextResponse.json({ ok: true, cleanup, stats })
   } catch (error) {

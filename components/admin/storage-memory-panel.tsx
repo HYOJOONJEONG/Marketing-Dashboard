@@ -6,7 +6,18 @@ type MemoryDetail = {
   key: string
   label: string
   bytes: number
+  compactBytes?: number
+  wasteBytes?: number
   updatedAt?: string
+}
+
+type AnalysisRow = {
+  key: string
+  label: string
+  bytes: number
+  count?: number
+  note: string
+  risk: "safe" | "review" | "keep"
 }
 
 type MemoryStats = {
@@ -21,6 +32,19 @@ type MemoryStats = {
   measuredBytes?: number
   estimatedBytes?: number
   details: MemoryDetail[]
+  analysis?: {
+    rows: AnalysisRow[]
+    legacyDashboard?: {
+      exists: boolean
+      bytes: number
+      compactBytes: number
+      wasteBytes: number
+      existingSliceCount: number
+      missingSlices: string[]
+      extraLegacyKeys: string[]
+      canMigrateAndPrune: boolean
+    }
+  }
   recommendations: string[]
 }
 
@@ -111,10 +135,32 @@ export function StorageMemoryPanel() {
     })
   }
 
+  const runLegacyCleanup = () => {
+    const legacy = stats?.analysis?.legacyDashboard
+    if (!legacy?.canMigrateAndPrune) return
+    if (!window.confirm("구버전 전체 대시보드 저장본을 분리 저장본으로 보존한 뒤 제거합니다. 이미 분리 저장된 최신 데이터는 덮어쓰지 않습니다. 계속할까요?")) return
+    setCleanupMessage("")
+    setError("")
+    startTransition(async () => {
+      try {
+        const payload = await fetchJson("/api/admin/memory", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "migrateLegacyDashboard" }),
+        })
+        setStats(payload.stats)
+        setCleanupMessage(`구버전 저장본 정리 완료: ${formatBytes(payload.cleanup?.savedBytes || 0)} 절감`)
+      } catch (err: any) {
+        setError(String(err?.message || "구버전 저장본 정리에 실패했습니다."))
+      }
+    })
+  }
+
   const percent = Math.round(stats?.percent || 0)
   const chartStyle = {
     background: `conic-gradient(${statusTone.color} ${Math.min(100, stats?.percent || 0)}%, #e2e8f0 0)`,
   }
+  const legacyDashboard = stats?.analysis?.legacyDashboard
 
   return (
     <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -138,6 +184,14 @@ export function StorageMemoryPanel() {
             className="h-10 rounded-2xl bg-blue-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
           >
             {isPending ? "정리 중" : "안전 정리 실행"}
+          </button>
+          <button
+            type="button"
+            onClick={runLegacyCleanup}
+            disabled={isPending || !legacyDashboard?.canMigrateAndPrune}
+            className="h-10 rounded-2xl border border-amber-300 bg-amber-50 px-4 text-sm font-bold text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            구버전 저장본 정리
           </button>
         </div>
       </div>
@@ -203,12 +257,77 @@ export function StorageMemoryPanel() {
             </div>
           </div>
 
+          <div className="rounded-[24px] border border-slate-200 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-black text-slate-950">상세 정리 후보</div>
+                <div className="mt-1 text-xs font-semibold text-slate-400">업무 데이터와 중복/압축 후보를 분리해서 보여줍니다.</div>
+              </div>
+              {legacyDashboard?.exists ? (
+                <div className="rounded-2xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
+                  legacy {formatBytes(legacyDashboard.bytes)} / 압축 가능 {formatBytes(legacyDashboard.wasteBytes)}
+                </div>
+              ) : null}
+            </div>
+            {legacyDashboard?.exists ? (
+              <div className="mt-3 grid gap-2 text-xs font-semibold text-slate-500 sm:grid-cols-3">
+                <div className="rounded-2xl bg-slate-50 px-3 py-2">분리 저장본 {legacyDashboard.existingSliceCount}개</div>
+                <div className="rounded-2xl bg-slate-50 px-3 py-2">누락 {legacyDashboard.missingSlices.length}개</div>
+                <div className="rounded-2xl bg-slate-50 px-3 py-2">미지원 필드 {legacyDashboard.extraLegacyKeys.length}개</div>
+              </div>
+            ) : null}
+            <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500">
+                    <th className="px-4 py-3 text-left font-black">후보</th>
+                    <th className="px-4 py-3 text-right font-black">크기</th>
+                    <th className="px-4 py-3 text-right font-black">건수</th>
+                    <th className="px-4 py-3 text-left font-black">판단</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(stats?.analysis?.rows || []).map((item) => (
+                    <tr key={item.key} className="border-t border-slate-200">
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-slate-900">{item.label}</div>
+                        <div className="mt-1 text-xs font-semibold text-slate-400">{item.key}</div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-black text-slate-950">{formatBytes(item.bytes)}</td>
+                      <td className="px-4 py-3 text-right text-slate-500">{item.count == null ? "-" : item.count.toLocaleString("ko-KR")}</td>
+                      <td className="px-4 py-3">
+                        <div className={`inline-flex rounded-full px-2 py-1 text-xs font-black ${
+                          item.risk === "safe"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : item.risk === "review"
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-slate-100 text-slate-600"
+                        }`}>
+                          {item.risk === "safe" ? "정리 가능" : item.risk === "review" ? "검토 필요" : "보존"}
+                        </div>
+                        <div className="mt-1 text-xs font-semibold text-slate-500">{item.note}</div>
+                      </td>
+                    </tr>
+                  ))}
+                  {!stats?.analysis?.rows?.length && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-sm font-semibold text-slate-400">
+                        상세 분석 대상이 없습니다.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div className="overflow-hidden rounded-[24px] border border-slate-200">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 text-slate-500">
                   <th className="px-4 py-3 text-left font-black">구분</th>
                   <th className="px-4 py-3 text-right font-black">크기</th>
+                  <th className="px-4 py-3 text-right font-black">압축 가능</th>
                   <th className="px-4 py-3 text-left font-black">수정일</th>
                   <th className="px-4 py-3 text-left font-black">키</th>
                 </tr>
@@ -218,13 +337,14 @@ export function StorageMemoryPanel() {
                   <tr key={item.key} className="border-t border-slate-200">
                     <td className="px-4 py-3 font-bold text-slate-900">{item.label}</td>
                     <td className="px-4 py-3 text-right font-black text-slate-950">{formatBytes(item.bytes)}</td>
+                    <td className="px-4 py-3 text-right font-bold text-amber-600">{formatBytes(item.wasteBytes || 0)}</td>
                     <td className="px-4 py-3 text-slate-500">{formatDate(item.updatedAt)}</td>
                     <td className="px-4 py-3 text-xs font-semibold text-slate-400">{item.key}</td>
                   </tr>
                 ))}
                 {!stats?.details?.length && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-sm font-semibold text-slate-400">
+                    <td colSpan={5} className="px-4 py-8 text-center text-sm font-semibold text-slate-400">
                       저장된 데이터가 없습니다.
                     </td>
                   </tr>
