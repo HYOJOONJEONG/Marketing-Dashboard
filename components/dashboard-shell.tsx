@@ -340,6 +340,11 @@ function sanitizeSummaryText(text: unknown, fallback: string) {
   return fallback
 }
 
+function sanitizeCellValue(value: unknown, fallback = "") {
+  const text = String(value ?? "").trim()
+  return text === "" ? fallback : text
+}
+
 function buildRevenueRows(rows: any[]) {
   const fallbackLabels = ["매출순증", "위약금", "이전비", "합계"]
   const fallbackKeys = ["sales", "penalty", "move", "total"]
@@ -494,7 +499,7 @@ function buildPaidOptionInfoColumns(columns: any[]) {
     const rows = Array.isArray(sourceRows)
       ? sourceRows.map((row: any) => [
           sanitizeSummaryText(Array.isArray(row) ? row[0] : row?.[0], ""),
-          sanitizeSummaryText(Array.isArray(row) ? row[1] : row?.[1], ""),
+          sanitizeCellValue(Array.isArray(row) ? row[1] : row?.[1], ""),
         ])
       : Array.isArray(fromBase?.rows)
         ? [...fromBase.rows]
@@ -550,7 +555,7 @@ function buildTerminationOverviewRows(rows: any[]) {
   return (Array.isArray(rows) && rows.length ? rows : weeklyTerminationOverviewRows).map((row: any, index: number) => ({
     label: sanitizeSummaryText(row?.label, weeklyTerminationOverviewRows[index]?.label || `행 ${index + 1}`),
     values: Array.from({ length: reportTerminationColumnsStatic.length }, (_, valueIndex) =>
-      sanitizeSummaryText(row?.values?.[valueIndex], weeklyTerminationOverviewRows[index]?.values?.[valueIndex] || ""),
+      sanitizeCellValue(row?.values?.[valueIndex], weeklyTerminationOverviewRows[index]?.values?.[valueIndex] || ""),
     ),
   }))
 }
@@ -560,7 +565,7 @@ function buildWeeklyIndustryOverviewRows(rows: any[]) {
     label: sanitizeSummaryText(row?.label, weeklyIndustryOverviewRows[index]?.label || `행 ${index + 1}`),
     values: buildIndustryRowValuesWithTotal(
       Array.from({ length: reportIndustryColumnsStatic.length }, (_, valueIndex) =>
-        sanitizeSummaryText(row?.values?.[valueIndex], weeklyIndustryOverviewRows[index]?.values?.[valueIndex] || ""),
+        sanitizeCellValue(row?.values?.[valueIndex], weeklyIndustryOverviewRows[index]?.values?.[valueIndex] || ""),
       ),
     ),
   }))
@@ -635,7 +640,7 @@ function computeIndustryRowTotal(values: any[]) {
 function normalizeIndustryRowValues(values: any[]) {
   const source = Array.isArray(values) ? values : []
   return Array.from({ length: reportIndustryColumnsStatic.length }, (_, index) =>
-    sanitizeSummaryText(source[index], ""),
+    sanitizeCellValue(source[index], ""),
   )
 }
 
@@ -5016,13 +5021,12 @@ export function DashboardShell({
                 <div className="mb-2 px-3 text-[12px] font-bold uppercase tracking-[0.16em] text-slate-400">
                   관리자
                 </div>
-                <button
-                  type="button"
-                  onClick={() => router.push("/admin")}
+                <a
+                  href="/admin"
                   className="flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   관리자페이지
-                </button>
+                </a>
               </div>
             ) : null}
 
