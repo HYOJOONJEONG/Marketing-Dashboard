@@ -4443,6 +4443,10 @@ export function DashboardShell({
     },
   }
 
+  function selectManualNumberInput(event: React.FocusEvent<HTMLInputElement>) {
+    event.currentTarget.select()
+  }
+
   function handleManualInputKeyDownCapture(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "Enter") return
     if ((event.nativeEvent as KeyboardEvent).isComposing) return
@@ -6028,6 +6032,7 @@ export function DashboardShell({
                       className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
                       inputMode="numeric"
                       value={formatNumericInputDisplay(manualDraft.revenueUnitPrice)}
+                      onFocus={selectManualNumberInput}
                       onChange={(e) => updateManualField("revenueUnitPrice", e.target.value)}
                     />
                   </label>
@@ -6041,6 +6046,7 @@ export function DashboardShell({
                         inputMode="numeric"
                         placeholder="예: 1,000,000"
                         value={formatNumericInputDisplay(manualDraft.additionalContractCount)}
+                        onFocus={selectManualNumberInput}
                         onChange={(e) => updateManualField("additionalContractCount", e.target.value)}
                       />
                       <button
@@ -6111,6 +6117,7 @@ export function DashboardShell({
                                   className={`${manualTableInputClass} ${isTotalRow ? "font-semibold text-slate-900" : ""}`}
                                   style={isTotalRow ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
                                   value={String(monthValue ?? "")}
+                                  onFocus={selectManualNumberInput}
                                   onChange={(e) => updateManualRevenueCell(rowIndex, monthIndex, e.target.value)}
                                   readOnly={isTotalRow}
                                 />
@@ -6171,6 +6178,7 @@ export function DashboardShell({
                                   className={`${manualTableInputClass} ${isAutoField ? "cursor-not-allowed font-bold text-slate-900" : ""} ${section.cells.length === 4 && cellIndex === section.cells.length - 1 ? "text-left px-4" : ""}`}
                                   style={isAutoField ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
                                   value={String(manualSummary?.[field] ?? "")}
+                                  onFocus={selectManualNumberInput}
                                   readOnly={isAutoField}
                                   onChange={(e) => updateManualSummaryField(field, e.target.value)}
                                 />
@@ -6216,6 +6224,7 @@ export function DashboardShell({
                                   borderColor: "#fcd34d",
                                 } : undefined}
                                 value={String(row[field] ?? "")}
+                                onFocus={selectManualNumberInput}
                                 onChange={(e) => updateManualGoalRow(rowIndex, field, e.target.value)}
                                 readOnly={isTotalRow}
                               />
@@ -6230,6 +6239,7 @@ export function DashboardShell({
                                   borderColor: "#fcd34d",
                                 } : undefined}
                                 value={String(row.quarterNetTarget ?? "")}
+                                onFocus={selectManualNumberInput}
                                 onChange={(e) => updateManualGoalRow(rowIndex, "quarterNetTarget", e.target.value)}
                                 readOnly={isTotalRow}
                               />
@@ -6243,6 +6253,7 @@ export function DashboardShell({
                                 borderColor: "#fcd34d",
                               } : undefined}
                               value={String(row.monthlyActual ?? "")}
+                              onFocus={selectManualNumberInput}
                               onChange={(e) => updateManualGoalRow(rowIndex, "monthlyActual", e.target.value)}
                               readOnly={isTotalRow}
                             />
@@ -6257,6 +6268,7 @@ export function DashboardShell({
                                   ...(isTotalRow ? { fontWeight: 700, color: "#0f172a" } : {}),
                                 }}
                                 value={String(row.quarterActual ?? "")}
+                                onFocus={selectManualNumberInput}
                                 onChange={(e) => updateManualGoalRow(rowIndex, "quarterActual", e.target.value)}
                                 readOnly
                               />
@@ -6272,6 +6284,7 @@ export function DashboardShell({
                                   ...(isTotalRow ? { fontWeight: 700, color: "#0f172a" } : {}),
                                 }}
                                 value={String(row.gap ?? "")}
+                                onFocus={selectManualNumberInput}
                                 onChange={(e) => updateManualGoalRow(rowIndex, "gap", e.target.value)}
                                 readOnly
                               />
@@ -6372,6 +6385,7 @@ export function DashboardShell({
                                     : undefined
                                 }
                                 value={isTotalColumn ? String(totalValue ?? "") : String(row.values?.[valueIndex] ?? "")}
+                                onFocus={selectManualNumberInput}
                                 onChange={(e) => updateManualTerminationOverviewCell(rowIndex, valueIndex, e.target.value)}
                                 readOnly={isTotalColumn}
                               />
@@ -6424,6 +6438,7 @@ export function DashboardShell({
                                     : undefined
                                 }
                                 value={isTotalColumn ? String(totalValue ?? "") : String(normalizedValues[valueIndex] ?? "")}
+                                onFocus={selectManualNumberInput}
                                 onChange={(e) => updateManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, e.target.value)}
                                 readOnly={isTotalColumn}
                               />
@@ -6484,7 +6499,7 @@ export function DashboardShell({
                             <input className={manualTableTextInputClass} placeholder="회사" value={String(row.company ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "company", e.target.value)} />
                           </td>
                           <td className={`${tdClass} p-1`}>
-                            <input className={manualTableInputClass} placeholder="금액" value={String(row.amount ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "amount", e.target.value)} />
+                            <input className={manualTableInputClass} placeholder="금액" value={String(row.amount ?? "")} onFocus={selectManualNumberInput} onChange={(e) => updateAdditionalSaleRow(rowIndex, "amount", e.target.value)} />
                           </td>
                           <td className={`${tdClass} p-1`}>
                             <input className={manualTableTextInputClass} placeholder="내용" value={String(row.content ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "content", e.target.value)} />
