@@ -813,15 +813,23 @@ function ManualGoalInputTable({
   onCommitCell: (rowIndex: number, field: EditableGoalField, value: string) => void
 }) {
   const [draftRows, setDraftRows] = useState<any[]>(() => buildEditableGoalRows(rows || []))
+  const [calculatedRows, setCalculatedRows] = useState<any[]>(() => buildGoalRows(rows || []))
   const isEditingRef = useRef(false)
   const rowsSignature = useMemo(() => JSON.stringify(rows || []), [rows])
 
   useEffect(() => {
     if (isEditingRef.current) return
-    setDraftRows(buildEditableGoalRows(rows || []))
+    const nextDraftRows = buildEditableGoalRows(rows || [])
+    setDraftRows(nextDraftRows)
+    setCalculatedRows(buildGoalRows(nextDraftRows))
   }, [rowsSignature])
 
-  const displayRows = useMemo(() => buildGoalRows(draftRows), [draftRows])
+  function buildNextDraftRows(rowIndex: number, field: EditableGoalField, value: string, baseRows = draftRows) {
+    const next = buildEditableGoalRows(baseRows)
+    if (!next[rowIndex]) return next
+    next[rowIndex][field] = value
+    return next
+  }
 
   function updateDraftCell(rowIndex: number, field: EditableGoalField, value: string) {
     setDraftRows((prev) => {
@@ -834,7 +842,10 @@ function ManualGoalInputTable({
 
   function commitDraftCell(rowIndex: number, field: EditableGoalField, value: string) {
     isEditingRef.current = false
-    const currentValue = draftRows[rowIndex]?.[field]
+    const nextDraftRows = buildNextDraftRows(rowIndex, field, value)
+    setDraftRows(nextDraftRows)
+    setCalculatedRows(buildGoalRows(nextDraftRows))
+    const currentValue = nextDraftRows[rowIndex]?.[field]
     if (
       String(currentValue ?? "") === String(value ?? "") &&
       String(rows?.[rowIndex]?.[field] ?? "") === String(value ?? "")
@@ -887,7 +898,7 @@ function ManualGoalInputTable({
           </tr>
         </thead>
         <tbody>
-          {displayRows.map((row: any, rowIndex: number) => {
+          {calculatedRows.map((row: any, rowIndex: number) => {
             const isTotalRow = row.month === "합계"
             const isQuarterGroupStart = rowIndex < 12 && rowIndex % 3 === 0
             const shouldRenderQuarterValue = isTotalRow || rowIndex >= 12 || isQuarterGroupStart
