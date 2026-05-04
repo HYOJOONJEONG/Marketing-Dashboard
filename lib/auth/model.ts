@@ -16,6 +16,7 @@ export type MenuKey =
   | "permissionManagement"
   | "permissionAuditLog"
   | "activityLog"
+  | "storageManagement"
   | "adminPage"
 export type PermissionAction = "view" | "create" | "edit" | "delete" | "approve" | "admin"
 
@@ -187,6 +188,7 @@ export const MENU_LABELS: Record<MenuKey, string> = {
   permissionManagement: "권한관리",
   permissionAuditLog: "권한변경로그",
   activityLog: "활동로그",
+  storageManagement: "저장공간",
   adminPage: "관리자페이지",
 }
 
@@ -211,12 +213,23 @@ export const ADMIN_PERMISSION_ROW_KEYS: MenuKey[] = [
   "collectionManagement",
   "optionDashboard",
   "terminationManagement",
+  "storageManagement",
   "adminPage",
   "userManagement",
   "teamManagement",
   "permissionManagement",
   "permissionAuditLog",
   "activityLog",
+]
+
+export const ADMIN_CONSOLE_ACCESS_KEYS: MenuKey[] = [
+  "adminPage",
+  "userManagement",
+  "teamManagement",
+  "permissionManagement",
+  "permissionAuditLog",
+  "activityLog",
+  "storageManagement",
 ]
 
 export const USER_COLOR_PALETTE = [

@@ -55,7 +55,7 @@ function readBackupContents(payload: unknown) {
 
 export async function GET() {
   try {
-    const auth = await requireApiPermission("adminPage", "view")
+    const auth = await requireApiPermission("storageManagement", "view")
     if (!auth.ok) return auth.response
 
     const generatedAt = new Date().toISOString()
@@ -100,7 +100,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireApiPermission("adminPage", "admin")
+    const auth = await requireApiPermission("storageManagement", "admin")
     if (!auth.ok) return auth.response
 
     const formData = await request.formData().catch(() => null)
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
         actionType: "backup_restore",
         targetType: "backup_json",
         targetId: String((file as File).name || "uploaded-json"),
-        pageKey: "adminPage",
+        pageKey: "storageManagement",
         beforeValue: "",
         afterValue: JSON.stringify({ restored }),
         ipAddress: getRequestIp(request),

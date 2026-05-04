@@ -1554,7 +1554,14 @@ export function DashboardShell({
   const canViewTermination = hasAccess("terminationManagement", "view")
   const canViewWeeklySelection = hasAccess("weeklySelection", "view")
   const canViewOptionDashboard = hasAccess("optionDashboard", "view")
-  const canViewAdminPage = hasAccess("adminPage", "view")
+  const canViewAdminPage =
+    hasAccess("adminPage", "view") ||
+    hasAccess("storageManagement", "view") ||
+    hasAccess("userManagement", "view") ||
+    hasAccess("teamManagement", "view") ||
+    hasAccess("permissionManagement", "view") ||
+    hasAccess("permissionAuditLog", "view") ||
+    hasAccess("activityLog", "view")
   const currentPresenceStatus = useMemo<PresenceStatus>(() => {
     if (!currentUser?.id) return "offline"
     return presenceUsers.find((user) => user.userId === currentUser.id)?.status || "offline"

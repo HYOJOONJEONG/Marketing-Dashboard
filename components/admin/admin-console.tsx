@@ -33,8 +33,8 @@ const tabPermissionMap: Record<AdminTabKey, string> = {
   users: "userManagement",
   teams: "teamManagement",
   permissions: "permissionManagement",
-  contracts: "contractManagement",
-  storage: "adminPage",
+  contracts: "adminPage",
+  storage: "storageManagement",
   permissionLogs: "permissionAuditLog",
   userLogs: "userManagement",
   activityLogs: "activityLog",
@@ -130,8 +130,8 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   )
   const hasEditablePermission = (menuKey: string) =>
     EDITABLE_ACTIONS.some((action) => Boolean(selectedUserPermissionIndex?.[menuKey]?.[action]))
-  const selectedUserAdminPagePermission = selectedUser ? userPermissionMap[selectedUser.id]?.adminPage || {} : {}
-  const selectedUserCanRestoreBackup = Boolean(selectedUserAdminPagePermission.view && selectedUserAdminPagePermission.admin)
+  const selectedUserStoragePermission = selectedUser ? userPermissionMap[selectedUser.id]?.storageManagement || {} : {}
+  const selectedUserCanRestoreBackup = Boolean(selectedUserStoragePermission.view && selectedUserStoragePermission.admin)
 
   const runAction = (task: () => Promise<void>) => {
     setMessage("")
@@ -215,7 +215,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
 
   const toggleAdminRestoreAccess = (userId: string, allowed: boolean) => {
     const updates = ["view", ...EDITABLE_ACTIONS].map((action) => ({
-      menuKey: "adminPage",
+      menuKey: "storageManagement",
       action,
       allowed,
     }))
@@ -451,7 +451,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                         </select>
                       </label>
                       <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">관리자페이지</div>
+                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">저장공간</div>
                         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                           <div>
                             <div className="text-sm font-bold text-slate-800">
@@ -465,7 +465,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                             type="button"
                             onClick={() => toggleAdminRestoreAccess(selectedUser.id, !selectedUserCanRestoreBackup)}
                             disabled={!canGrantPermissions}
-                            title={canGrantPermissions ? "관리자페이지 복구 권한 변경" : "권한관리 수정 권한이 필요합니다."}
+                            title={canGrantPermissions ? "저장공간 복구 권한 변경" : "권한관리 수정 권한이 필요합니다."}
                             className={`rounded-2xl px-4 py-2 text-sm font-bold ${
                               selectedUserCanRestoreBackup
                                 ? "border border-rose-200 bg-rose-50 text-rose-700"
@@ -683,7 +683,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
             </section>
           )}
 
-          {currentTab === "storage" && <StorageMemoryPanel canRestore={Boolean(permissions?.adminPage?.admin)} />}
+          {currentTab === "storage" && <StorageMemoryPanel canRestore={Boolean(permissions?.storageManagement?.admin)} />}
 
           {currentTab === "permissionLogs" && (
             <LogTable title="권한변경로그" rows={bootstrap?.permissionChangeLogs || []} columns={["targetUserId", "menuKey", "action", "beforeValue", "afterValue", "changedAt"]} />

@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation"
 import { AdminConsole } from "@/components/admin/admin-console"
-import { requirePagePermission } from "@/lib/auth/server"
-import { getUserColorToken } from "@/lib/auth/model"
+import { requireAnyPagePermission } from "@/lib/auth/server"
+import { ADMIN_CONSOLE_ACCESS_KEYS, getUserColorToken } from "@/lib/auth/model"
 
 export default async function AdminPage() {
-  const auth = await requirePagePermission("adminPage", "view")
+  const auth = await requireAnyPagePermission(ADMIN_CONSOLE_ACCESS_KEYS, "view")
   if (!auth) redirect("/")
 
   return (

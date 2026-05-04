@@ -9,6 +9,7 @@ const ADMIN_CONSOLE_MENU_KEYS: MenuKey[] = [
   "permissionManagement",
   "permissionAuditLog",
   "activityLog",
+  "storageManagement",
 ]
 
 export function canAccessAdminConsole(user: UserRecord | null | undefined) {

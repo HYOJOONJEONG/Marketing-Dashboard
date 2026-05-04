@@ -523,7 +523,7 @@ async function migrateAndPrunePersistentLegacyDashboard() {
 
 export async function GET() {
   try {
-    const auth = await requireApiPermission("adminPage", "view")
+    const auth = await requireApiPermission("storageManagement", "view")
     if (!auth.ok) return auth.response
     const stats = persistentStoreConfigured() ? await getPersistentStats() : await getLocalStats()
     return NextResponse.json({ ok: true, stats })
@@ -534,7 +534,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireApiPermission("adminPage", "admin")
+    const auth = await requireApiPermission("storageManagement", "admin")
     if (!auth.ok) return auth.response
     const body = await request.json().catch(() => null)
     const action = String(body?.action || "")

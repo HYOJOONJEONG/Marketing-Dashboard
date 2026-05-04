@@ -1,8 +1,8 @@
 import path from "path"
 import { NextResponse } from "next/server"
 import { readDashboardState } from "@/lib/shared-db-store"
-import { requireApiPermission } from "@/lib/auth/server"
-import { ADMIN_PERMISSION_ROW_KEYS, MENU_LABELS } from "@/lib/auth/model"
+import { requireAnyApiPermission } from "@/lib/auth/server"
+import { ADMIN_CONSOLE_ACCESS_KEYS, ADMIN_PERMISSION_ROW_KEYS, MENU_LABELS } from "@/lib/auth/model"
 import { buildPermissionIndex, createEmptyPermissionIndex } from "@/lib/auth/permissions"
 import { getTeamName, listOnlinePresence, toSafeUser } from "@/lib/auth/store"
 import { getIndustryGroupLabel } from "@/lib/industry-groups"
@@ -14,7 +14,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function GET() {
-  const auth = await requireApiPermission("adminPage", "view")
+  const auth = await requireAnyApiPermission(ADMIN_CONSOLE_ACCESS_KEYS, "view")
   if (!auth.ok) return auth.response
 
   const dashboard =
