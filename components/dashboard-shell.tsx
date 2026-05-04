@@ -4113,26 +4113,31 @@ export function DashboardShell({
     }
   }
 
+  function persistTerminationData(nextData: any) {
+    void persist(nextData, { updatedViews: ["termination"] })
+  }
+
   function toggleTerminationSelected(itemId: string) {
     if (!selectedSheet) return
-    startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
-          ? {
-              ...sheet,
-              items: (sheet.items || []).map((row: any) =>
-                row.id === itemId ? { ...row, selected: !row.selected } : row,
-              ),
-            }
-          : sheet,
-      )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
-    })
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            items: (sheet.items || []).map((row: any) =>
+              row.id === itemId ? { ...row, selected: !row.selected } : row,
+            ),
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
   }
 
   function handleConfirmSelectedTerminations() {
-    if (!selectedSheet) return
-    const activeItems = selectedSheet.items || []
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    const activeItems = latestSheet.items || []
     const selectedItems = activeItems
       .filter((row: any) => row.selected)
       .map((row: any) => {
@@ -4142,44 +4147,42 @@ export function DashboardShell({
       })
     if (!selectedItems.length) return
     const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
-    startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
-          ? {
-              ...sheet,
-              items: (sheet.items || []).filter((row: any) => !row.selected),
-              confirmedItems: [
-                ...selectedItems.map((row: any) => ({ ...row, reflectedDate })),
-                ...(sheet.confirmedItems || []),
-              ],
-            }
-          : sheet,
-      )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
-      if (selectedItems.some((row: any) => row.id === editingTerminationId)) {
-        setEditingTerminationId(null)
-        setEditingTerminationDraft({})
-      }
-    })
+    const selectedSet = new Set(selectedItems.map((row: any) => row.id))
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            items: (sheet.items || []).filter((row: any) => !selectedSet.has(row.id)),
+            confirmedItems: [
+              ...selectedItems.map((row: any) => ({ ...row, selected: false, reflectedDate })),
+              ...(sheet.confirmedItems || []),
+            ],
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+    if (selectedItems.some((row: any) => row.id === editingTerminationId)) {
+      setEditingTerminationId(null)
+      setEditingTerminationDraft({})
+    }
   }
 
   function restoreTerminationConfirmed(itemId: string) {
-    if (!selectedSheet) return
-    const confirmedItems = selectedSheet.confirmedItems || []
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    const confirmedItems = latestSheet.confirmedItems || []
     const targetItem = confirmedItems.find((row: any) => row.id === itemId)
     if (!targetItem) return
-    startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
-          ? {
-              ...sheet,
-              items: [{ ...targetItem, selected: false }, ...(sheet.items || [])],
-              confirmedItems: (sheet.confirmedItems || []).filter((row: any) => row.id !== itemId),
-            }
-          : sheet,
-      )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
-    })
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            items: [{ ...targetItem, selected: false }, ...(sheet.items || [])],
+            confirmedItems: (sheet.confirmedItems || []).filter((row: any) => row.id !== itemId),
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
   }
 
   function updateTerminationDraft(field: string, value: string) {
@@ -4239,19 +4242,19 @@ export function DashboardShell({
       terminationDate: normalizeDate(terminationDraft.terminationDate),
       penalty: toNumber(terminationDraft.penalty),
     }
-    startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
-          ? {
-              ...sheet,
-              items: [nextItem, ...(sheet.items || [])],
-              weeklyTerminationCount: (sheet.weeklyTerminationCount || 0) + 1,
-            }
-          : sheet,
-      )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
-      resetTerminationDraft()
-    })
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            items: [nextItem, ...(sheet.items || [])],
+            weeklyTerminationCount: (sheet.weeklyTerminationCount || 0) + 1,
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+    resetTerminationDraft()
   }
 
   function handleHoldCreate() {
@@ -4274,19 +4277,19 @@ export function DashboardShell({
       startDate: normalizeMonth(holdDraft.startDate),
       endDate: normalizeMonth(holdDraft.endDate),
     }
-    startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
-          ? {
-              ...sheet,
-              holdItems: [nextItem, ...(sheet.holdItems || [])],
-              weeklyBillingHoldCount: (sheet.weeklyBillingHoldCount || 0) + 1,
-            }
-          : sheet,
-      )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
-      resetHoldDraft()
-    })
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            holdItems: [nextItem, ...(sheet.holdItems || [])],
+            weeklyBillingHoldCount: (sheet.weeklyBillingHoldCount || 0) + 1,
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+    resetHoldDraft()
   }
 
   function toggleTerminationSort(
@@ -4379,43 +4382,43 @@ export function DashboardShell({
   }
 
   function handleBulkRestoreConfirmed() {
-    if (!selectedSheet || selectedConfirmedIds.length === 0) return
-    const confirmedItems = selectedSheet.confirmedItems || []
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet || selectedConfirmedIds.length === 0) return
+    const confirmedItems = latestSheet.confirmedItems || []
     const restoreTargets = confirmedItems.filter((row: any) => selectedConfirmedIds.includes(row.id))
     if (!restoreTargets.length) return
-    startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
-          ? {
-              ...sheet,
-              items: [...restoreTargets.map((row: any) => ({ ...row, selected: false })), ...(sheet.items || [])],
-              confirmedItems: (sheet.confirmedItems || []).filter((row: any) => !selectedConfirmedIds.includes(row.id)),
-            }
-          : sheet,
-      )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
-      setSelectedConfirmedIds([])
-    })
+    const selectedSet = new Set(selectedConfirmedIds)
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            items: [...restoreTargets.map((row: any) => ({ ...row, selected: false })), ...(sheet.items || [])],
+            confirmedItems: (sheet.confirmedItems || []).filter((row: any) => !selectedSet.has(row.id)),
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+    setSelectedConfirmedIds([])
   }
 
   function handleBulkRestoreReleased() {
-    if (!selectedSheet || selectedReleasedIds.length === 0) return
-    const releasedItems = selectedSheet.releasedHoldItems || []
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet || selectedReleasedIds.length === 0) return
+    const releasedItems = latestSheet.releasedHoldItems || []
     const restoreTargets = releasedItems.filter((row: any) => selectedReleasedIds.includes(row.id))
     if (!restoreTargets.length) return
-    startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
-          ? {
-              ...sheet,
-              holdItems: [...restoreTargets, ...(sheet.holdItems || [])],
-              releasedHoldItems: (sheet.releasedHoldItems || []).filter((row: any) => !selectedReleasedIds.includes(row.id)),
-            }
-          : sheet,
-      )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
-      setSelectedReleasedIds([])
-    })
+    const selectedSet = new Set(selectedReleasedIds)
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            holdItems: [...restoreTargets, ...(sheet.holdItems || [])],
+            releasedHoldItems: (sheet.releasedHoldItems || []).filter((row: any) => !selectedSet.has(row.id)),
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+    setSelectedReleasedIds([])
   }
 
   function startTerminationEdit(row: any) {
@@ -4456,58 +4459,57 @@ export function DashboardShell({
   }
 
   function handleTerminationUpdate(rowId: string) {
-    if (!selectedSheet) return
-    startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
-          ? {
-              ...sheet,
-              items: (sheet.items || []).map((row: any) =>
-                row.id === rowId
-                  ? {
-                      ...row,
-                      receivedDate: normalizeDate(editingTerminationDraft.receivedDate),
-                      manager: editingTerminationDraft.manager?.trim() || "",
-                      customerId: editingTerminationDraft.customerId?.trim().toUpperCase() || "",
-                      companyName: editingTerminationDraft.companyName?.trim() || "",
-                      departmentName: editingTerminationDraft.departmentName?.trim() || "",
-                      reason:
-                        editingTerminationDraft.reason === "기타" && editingTerminationDraft.reasonDetail?.trim()
-                          ? `기타(${editingTerminationDraft.reasonDetail.trim()})`
-                          : editingTerminationDraft.reason,
-                      terminationDate: normalizeDate(editingTerminationDraft.terminationDate),
-                      penalty: toNumber(editingTerminationDraft.penalty),
-                    }
-                  : row,
-              ),
-            }
-          : sheet,
-      )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
-      setEditingTerminationId(null)
-      setEditingTerminationDraft({})
-    })
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            items: (sheet.items || []).map((row: any) =>
+              row.id === rowId
+                ? {
+                    ...row,
+                    receivedDate: normalizeDate(editingTerminationDraft.receivedDate),
+                    manager: editingTerminationDraft.manager?.trim() || "",
+                    customerId: editingTerminationDraft.customerId?.trim().toUpperCase() || "",
+                    companyName: editingTerminationDraft.companyName?.trim() || "",
+                    departmentName: editingTerminationDraft.departmentName?.trim() || "",
+                    reason:
+                      editingTerminationDraft.reason === "기타" && editingTerminationDraft.reasonDetail?.trim()
+                        ? `기타(${editingTerminationDraft.reasonDetail.trim()})`
+                        : editingTerminationDraft.reason,
+                    terminationDate: normalizeDate(editingTerminationDraft.terminationDate),
+                    penalty: toNumber(editingTerminationDraft.penalty),
+                  }
+                : row,
+            ),
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+    setEditingTerminationId(null)
+    setEditingTerminationDraft({})
   }
 
   function handleDeleteTerminationRow(rowId: string) {
     if (!selectedSheet) return
     if (!window.confirm("이 해지 건을 삭제할까요?")) return
-    startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
-          ? {
-              ...sheet,
-              items: (sheet.items || []).filter((row: any) => row.id !== rowId),
-              weeklyTerminationCount: Math.max(0, (sheet.weeklyTerminationCount || 0) - 1),
-            }
-          : sheet,
-      )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
-      if (editingTerminationId === rowId) {
-        setEditingTerminationId(null)
-        setEditingTerminationDraft({})
-      }
-    })
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            items: (sheet.items || []).filter((row: any) => row.id !== rowId),
+            weeklyTerminationCount: Math.max(0, (sheet.weeklyTerminationCount || 0) - 1),
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+    if (editingTerminationId === rowId) {
+      setEditingTerminationId(null)
+      setEditingTerminationDraft({})
+    }
   }
 
   function startHoldEdit(row: any) {
@@ -4560,56 +4562,54 @@ export function DashboardShell({
   function handleHoldUpdate(rowId: string) {
     const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
     if (!latestSheet) return
-    startTransition(async () => {
-      const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
-        sheet.id === latestSheet.id
-          ? {
-              ...sheet,
-              holdItems: (sheet.holdItems || []).map((row: any) =>
-                row.id === rowId
-                  ? {
-                      ...row,
-                      receivedDate: normalizeDate(editingHoldDraft.receivedDate),
-                      manager: editingHoldDraft.manager?.trim() || "",
-                      customerId: editingHoldDraft.customerId?.trim().toUpperCase() || "",
-                      companyName: editingHoldDraft.companyName?.trim() || "",
-                      departmentName: editingHoldDraft.departmentName?.trim() || "",
-                      reason: editingHoldDraft.reason === "기타" && editingHoldDraft.reasonDetail?.trim()
-                        ? `기타(${editingHoldDraft.reasonDetail.trim()})`
-                        : editingHoldDraft.reason,
-                      startDate: normalizeMonth(editingHoldDraft.startDate),
-                      endDate: normalizeMonth(editingHoldDraft.endDate),
-                    }
-                  : row,
-              ),
-            }
-          : sheet,
-      )
-      await persist({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
-      setEditingHoldId(null)
-      setEditingHoldDraft({})
-    })
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            holdItems: (sheet.holdItems || []).map((row: any) =>
+              row.id === rowId
+                ? {
+                    ...row,
+                    receivedDate: normalizeDate(editingHoldDraft.receivedDate),
+                    manager: editingHoldDraft.manager?.trim() || "",
+                    customerId: editingHoldDraft.customerId?.trim().toUpperCase() || "",
+                    companyName: editingHoldDraft.companyName?.trim() || "",
+                    departmentName: editingHoldDraft.departmentName?.trim() || "",
+                    reason: editingHoldDraft.reason === "기타" && editingHoldDraft.reasonDetail?.trim()
+                      ? `기타(${editingHoldDraft.reasonDetail.trim()})`
+                      : editingHoldDraft.reason,
+                    startDate: normalizeMonth(editingHoldDraft.startDate),
+                    endDate: normalizeMonth(editingHoldDraft.endDate),
+                  }
+                : row,
+            ),
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+    setEditingHoldId(null)
+    setEditingHoldDraft({})
   }
 
   function handleDeleteHoldRow(rowId: string) {
     if (!selectedSheet) return
     if (!window.confirm("이 청구보류 건을 삭제할까요?")) return
-    startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
-          ? {
-              ...sheet,
-              holdItems: (sheet.holdItems || []).filter((row: any) => row.id !== rowId),
-              weeklyBillingHoldCount: Math.max(0, (sheet.weeklyBillingHoldCount || 0) - 1),
-            }
-          : sheet,
-      )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
-      if (editingHoldId === rowId) {
-        setEditingHoldId(null)
-        setEditingHoldDraft({})
-      }
-    })
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            holdItems: (sheet.holdItems || []).filter((row: any) => row.id !== rowId),
+            weeklyBillingHoldCount: Math.max(0, (sheet.weeklyBillingHoldCount || 0) - 1),
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+    if (editingHoldId === rowId) {
+      setEditingHoldId(null)
+      setEditingHoldDraft({})
+    }
   }
 
   function handleReleaseHoldRow(rowId: string) {
@@ -4617,25 +4617,23 @@ export function DashboardShell({
     if (!latestSheet) return
     const row = mergeEditingHoldRow((latestSheet.holdItems || []).find((item: any) => item.id === rowId))
     if (!row) return
-    startTransition(async () => {
-      const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
-        sheet.id === latestSheet.id
-          ? {
-              ...sheet,
-              holdItems: (sheet.holdItems || []).filter((item: any) => item.id !== rowId),
-              releasedHoldItems: [
-                { ...row, reflectedDate: normalizeDate(new Date().toISOString().slice(0, 10)) },
-                ...(sheet.releasedHoldItems || []),
-              ],
-            }
-          : sheet,
-      )
-      await persist({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
-      if (editingHoldId === rowId) {
-        setEditingHoldId(null)
-        setEditingHoldDraft({})
-      }
-    })
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            holdItems: (sheet.holdItems || []).filter((item: any) => item.id !== rowId),
+            releasedHoldItems: [
+              { ...row, reflectedDate: normalizeDate(new Date().toISOString().slice(0, 10)) },
+              ...(sheet.releasedHoldItems || []),
+            ],
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+    if (editingHoldId === rowId) {
+      setEditingHoldId(null)
+      setEditingHoldDraft({})
+    }
   }
 
   function handleReleaseSelectedHoldRows() {
@@ -4646,45 +4644,42 @@ export function DashboardShell({
       .filter((item: any) => selectedSet.has(item.id))
       .map((item: any) => mergeEditingHoldRow(item))
     if (!releaseTargets.length) return
-    startTransition(async () => {
-      const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
-      const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
-        sheet.id === latestSheet.id
-          ? {
-              ...sheet,
-              holdItems: (sheet.holdItems || []).filter((item: any) => !selectedSet.has(item.id)),
-              releasedHoldItems: [
-                ...releaseTargets.map((row: any) => ({ ...row, reflectedDate })),
-                ...(sheet.releasedHoldItems || []),
-              ],
-            }
-          : sheet,
-      )
-      await persist({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
-      if (editingHoldId && selectedSet.has(editingHoldId)) {
-        setEditingHoldId(null)
-        setEditingHoldDraft({})
-      }
-      setSelectedHoldIds([])
-    })
+    const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            holdItems: (sheet.holdItems || []).filter((item: any) => !selectedSet.has(item.id)),
+            releasedHoldItems: [
+              ...releaseTargets.map((row: any) => ({ ...row, reflectedDate })),
+              ...(sheet.releasedHoldItems || []),
+            ],
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+    if (editingHoldId && selectedSet.has(editingHoldId)) {
+      setEditingHoldId(null)
+      setEditingHoldDraft({})
+    }
+    setSelectedHoldIds([])
   }
 
   function restoreReleasedHoldRow(rowId: string) {
-    if (!selectedSheet) return
-    const row = (selectedSheet.releasedHoldItems || []).find((item: any) => item.id === rowId)
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    const row = (latestSheet.releasedHoldItems || []).find((item: any) => item.id === rowId)
     if (!row) return
-    startTransition(async () => {
-      const nextSheets = (termination.sheets || []).map((sheet: any) =>
-        sheet.id === selectedSheet.id
-          ? {
-              ...sheet,
-              holdItems: [{ ...row }, ...(sheet.holdItems || [])],
-              releasedHoldItems: (sheet.releasedHoldItems || []).filter((item: any) => item.id !== rowId),
-            }
-          : sheet,
-      )
-      await persist({ ...data, termination: { ...termination, currentSheetId: selectedSheet.id, sheets: nextSheets } })
-    })
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            holdItems: [{ ...row }, ...(sheet.holdItems || [])],
+            releasedHoldItems: (sheet.releasedHoldItems || []).filter((item: any) => item.id !== rowId),
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
   }
 
   function handleMoveHoldToTermination(rowId: string) {
@@ -4705,24 +4700,22 @@ export function DashboardShell({
       terminationDate: row.endDate || "",
       penalty: 0,
     }
-    startTransition(async () => {
-      const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
-        sheet.id === latestSheet.id
-          ? {
-              ...sheet,
-              items: [movedItem, ...(sheet.items || [])],
-              holdItems: (sheet.holdItems || []).filter((item: any) => item.id !== rowId),
-              weeklyTerminationCount: (sheet.weeklyTerminationCount || 0) + 1,
-              weeklyBillingHoldCount: Math.max(0, (sheet.weeklyBillingHoldCount || 0) - 1),
-            }
-          : sheet,
-      )
-      await persist({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
-      if (editingHoldId === rowId) {
-        setEditingHoldId(null)
-        setEditingHoldDraft({})
-      }
-    })
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            items: [movedItem, ...(sheet.items || [])],
+            holdItems: (sheet.holdItems || []).filter((item: any) => item.id !== rowId),
+            weeklyTerminationCount: (sheet.weeklyTerminationCount || 0) + 1,
+            weeklyBillingHoldCount: Math.max(0, (sheet.weeklyBillingHoldCount || 0) - 1),
+          }
+        : sheet,
+    )
+    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
+    if (editingHoldId === rowId) {
+      setEditingHoldId(null)
+      setEditingHoldDraft({})
+    }
   }
 
   function renderSortLabel(
@@ -7252,7 +7245,7 @@ export function DashboardShell({
                       </label>
                       <div className="col-span-4 flex justify-end pt-1">
                         <button type="button" onClick={handleTerminationCreate} className="h-10 rounded-2xl bg-blue-600 px-4 text-[14px] font-semibold text-white">
-                          {isPending ? "등록 중..." : "등록"}
+                          등록
                         </button>
                       </div>
                     </div>
@@ -7310,7 +7303,7 @@ export function DashboardShell({
                       </label>
                       <div className="col-span-4 flex justify-end pt-1">
                         <button type="button" onClick={handleHoldCreate} className="h-10 rounded-2xl bg-blue-600 px-4 text-[14px] font-semibold text-white">
-                          {isPending ? "등록 중..." : "등록"}
+                          등록
                         </button>
                       </div>
                     </div>
