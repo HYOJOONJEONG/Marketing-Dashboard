@@ -768,7 +768,29 @@ function isEditableGoalField(field: string): field is EditableGoalField {
 }
 
 function buildEditableGoalRows(rows: any[]) {
-  return buildGoalRows(rows).map((row) => ({ ...row }))
+  const mergedByMonth = new Map<number, any>()
+  ;(Array.isArray(rows) ? rows : []).forEach((row) => {
+    const parsedOrder = parseGoalMonthOrder(row?.month)
+    if (!parsedOrder) return
+    mergedByMonth.set(parsedOrder, row)
+  })
+  const hasCompleteGoalTemplate = Array.from({ length: 12 }, (_, index) => index + 1).every((month) =>
+    mergedByMonth.has(month),
+  )
+  if (!hasCompleteGoalTemplate) return goalRowTemplate2026.map((row) => ({ ...row }))
+  return goalRowTemplate2026.map((templateRow, index) => {
+    const order = index + 1 <= 12 ? index + 1 : 13
+    const savedRow = mergedByMonth.get(order)
+    return {
+      month: templateRow.month,
+      netTarget: savedRow && savedRow.netTarget != null ? savedRow.netTarget : templateRow.netTarget,
+      targetContracts: savedRow && savedRow.targetContracts != null ? savedRow.targetContracts : templateRow.targetContracts,
+      quarterNetTarget: savedRow && savedRow.quarterNetTarget != null ? savedRow.quarterNetTarget : templateRow.quarterNetTarget,
+      monthlyActual: savedRow && savedRow.monthlyActual != null ? savedRow.monthlyActual : templateRow.monthlyActual,
+      quarterActual: savedRow && savedRow.quarterActual != null ? savedRow.quarterActual : templateRow.quarterActual,
+      gap: savedRow && savedRow.gap != null ? savedRow.gap : templateRow.gap,
+    }
+  })
 }
 
 function buildIndustryStats(rows: any[]) {
@@ -2436,7 +2458,7 @@ export function DashboardShell({
       const goalRows = buildEditableGoalRows(prev.goalRows || [])
       if (!goalRows[rowIndex]) return prev
       goalRows[rowIndex][field] = value
-      return { ...prev, goalRows: buildGoalRows(goalRows) }
+      return { ...prev, goalRows }
     })
   }
 
