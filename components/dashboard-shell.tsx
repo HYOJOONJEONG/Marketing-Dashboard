@@ -341,8 +341,9 @@ function sanitizeSummaryText(text: unknown, fallback: string) {
 }
 
 function sanitizeCellValue(value: unknown, fallback = "") {
+  if (value == null) return fallback
   const text = String(value ?? "").trim()
-  return text === "" ? fallback : text
+  return text
 }
 
 function buildRevenueRows(rows: any[]) {
@@ -704,24 +705,16 @@ function buildGoalRows(rows: any[]) {
     const savedRow = mergedByMonth.get(order)
     return {
       month: templateRow.month,
-      netTarget: savedRow?.netTarget === "" || savedRow?.netTarget == null ? templateRow.netTarget : savedRow.netTarget,
+      netTarget: savedRow && savedRow.netTarget != null ? savedRow.netTarget : templateRow.netTarget,
       targetContracts:
-        savedRow?.targetContracts === "" || savedRow?.targetContracts == null
-          ? templateRow.targetContracts
-          : savedRow.targetContracts,
+        savedRow && savedRow.targetContracts != null ? savedRow.targetContracts : templateRow.targetContracts,
       quarterNetTarget:
-        savedRow?.quarterNetTarget === "" || savedRow?.quarterNetTarget == null
-          ? templateRow.quarterNetTarget
-          : savedRow.quarterNetTarget,
+        savedRow && savedRow.quarterNetTarget != null ? savedRow.quarterNetTarget : templateRow.quarterNetTarget,
       monthlyActual:
-        savedRow?.monthlyActual === "" || savedRow?.monthlyActual == null
-          ? templateRow.monthlyActual
-          : savedRow.monthlyActual,
+        savedRow && savedRow.monthlyActual != null ? savedRow.monthlyActual : templateRow.monthlyActual,
       quarterActual:
-        savedRow?.quarterActual === "" || savedRow?.quarterActual == null
-          ? templateRow.quarterActual
-          : savedRow.quarterActual,
-      gap: savedRow?.gap === "" || savedRow?.gap == null ? templateRow.gap : savedRow.gap,
+        savedRow && savedRow.quarterActual != null ? savedRow.quarterActual : templateRow.quarterActual,
+      gap: savedRow && savedRow.gap != null ? savedRow.gap : templateRow.gap,
     }
   })
 
