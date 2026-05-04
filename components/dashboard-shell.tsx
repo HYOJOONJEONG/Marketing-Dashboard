@@ -1659,9 +1659,6 @@ export function DashboardShell({
     setManualPreviewDraft(nextDraft)
   }
 
-  function saveAdditionalSaleRowsFromPreview() {
-    applyAdditionalSalesDraft((rows) => rows)
-  }
   const [terminationEntryMode, setTerminationEntryMode] = useState<"termination" | "hold">("termination")
   const [terminationDraft, setTerminationDraft] = useState<any>({
     receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
@@ -6698,7 +6695,7 @@ export function DashboardShell({
                       <col style={{ width: "140px" }} />
                       <col style={{ width: "180px" }} />
                       <col />
-                      <col style={{ width: "132px" }} />
+                      <col style={{ width: "72px" }} />
                     </colgroup>
                     <thead>
                       <tr>
@@ -6745,10 +6742,7 @@ export function DashboardShell({
                             <BufferedManualInput className={manualTableTextInputClass} placeholder="비고" value={String(row.note ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "note", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "note", value)} />
                           </td>
                           <td className={`${tdClass} p-1 text-center`}>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button type="button" onClick={saveAdditionalSaleRowsFromPreview} className="inline-flex h-8 items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100">저장</button>
-                              <button type="button" onClick={() => deleteAdditionalSaleRow(rowIndex)} className="inline-flex h-8 items-center rounded-full border border-rose-200 bg-white px-2.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50">삭제</button>
-                            </div>
+                            <button type="button" onClick={() => deleteAdditionalSaleRow(rowIndex)} className="inline-flex h-8 items-center rounded-full border border-rose-200 bg-white px-2.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50">삭제</button>
                           </td>
                         </tr>
                       ))}
