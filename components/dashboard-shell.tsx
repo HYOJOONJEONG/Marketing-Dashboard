@@ -806,6 +806,7 @@ function buildIndustryStats(rows: any[]) {
 function BufferedManualInput({
   value,
   onCommit,
+  onLiveChange,
   onDirty,
   className,
   style,
@@ -815,6 +816,7 @@ function BufferedManualInput({
 }: {
   value: unknown
   onCommit?: (value: string) => void
+  onLiveChange?: (value: string) => void
   onDirty?: () => void
   className: string
   style?: React.CSSProperties
@@ -859,6 +861,7 @@ function BufferedManualInput({
         latestDraftRef.current = nextValue
         setDraftValue(nextValue)
         if (!readOnly) onDirty?.()
+        if (!readOnly) onLiveChange?.(nextValue)
       }}
       onBlur={(event) => commit(event.currentTarget.value)}
     />
@@ -896,12 +899,9 @@ function ManualGoalInputTable({
   }
 
   function updateDraftCell(rowIndex: number, field: EditableGoalField, value: string) {
-    setDraftRows((prev) => {
-      const next = buildEditableGoalRows(prev)
-      if (!next[rowIndex]) return prev
-      next[rowIndex][field] = value
-      return next
-    })
+    const nextDraftRows = buildNextDraftRows(rowIndex, field, value)
+    setDraftRows(nextDraftRows)
+    setCalculatedRows(buildGoalRows(nextDraftRows))
     onDirty?.()
   }
 
@@ -1446,6 +1446,7 @@ export function DashboardShell({
       initialData?.paidOptionSourceColumns || initialData?.weeklyReport?.paidOptionInfoColumns || [],
     ),
   )
+  const [manualPreviewDraft, setManualPreviewDraft] = useState<any | null>(null)
   const [manualRevenueHeaderEdited, setManualRevenueHeaderEdited] = useState(false)
   const [contractDraft, setContractDraft] = useState<any>({
     companyName: "",
@@ -1520,6 +1521,7 @@ export function DashboardShell({
   const lastHistoryAtRef = useRef<number>(0)
   const dirtyViewsRef = useRef<Partial<Record<ViewKey, boolean>>>({})
   const manualDraftRef = useRef<any>(manualDraft)
+  const manualPreviewDraftRef = useRef<any | null>(manualPreviewDraft)
   const manualDraftReadyRef = useRef(false)
   const isSyncingManualDraftRef = useRef(false)
   const flushPendingSave = useRef<() => void>(() => {})
@@ -1567,6 +1569,71 @@ export function DashboardShell({
     const next = typeof updater === "function" ? updater(previous) : updater
     manualDraftRef.current = next
     setManualDraft(next)
+  }
+
+  function updateManualPreviewDraft(updater: any) {
+    markManualInputDirty()
+    const source = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
+    const base = cloneData(source)
+    const next = typeof updater === "function" ? updater(base) : updater
+    manualPreviewDraftRef.current = next
+    setManualPreviewDraft(next)
+  }
+
+  function previewManualField(field: string, value: string) {
+    if (field === "revenueUnitPrice" || field === "additionalContractCount") {
+      const digitsOnly = String(value ?? "").replace(/[^\d]/g, "")
+      updateManualPreviewDraft((prev: any) => ({ ...prev, [field]: digitsOnly }))
+      return
+    }
+    updateManualPreviewDraft((prev: any) => ({ ...prev, [field]: value }))
+  }
+
+  function previewManualSummaryField(field: string, value: string) {
+    updateManualPreviewDraft((prev: any) => ({
+      ...prev,
+      manualSummary: { ...prev.manualSummary, [field]: value },
+    }))
+  }
+
+  function previewManualRevenueCell(rowIndex: number, monthIndex: number, value: string) {
+    updateManualPreviewDraft((prev: any) => {
+      const revenueRows = cloneData(prev.revenueRows || [])
+      if (!revenueRows[rowIndex]) return prev
+      if (!Array.isArray(revenueRows[rowIndex].months)) revenueRows[rowIndex].months = Array(12).fill(0)
+      revenueRows[rowIndex].months[monthIndex] = value
+      return { ...prev, revenueRows }
+    })
+  }
+
+  function previewManualTerminationOverviewCell(rowIndex: number, valueIndex: number, value: string) {
+    updateManualPreviewDraft((prev: any) => {
+      const terminationOverviewRows = cloneData(prev.terminationOverviewRows || [])
+      if (!terminationOverviewRows[rowIndex]) return prev
+      if (!Array.isArray(terminationOverviewRows[rowIndex].values)) terminationOverviewRows[rowIndex].values = []
+      terminationOverviewRows[rowIndex].values[valueIndex] = value
+      return { ...prev, terminationOverviewRows }
+    })
+  }
+
+  function previewManualWeeklyIndustryOverviewCell(rowIndex: number, valueIndex: number, value: string) {
+    if (valueIndex >= reportIndustryColumnsStatic.length - 1) return
+    updateManualPreviewDraft((prev: any) => {
+      const weeklyIndustryOverviewRows = cloneData(prev.weeklyIndustryOverviewRows || [])
+      if (!weeklyIndustryOverviewRows[rowIndex]) return prev
+      weeklyIndustryOverviewRows[rowIndex].values = normalizeIndustryRowValues(weeklyIndustryOverviewRows[rowIndex].values)
+      weeklyIndustryOverviewRows[rowIndex].values[valueIndex] = value
+      weeklyIndustryOverviewRows[rowIndex].values = buildIndustryRowValuesWithTotal(weeklyIndustryOverviewRows[rowIndex].values)
+      return { ...prev, weeklyIndustryOverviewRows }
+    })
+  }
+
+  function previewAdditionalSaleRow(rowIndex: number, field: string, value: string) {
+    updateManualPreviewDraft((prev: any) => {
+      const additionalSales = normalizeAdditionalSalesRows(cloneData(prev.additionalSales || [])) as Array<Record<string, string>>
+      additionalSales[rowIndex][field] = value
+      return { ...prev, additionalSales }
+    })
   }
   const [terminationEntryMode, setTerminationEntryMode] = useState<"termination" | "hold">("termination")
   const [terminationDraft, setTerminationDraft] = useState<any>({
@@ -2519,6 +2586,10 @@ export function DashboardShell({
   }, [manualDraft])
 
   useEffect(() => {
+    manualPreviewDraftRef.current = manualPreviewDraft
+  }, [manualPreviewDraft])
+
+  useEffect(() => {
     const serverCollection = data?.collection || {}
     setCollectionYearFilter(getUpcomingThursday().getFullYear() || 2026)
     setCollectionStatusFilter(serverCollection?.statusFilter || "all")
@@ -2817,7 +2888,8 @@ export function DashboardShell({
   }
 
   function appendAdditionalContractAmountToSales() {
-    const amount = parseLooseNumber(manualDraft.additionalContractCount)
+    const sourceDraft = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
+    const amount = parseLooseNumber(sourceDraft.additionalContractCount)
     if (!amount) {
       window.alert("추가 계약 금액을 입력해주세요.")
       return
@@ -4696,7 +4768,7 @@ export function DashboardShell({
 
   function handleManualUpdate() {
     startTransition(async () => {
-      const draft = manualDraftRef.current || manualDraft
+      const draft = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
       const latestData = pendingDataRef.current || data
       const latestWeeklyReport = latestData?.weeklyReport || weeklyReport
       const draftSummary = applyWeeklyAutoSummary(draft.manualSummary || {})
@@ -4735,6 +4807,11 @@ export function DashboardShell({
           { ...latestData, weeklyReport: nextWeekly },
           { immediate: true, updatedViews: ["manual-input", "weekly-report"] },
         )
+        isSyncingManualDraftRef.current = true
+        manualDraftRef.current = draft
+        setManualDraft(draft)
+        manualPreviewDraftRef.current = null
+        setManualPreviewDraft(null)
       } catch {
         window.alert("Save failed. Please do not refresh; try Update again in a moment.")
       }
@@ -4757,7 +4834,8 @@ export function DashboardShell({
 
   const reportGoalRows = buildGoalRows(weeklyReport.goalRows || [])
   const reportIndustryStats = buildIndustryStats(weeklyReport.industryStats || [])
-  const autoManualSummary = applyWeeklyAutoSummary(manualDraft.manualSummary || {})
+  const manualDisplayDraft = manualPreviewDraft || manualDraft
+  const autoManualSummary = applyWeeklyAutoSummary(manualDisplayDraft.manualSummary || {})
   const autoWeeklyReportSummary = applyWeeklyAutoSummary(weeklyReport.manualSummary || {})
   const reportSummary = {
     ...autoWeeklyReportSummary,
@@ -4775,20 +4853,20 @@ export function DashboardShell({
     ),
   }
   const manualRevenueDisplay = buildRevenueDisplaySet({
-    revenueHeaderText: manualDraft.revenueHeaderText,
-    subtitleOne: manualDraft.subtitleOne,
-    subtitleTwo: manualDraft.subtitleTwo,
-    revenueUnitPrice: manualDraft.revenueUnitPrice,
-    additionalContractCount: manualDraft.additionalContractCount,
-    additionalSales: manualDraft.additionalSales || [],
+    revenueHeaderText: manualDisplayDraft.revenueHeaderText,
+    subtitleOne: manualDisplayDraft.subtitleOne,
+    subtitleTwo: manualDisplayDraft.subtitleTwo,
+    revenueUnitPrice: manualDisplayDraft.revenueUnitPrice,
+    additionalContractCount: manualDisplayDraft.additionalContractCount,
+    additionalSales: manualDisplayDraft.additionalSales || [],
     manualSummary: autoManualSummary,
-    revenueRows: manualDraft.revenueRows || [],
+    revenueRows: manualDisplayDraft.revenueRows || [],
     fallbackSelectedCount: weeklyNetAutoCount,
   })
   const manualRevenueHeaderText = manualRevenueDisplay.header
   const manualRevenueSubtitleOne = manualRevenueDisplay.subtitleOne
   const manualRevenueSubtitleTwo = manualRevenueDisplay.subtitleTwo
-  const manualRevenueRows = buildRevenueRows(manualDraft.revenueRows || [])
+  const manualRevenueRows = buildRevenueRows(manualDisplayDraft.revenueRows || [])
   const reportRevenueDisplay = buildRevenueDisplaySet({
     revenueHeaderText: weeklyReport.revenueHeaderText,
     subtitleOne: weeklyReport.subtitleOne,
@@ -4864,7 +4942,7 @@ export function DashboardShell({
     },
   ]
   const paidOptionColumns = buildPaidOptionInfoColumns(weeklyReport.paidOptionInfoColumns || [])
-  const manualPaidOptionColumns = buildPaidOptionInfoColumns(manualDraft.paidOptionInfoColumns || [])
+  const manualPaidOptionColumns = buildPaidOptionInfoColumns(manualDisplayDraft.paidOptionInfoColumns || [])
   const reportTerminationColumns = [...reportTerminationColumnsStatic]
   const reportTerminationRows = buildTerminationOverviewRows(weeklyReport.terminationOverviewRows || [])
   const reportIndustryColumns = [...reportIndustryColumnsStatic]
@@ -6268,8 +6346,9 @@ export function DashboardShell({
                     <BufferedManualInput
                       className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
                       inputMode="numeric"
-                      value={formatNumericInputDisplay(manualDraft.revenueUnitPrice)}
+                      value={formatNumericInputDisplay(manualDisplayDraft.revenueUnitPrice)}
                       onDirty={markManualInputDirty}
+                      onLiveChange={(value) => previewManualField("revenueUnitPrice", value)}
                       onCommit={(value) => updateManualField("revenueUnitPrice", value)}
                     />
                   </label>
@@ -6282,8 +6361,9 @@ export function DashboardShell({
                         className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[14px]"
                         inputMode="numeric"
                         placeholder="예: 1,000,000"
-                        value={formatNumericInputDisplay(manualDraft.additionalContractCount)}
+                        value={formatNumericInputDisplay(manualDisplayDraft.additionalContractCount)}
                         onDirty={markManualInputDirty}
+                        onLiveChange={(value) => previewManualField("additionalContractCount", value)}
                         onCommit={(value) => updateManualField("additionalContractCount", value)}
                       />
                       <button
@@ -6337,7 +6417,7 @@ export function DashboardShell({
                         const revenueTotalMonths = monthLabels.map((_, monthIndex) =>
                           baseRows.reduce((sum: number, row) => sum + toNumber(row.months?.[monthIndex]), 0),
                         )
-                        const rawRevenueRows = Array.isArray(manualDraft.revenueRows) ? manualDraft.revenueRows : []
+                        const rawRevenueRows = Array.isArray(manualDisplayDraft.revenueRows) ? manualDisplayDraft.revenueRows : []
                         return manualRevenueRows.map((row, rowIndex) => {
                           const isTotalRow = row.label === "합계"
                           const rawMonths = Array.isArray(rawRevenueRows[rowIndex]?.months) ? rawRevenueRows[rowIndex].months : []
@@ -6355,6 +6435,7 @@ export function DashboardShell({
                                   style={isTotalRow ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
                                   value={String(monthValue ?? "")}
                                   onDirty={markManualInputDirty}
+                                  onLiveChange={(value) => previewManualRevenueCell(rowIndex, monthIndex, value)}
                                   onCommit={(value) => updateManualRevenueCell(rowIndex, monthIndex, value)}
                                   readOnly={isTotalRow}
                                 />
@@ -6417,6 +6498,7 @@ export function DashboardShell({
                                   value={String(manualSummary?.[field] ?? "")}
                                   readOnly={isAutoField}
                                   onDirty={markManualInputDirty}
+                                  onLiveChange={(value) => previewManualSummaryField(field, value)}
                                   onCommit={(value) => updateManualSummaryField(field, value)}
                                 />
                               </td>
@@ -6431,7 +6513,7 @@ export function DashboardShell({
 
               <ManualGoalInputTable
                 currentYear={currentYear}
-                rows={manualDraft.goalRows || []}
+                rows={manualDisplayDraft.goalRows || []}
                 onCommitCell={updateManualGoalRow}
                 onDirty={markManualInputDirty}
               />
@@ -6505,7 +6587,7 @@ export function DashboardShell({
                     </tr>
                   </thead>
                   <tbody>
-                    {(manualDraft.terminationOverviewRows || []).map((row: any, rowIndex: number) => (
+                    {(manualDisplayDraft.terminationOverviewRows || []).map((row: any, rowIndex: number) => (
                       <tr key={`manual-termination-overview-${row.label}`}>
                         <td className={`${tdClass} whitespace-nowrap text-center font-semibold`}>{row.label}</td>
                         {reportTerminationColumnsStatic.map((column, valueIndex) => {
@@ -6525,6 +6607,7 @@ export function DashboardShell({
                                 }
                                 value={isTotalColumn ? String(totalValue ?? "") : String(row.values?.[valueIndex] ?? "")}
                                 onDirty={markManualInputDirty}
+                                onLiveChange={(value) => previewManualTerminationOverviewCell(rowIndex, valueIndex, value)}
                                 onCommit={(value) => updateManualTerminationOverviewCell(rowIndex, valueIndex, value)}
                                 readOnly={isTotalColumn}
                               />
@@ -6558,7 +6641,7 @@ export function DashboardShell({
                     </tr>
                   </thead>
                   <tbody>
-                    {(manualDraft.weeklyIndustryOverviewRows || []).map((row: any, rowIndex: number) => (
+                    {(manualDisplayDraft.weeklyIndustryOverviewRows || []).map((row: any, rowIndex: number) => (
                       <tr key={`manual-weekly-industry-${row.label}`}>
                         <td className={`${tdClass} whitespace-nowrap text-center font-semibold`}>{row.label}</td>
                         {reportIndustryColumnsStatic.map((column, valueIndex) => {
@@ -6578,6 +6661,7 @@ export function DashboardShell({
                                 }
                                 value={isTotalColumn ? String(totalValue ?? "") : String(normalizedValues[valueIndex] ?? "")}
                                 onDirty={markManualInputDirty}
+                                onLiveChange={(value) => previewManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, value)}
                                 onCommit={(value) => updateManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, value)}
                                 readOnly={isTotalColumn}
                               />
@@ -6628,23 +6712,23 @@ export function DashboardShell({
                       </tr>
                     </thead>
                     <tbody>
-                      {normalizeAdditionalSalesRows(manualDraft.additionalSales || []).map((row: any, rowIndex: number) => (
+                      {normalizeAdditionalSalesRows(manualDisplayDraft.additionalSales || []).map((row: any, rowIndex: number) => (
                         <tr key={`manual-additional-${rowIndex}`} className="bg-white">
                           <td className={`${tdClass} px-2 text-center font-semibold text-blue-700`}>{rowIndex + 1}</td>
                           <td className={`${tdClass} p-1`}>
-                            <BufferedManualInput className={manualTableTextInputClass} placeholder="ID" value={String(row.idCode ?? "")} onDirty={markManualInputDirty} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "idCode", value)} />
+                            <BufferedManualInput className={manualTableTextInputClass} placeholder="ID" value={String(row.idCode ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "idCode", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "idCode", value)} />
                           </td>
                           <td className={`${tdClass} p-1`}>
-                            <BufferedManualInput className={manualTableTextInputClass} placeholder="회사" value={String(row.company ?? "")} onDirty={markManualInputDirty} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "company", value)} />
+                            <BufferedManualInput className={manualTableTextInputClass} placeholder="회사" value={String(row.company ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "company", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "company", value)} />
                           </td>
                           <td className={`${tdClass} p-1`}>
-                            <BufferedManualInput className={manualTableInputClass} placeholder="금액" value={String(row.amount ?? "")} onDirty={markManualInputDirty} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "amount", value)} />
+                            <BufferedManualInput className={manualTableInputClass} placeholder="금액" value={String(row.amount ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "amount", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "amount", value)} />
                           </td>
                           <td className={`${tdClass} p-1`}>
-                            <BufferedManualInput className={manualTableTextInputClass} placeholder="내용" value={String(row.content ?? "")} onDirty={markManualInputDirty} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "content", value)} />
+                            <BufferedManualInput className={manualTableTextInputClass} placeholder="내용" value={String(row.content ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "content", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "content", value)} />
                           </td>
                           <td className={`${tdClass} p-1`}>
-                            <BufferedManualInput className={manualTableTextInputClass} placeholder="비고" value={String(row.note ?? "")} onDirty={markManualInputDirty} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "note", value)} />
+                            <BufferedManualInput className={manualTableTextInputClass} placeholder="비고" value={String(row.note ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "note", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "note", value)} />
                           </td>
                           <td className={`${tdClass} p-1 text-center`}>
                             <button type="button" onClick={() => deleteAdditionalSaleRow(rowIndex)} className="inline-flex h-8 items-center rounded-full border border-rose-200 bg-white px-2.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50">삭제</button>
