@@ -1429,6 +1429,7 @@ export function DashboardShell({
   const [isPending, startTransition] = useTransition()
   const [isAccountPending, startAccountTransition] = useTransition()
   const [dirtyViews, setDirtyViews] = useState<Partial<Record<ViewKey, boolean>>>({})
+  const [isSavingDashboard, setIsSavingDashboard] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [isPasswordOpen, setIsPasswordOpen] = useState(false)
   const [isPresenceListOpen, setIsPresenceListOpen] = useState(false)
@@ -2407,20 +2408,21 @@ export function DashboardShell({
   }
 
   function markViewsDirty(views: ViewKey[] = [view]) {
-    setDirtyViews((prev) => ({
-      ...prev,
+    const nextDirtyViews = {
+      ...dirtyViewsRef.current,
       ...Object.fromEntries(views.map((key) => [key, true])),
-    }))
+    }
+    dirtyViewsRef.current = nextDirtyViews
+    setDirtyViews(nextDirtyViews)
   }
 
   function clearDirtyViews(views: ViewKey[]) {
-    setDirtyViews((prev) => {
-      const next = { ...prev }
-      views.forEach((key) => {
-        delete next[key]
-      })
-      return next
+    const nextDirtyViews = { ...dirtyViewsRef.current }
+    views.forEach((key) => {
+      delete nextDirtyViews[key]
     })
+    dirtyViewsRef.current = nextDirtyViews
+    setDirtyViews(nextDirtyViews)
   }
 
   function getDirtyViewKeys(extraViews: ViewKey[] = []) {
@@ -4811,18 +4813,20 @@ export function DashboardShell({
     })
   }
 
-  function handleSaveCurrentView() {
+  async function handleSaveCurrentView() {
     if (view === "manual-input") {
       handleManualUpdate()
       return
     }
-    startTransition(async () => {
-      try {
-        await commitDashboardData(pendingDataRef.current || data, [view])
-      } catch {
-        window.alert("저장에 실패했습니다. 잠시 후 다시 시도해주세요.")
-      }
-    })
+    if (isSavingDashboard) return
+    setIsSavingDashboard(true)
+    try {
+      await commitDashboardData(pendingDataRef.current || data, [view])
+    } catch {
+      window.alert("저장에 실패했습니다. 잠시 후 다시 시도해주세요.")
+    } finally {
+      setIsSavingDashboard(false)
+    }
   }
 
   const reportGoalRows = buildGoalRows(weeklyReport.goalRows || [])
@@ -5476,16 +5480,16 @@ export function DashboardShell({
                 <button
                   type="button"
                   onClick={handleSaveCurrentView}
-                  disabled={!hasUnsavedChanges || isPending}
+                  disabled={!hasUnsavedChanges || isSavingDashboard}
                   title="저장"
                   aria-label="저장"
                   className={`inline-flex h-11 items-center gap-2 rounded-2xl px-4 text-[14px] font-bold transition ${
-                    hasUnsavedChanges && !isPending
+                    hasUnsavedChanges && !isSavingDashboard
                       ? "bg-blue-600 text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)] hover:bg-blue-700"
                       : "border border-slate-200 bg-slate-100 text-slate-400"
                   }`}
                 >
-                  <SaveIcon className={isPending && hasUnsavedChanges ? "h-5 w-5 animate-pulse" : "h-5 w-5"} />
+                  <SaveIcon className={isSavingDashboard && hasUnsavedChanges ? "h-5 w-5 animate-pulse" : "h-5 w-5"} />
                   <span>저장</span>
                 </button>
               )}
