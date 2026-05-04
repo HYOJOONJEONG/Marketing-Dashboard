@@ -220,6 +220,7 @@ function normalizeDate(value: unknown) {
 
 function normalizeMonth(value: unknown) {
   const digits = String(value ?? "").replace(/[^\d]/g, "")
+  if (digits.length === 4) return `20${digits.slice(0, 2)}.${digits.slice(2, 4)}`
   if (digits.length === 6 && digits.startsWith("20")) return `${digits.slice(0, 4)}.${digits.slice(4, 6)}`
   if (digits.length === 8 && digits.startsWith("20")) return `${digits.slice(0, 4)}.${digits.slice(4, 6)}`
   return String(value ?? "")
@@ -241,6 +242,7 @@ function toInputDate(value: unknown) {
 
 function toInputMonth(value: unknown) {
   const digits = String(value ?? "").replace(/[^\d]/g, "")
+  if (digits.length === 4) return `20${digits.slice(0, 2)}-${digits.slice(2, 4)}`
   if (digits.length === 6 && digits.startsWith("20")) return `${digits.slice(0, 4)}-${digits.slice(4, 6)}`
   if (digits.length === 8 && digits.startsWith("20")) return `${digits.slice(0, 4)}-${digits.slice(4, 6)}`
   return ""
