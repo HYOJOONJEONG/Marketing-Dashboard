@@ -1054,19 +1054,8 @@ function normalizeAdditionalSalesRows(rows: any[]) {
   })
 }
 
-function getSavedAdditionalContractAmount(rows: any[]) {
-  return normalizeAdditionalSalesRows(rows || []).reduce((sum, row) => {
-    const content = String(row.content || "")
-    const note = String(row.note || "")
-    const isAdditionalContract =
-      row.kind === "additional-contract" || content.includes("추가계약") || note.includes("추가계약")
-    if (!isAdditionalContract) return sum
-    return sum + Math.max(0, parseLooseNumber(row.amount))
-  }, 0)
-}
-
-function getTotalAdditionalContractAmount(currentAmount: unknown, rows?: any[]) {
-  return Math.max(0, toNumber(currentAmount)) + getSavedAdditionalContractAmount(rows || [])
+function getWeeklyAdditionalContractAmount(currentAmount: unknown) {
+  return Math.max(0, toNumber(currentAmount))
 }
 
 function buildAutoRevenueHeader(unitPrice: unknown, selectedCount: number, additionalContractCount: unknown) {
@@ -1203,14 +1192,11 @@ function buildRevenueDisplaySet(params: {
   fallbackSelectedCount?: number
 }) {
   const selectedContractCount = Number(params.fallbackSelectedCount || 0)
-  const totalAdditionalContractAmount = getTotalAdditionalContractAmount(
-    params.additionalContractCount,
-    params.additionalSales || [],
-  )
+  const weeklyAdditionalContractAmount = getWeeklyAdditionalContractAmount(params.additionalContractCount)
   const computedHeader = buildAutoRevenueHeader(
     params.revenueUnitPrice,
     selectedContractCount,
-    totalAdditionalContractAmount,
+    weeklyAdditionalContractAmount,
   )
   const computedSubtitleOne = buildAnnualNetRevenueSubtitle(
     params.revenueRows || [],
@@ -1986,14 +1972,14 @@ export function DashboardShell({
     const nextHeader = buildAutoRevenueHeader(
       manualDraft.revenueUnitPrice,
       weeklyNetAutoCount,
-      getTotalAdditionalContractAmount(manualDraft.additionalContractCount, manualDraft.additionalSales || []),
+      getWeeklyAdditionalContractAmount(manualDraft.additionalContractCount),
     )
     updateManualDraft((prev: any) => (
       prev.revenueHeaderText === nextHeader
         ? prev
         : { ...prev, revenueHeaderText: nextHeader }
     ))
-  }, [manualDraft.additionalContractCount, manualDraft.additionalSales, manualDraft.revenueUnitPrice, manualRevenueHeaderEdited, weeklyNetAutoCount])
+  }, [manualDraft.additionalContractCount, manualDraft.revenueUnitPrice, manualRevenueHeaderEdited, weeklyNetAutoCount])
 
   useEffect(() => {
     const nextSubtitleOne = buildAnnualNetRevenueSubtitle(
