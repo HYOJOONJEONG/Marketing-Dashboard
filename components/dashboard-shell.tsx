@@ -1280,6 +1280,7 @@ export function DashboardShell({
   const dirtyViewsRef = useRef<Partial<Record<ViewKey, boolean>>>({})
   const manualDraftRef = useRef<any>(manualDraft)
   const manualDraftReadyRef = useRef(false)
+  const isSyncingManualDraftRef = useRef(false)
   const flushPendingSave = useRef<() => void>(() => {})
   const heartbeatIdRef = useRef(`conn-${Math.random().toString(36).slice(2, 10)}`)
   const lastActivityAtRef = useRef(Date.now())
@@ -1686,6 +1687,8 @@ export function DashboardShell({
   ])
 
   useEffect(() => {
+    if (dirtyViewsRef.current["manual-input"]) return
+    isSyncingManualDraftRef.current = true
     updateManualDraft(buildManualDraftFromWeekly(weeklyReport, contracts, paidOptionSourceColumns))
     setManualRevenueHeaderEdited(false)
   }, [weeklyReport, contracts, paidOptionSourceColumns])
@@ -2264,6 +2267,10 @@ export function DashboardShell({
     manualDraftRef.current = manualDraft
     if (!manualDraftReadyRef.current) {
       manualDraftReadyRef.current = true
+      return
+    }
+    if (isSyncingManualDraftRef.current) {
+      isSyncingManualDraftRef.current = false
       return
     }
     markViewsDirty(["manual-input"])
