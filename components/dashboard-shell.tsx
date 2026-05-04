@@ -1681,6 +1681,7 @@ export function DashboardShell({
     reasonDetail: "",
     startDate: "",
     endDate: "",
+    note: "",
   })
   const [terminationSort, setTerminationSort] = useState<{
     key:
@@ -2352,7 +2353,7 @@ export function DashboardShell({
         if (holdReceivedDateFilter !== "all" && normalizeDate(row.receivedDate) !== holdReceivedDateFilter) return false
       if (holdEndDateFilter !== "all" && normalizeDate(row.endDate) !== holdEndDateFilter) return false
       if (!query) return true
-        return [row.companyName, row.departmentName, row.customerId, row.manager, row.reason]
+        return [row.companyName, row.departmentName, row.customerId, row.manager, row.reason, row.note]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(query))
       })
@@ -4284,6 +4285,7 @@ export function DashboardShell({
       reasonDetail: "",
       startDate: "",
       endDate: "",
+      note: "",
     })
   }
 
@@ -4355,6 +4357,7 @@ export function DashboardShell({
         : holdDraft.reason,
       startDate: normalizeMonth(holdDraft.startDate),
       endDate: normalizeMonth(holdDraft.endDate),
+      note: holdDraft.note?.trim() || "",
     }
     const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
       sheet.id === latestSheet.id
@@ -4606,6 +4609,7 @@ export function DashboardShell({
       reasonDetail: parsedReasonDetail,
       startDate: toInputMonth(row.startDate),
       endDate: toInputMonth(row.endDate),
+      note: row.note || "",
     })
   }
 
@@ -4627,6 +4631,7 @@ export function DashboardShell({
         : editingHoldDraft.reason,
       startDate: normalizeMonth(editingHoldDraft.startDate),
       endDate: normalizeMonth(editingHoldDraft.endDate),
+      note: editingHoldDraft.note?.trim() || "",
     }
   }
 
@@ -4658,6 +4663,7 @@ export function DashboardShell({
                       : editingHoldDraft.reason,
                     startDate: normalizeMonth(editingHoldDraft.startDate),
                     endDate: normalizeMonth(editingHoldDraft.endDate),
+                    note: editingHoldDraft.note?.trim() || "",
                   }
                 : row,
             ),
@@ -7391,6 +7397,15 @@ export function DashboardShell({
                           onChange={(e)=>updateHoldDraft("endDate", e.target.value)}
                         />
                       </label>
+                      <label className="space-y-1">
+                        <div className="text-[12px] font-medium text-slate-600">비고</div>
+                        <input
+                          className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]"
+                          placeholder="비고"
+                          value={holdDraft.note}
+                          onChange={(e)=>updateHoldDraft("note", e.target.value)}
+                        />
+                      </label>
                       <div className="col-span-4 flex justify-end pt-1">
                         <button
                           type="button"
@@ -7740,6 +7755,7 @@ export function DashboardShell({
                         <th className={thClass}>
                           {renderSortLabel("종료일", holdSort.key === "endDate", holdSort.dir, () => toggleHoldSort("endDate"))}
                         </th>
+                        <th className={thClass}>비고</th>
                         <th className={`${thClass} text-center`}>작업</th>
                       </tr>
                     </thead>
@@ -7789,6 +7805,7 @@ export function DashboardShell({
                           </td>
                               <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="month" className="h-9 w-32 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.startDate || ""} onChange={(e)=>updateEditingHoldDraft("startDate", e.target.value)} /> : formatMonthLabel(row.startDate)}</td>
                               <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="month" className="h-9 w-32 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.endDate || ""} onChange={(e)=>updateEditingHoldDraft("endDate", e.target.value)} /> : formatMonthLabel(row.endDate)}</td>
+                          <td className={`${tdClass} min-w-[180px] text-left`}>{editing ? <input className="h-9 w-full min-w-[180px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingHoldDraft.note || ""} onChange={(e)=>updateEditingHoldDraft("note", e.target.value)} placeholder="비고" /> : row.note}</td>
                           <td className={`${tdClass} text-center`}>
                             {editing ? (
                               <div className="flex items-center justify-center gap-2 whitespace-nowrap">
@@ -7857,6 +7874,7 @@ export function DashboardShell({
                         <th className={thClass}>
                           {renderSortLabel("종료일", holdSort.key === "endDate", holdSort.dir, () => toggleHoldSort("endDate"))}
                         </th>
+                        <th className={thClass}>비고</th>
                         <th className={thClass}>반영일</th>
                         <th className={`${thClass} text-center`}>작업</th>
                       </tr>
@@ -7864,7 +7882,7 @@ export function DashboardShell({
                     <tbody>
                       {releasedHoldItems.length === 0 ? (
                         <tr>
-                          <td className={`${tdClass} text-center text-slate-400`} colSpan={12}>
+                          <td className={`${tdClass} text-center text-slate-400`} colSpan={13}>
                             해제된 항목이 없습니다.
                           </td>
                         </tr>
@@ -7892,6 +7910,7 @@ export function DashboardShell({
                             <td className={tdClass}>{row.reason}</td>
                             <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{formatMonthLabel(row.startDate)}</td>
                             <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{formatMonthLabel(row.endDate)}</td>
+                            <td className={`${tdClass} min-w-[180px] text-left`}>{row.note}</td>
                             <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.reflectedDate)}</td>
                             <td className={`${tdClass} text-center`}>
                               <button
