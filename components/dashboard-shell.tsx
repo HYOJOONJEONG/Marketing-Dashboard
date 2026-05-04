@@ -1636,6 +1636,32 @@ export function DashboardShell({
       return { ...prev, additionalSales }
     })
   }
+
+  function applyAdditionalSalesDraft(
+    updater: (
+      rows: Array<Record<string, string>>,
+      sourceDraft: any,
+    ) => Array<Record<string, string>> | { rows: any[]; draftPatch?: Record<string, unknown> },
+  ) {
+    markManualInputDirty()
+    const sourceDraft = cloneData(manualPreviewDraftRef.current || manualDraftRef.current || manualDraft)
+    const sourceRows = normalizeAdditionalSalesRows(sourceDraft.additionalSales || []) as Array<Record<string, string>>
+    const result = updater(sourceRows, sourceDraft)
+    const nextRows = normalizeAdditionalSalesRows(Array.isArray(result) ? result : result.rows)
+    const nextDraft = {
+      ...sourceDraft,
+      ...(!Array.isArray(result) ? result.draftPatch || {} : {}),
+      additionalSales: nextRows,
+    }
+    manualDraftRef.current = nextDraft
+    setManualDraft(nextDraft)
+    manualPreviewDraftRef.current = nextDraft
+    setManualPreviewDraft(nextDraft)
+  }
+
+  function saveAdditionalSaleRowsFromPreview() {
+    applyAdditionalSalesDraft((rows) => rows)
+  }
   const [terminationEntryMode, setTerminationEntryMode] = useState<"termination" | "hold">("termination")
   const [terminationDraft, setTerminationDraft] = useState<any>({
     receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
@@ -2881,11 +2907,10 @@ export function DashboardShell({
   }
 
   function updateAdditionalSaleRow(rowIndex: number, field: string, value: string) {
-    markManualInputDirty()
-    updateManualDraft((prev: any) => {
-      const additionalSales = normalizeAdditionalSalesRows(cloneData(prev.additionalSales || [])) as Array<Record<string, string>>
-      additionalSales[rowIndex][field] = value
-      return { ...prev, additionalSales }
+    applyAdditionalSalesDraft((rows) => {
+      if (!rows[rowIndex]) return rows
+      rows[rowIndex][field] = value
+      return rows
     })
   }
 
@@ -2896,12 +2921,10 @@ export function DashboardShell({
       window.alert("추가 계약 금액을 입력해주세요.")
       return
     }
-    markManualInputDirty()
-    updateManualDraft((prev: any) => ({
-      ...prev,
-      additionalContractCount: "",
-      additionalSales: normalizeAdditionalSalesRows([
-        ...(prev.additionalSales || []),
+    applyAdditionalSalesDraft((rows) => ({
+      draftPatch: { additionalContractCount: "" },
+      rows: normalizeAdditionalSalesRows([
+        ...rows,
         {
           idCode: "",
           company: "",
@@ -2916,22 +2939,16 @@ export function DashboardShell({
   }
 
   function addAdditionalSaleRow() {
-    markManualInputDirty()
-    updateManualDraft((prev: any) => ({
-      ...prev,
-      additionalSales: [
-        ...(prev.additionalSales || []),
+    applyAdditionalSalesDraft((rows) =>
+      normalizeAdditionalSalesRows([
+        ...rows,
         { idCode: "", company: "", amount: "", content: "", note: "", kind: "manual" },
-      ],
-    }))
+      ]),
+    )
   }
 
   function deleteAdditionalSaleRow(rowIndex: number) {
-    markManualInputDirty()
-    updateManualDraft((prev: any) => ({
-      ...prev,
-      additionalSales: normalizeAdditionalSalesRows((prev.additionalSales || []).filter((_: any, index: number) => index !== rowIndex)),
-    }))
+    applyAdditionalSalesDraft((rows) => rows.filter((_: any, index: number) => index !== rowIndex))
   }
 
   function toggleWeeklySelection(contractId: string) {
@@ -6681,7 +6698,7 @@ export function DashboardShell({
                       <col style={{ width: "140px" }} />
                       <col style={{ width: "180px" }} />
                       <col />
-                      <col style={{ width: "72px" }} />
+                      <col style={{ width: "132px" }} />
                     </colgroup>
                     <thead>
                       <tr>
@@ -6728,7 +6745,10 @@ export function DashboardShell({
                             <BufferedManualInput className={manualTableTextInputClass} placeholder="비고" value={String(row.note ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "note", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "note", value)} />
                           </td>
                           <td className={`${tdClass} p-1 text-center`}>
-                            <button type="button" onClick={() => deleteAdditionalSaleRow(rowIndex)} className="inline-flex h-8 items-center rounded-full border border-rose-200 bg-white px-2.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50">삭제</button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button type="button" onClick={saveAdditionalSaleRowsFromPreview} className="inline-flex h-8 items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100">저장</button>
+                              <button type="button" onClick={() => deleteAdditionalSaleRow(rowIndex)} className="inline-flex h-8 items-center rounded-full border border-rose-200 bg-white px-2.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50">삭제</button>
+                            </div>
                           </td>
                         </tr>
                       ))}
