@@ -261,7 +261,7 @@ export function StorageMemoryPanel({ canRestore = false }: { canRestore?: boolea
     {
       key: "restore",
       label: isRestorePending ? "복구 중" : "백업 JSON 복구",
-      note: canRestore ? "백업 파일로 대시보드/옵션 값 복원" : "관리자페이지 수정가능 권한 필요",
+      note: canRestore ? "백업 파일로 대시보드/옵션 값 복원" : "저장공간/메모리관리 수정가능 권한 필요",
       icon: Upload,
       tone: "rose" as const,
       onClick: openRestoreFilePicker,

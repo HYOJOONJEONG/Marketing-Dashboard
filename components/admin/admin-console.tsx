@@ -21,7 +21,7 @@ const tabs = [
   { key: "teams", label: "팀관리" },
   { key: "permissions", label: "권한관리" },
   { key: "contracts", label: "계약관리" },
-  { key: "storage", label: "저장공간" },
+  { key: "storage", label: "저장공간/메모리관리" },
   { key: "permissionLogs", label: "권한변경로그" },
   { key: "userLogs", label: "사용자변경로그" },
   { key: "activityLogs", label: "활동로그" },
@@ -451,21 +451,21 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                         </select>
                       </label>
                       <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">저장공간</div>
+                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">저장공간/메모리관리</div>
                         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                           <div>
                             <div className="text-sm font-bold text-slate-800">
                               {selectedUserCanRestoreBackup ? "백업 복구 가능" : "권한 없음"}
                             </div>
                             <div className="mt-1 text-xs font-semibold text-slate-400">
-                              부여하면 저장공간 조회, 백업 다운로드, JSON 복구를 실행할 수 있습니다.
+                              부여하면 저장공간/메모리관리 조회, 백업 다운로드, JSON 복구를 실행할 수 있습니다.
                             </div>
                           </div>
                           <button
                             type="button"
                             onClick={() => toggleAdminRestoreAccess(selectedUser.id, !selectedUserCanRestoreBackup)}
                             disabled={!canGrantPermissions}
-                            title={canGrantPermissions ? "저장공간 복구 권한 변경" : "권한관리 수정 권한이 필요합니다."}
+                            title={canGrantPermissions ? "저장공간/메모리관리 복구 권한 변경" : "권한관리 수정 권한이 필요합니다."}
                             className={`rounded-2xl px-4 py-2 text-sm font-bold ${
                               selectedUserCanRestoreBackup
                                 ? "border border-rose-200 bg-rose-50 text-rose-700"

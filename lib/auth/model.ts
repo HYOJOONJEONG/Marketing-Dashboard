@@ -188,7 +188,7 @@ export const MENU_LABELS: Record<MenuKey, string> = {
   permissionManagement: "권한관리",
   permissionAuditLog: "권한변경로그",
   activityLog: "활동로그",
-  storageManagement: "저장공간",
+  storageManagement: "저장공간/메모리관리",
   adminPage: "관리자페이지",
 }
 
