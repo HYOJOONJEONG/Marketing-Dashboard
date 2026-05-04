@@ -803,6 +803,148 @@ function buildIndustryStats(rows: any[]) {
   }))
 }
 
+function ManualGoalInputTable({
+  currentYear,
+  rows,
+  onCommitCell,
+}: {
+  currentYear: number | string
+  rows?: any[]
+  onCommitCell: (rowIndex: number, field: EditableGoalField, value: string) => void
+}) {
+  const [draftRows, setDraftRows] = useState<any[]>(() => buildEditableGoalRows(rows || []))
+  const isEditingRef = useRef(false)
+  const rowsSignature = useMemo(() => JSON.stringify(rows || []), [rows])
+
+  useEffect(() => {
+    if (isEditingRef.current) return
+    setDraftRows(buildEditableGoalRows(rows || []))
+  }, [rowsSignature])
+
+  const displayRows = useMemo(() => buildGoalRows(draftRows), [draftRows])
+
+  function updateDraftCell(rowIndex: number, field: EditableGoalField, value: string) {
+    setDraftRows((prev) => {
+      const next = buildEditableGoalRows(prev)
+      if (!next[rowIndex]) return prev
+      next[rowIndex][field] = value
+      return next
+    })
+  }
+
+  function commitDraftCell(rowIndex: number, field: EditableGoalField, value: string) {
+    isEditingRef.current = false
+    const currentValue = draftRows[rowIndex]?.[field]
+    if (
+      String(currentValue ?? "") === String(value ?? "") &&
+      String(rows?.[rowIndex]?.[field] ?? "") === String(value ?? "")
+    ) {
+      return
+    }
+    onCommitCell(rowIndex, field, value)
+  }
+
+  function handleFocus(event: React.FocusEvent<HTMLInputElement>) {
+    isEditingRef.current = true
+    event.currentTarget.select()
+  }
+
+  function renderEditableInput(row: any, rowIndex: number, field: EditableGoalField, isTotalRow: boolean) {
+    const inputValue = isTotalRow ? row[field] : draftRows[rowIndex]?.[field]
+    return (
+      <input
+        className={`${manualTableInputClass} ${isTotalRow ? "font-bold text-slate-900" : ""}`}
+        style={
+          isTotalRow
+            ? {
+                backgroundColor: "#fffbeb",
+                borderColor: "#fcd34d",
+              }
+            : undefined
+        }
+        value={String(inputValue ?? "")}
+        onFocus={handleFocus}
+        onChange={(event) => updateDraftCell(rowIndex, field, event.target.value)}
+        onBlur={(event) => commitDraftCell(rowIndex, field, event.target.value)}
+        readOnly={isTotalRow}
+      />
+    )
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200">
+      <table className={tableClass}>
+        <thead>
+          <tr>
+            <th colSpan={7} className={manualTableTitleRowClass}>
+              {currentYear}년 판매 목표 (단말기 목표 6,364대, 순증 260대)
+            </th>
+          </tr>
+          <tr>
+            {["구분(월)", "순증", "목표계약대수", "분기순증목표", "월간실적", "분기실적", "목표대비 달성현황"].map((head) => (
+              <th key={head} className={manualHeaderCellClass}>{head}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {displayRows.map((row: any, rowIndex: number) => {
+            const isTotalRow = row.month === "합계"
+            const isQuarterGroupStart = rowIndex < 12 && rowIndex % 3 === 0
+            const shouldRenderQuarterValue = isTotalRow || rowIndex >= 12 || isQuarterGroupStart
+            const quarterRowSpan = !isTotalRow && rowIndex < 12 ? 3 : undefined
+            return (
+              <tr key={`${row.month}-${rowIndex}`}>
+                <td className={`${manualLabelCellClass} ${isTotalRow ? "font-bold text-slate-900" : ""}`}>{row.month}</td>
+                {(["netTarget", "targetContracts"] as EditableGoalField[]).map((field) => (
+                  <td key={field} className={`${tdClass} p-1`}>
+                    {renderEditableInput(row, rowIndex, field, isTotalRow)}
+                  </td>
+                ))}
+                {shouldRenderQuarterValue ? (
+                  <td rowSpan={quarterRowSpan} className={`${tdClass} p-1 align-middle`}>
+                    {renderEditableInput(row, rowIndex, "quarterNetTarget", isTotalRow)}
+                  </td>
+                ) : null}
+                <td className={`${tdClass} p-1`}>
+                  {renderEditableInput(row, rowIndex, "monthlyActual", isTotalRow)}
+                </td>
+                {shouldRenderQuarterValue ? (
+                  <td rowSpan={quarterRowSpan} className={`${tdClass} p-1 align-middle`}>
+                    <input
+                      className={`${manualTableInputClass} ${isTotalRow ? "font-bold text-slate-900" : ""}`}
+                      style={{
+                        backgroundColor: "#fffbeb",
+                        borderColor: "#fcd34d",
+                        ...(isTotalRow ? { fontWeight: 700, color: "#0f172a" } : {}),
+                      }}
+                      value={String(row.quarterActual ?? "")}
+                      readOnly
+                    />
+                  </td>
+                ) : null}
+                {shouldRenderQuarterValue ? (
+                  <td rowSpan={quarterRowSpan} className={`${tdClass} p-1 align-middle`}>
+                    <input
+                      className={`${manualTableInputClass} ${isTotalRow ? "font-bold text-slate-900" : ""}`}
+                      style={{
+                        backgroundColor: "#fffbeb",
+                        borderColor: "#fcd34d",
+                        ...(isTotalRow ? { fontWeight: 700, color: "#0f172a" } : {}),
+                      }}
+                      value={String(row.gap ?? "")}
+                      readOnly
+                    />
+                  </td>
+                ) : null}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function normalizeSummaryStatus(text: unknown, fallback: string) {
   const value = String(text ?? "").trim()
   if (!value) return fallback
@@ -4596,7 +4738,6 @@ export function DashboardShell({
   const revenueSubtitleMetricOne = splitRevenueMetric(revenueSubtitleOne, "26년 순증 매출")
   const revenueSubtitleMetricTwo = splitRevenueMetric(revenueSubtitleTwo, "연간 누적 매출 (추정)")
   const revenueNoteParts = splitRevenueNoteText(revenueNoteText)
-  const manualGoalRows = buildGoalRows(manualDraft.goalRows || [])
   const manualSummary = autoManualSummary
   const autoManualSummaryFields = new Set([
     "weeklyNetUnits",
@@ -6214,110 +6355,11 @@ export function DashboardShell({
                 ))}
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <table className={tableClass}>
-                  <thead>
-                    <tr>
-                      <th colSpan={7} className={manualTableTitleRowClass}>
-                        {currentYear}년 판매 목표 (단말기 목표 6,364대, 순증 260대)
-                      </th>
-                    </tr>
-                    <tr>
-                      {["구분(월)", "순증", "목표계약대수", "분기순증목표", "월간실적", "분기실적", "목표대비 달성현황"].map((head) => (
-                        <th key={head} className={manualHeaderCellClass}>{head}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {manualGoalRows.map((row: any, rowIndex: number) => {
-                      const isTotalRow = row.month === "합계"
-                      const isQuarterGroupStart = rowIndex < 12 && rowIndex % 3 === 0
-                      const shouldRenderQuarterValue = isTotalRow || rowIndex >= 12 || isQuarterGroupStart
-                      const quarterRowSpan = !isTotalRow && rowIndex < 12 ? 3 : undefined
-                      return (
-                        <tr key={`${row.month}-${rowIndex}`}>
-                          <td className={`${manualLabelCellClass} ${isTotalRow ? "font-bold text-slate-900" : ""}`}>{row.month}</td>
-                          {["netTarget", "targetContracts"].map((field) => (
-                            <td key={field} className={`${tdClass} p-1`}>
-                              <input
-                                className={`${manualTableInputClass} ${isTotalRow ? "font-bold text-slate-900" : ""}`}
-                                style={isTotalRow ? {
-                                  backgroundColor: "#fffbeb",
-                                  borderColor: "#fcd34d",
-                                } : undefined}
-                                value={String(row[field] ?? "")}
-                                onFocus={selectManualNumberInput}
-                                onChange={(e) => updateManualGoalRow(rowIndex, field, e.target.value)}
-                                readOnly={isTotalRow}
-                              />
-                            </td>
-                          ))}
-                          {shouldRenderQuarterValue ? (
-                            <td rowSpan={quarterRowSpan} className={`${tdClass} p-1 align-middle`}>
-                              <input
-                                className={`${manualTableInputClass} ${isTotalRow ? "font-bold text-slate-900" : ""}`}
-                                style={isTotalRow ? {
-                                  backgroundColor: "#fffbeb",
-                                  borderColor: "#fcd34d",
-                                } : undefined}
-                                value={String(row.quarterNetTarget ?? "")}
-                                onFocus={selectManualNumberInput}
-                                onChange={(e) => updateManualGoalRow(rowIndex, "quarterNetTarget", e.target.value)}
-                                readOnly={isTotalRow}
-                              />
-                            </td>
-                          ) : null}
-                          <td className={`${tdClass} p-1`}>
-                            <input
-                              className={`${manualTableInputClass} ${isTotalRow ? "font-bold text-slate-900" : ""}`}
-                              style={isTotalRow ? {
-                                backgroundColor: "#fffbeb",
-                                borderColor: "#fcd34d",
-                              } : undefined}
-                              value={String(row.monthlyActual ?? "")}
-                              onFocus={selectManualNumberInput}
-                              onChange={(e) => updateManualGoalRow(rowIndex, "monthlyActual", e.target.value)}
-                              readOnly={isTotalRow}
-                            />
-                          </td>
-                          {shouldRenderQuarterValue ? (
-                            <td rowSpan={quarterRowSpan} className={`${tdClass} p-1 align-middle`}>
-                              <input
-                                className={`${manualTableInputClass} ${isTotalRow ? "font-bold text-slate-900" : ""}`}
-                                style={{
-                                  backgroundColor: "#fffbeb",
-                                  borderColor: "#fcd34d",
-                                  ...(isTotalRow ? { fontWeight: 700, color: "#0f172a" } : {}),
-                                }}
-                                value={String(row.quarterActual ?? "")}
-                                onFocus={selectManualNumberInput}
-                                onChange={(e) => updateManualGoalRow(rowIndex, "quarterActual", e.target.value)}
-                                readOnly
-                              />
-                            </td>
-                          ) : null}
-                          {shouldRenderQuarterValue ? (
-                            <td rowSpan={quarterRowSpan} className={`${tdClass} p-1 align-middle`}>
-                              <input
-                                className={`${manualTableInputClass} ${isTotalRow ? "font-bold text-slate-900" : ""}`}
-                                style={{
-                                  backgroundColor: "#fffbeb",
-                                  borderColor: "#fcd34d",
-                                  ...(isTotalRow ? { fontWeight: 700, color: "#0f172a" } : {}),
-                                }}
-                                value={String(row.gap ?? "")}
-                                onFocus={selectManualNumberInput}
-                                onChange={(e) => updateManualGoalRow(rowIndex, "gap", e.target.value)}
-                                readOnly
-                              />
-                            </td>
-                          ) : null}
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <ManualGoalInputTable
+                currentYear={currentYear}
+                rows={manualDraft.goalRows || []}
+                onCommitCell={updateManualGoalRow}
+              />
 
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className={tableClass}>
