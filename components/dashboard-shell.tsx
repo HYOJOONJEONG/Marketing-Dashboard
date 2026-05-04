@@ -111,6 +111,17 @@ function normalizeCustomerIdentifier(value: unknown) {
   return String(value ?? "").trim().toUpperCase()
 }
 
+function normalizeSearchIdentifier(value: unknown) {
+  return String(value ?? "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
+}
+
+function matchesSearchQuery(value: unknown, query: string, identifierQuery: string) {
+  const text = String(value ?? "").toLowerCase()
+  if (query && text.includes(query)) return true
+  if (identifierQuery && normalizeSearchIdentifier(value).includes(identifierQuery)) return true
+  return false
+}
+
 function formatMoney(value: unknown) {
   return `${formatNumber(value)}원`
 }
@@ -2348,14 +2359,16 @@ export function DashboardShell({
     )
     const filteredHoldItems = useMemo(() => {
       if (!isTerminationView) return []
-      const query = deferredHoldQuery.trim().toLowerCase()
+      const rawQuery = deferredHoldQuery.trim()
+      const query = rawQuery.toLowerCase()
+      const identifierQuery = normalizeSearchIdentifier(rawQuery)
       return holdItems.filter((row: any) => {
         if (holdReceivedDateFilter !== "all" && normalizeDate(row.receivedDate) !== holdReceivedDateFilter) return false
-      if (holdEndDateFilter !== "all" && normalizeDate(row.endDate) !== holdEndDateFilter) return false
-      if (!query) return true
-        return [row.companyName, row.departmentName, row.customerId, row.manager, row.reason, row.note]
+        if (holdEndDateFilter !== "all" && normalizeDate(row.endDate) !== holdEndDateFilter) return false
+        if (!query && !identifierQuery) return true
+        return [row.companyName, row.departmentName, row.customerId, row.idCode, row.id, row.manager, row.reason, row.note]
           .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(query))
+          .some((value) => matchesSearchQuery(value, query, identifierQuery))
       })
     }, [holdItems, holdReceivedDateFilter, holdEndDateFilter, deferredHoldQuery, isTerminationView])
     const holdReceivedDateOptions = useMemo(() => {

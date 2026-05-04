@@ -156,6 +156,15 @@ export function StorageMemoryPanel() {
     })
   }
 
+  const downloadBackup = () => {
+    const link = document.createElement("a")
+    link.href = "/api/admin/backup"
+    link.download = ""
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  }
+
   const percent = Math.round(stats?.percent || 0)
   const chartStyle = {
     background: `conic-gradient(${statusTone.color} ${Math.min(100, stats?.percent || 0)}%, #e2e8f0 0)`,
@@ -176,6 +185,13 @@ export function StorageMemoryPanel() {
             className="h-10 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
           >
             새로고침
+          </button>
+          <button
+            type="button"
+            onClick={downloadBackup}
+            className="h-10 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-bold text-emerald-700 hover:bg-emerald-100"
+          >
+            자동백업 다운로드
           </button>
           <button
             type="button"
