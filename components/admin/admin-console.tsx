@@ -27,6 +27,19 @@ const tabs = [
   { key: "activityLogs", label: "활동로그" },
 ] as const
 
+type AdminTabKey = (typeof tabs)[number]["key"]
+
+const tabPermissionMap: Record<AdminTabKey, string> = {
+  users: "userManagement",
+  teams: "teamManagement",
+  permissions: "permissionManagement",
+  contracts: "contractManagement",
+  storage: "adminPage",
+  permissionLogs: "permissionAuditLog",
+  userLogs: "userManagement",
+  activityLogs: "activityLog",
+}
+
 const TITLE_OPTIONS = ["본부장", "팀장", "부장", "과장", "대리", "사원"] as const
 const EDITABLE_ACTIONS = ["create", "edit", "delete", "approve", "admin"] as const
 type PermissionUpdate = { menuKey: string; action: string; allowed: boolean }
@@ -45,7 +58,10 @@ async function fetchJson(url: string, init?: RequestInit) {
 }
 
 export function AdminConsole({ currentUser, permissions }: Props) {
-  const [currentTab, setCurrentTab] = useState<(typeof tabs)[number]["key"]>("users")
+  const getVisibleTabs = () =>
+    tabs.filter((tab) => Boolean(permissions?.[tabPermissionMap[tab.key]]?.view || permissions?.[tabPermissionMap[tab.key]]?.admin))
+
+  const [currentTab, setCurrentTab] = useState<AdminTabKey>(() => getVisibleTabs()[0]?.key || "storage")
   const [bootstrap, setBootstrap] = useState<any | null>(null)
   const [userSearch, setUserSearch] = useState("")
   const [selectedUserId, setSelectedUserId] = useState("")
@@ -66,9 +82,18 @@ export function AdminConsole({ currentUser, permissions }: Props) {
     }
   }
 
+  const visibleTabs = useMemo(() => getVisibleTabs(), [permissions])
+  const canGrantPermissions = Boolean(permissions?.permissionManagement?.edit || permissions?.permissionManagement?.admin)
+
   useEffect(() => {
-    void loadBootstrap()
-  }, [])
+    if (!visibleTabs.some((tab) => tab.key === currentTab)) {
+      setCurrentTab(visibleTabs[0]?.key || "storage")
+    }
+  }, [currentTab, visibleTabs])
+
+  useEffect(() => {
+    if (currentTab !== "storage") void loadBootstrap()
+  }, [currentTab])
 
   const users = bootstrap?.users || []
   const teams = bootstrap?.teams || []
@@ -105,6 +130,8 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   )
   const hasEditablePermission = (menuKey: string) =>
     EDITABLE_ACTIONS.some((action) => Boolean(selectedUserPermissionIndex?.[menuKey]?.[action]))
+  const selectedUserAdminPagePermission = selectedUser ? userPermissionMap[selectedUser.id]?.adminPage || {} : {}
+  const selectedUserCanRestoreBackup = Boolean(selectedUserAdminPagePermission.view && selectedUserAdminPagePermission.admin)
 
   const runAction = (task: () => Promise<void>) => {
     setMessage("")
@@ -171,6 +198,30 @@ export function AdminConsole({ currentUser, permissions }: Props) {
     })
   }
 
+  const savePermissionUpdatesForUser = (userId: string, updates: PermissionUpdate[]) => {
+    if (!userId || !updates.length) return
+    runAction(async () => {
+      await fetchJson("/api/admin/permissions", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: "user",
+          userId,
+          updates,
+        }),
+      })
+    })
+  }
+
+  const toggleAdminRestoreAccess = (userId: string, allowed: boolean) => {
+    const updates = ["view", ...EDITABLE_ACTIONS].map((action) => ({
+      menuKey: "adminPage",
+      action,
+      allowed,
+    }))
+    savePermissionUpdatesForUser(userId, updates)
+  }
+
   const saveMenuPermission = (menuKey: string, mode: "read" | "edit", allowed: boolean) => {
     const updates: PermissionUpdate[] = []
 
@@ -220,7 +271,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
         <aside className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
           <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Admin Menu</div>
           <div className="mt-4 space-y-2">
-            {tabs.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
@@ -399,6 +450,32 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                           ))}
                         </select>
                       </label>
+                      <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">관리자페이지</div>
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="text-sm font-bold text-slate-800">
+                              {selectedUserCanRestoreBackup ? "백업 복구 가능" : "권한 없음"}
+                            </div>
+                            <div className="mt-1 text-xs font-semibold text-slate-400">
+                              부여하면 저장공간 조회, 백업 다운로드, JSON 복구를 실행할 수 있습니다.
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleAdminRestoreAccess(selectedUser.id, !selectedUserCanRestoreBackup)}
+                            disabled={!canGrantPermissions}
+                            title={canGrantPermissions ? "관리자페이지 복구 권한 변경" : "권한관리 수정 권한이 필요합니다."}
+                            className={`rounded-2xl px-4 py-2 text-sm font-bold ${
+                              selectedUserCanRestoreBackup
+                                ? "border border-rose-200 bg-rose-50 text-rose-700"
+                                : "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                            } disabled:cursor-not-allowed disabled:opacity-50`}
+                          >
+                            {selectedUserCanRestoreBackup ? "복구권한 회수" : "복구권한 부여"}
+                          </button>
+                        </div>
+                      </div>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -606,7 +683,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
             </section>
           )}
 
-          {currentTab === "storage" && <StorageMemoryPanel />}
+          {currentTab === "storage" && <StorageMemoryPanel canRestore={Boolean(permissions?.adminPage?.admin)} />}
 
           {currentTab === "permissionLogs" && (
             <LogTable title="권한변경로그" rows={bootstrap?.permissionChangeLogs || []} columns={["targetUserId", "menuKey", "action", "beforeValue", "afterValue", "changedAt"]} />

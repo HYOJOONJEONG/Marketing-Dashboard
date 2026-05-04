@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 
 type MemoryDetail = {
   key: string
@@ -93,11 +93,13 @@ async function fetchJson(url: string, init?: RequestInit) {
   return payload
 }
 
-export function StorageMemoryPanel() {
+export function StorageMemoryPanel({ canRestore = false }: { canRestore?: boolean }) {
+  const restoreInputRef = useRef<HTMLInputElement | null>(null)
   const [stats, setStats] = useState<MemoryStats | null>(null)
   const [error, setError] = useState("")
   const [cleanupMessage, setCleanupMessage] = useState("")
   const [isPending, startTransition] = useTransition()
+  const [isRestorePending, startRestoreTransition] = useTransition()
 
   const loadStats = async () => {
     setError("")
@@ -165,6 +167,42 @@ export function StorageMemoryPanel() {
     link.remove()
   }
 
+  const openRestoreFilePicker = () => {
+    setError("")
+    setCleanupMessage("")
+    restoreInputRef.current?.click()
+  }
+
+  const restoreFromBackup = (file: File) => {
+    if (!canRestore) {
+      setError("복구 실행 권한이 없습니다. 관리자페이지의 수정가능 권한이 필요합니다.")
+      if (restoreInputRef.current) restoreInputRef.current.value = ""
+      return
+    }
+    if (!window.confirm(`"${file.name}" 파일로 현재 대시보드/옵션 데이터를 복구합니다. 실행 전에 현재 상태 백업을 먼저 다운로드합니다. 계속할까요?`)) {
+      if (restoreInputRef.current) restoreInputRef.current.value = ""
+      return
+    }
+    setCleanupMessage("현재 상태 백업을 먼저 다운로드한 뒤 복구를 시작합니다.")
+    downloadBackup()
+    startRestoreTransition(async () => {
+      try {
+        const body = new FormData()
+        body.append("file", file)
+        const payload = await fetchJson("/api/admin/backup", {
+          method: "POST",
+          body,
+        })
+        await loadStats()
+        setCleanupMessage(`백업 복구 완료: ${(payload.restored || []).join(", ") || "데이터"} 반영`)
+      } catch (err: any) {
+        setError(String(err?.message || "백업 복구에 실패했습니다."))
+      } finally {
+        if (restoreInputRef.current) restoreInputRef.current.value = ""
+      }
+    })
+  }
+
   const percent = Math.round(stats?.percent || 0)
   const chartStyle = {
     background: `conic-gradient(${statusTone.color} ${Math.min(100, stats?.percent || 0)}%, #e2e8f0 0)`,
@@ -179,6 +217,16 @@ export function StorageMemoryPanel() {
           <p className="mt-1 text-sm text-slate-500">Redis 경고 기준으로 현재 사용량과 수정로그 비중을 확인합니다.</p>
         </div>
         <div className="flex items-center gap-2">
+          <input
+            ref={restoreInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) restoreFromBackup(file)
+            }}
+          />
           <button
             type="button"
             onClick={() => void loadStats().catch((err) => setError(String(err?.message || "새로고침 실패")))}
@@ -192,6 +240,15 @@ export function StorageMemoryPanel() {
             className="h-10 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-bold text-emerald-700 hover:bg-emerald-100"
           >
             자동백업 다운로드
+          </button>
+          <button
+            type="button"
+            onClick={openRestoreFilePicker}
+            disabled={!canRestore || isRestorePending}
+            className="h-10 rounded-2xl border border-rose-200 bg-rose-50 px-4 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+            title={canRestore ? "백업 JSON 파일로 복구" : "관리자페이지 수정가능 권한이 필요합니다."}
+          >
+            {isRestorePending ? "복구 중" : "백업 JSON 복구"}
           </button>
           <button
             type="button"

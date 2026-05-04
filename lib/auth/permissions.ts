@@ -51,9 +51,14 @@ export function buildPermissionIndex(state: AuthState, user: UserRecord | null |
       })
     })
   } else {
+    const explicitAdminPermission = new Map(
+      state.userPermissionOverrides
+        .filter((override) => override.userId === user.id && ADMIN_CONSOLE_MENU_KEYS.includes(override.menuKey))
+        .map((override) => [`${override.menuKey}:${override.action}`, override.allowed] as const),
+    )
     ADMIN_CONSOLE_MENU_KEYS.forEach((menuKey) => {
       ACTION_KEYS.forEach((action) => {
-        index[menuKey][action] = false
+        index[menuKey][action] = Boolean(explicitAdminPermission.get(`${menuKey}:${action}`))
       })
     })
   }

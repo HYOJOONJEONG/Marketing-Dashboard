@@ -212,6 +212,11 @@ export const ADMIN_PERMISSION_ROW_KEYS: MenuKey[] = [
   "optionDashboard",
   "terminationManagement",
   "adminPage",
+  "userManagement",
+  "teamManagement",
+  "permissionManagement",
+  "permissionAuditLog",
+  "activityLog",
 ]
 
 export const USER_COLOR_PALETTE = [
