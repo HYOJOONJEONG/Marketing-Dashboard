@@ -803,14 +803,78 @@ function buildIndustryStats(rows: any[]) {
   }))
 }
 
+function BufferedManualInput({
+  value,
+  onCommit,
+  onDirty,
+  className,
+  style,
+  placeholder,
+  inputMode,
+  readOnly,
+}: {
+  value: unknown
+  onCommit?: (value: string) => void
+  onDirty?: () => void
+  className: string
+  style?: React.CSSProperties
+  placeholder?: string
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"]
+  readOnly?: boolean
+}) {
+  const externalValue = String(value ?? "")
+  const [draftValue, setDraftValue] = useState(externalValue)
+  const latestDraftRef = useRef(externalValue)
+  const isEditingRef = useRef(false)
+
+  useEffect(() => {
+    if (isEditingRef.current) return
+    latestDraftRef.current = externalValue
+    setDraftValue(externalValue)
+  }, [externalValue])
+
+  function commit(nextValue = latestDraftRef.current) {
+    isEditingRef.current = false
+    latestDraftRef.current = nextValue
+    setDraftValue(nextValue)
+    if (nextValue === externalValue) return
+    onCommit?.(nextValue)
+  }
+
+  return (
+    <input
+      className={className}
+      style={style}
+      placeholder={placeholder}
+      inputMode={inputMode}
+      value={draftValue}
+      readOnly={readOnly}
+      onFocus={(event) => {
+        isEditingRef.current = true
+        if (!readOnly) onDirty?.()
+        event.currentTarget.select()
+      }}
+      onChange={(event) => {
+        const nextValue = event.target.value
+        latestDraftRef.current = nextValue
+        setDraftValue(nextValue)
+        if (!readOnly) onDirty?.()
+      }}
+      onBlur={(event) => commit(event.currentTarget.value)}
+    />
+  )
+}
+
 function ManualGoalInputTable({
   currentYear,
   rows,
   onCommitCell,
+  onDirty,
 }: {
   currentYear: number | string
   rows?: any[]
   onCommitCell: (rowIndex: number, field: EditableGoalField, value: string) => void
+  onDirty?: () => void
 }) {
   const [draftRows, setDraftRows] = useState<any[]>(() => buildEditableGoalRows(rows || []))
   const [calculatedRows, setCalculatedRows] = useState<any[]>(() => buildGoalRows(rows || []))
@@ -838,6 +902,7 @@ function ManualGoalInputTable({
       next[rowIndex][field] = value
       return next
     })
+    onDirty?.()
   }
 
   function commitDraftCell(rowIndex: number, field: EditableGoalField, value: string) {
@@ -855,8 +920,9 @@ function ManualGoalInputTable({
     onCommitCell(rowIndex, field, value)
   }
 
-  function handleFocus(event: React.FocusEvent<HTMLInputElement>) {
+  function handleFocus(event: React.FocusEvent<HTMLInputElement>, readOnly?: boolean) {
     isEditingRef.current = true
+    if (!readOnly) onDirty?.()
     event.currentTarget.select()
   }
 
@@ -874,7 +940,7 @@ function ManualGoalInputTable({
             : undefined
         }
         value={String(inputValue ?? "")}
-        onFocus={handleFocus}
+        onFocus={(event) => handleFocus(event, isTotalRow)}
         onChange={(event) => updateDraftCell(rowIndex, field, event.target.value)}
         onBlur={(event) => commitDraftCell(rowIndex, field, event.target.value)}
         readOnly={isTotalRow}
@@ -2431,6 +2497,7 @@ export function DashboardShell({
   }, [dirtyViews])
 
   function markManualInputDirty() {
+    if (dirtyViewsRef.current["manual-input"]) return
     dirtyViewsRef.current = {
       ...dirtyViewsRef.current,
       "manual-input": true,
@@ -4618,10 +4685,6 @@ export function DashboardShell({
     },
   }
 
-  function selectManualNumberInput(event: React.FocusEvent<HTMLInputElement>) {
-    event.currentTarget.select()
-  }
-
   function handleManualInputKeyDownCapture(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "Enter") return
     if ((event.nativeEvent as KeyboardEvent).isComposing) return
@@ -6202,12 +6265,12 @@ export function DashboardShell({
                       단가 <span className="text-amber-600">(자동계산 반영)</span>
                       {calcHint("주간 순증 매출 계산식에 곱해지는 기준 단가")}
                     </div>
-                    <input
+                    <BufferedManualInput
                       className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
                       inputMode="numeric"
                       value={formatNumericInputDisplay(manualDraft.revenueUnitPrice)}
-                      onFocus={selectManualNumberInput}
-                      onChange={(e) => updateManualField("revenueUnitPrice", e.target.value)}
+                      onDirty={markManualInputDirty}
+                      onCommit={(value) => updateManualField("revenueUnitPrice", value)}
                     />
                   </label>
                   <div className="space-y-1.5">
@@ -6215,13 +6278,13 @@ export function DashboardShell({
                       추가 계약 금액
                     </div>
                     <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                      <input
+                      <BufferedManualInput
                         className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[14px]"
                         inputMode="numeric"
                         placeholder="예: 1,000,000"
                         value={formatNumericInputDisplay(manualDraft.additionalContractCount)}
-                        onFocus={selectManualNumberInput}
-                        onChange={(e) => updateManualField("additionalContractCount", e.target.value)}
+                        onDirty={markManualInputDirty}
+                        onCommit={(value) => updateManualField("additionalContractCount", value)}
                       />
                       <button
                         type="button"
@@ -6287,12 +6350,12 @@ export function DashboardShell({
                             <td className={manualLabelCellClass}>{row.label}</td>
                             {(displayMonths || []).map((monthValue: unknown, monthIndex: number) => (
                               <td key={`${row.key}-${monthIndex}`} className={`${tdClass} p-1`}>
-                                <input
+                                <BufferedManualInput
                                   className={`${manualTableInputClass} ${isTotalRow ? "font-semibold text-slate-900" : ""}`}
                                   style={isTotalRow ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
                                   value={String(monthValue ?? "")}
-                                  onFocus={selectManualNumberInput}
-                                  onChange={(e) => updateManualRevenueCell(rowIndex, monthIndex, e.target.value)}
+                                  onDirty={markManualInputDirty}
+                                  onCommit={(value) => updateManualRevenueCell(rowIndex, monthIndex, value)}
                                   readOnly={isTotalRow}
                                 />
                               </td>
@@ -6348,13 +6411,13 @@ export function DashboardShell({
                             const isAutoField = autoManualSummaryFields.has(field)
                             return (
                               <td key={`${section.title}-${field}`} className={`${tdClass} p-1`}>
-                                <input
+                                <BufferedManualInput
                                   className={`${manualTableInputClass} ${isAutoField ? "cursor-not-allowed font-bold text-slate-900" : ""} ${section.cells.length === 4 && cellIndex === section.cells.length - 1 ? "text-left px-4" : ""}`}
                                   style={isAutoField ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
                                   value={String(manualSummary?.[field] ?? "")}
-                                  onFocus={selectManualNumberInput}
                                   readOnly={isAutoField}
-                                  onChange={(e) => updateManualSummaryField(field, e.target.value)}
+                                  onDirty={markManualInputDirty}
+                                  onCommit={(value) => updateManualSummaryField(field, value)}
                                 />
                               </td>
                             )
@@ -6370,6 +6433,7 @@ export function DashboardShell({
                 currentYear={currentYear}
                 rows={manualDraft.goalRows || []}
                 onCommitCell={updateManualGoalRow}
+                onDirty={markManualInputDirty}
               />
 
               <div className="overflow-hidden rounded-2xl border border-slate-200">
@@ -6452,7 +6516,7 @@ export function DashboardShell({
                             : null
                           return (
                             <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
-                              <input
+                              <BufferedManualInput
                                 className={manualTableInputClass}
                                 style={
                                   isTotalColumn
@@ -6460,8 +6524,8 @@ export function DashboardShell({
                                     : undefined
                                 }
                                 value={isTotalColumn ? String(totalValue ?? "") : String(row.values?.[valueIndex] ?? "")}
-                                onFocus={selectManualNumberInput}
-                                onChange={(e) => updateManualTerminationOverviewCell(rowIndex, valueIndex, e.target.value)}
+                                onDirty={markManualInputDirty}
+                                onCommit={(value) => updateManualTerminationOverviewCell(rowIndex, valueIndex, value)}
                                 readOnly={isTotalColumn}
                               />
                             </td>
@@ -6505,7 +6569,7 @@ export function DashboardShell({
                             : null
                           return (
                             <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
-                              <input
+                              <BufferedManualInput
                                 className={manualTableInputClass}
                                 style={
                                   isTotalColumn
@@ -6513,8 +6577,8 @@ export function DashboardShell({
                                     : undefined
                                 }
                                 value={isTotalColumn ? String(totalValue ?? "") : String(normalizedValues[valueIndex] ?? "")}
-                                onFocus={selectManualNumberInput}
-                                onChange={(e) => updateManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, e.target.value)}
+                                onDirty={markManualInputDirty}
+                                onCommit={(value) => updateManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, value)}
                                 readOnly={isTotalColumn}
                               />
                             </td>
@@ -6568,19 +6632,19 @@ export function DashboardShell({
                         <tr key={`manual-additional-${rowIndex}`} className="bg-white">
                           <td className={`${tdClass} px-2 text-center font-semibold text-blue-700`}>{rowIndex + 1}</td>
                           <td className={`${tdClass} p-1`}>
-                            <input className={manualTableTextInputClass} placeholder="ID" value={String(row.idCode ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "idCode", e.target.value)} />
+                            <BufferedManualInput className={manualTableTextInputClass} placeholder="ID" value={String(row.idCode ?? "")} onDirty={markManualInputDirty} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "idCode", value)} />
                           </td>
                           <td className={`${tdClass} p-1`}>
-                            <input className={manualTableTextInputClass} placeholder="회사" value={String(row.company ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "company", e.target.value)} />
+                            <BufferedManualInput className={manualTableTextInputClass} placeholder="회사" value={String(row.company ?? "")} onDirty={markManualInputDirty} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "company", value)} />
                           </td>
                           <td className={`${tdClass} p-1`}>
-                            <input className={manualTableInputClass} placeholder="금액" value={String(row.amount ?? "")} onFocus={selectManualNumberInput} onChange={(e) => updateAdditionalSaleRow(rowIndex, "amount", e.target.value)} />
+                            <BufferedManualInput className={manualTableInputClass} placeholder="금액" value={String(row.amount ?? "")} onDirty={markManualInputDirty} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "amount", value)} />
                           </td>
                           <td className={`${tdClass} p-1`}>
-                            <input className={manualTableTextInputClass} placeholder="내용" value={String(row.content ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "content", e.target.value)} />
+                            <BufferedManualInput className={manualTableTextInputClass} placeholder="내용" value={String(row.content ?? "")} onDirty={markManualInputDirty} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "content", value)} />
                           </td>
                           <td className={`${tdClass} p-1`}>
-                            <input className={manualTableTextInputClass} placeholder="비고" value={String(row.note ?? "")} onChange={(e) => updateAdditionalSaleRow(rowIndex, "note", e.target.value)} />
+                            <BufferedManualInput className={manualTableTextInputClass} placeholder="비고" value={String(row.note ?? "")} onDirty={markManualInputDirty} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "note", value)} />
                           </td>
                           <td className={`${tdClass} p-1 text-center`}>
                             <button type="button" onClick={() => deleteAdditionalSaleRow(rowIndex)} className="inline-flex h-8 items-center rounded-full border border-rose-200 bg-white px-2.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50">삭제</button>
