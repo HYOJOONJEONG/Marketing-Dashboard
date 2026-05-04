@@ -49,6 +49,10 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
     return onlineUsers.length > 1 ? `${firstName} 외 ${onlineUsers.length - 1}명` : firstName
   }, [onlineUsers])
 
+  useEffect(() => {
+    router.prefetch("/me")
+  }, [router])
+
   const logout = () => {
     startTransition(async () => {
       await fetch("/api/auth/logout", { method: "POST" }).catch(() => null)

@@ -1761,6 +1761,10 @@ export function DashboardShell({
   const previousViewRef = useRef<ViewKey | null>(null)
 
   useEffect(() => {
+    router.prefetch("/me")
+  }, [router])
+
+  useEffect(() => {
     if (normalizedTerminationOnceRef.current) return
     if (!termination.sheets || termination.sheets.length === 0) return
     const needsPrune = termination.sheets.length > 1
