@@ -1,5 +1,6 @@
 "use client"
 
+import { Archive, Download, RefreshCw, ShieldCheck, Upload } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 
 type MemoryDetail = {
@@ -48,6 +49,8 @@ type MemoryStats = {
   recommendations: string[]
 }
 
+type StorageActionTone = "slate" | "emerald" | "rose" | "blue" | "amber"
+
 class ApiRequestError extends Error {
   status: number
 
@@ -74,6 +77,34 @@ function formatDate(value?: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })
+}
+
+const actionToneClasses: Record<StorageActionTone, { button: string; icon: string; note: string }> = {
+  slate: {
+    button: "border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50",
+    icon: "bg-slate-100 text-slate-600",
+    note: "text-slate-500",
+  },
+  emerald: {
+    button: "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100",
+    icon: "bg-emerald-100 text-emerald-700",
+    note: "text-emerald-700",
+  },
+  rose: {
+    button: "border-rose-200 bg-rose-50 text-rose-800 hover:border-rose-300 hover:bg-rose-100",
+    icon: "bg-rose-100 text-rose-700",
+    note: "text-rose-700",
+  },
+  blue: {
+    button: "border-blue-200 bg-blue-600 text-white hover:bg-blue-700",
+    icon: "bg-white/20 text-white",
+    note: "text-blue-700",
+  },
+  amber: {
+    button: "border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-400 hover:bg-amber-100",
+    icon: "bg-amber-100 text-amber-700",
+    note: "text-amber-700",
+  },
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -208,6 +239,53 @@ export function StorageMemoryPanel({ canRestore = false }: { canRestore?: boolea
     background: `conic-gradient(${statusTone.color} ${Math.min(100, stats?.percent || 0)}%, #e2e8f0 0)`,
   }
   const legacyDashboard = stats?.analysis?.legacyDashboard
+  const storageActions = [
+    {
+      key: "refresh",
+      label: "새로고침",
+      note: "DB 변경 없이 현재 사용량만 다시 조회",
+      icon: RefreshCw,
+      tone: "slate" as const,
+      onClick: () => void loadStats().catch((err) => setError(String(err?.message || "새로고침 실패"))),
+      disabled: false,
+    },
+    {
+      key: "download",
+      label: "자동백업 다운로드",
+      note: "대시보드/옵션 데이터를 JSON으로 저장",
+      icon: Download,
+      tone: "emerald" as const,
+      onClick: downloadBackup,
+      disabled: false,
+    },
+    {
+      key: "restore",
+      label: isRestorePending ? "복구 중" : "백업 JSON 복구",
+      note: canRestore ? "백업 파일로 대시보드/옵션 값 복원" : "관리자페이지 수정가능 권한 필요",
+      icon: Upload,
+      tone: "rose" as const,
+      onClick: openRestoreFilePicker,
+      disabled: !canRestore || isRestorePending,
+    },
+    {
+      key: "cleanup",
+      label: isPending ? "정리 중" : "안전 정리 실행",
+      note: "원문 압축과 오래된 수정로그 정리",
+      icon: ShieldCheck,
+      tone: "blue" as const,
+      onClick: runCleanup,
+      disabled: isPending || !stats,
+    },
+    {
+      key: "legacy",
+      label: "구버전 저장본 정리",
+      note: "분리 저장 후 남은 과거 저장본 제거",
+      icon: Archive,
+      tone: "amber" as const,
+      onClick: runLegacyCleanup,
+      disabled: isPending || !legacyDashboard?.canMigrateAndPrune,
+    },
+  ]
 
   return (
     <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -216,57 +294,42 @@ export function StorageMemoryPanel({ canRestore = false }: { canRestore?: boolea
           <h2 className="text-xl font-black tracking-[-0.03em] text-slate-950">저장공간 / 메모리 관리</h2>
           <p className="mt-1 text-sm text-slate-500">Redis 경고 기준으로 현재 사용량과 수정로그 비중을 확인합니다.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            ref={restoreInputRef}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) restoreFromBackup(file)
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => void loadStats().catch((err) => setError(String(err?.message || "새로고침 실패")))}
-            className="h-10 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
-          >
-            새로고침
-          </button>
-          <button
-            type="button"
-            onClick={downloadBackup}
-            className="h-10 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-bold text-emerald-700 hover:bg-emerald-100"
-          >
-            자동백업 다운로드
-          </button>
-          <button
-            type="button"
-            onClick={openRestoreFilePicker}
-            disabled={!canRestore || isRestorePending}
-            className="h-10 rounded-2xl border border-rose-200 bg-rose-50 px-4 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
-            title={canRestore ? "백업 JSON 파일로 복구" : "관리자페이지 수정가능 권한이 필요합니다."}
-          >
-            {isRestorePending ? "복구 중" : "백업 JSON 복구"}
-          </button>
-          <button
-            type="button"
-            onClick={runCleanup}
-            disabled={isPending || !stats}
-            className="h-10 rounded-2xl bg-blue-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
-          >
-            {isPending ? "정리 중" : "안전 정리 실행"}
-          </button>
-          <button
-            type="button"
-            onClick={runLegacyCleanup}
-            disabled={isPending || !legacyDashboard?.canMigrateAndPrune}
-            className="h-10 rounded-2xl border border-amber-300 bg-amber-50 px-4 text-sm font-bold text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            구버전 저장본 정리
-          </button>
-        </div>
+      </div>
+      <input
+        ref={restoreInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          if (file) restoreFromBackup(file)
+        }}
+      />
+      <div className="mt-4 grid gap-2 rounded-[24px] border border-slate-200 bg-slate-50 p-2 sm:grid-cols-2 xl:grid-cols-5">
+        {storageActions.map((action) => {
+          const Icon = action.icon
+          const tone = actionToneClasses[action.tone]
+          return (
+            <button
+              key={action.key}
+              type="button"
+              onClick={action.onClick}
+              disabled={action.disabled}
+              title={action.note}
+              className={`min-h-[86px] rounded-2xl border px-3 py-3 text-left shadow-sm transition disabled:cursor-not-allowed disabled:opacity-45 ${tone.button}`}
+            >
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${tone.icon}`}>
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span className="text-sm font-black leading-tight">{action.label}</span>
+              </div>
+              <div className={`mt-2 text-[11px] font-bold leading-snug ${action.tone === "blue" ? "text-blue-50" : tone.note}`}>
+                {action.note}
+              </div>
+            </button>
+          )
+        })}
       </div>
 
       {error && <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600">{error}</div>}
