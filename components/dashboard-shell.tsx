@@ -883,17 +883,23 @@ function ManualGoalInputTable({
 }) {
   const [draftRows, setDraftRows] = useState<any[]>(() => buildEditableGoalRows(rows || []))
   const [calculatedRows, setCalculatedRows] = useState<any[]>(() => buildGoalRows(rows || []))
+  const draftRowsRef = useRef<any[]>(draftRows)
   const isEditingRef = useRef(false)
   const rowsSignature = useMemo(() => JSON.stringify(rows || []), [rows])
+
+  function setGoalDraftRows(nextDraftRows: any[]) {
+    draftRowsRef.current = nextDraftRows
+    setDraftRows(nextDraftRows)
+    setCalculatedRows(buildGoalRows(nextDraftRows))
+  }
 
   useEffect(() => {
     if (isEditingRef.current) return
     const nextDraftRows = buildEditableGoalRows(rows || [])
-    setDraftRows(nextDraftRows)
-    setCalculatedRows(buildGoalRows(nextDraftRows))
+    setGoalDraftRows(nextDraftRows)
   }, [rowsSignature])
 
-  function buildNextDraftRows(rowIndex: number, field: EditableGoalField, value: string, baseRows = draftRows) {
+  function buildNextDraftRows(rowIndex: number, field: EditableGoalField, value: string, baseRows = draftRowsRef.current) {
     const next = buildEditableGoalRows(baseRows)
     if (!next[rowIndex]) return next
     next[rowIndex][field] = value
@@ -902,16 +908,14 @@ function ManualGoalInputTable({
 
   function updateDraftCell(rowIndex: number, field: EditableGoalField, value: string) {
     const nextDraftRows = buildNextDraftRows(rowIndex, field, value)
-    setDraftRows(nextDraftRows)
-    setCalculatedRows(buildGoalRows(nextDraftRows))
+    setGoalDraftRows(nextDraftRows)
     onDirty?.()
   }
 
   function commitDraftCell(rowIndex: number, field: EditableGoalField, value: string) {
     isEditingRef.current = false
     const nextDraftRows = buildNextDraftRows(rowIndex, field, value)
-    setDraftRows(nextDraftRows)
-    setCalculatedRows(buildGoalRows(nextDraftRows))
+    setGoalDraftRows(nextDraftRows)
     const currentValue = nextDraftRows[rowIndex]?.[field]
     if (
       String(currentValue ?? "") === String(value ?? "") &&
@@ -2758,12 +2762,15 @@ export function DashboardShell({
     if (rowIndex >= 12) return
     if (field === "quarterNetTarget" && rowIndex % 3 !== 0) return
     markManualInputDirty()
-    updateManualDraft((prev: any) => {
-      const goalRows = buildEditableGoalRows(prev.goalRows || [])
-      if (!goalRows[rowIndex]) return prev
-      goalRows[rowIndex][field] = value
-      return { ...prev, goalRows }
-    })
+    const sourceDraft = cloneData(manualPreviewDraftRef.current || manualDraftRef.current || manualDraft)
+    const goalRows = buildEditableGoalRows(sourceDraft.goalRows || [])
+    if (!goalRows[rowIndex]) return
+    goalRows[rowIndex][field] = value
+    const nextDraft = { ...sourceDraft, goalRows }
+    manualDraftRef.current = nextDraft
+    setManualDraft(nextDraft)
+    manualPreviewDraftRef.current = nextDraft
+    setManualPreviewDraft(nextDraft)
   }
 
   function updateManualIndustryRow(rowIndex: number, field: string, value: string) {
