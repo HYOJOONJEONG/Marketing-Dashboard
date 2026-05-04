@@ -27,7 +27,6 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
   const [currentPassword, setCurrentPassword] = useState("")
   const [nextPassword, setNextPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-  const [isMyPageNavigating, setIsMyPageNavigating] = useState(false)
   const [onlineUsers, setOnlineUsers] = useState<
     Array<{
       userId: string
@@ -53,16 +52,6 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
   useEffect(() => {
     router.prefetch("/me")
   }, [router])
-
-  const goToMyPage = () => {
-    setIsPresenceOpen(false)
-    setIsPasswordOpen(false)
-    setIsMyPageNavigating(true)
-    router.push("/me")
-    window.setTimeout(() => {
-      if (window.location.pathname !== "/me") window.location.assign("/me")
-    }, 450)
-  }
 
   const logout = () => {
     startTransition(async () => {
@@ -155,15 +144,17 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
     <div className="workspace-header-shell relative mb-5 overflow-visible rounded-[28px] border border-slate-200/90 bg-white/95 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur">
       <div className="flex items-center justify-between gap-4 px-6 py-4">
         <div className="flex min-w-0 items-center gap-3">
-          <button
-            type="button"
-            onClick={goToMyPage}
-            disabled={isMyPageNavigating}
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border ${currentUser.color.border} ${currentUser.color.bg} ${currentUser.color.text} text-[21px] font-black shadow-sm transition hover:scale-[1.03] disabled:cursor-wait disabled:opacity-70`}
-            aria-label={isMyPageNavigating ? "개인페이지 이동 중" : "개인페이지 열기"}
+          <a
+            href="/me"
+            onClick={() => {
+              setIsPresenceOpen(false)
+              setIsPasswordOpen(false)
+            }}
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border ${currentUser.color.border} ${currentUser.color.bg} ${currentUser.color.text} text-[21px] font-black shadow-sm transition hover:scale-[1.03]`}
+            aria-label="개인페이지 열기"
           >
             {avatarLabel}
-          </button>
+          </a>
           <div className="flex min-w-0 items-center gap-2.5 overflow-hidden text-[14px]">
             <span className="shrink-0 text-[18px] font-black tracking-[-0.04em] text-slate-950">{currentUser.name}</span>
             <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-600">{currentUser.role}</span>

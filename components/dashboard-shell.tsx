@@ -1440,7 +1440,6 @@ export function DashboardShell({
   const [isSavingDashboard, setIsSavingDashboard] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [isPasswordOpen, setIsPasswordOpen] = useState(false)
-  const [isMyPageNavigating, setIsMyPageNavigating] = useState(false)
   const [isPresenceListOpen, setIsPresenceListOpen] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState("")
@@ -1764,19 +1763,6 @@ export function DashboardShell({
   useEffect(() => {
     router.prefetch("/me")
   }, [router])
-
-  const goToMyPage = () => {
-    setIsUserMenuOpen(false)
-    setIsPasswordOpen(false)
-    setIsSidebarOpen(false)
-    setIsMyPageNavigating(true)
-    router.push("/me")
-    window.setTimeout(() => {
-      if (window.location.pathname === "/me") return
-      if (Object.values(dirtyViewsRef.current).some(Boolean)) return
-      window.location.assign("/me")
-    }, 450)
-  }
 
   useEffect(() => {
     if (normalizedTerminationOnceRef.current) return
@@ -5150,17 +5136,18 @@ export function DashboardShell({
                   >
                     <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
                       <div className="space-y-1">
-                        <button
-                          type="button"
-                          onClick={goToMyPage}
-                          disabled={isMyPageNavigating}
-                          className="flex h-11 w-full items-center gap-2.5 rounded-xl px-2 text-left text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                        <a
+                          href="/me"
+                          onClick={() => {
+                            setIsUserMenuOpen(false)
+                            setIsPasswordOpen(false)
+                            setIsSidebarOpen(false)
+                          }}
+                          className="flex h-11 w-full items-center gap-2.5 rounded-xl px-2 text-left text-slate-700 transition hover:bg-slate-50"
                         >
                           <UserRound className="ml-1 h-[18px] w-[18px] text-slate-400" />
-                          <span className="flex-1 text-[14px] font-bold tracking-[-0.03em] text-slate-800">
-                            {isMyPageNavigating ? "내 페이지 이동 중" : "내 페이지"}
-                          </span>
-                        </button>
+                          <span className="flex-1 text-[14px] font-bold tracking-[-0.03em] text-slate-800">내 페이지</span>
+                        </a>
                         <button
                           type="button"
                           onClick={() => {
