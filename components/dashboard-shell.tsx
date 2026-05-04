@@ -57,6 +57,7 @@ const viewTitles: Record<ViewKey, string> = {
 }
 
 type PresenceStatus = "online" | "away" | "offline"
+type CreateStatus = "idle" | "saving" | "success"
 
 type PresenceUser = {
   userId: string
@@ -104,6 +105,10 @@ function toNumber(value: unknown) {
 
 function formatNumber(value: unknown) {
   return toNumber(value).toLocaleString("ko-KR")
+}
+
+function normalizeCustomerIdentifier(value: unknown) {
+  return String(value ?? "").trim().toUpperCase()
 }
 
 function formatMoney(value: unknown) {
@@ -1452,6 +1457,9 @@ export function DashboardShell({
     documentStatus: "미회수",
     replacementType: "신규",
   })
+  const [contractCreateStatus, setContractCreateStatus] = useState<CreateStatus>("idle")
+  const [terminationCreateStatus, setTerminationCreateStatus] = useState<CreateStatus>("idle")
+  const [holdCreateStatus, setHoldCreateStatus] = useState<CreateStatus>("idle")
   const [editingContractId, setEditingContractId] = useState<string | null>(null)
   const [editingContractDraft, setEditingContractDraft] = useState<any>({})
   const [contractQuery, setContractQuery] = useState("")
@@ -2715,7 +2723,45 @@ export function DashboardShell({
     updateManualDraft((prev: any) => ({ ...prev, [field]: value }))
   }
 
+  function getCreateButtonLabel(status: CreateStatus, idleLabel = "등록") {
+    if (status === "saving") return "저장 중..."
+    if (status === "success") return "등록완료"
+    return idleLabel
+  }
+
+  function getCreateButtonClass(status: CreateStatus) {
+    const colorClass =
+      status === "success"
+        ? "bg-emerald-600 text-white"
+        : status === "saving"
+          ? "bg-slate-400 text-white"
+          : "bg-blue-600 text-white hover:bg-blue-700"
+    return `h-10 rounded-2xl px-4 text-[14px] font-semibold whitespace-nowrap transition ${colorClass}`
+  }
+
+  function hasDuplicateContractId(idCode: unknown) {
+    const normalizedId = normalizeCustomerIdentifier(idCode)
+    if (!normalizedId) return false
+    const latestContracts = (pendingDataRef.current || data)?.contracts || contracts
+    return latestContracts.some((row: any) => normalizeCustomerIdentifier(row?.idCode) === normalizedId)
+  }
+
+  function hasDuplicateTerminationCustomerId(customerId: unknown, sourceTermination?: any) {
+    const normalizedId = normalizeCustomerIdentifier(customerId)
+    if (!normalizedId) return false
+    const latestTermination = sourceTermination || (pendingDataRef.current || data)?.termination || termination
+    return (latestTermination?.sheets || []).some((sheet: any) =>
+      [
+        ...(sheet?.items || []),
+        ...(sheet?.holdItems || []),
+        ...(sheet?.confirmedItems || []),
+        ...(sheet?.releasedHoldItems || []),
+      ].some((row: any) => normalizeCustomerIdentifier(row?.customerId) === normalizedId),
+    )
+  }
+
   function updateContractDraft(field: string, value: string) {
+    if (contractCreateStatus !== "idle") setContractCreateStatus("idle")
     setContractDraft((prev: any) => ({ ...prev, [field]: value }))
   }
 
@@ -3021,6 +3067,11 @@ export function DashboardShell({
       window.alert("회사명과 아이디는 필수입니다.")
       return
     }
+    if (hasDuplicateContractId(contractDraft.idCode)) {
+      window.alert("중복된 ID가 존재합니다.")
+      return
+    }
+    setContractCreateStatus("saving")
     startTransition(async () => {
       try {
         const nextContract = {
@@ -3062,7 +3113,9 @@ export function DashboardShell({
           documentStatus: "미회수",
           replacementType: "신규",
         })
+        setContractCreateStatus("success")
       } catch (error: any) {
+        setContractCreateStatus("idle")
         window.alert(String(error?.message || "계약 등록 저장에 실패했습니다."))
       }
     })
@@ -4197,10 +4250,12 @@ export function DashboardShell({
   }
 
   function updateTerminationDraft(field: string, value: string) {
+    if (terminationCreateStatus !== "idle") setTerminationCreateStatus("idle")
     setTerminationDraft((prev: any) => ({ ...prev, [field]: field === "customerId" ? String(value || "").trim().toUpperCase() : value }))
   }
 
   function updateHoldDraft(field: string, value: string) {
+    if (holdCreateStatus !== "idle") setHoldCreateStatus("idle")
     setHoldDraft((prev: any) => ({ ...prev, [field]: field === "customerId" ? String(value || "").trim().toUpperCase() : value }))
   }
 
@@ -4238,6 +4293,13 @@ export function DashboardShell({
       window.alert("고객번호와 고객사는 필수입니다.")
       return
     }
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    if (hasDuplicateTerminationCustomerId(terminationDraft.customerId, latestTermination)) {
+      window.alert("중복된 ID가 존재합니다.")
+      return
+    }
+    setTerminationCreateStatus("saving")
     const nextItem = {
       id: `term-${Date.now()}`,
       no: "0",
@@ -4253,8 +4315,6 @@ export function DashboardShell({
       terminationDate: normalizeDate(terminationDraft.terminationDate),
       penalty: toNumber(terminationDraft.penalty),
     }
-    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
-    if (!latestSheet) return
     const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
       sheet.id === latestSheet.id
         ? {
@@ -4266,6 +4326,7 @@ export function DashboardShell({
     )
     persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
     resetTerminationDraft()
+    setTerminationCreateStatus("success")
   }
 
   function handleHoldCreate() {
@@ -4274,6 +4335,13 @@ export function DashboardShell({
       window.alert("고객번호와 고객사는 필수입니다.")
       return
     }
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    if (hasDuplicateTerminationCustomerId(holdDraft.customerId, latestTermination)) {
+      window.alert("중복된 ID가 존재합니다.")
+      return
+    }
+    setHoldCreateStatus("saving")
     const nextItem = {
       id: `hold-${Date.now()}`,
       no: "0",
@@ -4288,8 +4356,6 @@ export function DashboardShell({
       startDate: normalizeMonth(holdDraft.startDate),
       endDate: normalizeMonth(holdDraft.endDate),
     }
-    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
-    if (!latestSheet) return
     const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
       sheet.id === latestSheet.id
         ? {
@@ -4301,6 +4367,7 @@ export function DashboardShell({
     )
     persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
     resetHoldDraft()
+    setHoldCreateStatus("success")
   }
 
   function toggleTerminationSort(
@@ -6039,8 +6106,13 @@ export function DashboardShell({
                         <option value="미회수">미회수</option>
                         <option value="회수">회수</option>
                       </select>
-                      <button type="button" onClick={handleContractCreate} className="h-10 rounded-2xl bg-blue-600 px-4 text-[14px] font-semibold text-white whitespace-nowrap">
-                        {isPending ? "저장 중..." : "등록&저장"}
+                      <button
+                        type="button"
+                        onClick={handleContractCreate}
+                        disabled={contractCreateStatus !== "idle"}
+                        className={getCreateButtonClass(contractCreateStatus)}
+                      >
+                        {getCreateButtonLabel(contractCreateStatus, "등록&저장")}
                       </button>
                     </div>
                   </div>
@@ -7257,8 +7329,13 @@ export function DashboardShell({
                         <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" placeholder="위약금" value={terminationDraft.penalty} onChange={(e)=>updateTerminationDraft("penalty", e.target.value)} />
                       </label>
                       <div className="col-span-4 flex justify-end pt-1">
-                        <button type="button" onClick={handleTerminationCreate} className="h-10 rounded-2xl bg-blue-600 px-4 text-[14px] font-semibold text-white">
-                          등록
+                        <button
+                          type="button"
+                          onClick={handleTerminationCreate}
+                          disabled={terminationCreateStatus !== "idle"}
+                          className={getCreateButtonClass(terminationCreateStatus)}
+                        >
+                          {getCreateButtonLabel(terminationCreateStatus)}
                         </button>
                       </div>
                     </div>
@@ -7315,8 +7392,13 @@ export function DashboardShell({
                         />
                       </label>
                       <div className="col-span-4 flex justify-end pt-1">
-                        <button type="button" onClick={handleHoldCreate} className="h-10 rounded-2xl bg-blue-600 px-4 text-[14px] font-semibold text-white">
-                          등록
+                        <button
+                          type="button"
+                          onClick={handleHoldCreate}
+                          disabled={holdCreateStatus !== "idle"}
+                          className={getCreateButtonClass(holdCreateStatus)}
+                        >
+                          {getCreateButtonLabel(holdCreateStatus)}
                         </button>
                       </div>
                     </div>
