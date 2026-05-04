@@ -27,6 +27,7 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
   const [currentPassword, setCurrentPassword] = useState("")
   const [nextPassword, setNextPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [isMyPageNavigating, setIsMyPageNavigating] = useState(false)
   const [onlineUsers, setOnlineUsers] = useState<
     Array<{
       userId: string
@@ -52,6 +53,16 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
   useEffect(() => {
     router.prefetch("/me")
   }, [router])
+
+  const goToMyPage = () => {
+    setIsPresenceOpen(false)
+    setIsPasswordOpen(false)
+    setIsMyPageNavigating(true)
+    router.push("/me")
+    window.setTimeout(() => {
+      if (window.location.pathname !== "/me") window.location.assign("/me")
+    }, 450)
+  }
 
   const logout = () => {
     startTransition(async () => {
@@ -146,9 +157,10 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
-            onClick={() => router.push("/me")}
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border ${currentUser.color.border} ${currentUser.color.bg} ${currentUser.color.text} text-[21px] font-black shadow-sm transition hover:scale-[1.03]`}
-            aria-label="개인페이지 열기"
+            onClick={goToMyPage}
+            disabled={isMyPageNavigating}
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border ${currentUser.color.border} ${currentUser.color.bg} ${currentUser.color.text} text-[21px] font-black shadow-sm transition hover:scale-[1.03] disabled:cursor-wait disabled:opacity-70`}
+            aria-label={isMyPageNavigating ? "개인페이지 이동 중" : "개인페이지 열기"}
           >
             {avatarLabel}
           </button>
