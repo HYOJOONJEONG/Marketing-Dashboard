@@ -498,6 +498,23 @@ function mergeById<T extends { id: string; updatedAt?: string; createdAt?: strin
   return Array.from(index.values())
 }
 
+function mergePopupMessages(base: PopupMessageRecord[], incoming: PopupMessageRecord[]) {
+  const index = new Map<string, PopupMessageRecord>()
+  ;[...base, ...incoming].forEach((message) => {
+    const existing = index.get(message.id)
+    if (!existing) {
+      index.set(message.id, message)
+      return
+    }
+    const existingTime = timestampValue(existing.createdAt)
+    const messageTime = timestampValue(message.createdAt)
+    const merged = messageTime >= existingTime ? { ...existing, ...message } : { ...message, ...existing }
+    merged.readAt = existing.readAt || message.readAt || null
+    index.set(message.id, merged)
+  })
+  return Array.from(index.values())
+}
+
 function preserveConcurrentSessionState(draft: AuthState, latest: AuthState) {
   const activeUserIds = new Set(draft.users.filter((user) => user.active && !user.deletedAt).map((user) => user.id))
   draft.userSessions = mergeById(draft.userSessions || [], latest.userSessions || []).filter((session) => {
@@ -511,7 +528,7 @@ function preserveConcurrentSessionState(draft: AuthState, latest: AuthState) {
   draft.activityLogs = mergeById(draft.activityLogs || [], latest.activityLogs || [])
     .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt))
     .slice(0, 500)
-  draft.popupMessages = mergeById(draft.popupMessages || [], latest.popupMessages || [])
+  draft.popupMessages = mergePopupMessages(draft.popupMessages || [], latest.popupMessages || [])
     .filter((message) => toTimestamp(message.expiresAt) > Date.now())
     .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt))
     .slice(0, 200)

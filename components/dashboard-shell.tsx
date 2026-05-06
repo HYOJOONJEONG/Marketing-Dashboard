@@ -1743,6 +1743,7 @@ export function DashboardShell({
   const flushPendingSave = useRef<() => void>(() => {})
   const heartbeatIdRef = useRef(`conn-${Math.random().toString(36).slice(2, 10)}`)
   const lastActivityAtRef = useRef(Date.now())
+  const dismissedPopupMessageIdsRef = useRef<Set<string>>(new Set())
   const hasAccess = (menuKey: string, action: string = "view") =>
     Boolean(permissions?.[menuKey]?.admin || permissions?.[menuKey]?.[action])
   const avatarLabel = String(currentUser?.avatarEmoji || "").trim() || String(currentUser?.name || "").slice(0, 1) || "사"
@@ -2067,7 +2068,10 @@ export function DashboardShell({
         try {
           const payload = JSON.parse(event.data)
           setPresenceUsers(Array.isArray(payload?.presenceUsers) ? payload.presenceUsers : [])
-          setPopupMessages(Array.isArray(payload?.popupMessages) ? payload.popupMessages : [])
+          const nextPopupMessages = Array.isArray(payload?.popupMessages)
+            ? payload.popupMessages.filter((message: PopupMessage) => !dismissedPopupMessageIdsRef.current.has(message.id))
+            : []
+          setPopupMessages(nextPopupMessages)
         } catch {
           setPresenceUsers([])
           setPopupMessages([])
@@ -2795,6 +2799,10 @@ export function DashboardShell({
   }
 
   async function acknowledgePopupMessage(messageId: string) {
+    dismissedPopupMessageIdsRef.current.add(messageId)
+    if (dismissedPopupMessageIdsRef.current.size > 200) {
+      dismissedPopupMessageIdsRef.current = new Set(Array.from(dismissedPopupMessageIdsRef.current).slice(-100))
+    }
     setPopupMessages((prev) => prev.filter((message) => message.id !== messageId))
     try {
       await fetch("/api/popup-messages", {
