@@ -3,8 +3,8 @@
 import type { ReactNode } from "react"
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, OctagonAlert, UserRound } from "lucide-react"
-import type { UserTestIdEntry } from "@/lib/auth/model"
+import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, MessageSquare, OctagonAlert, UserRound } from "lucide-react"
+import type { PopupMessageRecord, UserTestIdEntry } from "@/lib/auth/model"
 
 type Props = {
   currentUser: {
@@ -26,10 +26,11 @@ type Props = {
     myHoldRows: any[]
     assignedIndustries: string[]
     industryOptions: string[]
+    messageHistory?: PopupMessageRecord[]
   }
 }
 
-type MobileMyPageSection = "contracts" | "pending" | "termination" | "hold" | "testIds"
+type MobileMyPageSection = "contracts" | "pending" | "termination" | "hold" | "testIds" | "messages"
 
 const cardClass = "rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
 const avatarOptions = ["😀", "😎", "🧑‍💼", "📈", "💼", "🦊", "🐯", "⭐", "🚀", "🧠", "🫶", "🔥", "🐻", "🐼", "🦁", "🐸", "🌈", "⚡", "🎯", "🎧", "☕", "🍀", "🪐", "🎨"]
@@ -65,6 +66,19 @@ function formatMonthDisplay(value: unknown, fallback = "-") {
   }
 
   return text
+}
+
+function formatMessageTime(value: unknown) {
+  const date = new Date(String(value || ""))
+  if (Number.isNaN(date.getTime())) return "-"
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date)
 }
 
 function terminationBadgeClass(label: string) {
@@ -158,6 +172,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
   const [bulkStartId, setBulkStartId] = useState("")
   const [bulkEndId, setBulkEndId] = useState("")
   const [testIdMessage, setTestIdMessage] = useState("")
+  const [messageHistory, setMessageHistory] = useState<PopupMessageRecord[]>(data.messageHistory || [])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -178,6 +193,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
     () => selectedIndustries.slice().sort((a, b) => a.localeCompare(b, "ko")),
     [selectedIndustries],
   )
+  const unreadMessageCount = useMemo(() => messageHistory.filter((message) => !message.readAt).length, [messageHistory])
 
   const toggleIndustry = (industry: string) => {
     setSelectedIndustries((prev) =>
@@ -274,6 +290,18 @@ export function PersonalDashboard({ currentUser, data }: Props) {
       setTestIdEntries(Array.isArray(payload?.testIdEntries) ? payload.testIdEntries : testIdEntries)
       setTestIdMessage("시험아이디 관리 항목이 저장되었습니다.")
       router.refresh()
+    })
+  }
+
+  const markMessageRead = (messageId: string) => {
+    const now = new Date().toISOString()
+    setMessageHistory((prev) =>
+      prev.map((message) => (message.id === messageId ? { ...message, readAt: message.readAt || now } : message)),
+    )
+    void fetch("/api/popup-messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "read", messageIds: [messageId] }),
     })
   }
 
@@ -409,7 +437,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             {profileMessage ? <div className="mt-3 text-sm text-slate-500">{profileMessage}</div> : null}
           </section>
 
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <MetricCard
               title="나의 시험아이디"
               value={testIdEntries.length}
@@ -440,6 +468,12 @@ export function PersonalDashboard({ currentUser, data }: Props) {
               tone="bg-amber-50 text-amber-700"
               icon={<CirclePause className="h-5 w-5" />}
             />
+            <MetricCard
+              title="내 메시지"
+              value={messageHistory.length}
+              tone="bg-indigo-50 text-indigo-700"
+              icon={<MessageSquare className="h-5 w-5" />}
+            />
           </section>
 
           <section className="lg:hidden">
@@ -450,6 +484,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                   { key: "pending", label: "미회수" },
                   { key: "termination", label: "해지" },
                   { key: "hold", label: "청구보류" },
+                  { key: "messages", label: "메시지" },
                 ].map((item) => (
                 <button
                   key={item.key}
@@ -466,6 +501,64 @@ export function PersonalDashboard({ currentUser, data }: Props) {
           </section>
 
           <section className="space-y-5">
+            <div className={`${cardClass} ${mobileSection === "messages" ? "block" : "hidden"} lg:block`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">내 메시지</h3>
+                  <p className="mt-1 text-sm text-slate-500">최근 7일 팝업 메시지를 확인합니다. 메시지는 최대 200개 정책 안에서 보관됩니다.</p>
+                </div>
+                <div className="rounded-2xl bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700">
+                  미확인 {unreadMessageCount}건
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                {messageHistory.length ? (
+                  messageHistory.map((message) => {
+                    const unread = !message.readAt
+                    return (
+                      <div
+                        key={message.id}
+                        className={`rounded-2xl border px-4 py-3 ${
+                          unread ? "border-indigo-200 bg-indigo-50/70" : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[14px] font-black text-slate-950">{message.title || "업무 알림"}</span>
+                              {unread ? (
+                                <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[11px] font-bold text-white">미확인</span>
+                              ) : (
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500">확인됨</span>
+                              )}
+                            </div>
+                            <div className="mt-1 text-[12px] font-semibold text-slate-500">
+                              {message.senderName || "시스템"} · {formatMessageTime(message.createdAt)}
+                            </div>
+                          </div>
+                          {unread ? (
+                            <button
+                              type="button"
+                              onClick={() => markMessageRead(message.id)}
+                              className="h-8 shrink-0 rounded-xl bg-slate-950 px-3 text-[12px] font-bold text-white"
+                            >
+                              읽음
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="mt-3 whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-700">{message.body}</div>
+                      </div>
+                    )
+                  })
+                ) : (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
+                    받은 팝업 메시지가 없습니다.
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className={`${cardClass} ${mobileSection === "testIds" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>

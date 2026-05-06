@@ -2,7 +2,7 @@ import path from "path"
 import { redirect } from "next/navigation"
 import { requirePageAuth } from "@/lib/auth/server"
 import { readDashboardState } from "@/lib/shared-db-store"
-import { getUserColorToken } from "@/lib/auth/model"
+import { getUserColorToken, PopupMessageRecord } from "@/lib/auth/model"
 import { PersonalDashboard } from "@/components/me/personal-dashboard"
 import { buildPersonalDashboardData } from "@/lib/personal-dashboard"
 import { getIndustryGroupLabel } from "@/lib/industry-groups"
@@ -19,6 +19,10 @@ export default async function MyPage() {
     (await readDashboardState<any>(FALLBACK_PATH)) || { contracts: [], collection: {}, termination: {} }
 
   const personalData = buildPersonalDashboardData(auth.user, dashboard)
+  const messageHistory = (Array.isArray(auth.state.popupMessages) ? auth.state.popupMessages : [])
+    .filter((message: PopupMessageRecord) => message.recipientUserId === auth.user.id)
+    .sort((a: PopupMessageRecord, b: PopupMessageRecord) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 50)
   const industryOptions = Array.from(
     new Set(
       [
@@ -49,7 +53,7 @@ export default async function MyPage() {
         assignedIndustries: auth.user.assignedIndustries || [],
         testIdEntries: auth.user.testIdEntries || [],
       }}
-      data={{ ...personalData, industryOptions }}
+      data={{ ...personalData, industryOptions, messageHistory }}
     />
   )
 }
