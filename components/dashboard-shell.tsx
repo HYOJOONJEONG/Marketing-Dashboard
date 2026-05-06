@@ -1765,7 +1765,7 @@ export function DashboardShell({
     () => presenceUsers.filter((user) => user.status !== "offline"),
     [presenceUsers],
   )
-  const visiblePresenceUsers = useMemo(() => activePresenceUsers.slice(0, 8), [activePresenceUsers])
+  const visiblePresenceUsers = useMemo(() => activePresenceUsers.slice(0, 5), [activePresenceUsers])
   const hiddenPresenceCount = Math.max(0, activePresenceUsers.length - visiblePresenceUsers.length)
   const visibleViews = [
     canViewDailyReport ? "daily-report" : null,
@@ -6170,9 +6170,9 @@ export function DashboardShell({
 
           {currentUser ? (
             <div className="mt-auto px-1 pt-6">
-              <div className="rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
+              <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <div className="text-[15px] font-black tracking-[-0.03em] text-slate-900">현재 접속 인원</div>
                     <div className="mt-1 text-[12px] font-semibold text-emerald-600">
                       {activePresenceUsers.length}명 접속 중
@@ -6181,7 +6181,7 @@ export function DashboardShell({
                   <button
                     type="button"
                     onClick={() => setIsPresenceListOpen((prev) => !prev)}
-                    className="inline-flex h-8 items-center gap-1 rounded-full bg-slate-50 px-2.5 text-[12px] font-semibold text-slate-500 transition hover:bg-slate-100"
+                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-slate-50 px-2.5 text-[12px] font-semibold text-slate-500 transition hover:bg-slate-100"
                   >
                     전체 보기
                     <ChevronDown
@@ -6193,25 +6193,25 @@ export function DashboardShell({
                 <button
                   type="button"
                   onClick={() => setIsPresenceListOpen((prev) => !prev)}
-                  className="mt-4 flex w-full items-center gap-3 text-left"
+                  className="mt-4 block w-full overflow-hidden rounded-2xl bg-slate-50/70 px-3 py-3 text-left transition hover:bg-slate-100"
                 >
-                  <div className="flex min-w-0 items-center -space-x-3">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {visiblePresenceUsers.length ? (
                       visiblePresenceUsers.map((user) => {
                         const label = String(user.avatarEmoji || "").trim() || String(user.userName || "").slice(0, 1)
                         return (
-                          <span key={user.userId} className="group relative inline-flex">
+                          <span
+                            key={user.userId}
+                            className="relative inline-flex min-w-0"
+                            title={`${user.userName} · ${user.teamName || "팀 미지정"}`}
+                          >
                             <span
-                              className={`relative inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-white ${user.color.bg} ${user.color.text} ${user.color.border} text-[18px] font-black shadow-sm`}
+                              className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border ${user.color.bg} ${user.color.text} ${user.color.border} text-[16px] font-black shadow-sm`}
                             >
                               {label}
                               <span
-                                className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${getPresenceDotClass(user.status)}`}
+                                className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white ${getPresenceDotClass(user.status)}`}
                               />
-                            </span>
-                            <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 -translate-x-1/2 rounded-xl bg-slate-950 px-2.5 py-2 text-[11px] font-semibold text-white opacity-0 shadow-lg transition duration-150 group-hover:opacity-100">
-                              <span className="block whitespace-nowrap">{user.userName}</span>
-                              <span className="mt-0.5 block whitespace-nowrap text-slate-300">{user.teamName || "팀 미지정"}</span>
                             </span>
                           </span>
                         )
@@ -6220,7 +6220,7 @@ export function DashboardShell({
                       <span className="text-[13px] font-medium text-slate-400">현재 접속 중인 사용자가 없습니다.</span>
                     )}
                     {hiddenPresenceCount > 0 ? (
-                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-[13px] font-bold text-slate-600 shadow-sm">
+                      <span className="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white px-2 text-[12px] font-bold text-slate-600 shadow-sm">
                         +{hiddenPresenceCount}
                       </span>
                     ) : null}
