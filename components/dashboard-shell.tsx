@@ -1510,7 +1510,6 @@ export function DashboardShell({
   const [editingContractId, setEditingContractId] = useState<string | null>(null)
   const [editingContractDraft, setEditingContractDraft] = useState<any>({})
   const [contractQuery, setContractQuery] = useState("")
-  const deferredContractQuery = useDeferredValue(contractQuery)
   const [contractStatusFilter, setContractStatusFilter] = useState("all")
   const [contractReplacementFilter, setContractReplacementFilter] = useState("all")
   const [contractMonthFilter, setContractMonthFilter] = useState("all")
@@ -2009,7 +2008,7 @@ export function DashboardShell({
     return ["all", ...Array.from(values).sort((a, b) => parseContractMonthKey(b) - parseContractMonthKey(a))]
   }, [contracts])
   const filteredContracts = useMemo(() => {
-    const rawQuery = deferredContractQuery.trim()
+    const rawQuery = contractQuery.trim()
     const query = rawQuery.toLowerCase()
     const identifierQuery = normalizeSearchIdentifier(rawQuery)
     return contracts.filter((row: any) => {
@@ -2021,7 +2020,7 @@ export function DashboardShell({
         .filter(Boolean)
         .some((value) => matchesSearchQuery(value, query, identifierQuery))
     })
-  }, [contracts, deferredContractQuery, contractStatusFilter, contractReplacementFilter, contractMonthFilter])
+  }, [contracts, contractQuery, contractStatusFilter, contractReplacementFilter, contractMonthFilter])
   const sortedContracts = useMemo(
     () => sortContractsByKey(filteredContracts, contractSort.key, contractSort.dir),
     [filteredContracts, contractSort],
@@ -6187,7 +6186,15 @@ export function DashboardShell({
                   className="h-9 w-64 rounded-xl border border-slate-200 bg-white px-3 text-[13px]"
                   placeholder="회사명/부서/아이디/권유자 검색"
                   value={contractQuery}
-                  onChange={(e) => setContractQuery(e.target.value)}
+                  onChange={(e) => setContractQuery(e.currentTarget.value)}
+                  onInput={(e) => setContractQuery(e.currentTarget.value)}
+                  onCompositionEnd={(e) => setContractQuery(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      setContractQuery(e.currentTarget.value.trim())
+                    }
+                  }}
                 />
                 <select
                   className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-[13px]"
