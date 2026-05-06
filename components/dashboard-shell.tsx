@@ -1770,7 +1770,6 @@ export function DashboardShell({
   const [holdReceivedDateFilter, setHoldReceivedDateFilter] = useState("all")
   const [holdEndDateFilter, setHoldEndDateFilter] = useState("all")
   const [holdQuery, setHoldQuery] = useState("")
-  const deferredHoldQuery = useDeferredValue(holdQuery)
 
   const weeklyReport = data.weeklyReport || {}
   const dailyReportDate = getSeoulTodayKey()
@@ -2398,7 +2397,7 @@ export function DashboardShell({
     )
     const filteredHoldItems = useMemo(() => {
       if (!isTerminationView) return []
-      const rawQuery = deferredHoldQuery.trim()
+      const rawQuery = holdQuery.trim()
       const query = rawQuery.toLowerCase()
       const identifierQuery = normalizeSearchIdentifier(rawQuery)
       return holdItems.filter((row: any) => {
@@ -2409,7 +2408,7 @@ export function DashboardShell({
           .filter(Boolean)
           .some((value) => matchesSearchQuery(value, query, identifierQuery))
       })
-    }, [holdItems, holdReceivedDateFilter, holdEndDateFilter, deferredHoldQuery, isTerminationView])
+    }, [holdItems, holdReceivedDateFilter, holdEndDateFilter, holdQuery, isTerminationView])
     const holdReceivedDateOptions = useMemo(() => {
       if (!isTerminationView) return ["all"]
       const dates = new Set<string>()
@@ -7742,7 +7741,15 @@ export function DashboardShell({
                         className="h-9 w-56 rounded-xl border border-slate-200 bg-white px-3 text-[12px]"
                         placeholder="고객사/담당자/고객번호 검색"
                         value={holdQuery}
-                        onChange={(e) => setHoldQuery(e.target.value)}
+                        onChange={(e) => setHoldQuery(e.currentTarget.value)}
+                        onInput={(e) => setHoldQuery(e.currentTarget.value)}
+                        onCompositionEnd={(e) => setHoldQuery(e.currentTarget.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            setHoldQuery(e.currentTarget.value.trim())
+                          }
+                        }}
                       />
                       <select
                         className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-[12px]"
