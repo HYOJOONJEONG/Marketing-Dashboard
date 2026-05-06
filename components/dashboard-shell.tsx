@@ -917,6 +917,11 @@ function BufferedManualInput({
         if (!readOnly) onDirty?.()
         if (!readOnly) onLiveChange?.(nextValue)
       }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.currentTarget.blur()
+        }
+      }}
       onBlur={(event) => commit(event.currentTarget.value)}
     />
   )
@@ -6754,7 +6759,6 @@ export function DashboardShell({
                                 }
                                 value={isTotalColumn ? String(totalValue ?? "") : String(row.values?.[valueIndex] ?? "")}
                                 onDirty={markManualInputDirty}
-                                onLiveChange={(value) => previewManualTerminationOverviewCell(rowIndex, valueIndex, value)}
                                 onCommit={(value) => updateManualTerminationOverviewCell(rowIndex, valueIndex, value)}
                                 readOnly={isTotalColumn}
                               />
@@ -6808,7 +6812,6 @@ export function DashboardShell({
                                 }
                                 value={isTotalColumn ? String(totalValue ?? "") : String(normalizedValues[valueIndex] ?? "")}
                                 onDirty={markManualInputDirty}
-                                onLiveChange={(value) => previewManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, value)}
                                 onCommit={(value) => updateManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, value)}
                                 readOnly={isTotalColumn}
                               />
