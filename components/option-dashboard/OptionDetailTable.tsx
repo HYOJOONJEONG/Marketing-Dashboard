@@ -207,6 +207,18 @@ export function OptionDetailTable({
     return list
   }, [records, sortKey, sortDir])
 
+  const duplicateBondUserIds = React.useMemo(() => {
+    if (!isBondView) return new Set<string>()
+    const counts = new Map<string, number>()
+    records.forEach((record) => {
+      if (record.category_code !== "BOND") return
+      const userId = String(record.user_id ?? "").trim()
+      if (!userId) return
+      counts.set(userId, (counts.get(userId) ?? 0) + 1)
+    })
+    return new Set(Array.from(counts.entries()).filter(([, count]) => count > 1).map(([userId]) => userId))
+  }, [isBondView, records])
+
   const getRecordRowKey = React.useCallback((record: OptionRecord, index: number) => {
     return record.record_id || `${record.category_code}-${record.user_id}-${record.company_name}-${index}`
   }, [])
@@ -393,6 +405,11 @@ export function OptionDetailTable({
         <div className="flex items-center gap-2">
           <div className="text-[15px] font-bold text-slate-900">상세 목록</div>
           <span className="text-[12px] text-slate-500">{records.length}건</span>
+          {isBondView && duplicateBondUserIds.size > 0 && (
+            <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+              중복 ID {duplicateBondUserIds.size}개
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isSignageView && visibleSignageNoteIds.length > 0 && (
@@ -579,8 +596,10 @@ export function OptionDetailTable({
               sortedRecords.map((row, index) => {
                 const isEditing = editingId && row.record_id === editingId
                 const rowKey = getRecordRowKey(row, index)
+                const rowUserId = String(row.user_id ?? "").trim()
+                const isDuplicateBondUserId = isBondView && duplicateBondUserIds.has(rowUserId)
                 return (
-                  <tr key={row.record_id || `${row.user_id}-${index}`}>
+                  <tr key={row.record_id || `${row.user_id}-${index}`} className={isDuplicateBondUserId ? "bg-rose-50/70" : undefined}>
                     {columns.map((column) => {
                       const value =
                         column.key === "row_no"
@@ -590,6 +609,10 @@ export function OptionDetailTable({
                             : (row as any)[column.key]
                       const cellClass = `${tdClass} ${column.cellClass || "whitespace-nowrap"} ${
                         isSignageView ? "px-2 py-1.5 text-[11.5px]" : isBondView ? "px-2 py-2 text-[11.5px]" : ""
+                      } ${
+                        isDuplicateBondUserId && column.key === "user_id"
+                          ? "bg-rose-100 font-bold text-rose-700 ring-1 ring-inset ring-rose-200"
+                          : ""
                       }`
                       if (isEditing && draft) {
                         const editKey = column.key as keyof OptionRecord
