@@ -676,6 +676,17 @@ function buildTerminationWeeklyCounts(items: any[]) {
   return [...counts.map((value) => String(value)), String(total)]
 }
 
+function buildTerminationRatioValues(values: string[]) {
+  const baseValues = Array.isArray(values) ? values : []
+  const total = parseLooseNumber(baseValues[reportTerminationColumnsStatic.length - 1])
+  const columns = reportTerminationColumnsStatic.slice(0, -1)
+  if (!total) return [...columns.map(() => "0%"), "0%"]
+  return [
+    ...columns.map((_, index) => `${Math.round((parseLooseNumber(baseValues[index]) / total) * 100)}%`),
+    "100%",
+  ]
+}
+
 function computeTerminationRowTotal(values: any[]) {
   const hasValue = values.some((value) => String(value ?? "").trim() !== "")
   if (!hasValue) return ""
@@ -884,15 +895,16 @@ function BufferedManualInput({
   const isEditingRef = useRef(false)
 
   useEffect(() => {
-    if (isEditingRef.current) return
+    if (isEditingRef.current && !readOnly) return
     latestDraftRef.current = externalValue
     setDraftValue(externalValue)
-  }, [externalValue])
+  }, [externalValue, readOnly])
 
   function commit(nextValue = latestDraftRef.current) {
     isEditingRef.current = false
     latestDraftRef.current = nextValue
     setDraftValue(nextValue)
+    if (readOnly) return
     if (nextValue === externalValue) return
     onCommit?.(nextValue)
   }
@@ -905,9 +917,21 @@ function BufferedManualInput({
       inputMode={inputMode}
       value={draftValue}
       readOnly={readOnly}
+      tabIndex={readOnly ? -1 : undefined}
+      aria-readonly={readOnly || undefined}
+      onMouseDown={(event) => {
+        if (readOnly) event.preventDefault()
+      }}
       onFocus={(event) => {
+        if (readOnly) {
+          isEditingRef.current = false
+          latestDraftRef.current = externalValue
+          setDraftValue(externalValue)
+          event.currentTarget.blur()
+          return
+        }
         isEditingRef.current = true
-        if (!readOnly) onDirty?.()
+        onDirty?.()
         event.currentTarget.select()
       }}
       onChange={(event) => {
@@ -2977,9 +3001,11 @@ export function DashboardShell({
       const terminationOverviewRows = cloneData(prev.terminationOverviewRows || [])
       const weeklyIndex = terminationOverviewRows.findIndex((row: any) => row.label === "주간")
       const cumulativeIndex = terminationOverviewRows.findIndex((row: any) => row.label === "누적")
+      const ratioIndex = terminationOverviewRows.findIndex((row: any) => row.label === "비율")
       if (weeklyIndex === -1 && cumulativeIndex === -1) return prev
       if (weeklyIndex !== -1) terminationOverviewRows[weeklyIndex].values = weeklyValues
       if (cumulativeIndex !== -1) terminationOverviewRows[cumulativeIndex].values = cumulativeValues
+      if (ratioIndex !== -1) terminationOverviewRows[ratioIndex].values = buildTerminationRatioValues(cumulativeValues)
       return { ...prev, terminationOverviewRows }
     })()
     manualDraftRef.current = nextDraft
@@ -6738,6 +6764,7 @@ export function DashboardShell({
                           <button
                             type="button"
                             className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[12px] font-semibold tracking-[-0.01em] text-amber-700 transition hover:border-amber-300 hover:bg-amber-100"
+                            onMouseDown={(event) => event.preventDefault()}
                             onClick={loadTerminationOverviewFromWeeklyList}
                           >
                             해지확정현황 불러오기
