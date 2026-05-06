@@ -2951,9 +2951,14 @@ export function DashboardShell({
   }
 
   function loadTerminationOverviewFromWeeklyList() {
-    const confirmedItems = Array.isArray(selectedSheet?.confirmedItems) ? selectedSheet.confirmedItems : []
-    const weeklySelected = Array.isArray(selectedSheet?.items)
-      ? selectedSheet.items.filter((row: any) => row?.selected)
+    const latestData = pendingDataRef.current || data
+    const latestTermination = latestData?.termination || termination
+    const latestSheet = Array.isArray(latestTermination?.sheets) && latestTermination.sheets.length
+      ? latestTermination.sheets[0]
+      : selectedSheet
+    const confirmedItems = Array.isArray(latestSheet?.confirmedItems) ? latestSheet.confirmedItems : []
+    const weeklySelected = Array.isArray(latestSheet?.items)
+      ? latestSheet.items.filter((row: any) => row?.selected)
       : []
     const weeklyValues = buildTerminationWeeklyCounts(weeklySelected)
     const confirmedValues = buildTerminationWeeklyCounts(confirmedItems)
@@ -2966,7 +2971,9 @@ export function DashboardShell({
     }
     const cumulativeValues = combineValues(confirmedValues, weeklyValues)
     markManualInputDirty()
-    updateManualDraft((prev: any) => {
+    const sourceDraft = cloneData(manualPreviewDraftRef.current || manualDraftRef.current || manualDraft)
+    const nextDraft = (() => {
+      const prev = sourceDraft
       const terminationOverviewRows = cloneData(prev.terminationOverviewRows || [])
       const weeklyIndex = terminationOverviewRows.findIndex((row: any) => row.label === "주간")
       const cumulativeIndex = terminationOverviewRows.findIndex((row: any) => row.label === "누적")
@@ -2974,7 +2981,11 @@ export function DashboardShell({
       if (weeklyIndex !== -1) terminationOverviewRows[weeklyIndex].values = weeklyValues
       if (cumulativeIndex !== -1) terminationOverviewRows[cumulativeIndex].values = cumulativeValues
       return { ...prev, terminationOverviewRows }
-    })
+    })()
+    manualDraftRef.current = nextDraft
+    setManualDraft(nextDraft)
+    manualPreviewDraftRef.current = nextDraft
+    setManualPreviewDraft(nextDraft)
   }
 
   function updateManualTerminationOverviewCell(rowIndex: number, valueIndex: number, value: string) {
