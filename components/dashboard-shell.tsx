@@ -1767,6 +1767,16 @@ export function DashboardShell({
     setManualPreviewDraft(next)
   }
 
+  function updateManualLiveDraft(updater: any) {
+    markManualInputDirty()
+    const source = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
+    const next = typeof updater === "function" ? updater(source) : updater
+    manualDraftRef.current = next
+    setManualDraft(next)
+    manualPreviewDraftRef.current = next
+    setManualPreviewDraft(next)
+  }
+
   function previewManualField(field: string, value: string) {
     if (field === "revenueUnitPrice" || field === "additionalContractCount") {
       const digitsOnly = String(value ?? "").replace(/[^\d]/g, "")
@@ -1784,7 +1794,7 @@ export function DashboardShell({
   }
 
   function previewManualRevenueCell(rowIndex: number, monthIndex: number, value: string) {
-    updateManualPreviewDraft((prev: any) => {
+    updateManualLiveDraft((prev: any) => {
       const revenueRows = cloneData(prev.revenueRows || [])
       if (!revenueRows[rowIndex]) return prev
       if (!Array.isArray(revenueRows[rowIndex].months)) revenueRows[rowIndex].months = Array(12).fill(0)
@@ -1805,7 +1815,7 @@ export function DashboardShell({
 
   function previewManualWeeklyIndustryOverviewCell(rowIndex: number, valueIndex: number, value: string) {
     if (valueIndex >= reportIndustryColumnsStatic.length - 1) return
-    updateManualPreviewDraft((prev: any) => {
+    updateManualLiveDraft((prev: any) => {
       const weeklyIndustryOverviewRows = cloneData(prev.weeklyIndustryOverviewRows || [])
       if (!weeklyIndustryOverviewRows[rowIndex]) return prev
       weeklyIndustryOverviewRows[rowIndex].values = normalizeIndustryRowValues(weeklyIndustryOverviewRows[rowIndex].values)
@@ -5103,13 +5113,16 @@ export function DashboardShell({
         additionalSales: normalizeAdditionalSalesRows(cloneData(draft.additionalSales || [])),
       }
       try {
+        isSyncingManualDraftRef.current = true
+        manualDraftRef.current = nextManualDraft
+        setManualDraft(nextManualDraft)
+        manualPreviewDraftRef.current = nextManualDraft
+        setManualPreviewDraft(nextManualDraft)
         await persist(
           { ...latestData, weeklyReport: nextWeekly },
           { immediate: true, updatedViews: ["manual-input", "weekly-report"] },
         )
         isSyncingManualDraftRef.current = true
-        manualDraftRef.current = nextManualDraft
-        setManualDraft(nextManualDraft)
         manualPreviewDraftRef.current = null
         setManualPreviewDraft(null)
       } catch {
