@@ -56,6 +56,57 @@ const viewTitles: Record<ViewKey, string> = {
   termination: "해지 진행사항",
 }
 
+const manualSummaryAutoFields = new Set([
+  "weeklyNetUnits",
+  "weeklyNewContracts",
+  "weeklyTerminationContracts",
+  "newContractTotal",
+  "holdTotal",
+  "terminationTypeTotal",
+])
+
+const manualSummaryMatrixRows = [
+  {
+    title: "단말기 순증 및 해지",
+    cells: [
+      ["주간순증 합계", "weeklyNetUnits"],
+      ["신규계약", "weeklyNewContracts"],
+      ["해지계약", "weeklyTerminationContracts"],
+      ["누적순증 합계", "cumulativeNetUnits"],
+      ["누적신규 계약", "cumulativeNewContracts"],
+      ["누적해지계약", "cumulativeTerminationContracts"],
+      ["총 계약대수", "totalContracts"],
+    ],
+  },
+  {
+    title: "경쟁사 단말기 교체 현황",
+    cells: [
+      ["신규계약 합계", "newContractTotal"],
+      ["타사교체", "competitorReplacement"],
+      ["신규계약", "newReplacement"],
+      ["단말 교체 현황", "competitorStatus"],
+    ],
+  },
+  {
+    title: "해지대기 및 청구보류",
+    cells: [
+      ["해지보류 합계", "holdTotal"],
+      ["해지대기", "holdPending"],
+      ["청구보류", "billingHold"],
+      ["해지 진행 현황", "holdStatus"],
+    ],
+  },
+  {
+    title: "단말기 해지 유형",
+    cells: [
+      ["단말해지 합계", "terminationTypeTotal"],
+      ["계약해지", "contractTermination"],
+      ["타사교체", "competitorTermination"],
+      ["타사 교체 현황", "competitorTerminationStatus"],
+    ],
+  },
+]
+
 type PresenceStatus = "online" | "away" | "offline"
 type CreateStatus = "idle" | "saving" | "success"
 
@@ -1594,6 +1645,8 @@ export function DashboardShell({
   const pendingPayloadRef = useRef<string | null>(null)
   const pendingDataRef = useRef<any | null>(null)
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const localStorageCacheTimerRef = useRef<number | null>(null)
+  const manualSaveTimerRef = useRef<number | null>(null)
   const lastHistoryAtRef = useRef<number>(0)
   const dirtyViewsRef = useRef<Partial<Record<ViewKey, boolean>>>({})
   const manualDraftRef = useRef<any>(manualDraft)
@@ -1657,8 +1710,7 @@ export function DashboardShell({
   function updateManualPreviewDraft(updater: any) {
     markManualInputDirty()
     const source = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
-    const base = cloneData(source)
-    const next = typeof updater === "function" ? updater(base) : updater
+    const next = typeof updater === "function" ? updater(source) : updater
     manualPreviewDraftRef.current = next
     setManualPreviewDraft(next)
   }
@@ -1726,8 +1778,8 @@ export function DashboardShell({
     ) => Array<Record<string, string>> | { rows: any[]; draftPatch?: Record<string, unknown> },
   ) {
     markManualInputDirty()
-    const sourceDraft = cloneData(manualPreviewDraftRef.current || manualDraftRef.current || manualDraft)
-    const sourceRows = normalizeAdditionalSalesRows(sourceDraft.additionalSales || []) as Array<Record<string, string>>
+    const sourceDraft = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
+    const sourceRows = normalizeAdditionalSalesRows(cloneData(sourceDraft.additionalSales || [])) as Array<Record<string, string>>
     const result = updater(sourceRows, sourceDraft)
     const nextRows = normalizeAdditionalSalesRows(Array.isArray(result) ? result : result.rows)
     const nextDraft = {
@@ -2511,6 +2563,19 @@ export function DashboardShell({
     return nextSave
   }
 
+  function scheduleLocalDashboardCache(nextData: any) {
+    if (typeof window === "undefined") return
+    if (localStorageCacheTimerRef.current) {
+      window.clearTimeout(localStorageCacheTimerRef.current)
+    }
+    localStorageCacheTimerRef.current = window.setTimeout(() => {
+      localStorageCacheTimerRef.current = null
+      try {
+        window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(nextData))
+      } catch {}
+    }, 0)
+  }
+
   function markViewsDirty(views: ViewKey[] = [view]) {
     const nextDirtyViews = {
       ...dirtyViewsRef.current,
@@ -2554,7 +2619,6 @@ export function DashboardShell({
         menuUpdatedAt,
       },
     }
-    const serialized = JSON.stringify(nextDataWithMeta)
     const changedKeys = collectStateKeysForViews(viewsToCommit)
     const payload = JSON.stringify({
       partial: true,
@@ -2564,28 +2628,18 @@ export function DashboardShell({
     await queueDashboardUpdate(payload)
     setData(nextDataWithMeta)
     pendingDataRef.current = nextDataWithMeta
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(LOCAL_STORAGE_KEY, serialized)
-      }
-    } catch {}
+    scheduleLocalDashboardCache(nextDataWithMeta)
     clearDirtyViews(viewsToCommit)
   }
 
   function persist(nextData: any, options: { immediate?: boolean; updatedViews?: ViewKey[] } = {}) {
     const now = Date.now()
     const updatedViews = options.updatedViews?.length ? options.updatedViews : [view]
-    const serialized = JSON.stringify(nextData)
     const previousData = cloneData(pendingDataRef.current || data)
-    const previousSerialized = JSON.stringify(previousData)
     setData(nextData)
     pendingDataRef.current = nextData
     markViewsDirty(updatedViews)
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(LOCAL_STORAGE_KEY, serialized)
-      }
-    } catch {}
+    scheduleLocalDashboardCache(nextData)
     if (pendingSaveRef.current) {
       window.clearTimeout(pendingSaveRef.current)
     }
@@ -2596,11 +2650,7 @@ export function DashboardShell({
       savePromise = commitDashboardData(nextData, updatedViews).catch((error) => {
         setData(previousData)
         pendingDataRef.current = previousData
-        try {
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem(LOCAL_STORAGE_KEY, previousSerialized)
-          }
-        } catch {}
+        scheduleLocalDashboardCache(previousData)
         window.alert("저장에 실패해서 이전 상태로 되돌렸습니다. 잠시 후 다시 시도해주세요.")
         throw error
       })
@@ -2662,6 +2712,13 @@ export function DashboardShell({
     window.addEventListener("beforeunload", handleBeforeUnload)
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (manualSaveTimerRef.current) window.clearTimeout(manualSaveTimerRef.current)
+      if (localStorageCacheTimerRef.current) window.clearTimeout(localStorageCacheTimerRef.current)
     }
   }, [])
 
@@ -2889,7 +2946,7 @@ export function DashboardShell({
     if (rowIndex >= 12) return
     if (field === "quarterNetTarget" && rowIndex % 3 !== 0) return
     markManualInputDirty()
-    const sourceDraft = cloneData(manualPreviewDraftRef.current || manualDraftRef.current || manualDraft)
+    const sourceDraft = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
     const goalRows = buildEditableGoalRows(sourceDraft.goalRows || [])
     if (!goalRows[rowIndex]) return
     goalRows[rowIndex][field] = value
@@ -2995,7 +3052,7 @@ export function DashboardShell({
     }
     const cumulativeValues = combineValues(confirmedValues, weeklyValues)
     markManualInputDirty()
-    const sourceDraft = cloneData(manualPreviewDraftRef.current || manualDraftRef.current || manualDraft)
+    const sourceDraft = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
     const nextDraft = (() => {
       const prev = sourceDraft
       const terminationOverviewRows = cloneData(prev.terminationOverviewRows || [])
@@ -4940,6 +4997,18 @@ export function DashboardShell({
     if (typeof document !== "undefined" && document.activeElement instanceof HTMLInputElement) {
       document.activeElement.blur()
     }
+    if (typeof window !== "undefined") {
+      if (manualSaveTimerRef.current) window.clearTimeout(manualSaveTimerRef.current)
+      manualSaveTimerRef.current = window.setTimeout(() => {
+        manualSaveTimerRef.current = null
+        runManualUpdate()
+      }, 0)
+      return
+    }
+    runManualUpdate()
+  }
+
+  function runManualUpdate() {
     startTransition(async () => {
       const draft = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
       const latestData = pendingDataRef.current || data
@@ -5010,8 +5079,24 @@ export function DashboardShell({
   const reportGoalRows = buildGoalRows(weeklyReport.goalRows || [])
   const reportIndustryStats = buildIndustryStats(weeklyReport.industryStats || [])
   const manualDisplayDraft = manualPreviewDraft || manualDraft
-  const autoManualSummary = applyWeeklyAutoSummary(manualDisplayDraft.manualSummary || {})
-  const autoWeeklyReportSummary = applyWeeklyAutoSummary(weeklyReport.manualSummary || {})
+  const autoManualSummary = useMemo(
+    () => applyWeeklyAutoSummary(manualDisplayDraft.manualSummary || {}),
+    [
+      manualDisplayDraft.manualSummary,
+      weeklyNetAutoCount,
+      weeklyNewContractAutoCount,
+      weeklyTerminationAutoCount,
+    ],
+  )
+  const autoWeeklyReportSummary = useMemo(
+    () => applyWeeklyAutoSummary(weeklyReport.manualSummary || {}),
+    [
+      weeklyReport.manualSummary,
+      weeklyNetAutoCount,
+      weeklyNewContractAutoCount,
+      weeklyTerminationAutoCount,
+    ],
+  )
   const reportSummary = {
     ...autoWeeklyReportSummary,
     competitorStatus: normalizeSummaryStatus(
@@ -5027,21 +5112,38 @@ export function DashboardShell({
       "체크0대, 마켓포인트0대, 블룸버그0대, 로이터0대, 기타0대",
     ),
   }
-  const manualRevenueDisplay = buildRevenueDisplaySet({
-    revenueHeaderText: manualDisplayDraft.revenueHeaderText,
-    subtitleOne: manualDisplayDraft.subtitleOne,
-    subtitleTwo: manualDisplayDraft.subtitleTwo,
-    revenueUnitPrice: manualDisplayDraft.revenueUnitPrice,
-    additionalContractCount: manualDisplayDraft.additionalContractCount,
-    additionalSales: manualDisplayDraft.additionalSales || [],
-    manualSummary: autoManualSummary,
-    revenueRows: manualDisplayDraft.revenueRows || [],
-    fallbackSelectedCount: weeklyNetAutoCount,
-  })
+  const manualRevenueDisplay = useMemo(
+    () =>
+      buildRevenueDisplaySet({
+        revenueHeaderText: manualDisplayDraft.revenueHeaderText,
+        subtitleOne: manualDisplayDraft.subtitleOne,
+        subtitleTwo: manualDisplayDraft.subtitleTwo,
+        revenueUnitPrice: manualDisplayDraft.revenueUnitPrice,
+        additionalContractCount: manualDisplayDraft.additionalContractCount,
+        additionalSales: manualDisplayDraft.additionalSales || [],
+        manualSummary: autoManualSummary,
+        revenueRows: manualDisplayDraft.revenueRows || [],
+        fallbackSelectedCount: weeklyNetAutoCount,
+      }),
+    [
+      manualDisplayDraft.revenueHeaderText,
+      manualDisplayDraft.subtitleOne,
+      manualDisplayDraft.subtitleTwo,
+      manualDisplayDraft.revenueUnitPrice,
+      manualDisplayDraft.additionalContractCount,
+      manualDisplayDraft.additionalSales,
+      autoManualSummary,
+      manualDisplayDraft.revenueRows,
+      weeklyNetAutoCount,
+    ],
+  )
   const manualRevenueHeaderText = manualRevenueDisplay.header
   const manualRevenueSubtitleOne = manualRevenueDisplay.subtitleOne
   const manualRevenueSubtitleTwo = manualRevenueDisplay.subtitleTwo
-  const manualRevenueRows = buildRevenueRows(manualDisplayDraft.revenueRows || [])
+  const manualRevenueRows = useMemo(
+    () => buildRevenueRows(manualDisplayDraft.revenueRows || []),
+    [manualDisplayDraft.revenueRows],
+  )
   const reportRevenueDisplay = buildRevenueDisplaySet({
     revenueHeaderText: weeklyReport.revenueHeaderText,
     subtitleOne: weeklyReport.subtitleOne,
@@ -5066,58 +5168,12 @@ export function DashboardShell({
   const revenueSubtitleMetricTwo = splitRevenueMetric(revenueSubtitleTwo, "연간 누적 매출 (추정)")
   const revenueNoteParts = splitRevenueNoteText(revenueNoteText)
   const manualSummary = autoManualSummary
-  const autoManualSummaryFields = new Set([
-    "weeklyNetUnits",
-    "weeklyNewContracts",
-    "weeklyTerminationContracts",
-    "newContractTotal",
-    "holdTotal",
-    "terminationTypeTotal",
-  ])
-  const monthLabels = Array.from({ length: 12 }, (_, index) => `${index + 1}월`)
-  const summaryMatrixRows = [
-    {
-      title: "단말기 순증 및 해지",
-      cells: [
-        ["주간순증 합계", "weeklyNetUnits"],
-        ["신규계약", "weeklyNewContracts"],
-        ["해지계약", "weeklyTerminationContracts"],
-        ["누적순증 합계", "cumulativeNetUnits"],
-        ["누적신규 계약", "cumulativeNewContracts"],
-        ["누적해지계약", "cumulativeTerminationContracts"],
-        ["총 계약대수", "totalContracts"],
-      ],
-    },
-    {
-      title: "경쟁사 단말기 교체 현황",
-      cells: [
-        ["신규계약 합계", "newContractTotal"],
-        ["타사교체", "competitorReplacement"],
-        ["신규계약", "newReplacement"],
-        ["단말 교체 현황", "competitorStatus"],
-      ],
-    },
-    {
-      title: "해지대기 및 청구보류",
-      cells: [
-        ["해지보류 합계", "holdTotal"],
-        ["해지대기", "holdPending"],
-        ["청구보류", "billingHold"],
-        ["해지 진행 현황", "holdStatus"],
-      ],
-    },
-    {
-      title: "단말기 해지 유형",
-      cells: [
-        ["단말해지 합계", "terminationTypeTotal"],
-        ["계약해지", "contractTermination"],
-        ["타사교체", "competitorTermination"],
-        ["타사 교체 현황", "competitorTerminationStatus"],
-      ],
-    },
-  ]
+  const monthLabels = useMemo(() => Array.from({ length: 12 }, (_, index) => `${index + 1}월`), [])
   const paidOptionColumns = buildPaidOptionInfoColumns(weeklyReport.paidOptionInfoColumns || [])
-  const manualPaidOptionColumns = buildPaidOptionInfoColumns(manualDisplayDraft.paidOptionInfoColumns || [])
+  const manualPaidOptionColumns = useMemo(
+    () => buildPaidOptionInfoColumns(manualDisplayDraft.paidOptionInfoColumns || []),
+    [manualDisplayDraft.paidOptionInfoColumns],
+  )
   const reportTerminationColumns = [...reportTerminationColumnsStatic]
   const reportTerminationRows = buildTerminationOverviewRows(weeklyReport.terminationOverviewRows || [])
   const reportIndustryColumns = [...reportIndustryColumnsStatic]
@@ -5126,6 +5182,464 @@ export function DashboardShell({
   const currentViewDirty = Boolean(dirtyViews[view])
   const hasUnsavedChanges = Object.values(dirtyViews).some(Boolean)
   const showHeaderSave = !["daily-report", "weekly-report", "contracts", "weekly-selection", "manual-input"].includes(view)
+
+  const manualRevenueSection = useMemo(
+    () => (
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <div className={manualSectionTitleClass}>매출 자동계산 설정</div>
+          </div>
+        </div>
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_180px_280px]">
+          <label className="space-y-1.5">
+            <div className="text-[12px] font-semibold text-slate-500">
+              매출 헤더 <span className="text-amber-600">(자동계산)</span>
+              {calcHint("(주간반영 선택계약수 × 단가) + 추가계약 금액")}
+            </div>
+            <input
+              className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
+              value={manualRevenueHeaderText}
+              readOnly
+            />
+          </label>
+          <label className="space-y-1.5">
+            <div className="text-[12px] font-semibold text-slate-500">
+              단가 <span className="text-amber-600">(자동계산 반영)</span>
+              {calcHint("주간 순증 매출 계산식에 곱해지는 기준 단가")}
+            </div>
+            <BufferedManualInput
+              className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
+              inputMode="numeric"
+              value={formatNumericInputDisplay(manualDisplayDraft.revenueUnitPrice)}
+              onDirty={markManualInputDirty}
+              onLiveChange={(value) => previewManualField("revenueUnitPrice", value)}
+              onCommit={(value) => updateManualField("revenueUnitPrice", value)}
+            />
+          </label>
+          <div className="space-y-1.5">
+            <div className="text-[12px] font-semibold text-slate-500">
+              추가 계약 금액
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+              <BufferedManualInput
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[14px]"
+                inputMode="numeric"
+                placeholder="예: 1,000,000"
+                value={formatNumericInputDisplay(manualDisplayDraft.additionalContractCount)}
+                onDirty={markManualInputDirty}
+                onLiveChange={(value) => previewManualField("additionalContractCount", value)}
+                onCommit={(value) => updateManualField("additionalContractCount", value)}
+              />
+              <button
+                type="button"
+                onClick={appendAdditionalContractAmountToSales}
+                className="h-10 rounded-xl bg-blue-600 px-4 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(37,99,235,0.16)] hover:bg-blue-700"
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-3 xl:grid-cols-2">
+          <label className="space-y-1.5">
+            <div className="text-[12px] font-semibold text-slate-500">
+              연간 순증 매출 <span className="text-amber-600">(자동계산)</span>
+              {calcHint("누적순증 합계(단말기 순증 및 해지) × 단가 + ((매출 자동계산 설정 표의 합계 - 매출순증) × 1,000,000)")}
+            </div>
+            <input
+              className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
+              value={manualRevenueSubtitleOne}
+              readOnly
+            />
+          </label>
+          <label className="space-y-1.5">
+            <div className="text-[12px] font-semibold text-slate-500">
+              연간 누적 매출 <span className="text-amber-600">(자동계산)</span>
+              {calcHint("총 계약대수 × 단가")}
+            </div>
+            <input
+              className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
+              value={manualRevenueSubtitleTwo}
+              readOnly
+            />
+          </label>
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-slate-200">
+          <table className={tableClass}>
+            <thead>
+              <tr>
+                <th className={manualHeaderCellClass}>구분(월)</th>
+                {monthLabels.map((label) => (
+                  <th key={label} className={manualHeaderCellClass}>{label}</th>
+                ))}
+                <th className={manualHeaderCellClass}>합계</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                const baseRows = manualRevenueRows.filter((row) => row.label !== "합계")
+                const revenueTotalMonths = monthLabels.map((_, monthIndex) =>
+                  baseRows.reduce((sum: number, row) => sum + toNumber(row.months?.[monthIndex]), 0),
+                )
+                const rawRevenueRows = Array.isArray(manualDisplayDraft.revenueRows) ? manualDisplayDraft.revenueRows : []
+                return manualRevenueRows.map((row, rowIndex) => {
+                  const isTotalRow = row.label === "합계"
+                  const rawMonths = Array.isArray(rawRevenueRows[rowIndex]?.months) ? rawRevenueRows[rowIndex].months : []
+                  const displayMonths = isTotalRow
+                    ? revenueTotalMonths
+                    : monthLabels.map((_, monthIndex) => rawMonths[monthIndex] ?? row.months?.[monthIndex] ?? "")
+                  const total = (displayMonths || []).reduce((sum: number, value: unknown) => sum + toNumber(value), 0)
+                  return (
+                    <tr key={row.key || rowIndex}>
+                      <td className={manualLabelCellClass}>{row.label}</td>
+                      {(displayMonths || []).map((monthValue: unknown, monthIndex: number) => (
+                        <td key={`${row.key}-${monthIndex}`} className={`${tdClass} p-1`}>
+                          <BufferedManualInput
+                            className={`${manualTableInputClass} ${isTotalRow ? "font-semibold text-slate-900" : ""}`}
+                            style={isTotalRow ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
+                            value={String(monthValue ?? "")}
+                            onDirty={markManualInputDirty}
+                            onCommit={(value) => updateManualRevenueCell(rowIndex, monthIndex, value)}
+                            readOnly={isTotalRow}
+                          />
+                        </td>
+                      ))}
+                      <td className={`${tdClass} w-[96px] text-center font-semibold bg-amber-50 text-slate-900`}>
+                        {formatNumber(total)}
+                      </td>
+                    </tr>
+                  )
+                })
+              })()}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    ),
+    [
+      manualRevenueHeaderText,
+      manualRevenueSubtitleOne,
+      manualRevenueSubtitleTwo,
+      manualDisplayDraft.revenueUnitPrice,
+      manualDisplayDraft.additionalContractCount,
+      manualDisplayDraft.revenueRows,
+      manualRevenueRows,
+      monthLabels,
+    ],
+  )
+
+  const manualSummaryMatrixSection = useMemo(
+    () => (
+      <div className="space-y-3">
+        {manualSummaryMatrixRows.map((section) => (
+          <div key={section.title} className="overflow-hidden rounded-2xl border border-slate-200">
+            <table className={tableClass}>
+              <colgroup>
+                {section.cells.length === 7 ? (
+                  <>
+                    <col style={{ width: "18%" }} />
+                    <col style={{ width: "12%" }} />
+                    <col style={{ width: "8%" }} />
+                    <col style={{ width: "8%" }} />
+                    <col style={{ width: "14%" }} />
+                    <col style={{ width: "8%" }} />
+                    <col style={{ width: "8%" }} />
+                    <col style={{ width: "24%" }} />
+                  </>
+                ) : (
+                  <>
+                    <col style={{ width: "20%" }} />
+                    <col style={{ width: "14%" }} />
+                    <col style={{ width: "11%" }} />
+                    <col style={{ width: "11%" }} />
+                    <col style={{ width: "44%" }} />
+                  </>
+                )}
+              </colgroup>
+              <tbody>
+                <tr>
+                  <th className={`${manualHeaderCellClass} w-[220px] text-[15px] font-bold`}>{section.title}</th>
+                  {section.cells.map(([label]) => (
+                    <th key={`${section.title}-${label}`} className={manualHeaderCellClass}>{label}</th>
+                  ))}
+                </tr>
+                <tr>
+                  <td className={`${tdClass} bg-white`} />
+                  {section.cells.map(([label, field], cellIndex) => {
+                    const isAutoField = manualSummaryAutoFields.has(field)
+                    return (
+                      <td key={`${section.title}-${field}`} className={`${tdClass} p-1`}>
+                        <BufferedManualInput
+                          className={`${manualTableInputClass} ${isAutoField ? "cursor-not-allowed font-bold text-slate-900" : ""} ${section.cells.length === 4 && cellIndex === section.cells.length - 1 ? "text-left px-4" : ""}`}
+                          style={isAutoField ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
+                          value={String(manualSummary?.[field] ?? "")}
+                          readOnly={isAutoField}
+                          onDirty={markManualInputDirty}
+                          onLiveChange={(value) => previewManualSummaryField(field, value)}
+                          onCommit={(value) => updateManualSummaryField(field, value)}
+                        />
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    ),
+    [manualSummary],
+  )
+
+  const manualGoalSection = useMemo(
+    () => (
+      <ManualGoalInputTable
+        currentYear={currentYear}
+        rows={manualDisplayDraft.goalRows || []}
+        onCommitCell={updateManualGoalRow}
+        onDirty={markManualInputDirty}
+      />
+    ),
+    [currentYear, manualDisplayDraft.goalRows],
+  )
+
+  const manualPaidOptionSection = useMemo(
+    () => (
+      <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <table className={tableClass}>
+          <thead>
+            <tr>
+              <th colSpan={Math.max(1, manualPaidOptionColumns.length)} className={manualTableTitleRowClass}>
+                <div className="flex items-center justify-between gap-3">
+                  <span>유료 옵션 정보</span>
+                  <button
+                    type="button"
+                    className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[12px] font-semibold tracking-[-0.01em] text-blue-700 transition hover:border-blue-300 hover:bg-blue-100"
+                    onClick={reloadPaidOptionInfo}
+                  >
+                    옵션정보 불러오기
+                  </button>
+                </div>
+              </th>
+            </tr>
+            <tr>
+              {manualPaidOptionColumns.map((column, columnIndex) => (
+                <th key={`manual-paid-option-title-${column.id}-${columnIndex}`} className={manualHeaderCellClass}>
+                  {column.title}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {manualPaidOptionColumns.map((column, columnIndex) => (
+                <td key={`manual-paid-option-total-${column.id}-${columnIndex}`} className={`${tdClass} text-center font-semibold`}>
+                  {column.total}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    ),
+    [manualPaidOptionColumns],
+  )
+
+  const manualTerminationOverviewSection = useMemo(
+    () => (
+      <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <table className={tableClass}>
+          <colgroup>
+            <col style={{ width: "88px" }} />
+            {reportTerminationColumnsStatic.map((column) => (
+              <col key={`manual-termination-col-${column}`} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr>
+              <th colSpan={reportTerminationColumnsStatic.length + 1} className={manualTableTitleRowClass}>
+                <div className="flex items-center justify-between gap-3">
+                  <span>
+                    {currentYear}년 해지 현황 ({String(displayBaseDate || "").replace(/^\d{4}-(\d{2})-(\d{2})$/, "$1/$2")} 기준)
+                  </span>
+                  <button
+                    type="button"
+                    className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[12px] font-semibold tracking-[-0.01em] text-amber-700 transition hover:border-amber-300 hover:bg-amber-100"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={loadTerminationOverviewFromWeeklyList}
+                  >
+                    해지확정현황 불러오기
+                  </button>
+                </div>
+              </th>
+            </tr>
+            <tr>
+              {["구분", ...reportTerminationColumnsStatic].map((head) => (
+                <th key={head} className={manualHeaderCellClass}>{head}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(manualDisplayDraft.terminationOverviewRows || []).map((row: any, rowIndex: number) => (
+              <tr key={`manual-termination-overview-${row.label}`}>
+                <td className={`${tdClass} whitespace-nowrap text-center font-semibold`}>{row.label}</td>
+                {reportTerminationColumnsStatic.map((column, valueIndex) => {
+                  const isTotalColumn = column === "합계"
+                  const storedTotalValue = row.values?.[valueIndex]
+                  const totalValue = isTotalColumn
+                    ? String(storedTotalValue ?? "").trim() || computeTerminationRowTotal((row.values || []).slice(0, reportTerminationColumnsStatic.length - 1))
+                    : null
+                  return (
+                    <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
+                      <BufferedManualInput
+                        className={manualTableInputClass}
+                        style={{ backgroundColor: "#fffbeb", borderColor: "#fcd34d" }}
+                        value={isTotalColumn ? String(totalValue ?? "") : String(row.values?.[valueIndex] ?? "")}
+                        onDirty={markManualInputDirty}
+                        onCommit={(value) => updateManualTerminationOverviewCell(rowIndex, valueIndex, value)}
+                        readOnly
+                      />
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ),
+    [currentYear, displayBaseDate, manualDisplayDraft.terminationOverviewRows],
+  )
+
+  const manualWeeklyIndustrySection = useMemo(
+    () => (
+      <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <table className={tableClass}>
+          <colgroup>
+            <col style={{ width: "88px" }} />
+            {reportIndustryColumnsStatic.map((column) => (
+              <col key={`manual-industry-col-${column}`} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr>
+              <th colSpan={reportIndustryColumnsStatic.length + 1} className={manualTableTitleRowClass}>
+                {replaceDivisionName(`정보사업본부 업종별 실적 현황 (${String(displayBaseDate || "").replace(/^\d{4}-(\d{2})-(\d{2})$/, "$1/$2")} 기준)`)}
+              </th>
+            </tr>
+            <tr>
+              {["구분", ...reportIndustryColumnsStatic].map((head) => (
+                <th key={head} className={manualHeaderCellClass}>{head}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(manualDisplayDraft.weeklyIndustryOverviewRows || []).map((row: any, rowIndex: number) => (
+              <tr key={`manual-weekly-industry-${row.label}`}>
+                <td className={`${tdClass} whitespace-nowrap text-center font-semibold`}>{row.label}</td>
+                {reportIndustryColumnsStatic.map((column, valueIndex) => {
+                  const normalizedValues = normalizeIndustryRowValues(row.values || [])
+                  const isTotalColumn = column === "합계"
+                  const totalValue = isTotalColumn
+                    ? computeIndustryRowTotal(normalizedValues.slice(0, reportIndustryColumnsStatic.length - 1))
+                    : null
+                  return (
+                    <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
+                      <BufferedManualInput
+                        className={manualTableInputClass}
+                        style={
+                          isTotalColumn
+                            ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" }
+                            : undefined
+                        }
+                        value={isTotalColumn ? String(totalValue ?? "") : String(normalizedValues[valueIndex] ?? "")}
+                        onDirty={markManualInputDirty}
+                        onCommit={(value) => updateManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, value)}
+                        readOnly={isTotalColumn}
+                      />
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ),
+    [displayBaseDate, manualDisplayDraft.weeklyIndustryOverviewRows],
+  )
+
+  const manualAdditionalSalesSection = useMemo(
+    () => (
+      <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <div className="overflow-x-auto">
+          <table className={`${tableClass} min-w-[760px]`}>
+            <colgroup>
+              <col style={{ width: "56px" }} />
+              <col style={{ width: "110px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "140px" }} />
+              <col style={{ width: "180px" }} />
+              <col />
+              <col style={{ width: "72px" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th colSpan={7} className={manualTableTitleRowClass}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>추가 매출</span>
+                    <button
+                      type="button"
+                      onClick={addAdditionalSaleRow}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold tracking-[-0.01em] text-slate-700 transition hover:bg-slate-50"
+                    >
+                      행 추가
+                    </button>
+                  </div>
+                </th>
+              </tr>
+              <tr>
+                <th className={manualHeaderCellClass}>No.</th>
+                <th className={manualHeaderCellClass}>ID</th>
+                <th className={manualHeaderCellClass}>회사</th>
+                <th className={manualHeaderCellClass}>금액</th>
+                <th className={manualHeaderCellClass}>내용</th>
+                <th className={manualHeaderCellClass}>비고</th>
+                <th className={manualHeaderCellClass}>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {normalizeAdditionalSalesRows(manualDisplayDraft.additionalSales || []).map((row: any, rowIndex: number) => (
+                <tr key={`manual-additional-${rowIndex}`} className="bg-white">
+                  <td className={`${tdClass} px-2 text-center font-semibold text-blue-700`}>{rowIndex + 1}</td>
+                  <td className={`${tdClass} p-1`}>
+                    <BufferedManualInput className={manualTableTextInputClass} placeholder="ID" value={String(row.idCode ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "idCode", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "idCode", value)} />
+                  </td>
+                  <td className={`${tdClass} p-1`}>
+                    <BufferedManualInput className={manualTableTextInputClass} placeholder="회사" value={String(row.company ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "company", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "company", value)} />
+                  </td>
+                  <td className={`${tdClass} p-1`}>
+                    <BufferedManualInput className={manualTableInputClass} placeholder="금액" value={String(row.amount ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "amount", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "amount", value)} />
+                  </td>
+                  <td className={`${tdClass} p-1`}>
+                    <BufferedManualInput className={manualTableTextInputClass} placeholder="내용" value={String(row.content ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "content", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "content", value)} />
+                  </td>
+                  <td className={`${tdClass} p-1`}>
+                    <BufferedManualInput className={manualTableTextInputClass} placeholder="비고" value={String(row.note ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "note", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "note", value)} />
+                  </td>
+                  <td className={`${tdClass} p-1 text-center`}>
+                    <button type="button" onClick={() => deleteAdditionalSaleRow(rowIndex)} className="inline-flex h-8 items-center rounded-full border border-rose-200 bg-white px-2.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50">삭제</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    ),
+    [manualDisplayDraft.additionalSales],
+  )
 
   return (
     <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
@@ -6512,419 +7026,19 @@ export function DashboardShell({
                 </button>
               </div>
 
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className={manualSectionTitleClass}>매출 자동계산 설정</div>
-                  </div>
-                </div>
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_180px_280px]">
-                  <label className="space-y-1.5">
-                    <div className="text-[12px] font-semibold text-slate-500">
-                      매출 헤더 <span className="text-amber-600">(자동계산)</span>
-                      {calcHint("(주간반영 선택계약수 × 단가) + 추가계약 금액")}
-                    </div>
-                    <input
-                      className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
-                      value={manualRevenueHeaderText}
-                      readOnly
-                    />
-                  </label>
-                  <label className="space-y-1.5">
-                    <div className="text-[12px] font-semibold text-slate-500">
-                      단가 <span className="text-amber-600">(자동계산 반영)</span>
-                      {calcHint("주간 순증 매출 계산식에 곱해지는 기준 단가")}
-                    </div>
-                    <BufferedManualInput
-                      className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
-                      inputMode="numeric"
-                      value={formatNumericInputDisplay(manualDisplayDraft.revenueUnitPrice)}
-                      onDirty={markManualInputDirty}
-                      onLiveChange={(value) => previewManualField("revenueUnitPrice", value)}
-                      onCommit={(value) => updateManualField("revenueUnitPrice", value)}
-                    />
-                  </label>
-                  <div className="space-y-1.5">
-                    <div className="text-[12px] font-semibold text-slate-500">
-                      추가 계약 금액
-                    </div>
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                      <BufferedManualInput
-                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[14px]"
-                        inputMode="numeric"
-                        placeholder="예: 1,000,000"
-                        value={formatNumericInputDisplay(manualDisplayDraft.additionalContractCount)}
-                        onDirty={markManualInputDirty}
-                        onLiveChange={(value) => previewManualField("additionalContractCount", value)}
-                        onCommit={(value) => updateManualField("additionalContractCount", value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={appendAdditionalContractAmountToSales}
-                        className="h-10 rounded-xl bg-blue-600 px-4 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(37,99,235,0.16)] hover:bg-blue-700"
-                      >
-                        저장
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div className="grid gap-3 xl:grid-cols-2">
-                    <label className="space-y-1.5">
-                      <div className="text-[12px] font-semibold text-slate-500">
-                        연간 순증 매출 <span className="text-amber-600">(자동계산)</span>
-                      {calcHint("누적순증 합계(단말기 순증 및 해지) × 단가 + ((매출 자동계산 설정 표의 합계 - 매출순증) × 1,000,000)")}
-                      </div>
-                      <input
-                        className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
-                        value={manualRevenueSubtitleOne}
-                      readOnly
-                    />
-                  </label>
-                  <label className="space-y-1.5">
-                    <div className="text-[12px] font-semibold text-slate-500">
-                      연간 누적 매출 <span className="text-amber-600">(자동계산)</span>
-                      {calcHint("총 계약대수 × 단가")}
-                    </div>
-                    <input
-                      className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
-                      value={manualRevenueSubtitleTwo}
-                      readOnly
-                    />
-                  </label>
-                </div>
-                <div className="overflow-hidden rounded-2xl border border-slate-200">
-                  <table className={tableClass}>
-                    <thead>
-                      <tr>
-                        <th className={manualHeaderCellClass}>구분(월)</th>
-                        {monthLabels.map((label) => (
-                          <th key={label} className={manualHeaderCellClass}>{label}</th>
-                        ))}
-                        <th className={manualHeaderCellClass}>합계</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(() => {
-                        const baseRows = manualRevenueRows.filter((row) => row.label !== "합계")
-                        const revenueTotalMonths = monthLabels.map((_, monthIndex) =>
-                          baseRows.reduce((sum: number, row) => sum + toNumber(row.months?.[monthIndex]), 0),
-                        )
-                        const rawRevenueRows = Array.isArray(manualDisplayDraft.revenueRows) ? manualDisplayDraft.revenueRows : []
-                        return manualRevenueRows.map((row, rowIndex) => {
-                          const isTotalRow = row.label === "합계"
-                          const rawMonths = Array.isArray(rawRevenueRows[rowIndex]?.months) ? rawRevenueRows[rowIndex].months : []
-                          const displayMonths = isTotalRow
-                            ? revenueTotalMonths
-                            : monthLabels.map((_, monthIndex) => rawMonths[monthIndex] ?? row.months?.[monthIndex] ?? "")
-                          const total = (displayMonths || []).reduce((sum: number, value: unknown) => sum + toNumber(value), 0)
-                        return (
-                          <tr key={row.key || rowIndex}>
-                            <td className={manualLabelCellClass}>{row.label}</td>
-                            {(displayMonths || []).map((monthValue: unknown, monthIndex: number) => (
-                              <td key={`${row.key}-${monthIndex}`} className={`${tdClass} p-1`}>
-                                <BufferedManualInput
-                                  className={`${manualTableInputClass} ${isTotalRow ? "font-semibold text-slate-900" : ""}`}
-                                  style={isTotalRow ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
-                                  value={String(monthValue ?? "")}
-                                  onDirty={markManualInputDirty}
-                                  onCommit={(value) => updateManualRevenueCell(rowIndex, monthIndex, value)}
-                                  readOnly={isTotalRow}
-                                />
-                              </td>
-                            ))}
-                            <td className={`${tdClass} w-[96px] text-center font-semibold bg-amber-50 text-slate-900`}>
-                              {formatNumber(total)}
-                            </td>
-                          </tr>
-                        )
-                        })
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              {manualRevenueSection}
 
-              <div className="space-y-3">
-                {summaryMatrixRows.map((section) => (
-                  <div key={section.title} className="overflow-hidden rounded-2xl border border-slate-200">
-                    <table className={tableClass}>
-                      <colgroup>
-                        {section.cells.length === 7 ? (
-                          <>
-                            <col style={{ width: "18%" }} />
-                            <col style={{ width: "12%" }} />
-                            <col style={{ width: "8%" }} />
-                            <col style={{ width: "8%" }} />
-                            <col style={{ width: "14%" }} />
-                            <col style={{ width: "8%" }} />
-                            <col style={{ width: "8%" }} />
-                            <col style={{ width: "24%" }} />
-                          </>
-                        ) : (
-                          <>
-                            <col style={{ width: "20%" }} />
-                            <col style={{ width: "14%" }} />
-                            <col style={{ width: "11%" }} />
-                            <col style={{ width: "11%" }} />
-                            <col style={{ width: "44%" }} />
-                          </>
-                        )}
-                      </colgroup>
-                      <tbody>
-                        <tr>
-                          <th className={`${manualHeaderCellClass} w-[220px] text-[15px] font-bold`}>{section.title}</th>
-                          {section.cells.map(([label]) => (
-                            <th key={`${section.title}-${label}`} className={manualHeaderCellClass}>{label}</th>
-                          ))}
-                        </tr>
-                        <tr>
-                          <td className={`${tdClass} bg-white`} />
-                          {section.cells.map(([label, field], cellIndex) => {
-                            const isAutoField = autoManualSummaryFields.has(field)
-                            return (
-                              <td key={`${section.title}-${field}`} className={`${tdClass} p-1`}>
-                                <BufferedManualInput
-                                  className={`${manualTableInputClass} ${isAutoField ? "cursor-not-allowed font-bold text-slate-900" : ""} ${section.cells.length === 4 && cellIndex === section.cells.length - 1 ? "text-left px-4" : ""}`}
-                                  style={isAutoField ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
-                                  value={String(manualSummary?.[field] ?? "")}
-                                  readOnly={isAutoField}
-                                  onDirty={markManualInputDirty}
-                                  onLiveChange={(value) => previewManualSummaryField(field, value)}
-                                  onCommit={(value) => updateManualSummaryField(field, value)}
-                                />
-                              </td>
-                            )
-                          })}
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
-              </div>
+              {manualSummaryMatrixSection}
 
-              <ManualGoalInputTable
-                currentYear={currentYear}
-                rows={manualDisplayDraft.goalRows || []}
-                onCommitCell={updateManualGoalRow}
-                onDirty={markManualInputDirty}
-              />
+              {manualGoalSection}
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <table className={tableClass}>
-                  <thead>
-                    <tr>
-                      <th colSpan={Math.max(1, manualPaidOptionColumns.length)} className={manualTableTitleRowClass}>
-                        <div className="flex items-center justify-between gap-3">
-                          <span>유료 옵션 정보</span>
-                          <button
-                            type="button"
-                            className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[12px] font-semibold tracking-[-0.01em] text-blue-700 transition hover:border-blue-300 hover:bg-blue-100"
-                            onClick={reloadPaidOptionInfo}
-                          >
-                            옵션정보 불러오기
-                          </button>
-                        </div>
-                      </th>
-                    </tr>
-                    <tr>
-                      {manualPaidOptionColumns.map((column, columnIndex) => (
-                        <th key={`manual-paid-option-title-${column.id}-${columnIndex}`} className={manualHeaderCellClass}>
-                          {column.title}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      {manualPaidOptionColumns.map((column, columnIndex) => (
-                        <td key={`manual-paid-option-total-${column.id}-${columnIndex}`} className={`${tdClass} text-center font-semibold`}>
-                          {column.total}
-                        </td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              {manualPaidOptionSection}
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <table className={tableClass}>
-                  <colgroup>
-                    <col style={{ width: "88px" }} />
-                    {reportTerminationColumnsStatic.map((column) => (
-                      <col key={`manual-termination-col-${column}`} />
-                    ))}
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th colSpan={reportTerminationColumnsStatic.length + 1} className={manualTableTitleRowClass}>
-                        <div className="flex items-center justify-between gap-3">
-                          <span>
-                            {currentYear}년 해지 현황 ({String(displayBaseDate || "").replace(/^\d{4}-(\d{2})-(\d{2})$/, "$1/$2")} 기준)
-                          </span>
-                          <button
-                            type="button"
-                            className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[12px] font-semibold tracking-[-0.01em] text-amber-700 transition hover:border-amber-300 hover:bg-amber-100"
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={loadTerminationOverviewFromWeeklyList}
-                          >
-                            해지확정현황 불러오기
-                          </button>
-                        </div>
-                      </th>
-                    </tr>
-                    <tr>
-                      {["구분", ...reportTerminationColumnsStatic].map((head) => (
-                        <th key={head} className={manualHeaderCellClass}>{head}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(manualDisplayDraft.terminationOverviewRows || []).map((row: any, rowIndex: number) => (
-                      <tr key={`manual-termination-overview-${row.label}`}>
-                        <td className={`${tdClass} whitespace-nowrap text-center font-semibold`}>{row.label}</td>
-                        {reportTerminationColumnsStatic.map((column, valueIndex) => {
-                          const isTotalColumn = column === "합계"
-                          const storedTotalValue = row.values?.[valueIndex]
-                          const totalValue = isTotalColumn
-                            ? String(storedTotalValue ?? "").trim() || computeTerminationRowTotal((row.values || []).slice(0, reportTerminationColumnsStatic.length - 1))
-                            : null
-                          return (
-                            <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
-                              <BufferedManualInput
-                                className={manualTableInputClass}
-                                style={{ backgroundColor: "#fffbeb", borderColor: "#fcd34d" }}
-                                value={isTotalColumn ? String(totalValue ?? "") : String(row.values?.[valueIndex] ?? "")}
-                                onDirty={markManualInputDirty}
-                                onCommit={(value) => updateManualTerminationOverviewCell(rowIndex, valueIndex, value)}
-                                readOnly
-                              />
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {manualTerminationOverviewSection}
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <table className={tableClass}>
-                  <colgroup>
-                    <col style={{ width: "88px" }} />
-                    {reportIndustryColumnsStatic.map((column) => (
-                      <col key={`manual-industry-col-${column}`} />
-                    ))}
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th colSpan={reportIndustryColumnsStatic.length + 1} className={manualTableTitleRowClass}>
-                        {replaceDivisionName(`정보사업본부 업종별 실적 현황 (${String(displayBaseDate || "").replace(/^\d{4}-(\d{2})-(\d{2})$/, "$1/$2")} 기준)`)}
-                      </th>
-                    </tr>
-                    <tr>
-                      {["구분", ...reportIndustryColumnsStatic].map((head) => (
-                        <th key={head} className={manualHeaderCellClass}>{head}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(manualDisplayDraft.weeklyIndustryOverviewRows || []).map((row: any, rowIndex: number) => (
-                      <tr key={`manual-weekly-industry-${row.label}`}>
-                        <td className={`${tdClass} whitespace-nowrap text-center font-semibold`}>{row.label}</td>
-                        {reportIndustryColumnsStatic.map((column, valueIndex) => {
-                          const normalizedValues = normalizeIndustryRowValues(row.values || [])
-                          const isTotalColumn = column === "합계"
-                          const totalValue = isTotalColumn
-                            ? computeIndustryRowTotal(normalizedValues.slice(0, reportIndustryColumnsStatic.length - 1))
-                            : null
-                          return (
-                            <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
-                              <BufferedManualInput
-                                className={manualTableInputClass}
-                                style={
-                                  isTotalColumn
-                                    ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" }
-                                    : undefined
-                                }
-                                value={isTotalColumn ? String(totalValue ?? "") : String(normalizedValues[valueIndex] ?? "")}
-                                onDirty={markManualInputDirty}
-                                onCommit={(value) => updateManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, value)}
-                                readOnly={isTotalColumn}
-                              />
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {manualWeeklyIndustrySection}
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <div className="overflow-x-auto">
-                  <table className={`${tableClass} min-w-[760px]`}>
-                    <colgroup>
-                      <col style={{ width: "56px" }} />
-                      <col style={{ width: "110px" }} />
-                      <col style={{ width: "160px" }} />
-                      <col style={{ width: "140px" }} />
-                      <col style={{ width: "180px" }} />
-                      <col />
-                      <col style={{ width: "72px" }} />
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        <th colSpan={7} className={manualTableTitleRowClass}>
-                          <div className="flex items-center justify-between gap-3">
-                            <span>추가 매출</span>
-                            <button
-                              type="button"
-                              onClick={addAdditionalSaleRow}
-                              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold tracking-[-0.01em] text-slate-700 transition hover:bg-slate-50"
-                            >
-                              행 추가
-                            </button>
-                          </div>
-                        </th>
-                      </tr>
-                      <tr>
-                        <th className={manualHeaderCellClass}>No.</th>
-                        <th className={manualHeaderCellClass}>ID</th>
-                        <th className={manualHeaderCellClass}>회사</th>
-                        <th className={manualHeaderCellClass}>금액</th>
-                        <th className={manualHeaderCellClass}>내용</th>
-                        <th className={manualHeaderCellClass}>비고</th>
-                        <th className={manualHeaderCellClass}>관리</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {normalizeAdditionalSalesRows(manualDisplayDraft.additionalSales || []).map((row: any, rowIndex: number) => (
-                        <tr key={`manual-additional-${rowIndex}`} className="bg-white">
-                          <td className={`${tdClass} px-2 text-center font-semibold text-blue-700`}>{rowIndex + 1}</td>
-                          <td className={`${tdClass} p-1`}>
-                            <BufferedManualInput className={manualTableTextInputClass} placeholder="ID" value={String(row.idCode ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "idCode", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "idCode", value)} />
-                          </td>
-                          <td className={`${tdClass} p-1`}>
-                            <BufferedManualInput className={manualTableTextInputClass} placeholder="회사" value={String(row.company ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "company", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "company", value)} />
-                          </td>
-                          <td className={`${tdClass} p-1`}>
-                            <BufferedManualInput className={manualTableInputClass} placeholder="금액" value={String(row.amount ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "amount", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "amount", value)} />
-                          </td>
-                          <td className={`${tdClass} p-1`}>
-                            <BufferedManualInput className={manualTableTextInputClass} placeholder="내용" value={String(row.content ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "content", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "content", value)} />
-                          </td>
-                          <td className={`${tdClass} p-1`}>
-                            <BufferedManualInput className={manualTableTextInputClass} placeholder="비고" value={String(row.note ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "note", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "note", value)} />
-                          </td>
-                          <td className={`${tdClass} p-1 text-center`}>
-                            <button type="button" onClick={() => deleteAdditionalSaleRow(rowIndex)} className="inline-flex h-8 items-center rounded-full border border-rose-200 bg-white px-2.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50">삭제</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              {manualAdditionalSalesSection}
 
             </div>
           )}
