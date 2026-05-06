@@ -799,6 +799,28 @@ function computeTerminationRowTotal(values: any[]) {
   return hasPercent ? `${formatNumber(percentTotal)}%` : formatNumber(sum)
 }
 
+function buildTerminationOverviewRowsWithComputedTotals(rows: any[]) {
+  const normalizedRows = buildTerminationOverviewRows(rows || []).map((row) => {
+    if (row.label === "비율") return row
+    const values = Array.from({ length: reportTerminationColumnsStatic.length }, (_, index) =>
+      sanitizeCellValue(row.values?.[index], ""),
+    )
+    values[reportTerminationColumnsStatic.length - 1] = computeTerminationRowTotal(
+      values.slice(0, reportTerminationColumnsStatic.length - 1),
+    )
+    return { ...row, values }
+  })
+  const cumulativeRow = normalizedRows.find((row) => row.label === "누적")
+  const ratioIndex = normalizedRows.findIndex((row) => row.label === "비율")
+  if (cumulativeRow && ratioIndex !== -1) {
+    normalizedRows[ratioIndex] = {
+      ...normalizedRows[ratioIndex],
+      values: buildTerminationRatioValues(cumulativeRow.values),
+    }
+  }
+  return normalizedRows
+}
+
 function computeIndustryRowTotal(values: any[]) {
   const hasValue = values.some((value) => String(value ?? "").trim() !== "")
   if (!hasValue) return ""
@@ -5092,6 +5114,7 @@ export function DashboardShell({
       const nextManualDraft = {
         ...draft,
         revenueRows: cloneData(normalizedRevenueRows),
+        terminationOverviewRows: cloneData(buildTerminationOverviewRowsWithComputedTotals(draft.terminationOverviewRows || [])),
       }
       const nextWeekly = {
         ...latestWeeklyReport,
@@ -5108,7 +5131,7 @@ export function DashboardShell({
         goalRows: cloneData(buildGoalRows(draft.goalRows || [])),
         industryStats: cloneData(draft.industryStats || []),
         paidOptionInfoColumns: cloneData(draft.paidOptionInfoColumns || []),
-        terminationOverviewRows: cloneData(draft.terminationOverviewRows || []),
+        terminationOverviewRows: cloneData(nextManualDraft.terminationOverviewRows || []),
         weeklyIndustryOverviewRows: cloneData(draft.weeklyIndustryOverviewRows || []),
         additionalSales: normalizeAdditionalSalesRows(cloneData(draft.additionalSales || [])),
       }
@@ -5249,7 +5272,14 @@ export function DashboardShell({
     [manualDisplayDraft.paidOptionInfoColumns],
   )
   const reportTerminationColumns = [...reportTerminationColumnsStatic]
-  const reportTerminationRows = buildTerminationOverviewRows(weeklyReport.terminationOverviewRows || [])
+  const reportTerminationRows = useMemo(
+    () => buildTerminationOverviewRowsWithComputedTotals(weeklyReport.terminationOverviewRows || []),
+    [weeklyReport.terminationOverviewRows],
+  )
+  const manualTerminationOverviewRows = useMemo(
+    () => buildTerminationOverviewRowsWithComputedTotals(manualDisplayDraft.terminationOverviewRows || []),
+    [manualDisplayDraft.terminationOverviewRows],
+  )
   const reportIndustryColumns = [...reportIndustryColumnsStatic]
   const reportIndustryRows = buildWeeklyIndustryOverviewRows(weeklyReport.weeklyIndustryOverviewRows || [])
   const currentMenuUpdatedAt = data?.ui?.menuUpdatedAt?.[view]
@@ -5556,7 +5586,7 @@ export function DashboardShell({
             </tr>
           </thead>
           <tbody>
-            {(manualDisplayDraft.terminationOverviewRows || []).map((row: any, rowIndex: number) => (
+            {manualTerminationOverviewRows.map((row: any, rowIndex: number) => (
               <tr key={`manual-termination-overview-${row.label}`}>
                 <td className={`${tdClass} whitespace-nowrap text-center font-semibold`}>{row.label}</td>
                 {reportTerminationColumnsStatic.map((column, valueIndex) => {
@@ -5584,7 +5614,7 @@ export function DashboardShell({
         </table>
       </div>
     ),
-    [currentYear, displayBaseDate, manualDisplayDraft.terminationOverviewRows],
+    [currentYear, displayBaseDate, manualTerminationOverviewRows],
   )
 
   const manualWeeklyIndustrySection = useMemo(
