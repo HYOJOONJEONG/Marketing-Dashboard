@@ -5334,6 +5334,7 @@ export function DashboardShell({
                             style={isTotalRow ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
                             value={String(monthValue ?? "")}
                             onDirty={markManualInputDirty}
+                            onLiveChange={(value) => previewManualRevenueCell(rowIndex, monthIndex, value)}
                             onCommit={(value) => updateManualRevenueCell(rowIndex, monthIndex, value)}
                             readOnly={isTotalRow}
                           />
@@ -5589,6 +5590,7 @@ export function DashboardShell({
                         }
                         value={isTotalColumn ? String(totalValue ?? "") : String(normalizedValues[valueIndex] ?? "")}
                         onDirty={markManualInputDirty}
+                        onLiveChange={(value) => previewManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, value)}
                         onCommit={(value) => updateManualWeeklyIndustryOverviewCell(rowIndex, valueIndex, value)}
                         readOnly={isTotalColumn}
                       />
