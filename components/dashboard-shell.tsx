@@ -4911,6 +4911,9 @@ export function DashboardShell({
   }
 
   function handleManualUpdate() {
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLInputElement) {
+      document.activeElement.blur()
+    }
     startTransition(async () => {
       const draft = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
       const latestData = pendingDataRef.current || data
@@ -6469,16 +6472,16 @@ export function DashboardShell({
                 <button
                   type="button"
                   onClick={handleManualUpdate}
-                  disabled={!currentViewDirty || isPending}
+                  disabled={isPending}
                   title="저장"
                   aria-label="저장"
                   className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-2xl px-4 text-[13px] font-bold ${
-                    currentViewDirty && !isPending
+                    !isPending
                       ? "bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] hover:bg-blue-700"
                       : "border border-slate-200 bg-slate-100 text-slate-400"
                   }`}
                 >
-                  <SaveIcon className={isPending && currentViewDirty ? "h-[18px] w-[18px] animate-pulse" : "h-[18px] w-[18px]"} />
+                  <SaveIcon className={isPending ? "h-[18px] w-[18px] animate-pulse" : "h-[18px] w-[18px]"} />
                   <span>저장</span>
                 </button>
               </div>
@@ -6598,7 +6601,6 @@ export function DashboardShell({
                                   style={isTotalRow ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" } : undefined}
                                   value={String(monthValue ?? "")}
                                   onDirty={markManualInputDirty}
-                                  onLiveChange={(value) => previewManualRevenueCell(rowIndex, monthIndex, value)}
                                   onCommit={(value) => updateManualRevenueCell(rowIndex, monthIndex, value)}
                                   readOnly={isTotalRow}
                                 />
@@ -6763,15 +6765,11 @@ export function DashboardShell({
                             <td key={`${row.label}-${column}`} className={`${tdClass} p-1`}>
                               <BufferedManualInput
                                 className={manualTableInputClass}
-                                style={
-                                  isTotalColumn
-                                    ? { backgroundColor: "#fffbeb", borderColor: "#fcd34d" }
-                                    : undefined
-                                }
+                                style={{ backgroundColor: "#fffbeb", borderColor: "#fcd34d" }}
                                 value={isTotalColumn ? String(totalValue ?? "") : String(row.values?.[valueIndex] ?? "")}
                                 onDirty={markManualInputDirty}
                                 onCommit={(value) => updateManualTerminationOverviewCell(rowIndex, valueIndex, value)}
-                                readOnly={isTotalColumn}
+                                readOnly
                               />
                             </td>
                           )
