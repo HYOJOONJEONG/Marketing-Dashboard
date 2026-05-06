@@ -3236,7 +3236,7 @@ export function DashboardShell({
           statusFilter: collectionStatusFilter,
           sort: collectionSort,
         },
-      })
+      }, { immediate: true, updatedViews: ["collection"] })
     })
   }
 
@@ -3287,7 +3287,7 @@ export function DashboardShell({
           statusFilter: collectionStatusFilter,
           sort: collectionSort,
         },
-      })
+      }, { immediate: true, updatedViews: ["collection"] })
       setEditingCollectionId(null)
       setEditingCollectionDraft({})
     })
@@ -3316,7 +3316,7 @@ export function DashboardShell({
         statusFilter: collectionStatusFilter,
         sort: collectionSort,
       },
-    })
+    }, { immediate: true, updatedViews: ["collection"] })
   }
 
   function handleCollectionReceiptDateChange(rowId: string, nextValue: string) {
@@ -3339,7 +3339,7 @@ export function DashboardShell({
           statusFilter: collectionStatusFilter,
           sort: collectionSort,
         },
-      })
+      }, { immediate: true, updatedViews: ["collection"] })
     })
   }
 
