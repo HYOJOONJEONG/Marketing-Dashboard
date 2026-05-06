@@ -40,6 +40,7 @@ export function OptionDetailTable({
   const [editingId, setEditingId] = React.useState<string | null>(null)
   const [draft, setDraft] = React.useState<OptionRecord | null>(null)
   const [newRecord, setNewRecord] = React.useState<OptionRecord | null>(null)
+  const [expandedNoteIds, setExpandedNoteIds] = React.useState<Set<string>>(new Set())
 
   const industryOptions = React.useMemo(
     () => [
@@ -206,6 +207,45 @@ export function OptionDetailTable({
     return list
   }, [records, sortKey, sortDir])
 
+  const getRecordRowKey = React.useCallback((record: OptionRecord, index: number) => {
+    return record.record_id || `${record.category_code}-${record.user_id}-${record.company_name}-${index}`
+  }, [])
+
+  const visibleSignageNoteIds = React.useMemo(() => {
+    if (!isSignageView) return []
+    return sortedRecords
+      .map((record, index) => ({
+        id: getRecordRowKey(record, index),
+        note: String(record.note ?? "").trim(),
+      }))
+      .filter((item) => item.note.length > 0)
+      .map((item) => item.id)
+  }, [getRecordRowKey, isSignageView, sortedRecords])
+
+  const allSignageNotesExpanded =
+    visibleSignageNoteIds.length > 0 && visibleSignageNoteIds.every((id) => expandedNoteIds.has(id))
+
+  const toggleExpandedNote = React.useCallback((id: string) => {
+    setExpandedNoteIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const toggleAllSignageNotes = React.useCallback(() => {
+    setExpandedNoteIds((prev) => {
+      const next = new Set(prev)
+      if (allSignageNotesExpanded) {
+        visibleSignageNoteIds.forEach((id) => next.delete(id))
+      } else {
+        visibleSignageNoteIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }, [allSignageNotesExpanded, visibleSignageNoteIds])
+
   const startEdit = (record: OptionRecord) => {
     setEditingId(record.record_id || null)
     setDraft({ ...record })
@@ -329,6 +369,15 @@ export function OptionDetailTable({
         </select>
       )
     }
+    if (key === "note") {
+      return (
+        <textarea
+          value={value}
+          onChange={(event) => handleDraftChange(key, event.target.value)}
+          className="min-h-[72px] w-full resize-y rounded-lg border border-slate-200 bg-white px-2 py-2 text-[12px] leading-4"
+        />
+      )
+    }
     return (
       <input
         value={value}
@@ -346,6 +395,15 @@ export function OptionDetailTable({
           <span className="text-[12px] text-slate-500">{records.length}건</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {isSignageView && visibleSignageNoteIds.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleAllSignageNotes}
+              className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+            >
+              {allSignageNotesExpanded ? "비고 전체 접기" : "비고 전체 펼치기"}
+            </button>
+          )}
           <input
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
@@ -520,6 +578,7 @@ export function OptionDetailTable({
             ) : (
               sortedRecords.map((row, index) => {
                 const isEditing = editingId && row.record_id === editingId
+                const rowKey = getRecordRowKey(row, index)
                 return (
                   <tr key={row.record_id || `${row.user_id}-${index}`}>
                     {columns.map((column) => {
@@ -557,20 +616,44 @@ export function OptionDetailTable({
                       return (
                         <td key={column.key} className={cellClass}>
                           {column.key === "note" ? (
-                            <div className="flex min-h-[64px] items-center justify-center text-center">
-                              <div
-                                className={`${column.valueClass || ""} whitespace-pre-wrap break-all`}
-                                title={String(value ?? "")}
-                                style={{
-                                  display: "-webkit-box",
-                                  WebkitLineClamp: 2,
-                                  WebkitBoxOrient: "vertical",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                {value}
-                              </div>
-                            </div>
+                            (() => {
+                              const noteText = String(value ?? "")
+                              const isExpandableNote = isSignageView && noteText.trim().length > 0
+                              const isExpanded = isExpandableNote && expandedNoteIds.has(rowKey)
+                              return (
+                                <div
+                                  className={`flex min-h-[64px] flex-col justify-center gap-1 text-center ${
+                                    isExpanded ? "items-stretch" : "items-center"
+                                  }`}
+                                >
+                                  <div
+                                    className={`${column.valueClass || ""} whitespace-pre-wrap break-all ${isExpanded ? "text-left" : ""}`}
+                                    title={noteText}
+                                    style={
+                                      isExpanded
+                                        ? undefined
+                                        : {
+                                            display: "-webkit-box",
+                                            WebkitLineClamp: 2,
+                                            WebkitBoxOrient: "vertical",
+                                            overflow: "hidden",
+                                          }
+                                    }
+                                  >
+                                    {noteText}
+                                  </div>
+                                  {isExpandableNote && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleExpandedNote(rowKey)}
+                                      className="mx-auto rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10.5px] font-semibold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                                    >
+                                      {isExpanded ? "접기" : "펼치기"}
+                                    </button>
+                                  )}
+                                </div>
+                              )
+                            })()
                           ) : (
                             <div className={column.valueClass || ""}>{value}</div>
                           )}
