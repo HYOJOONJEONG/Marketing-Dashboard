@@ -3099,19 +3099,33 @@ export function DashboardShell({
 
   async function reloadPaidOptionInfo() {
     try {
-      const response = await fetch("/api/options?basis=seed&category=all&activeOnly=1", {
+      const response = await fetch("/api/options?basis=seed&category=all&activeOnly=1&includeRecords=0", {
         cache: "no-store",
       })
       if (!response.ok) {
         throw new Error(`옵션정보 API 오류 (${response.status})`)
       }
       const payload = await response.json()
-      const nextColumns = applySeedTotalsToPaidOptionColumns(paidOptionSourceColumns, Array.isArray(payload?.cards) ? payload.cards : [])
+      const sourceDraft = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
+      const sourceColumns = Array.isArray(sourceDraft?.paidOptionInfoColumns) && sourceDraft.paidOptionInfoColumns.length
+        ? sourceDraft.paidOptionInfoColumns
+        : paidOptionSourceColumns
+      const nextColumns = applySeedTotalsToPaidOptionColumns(sourceColumns, Array.isArray(payload?.cards) ? payload.cards : [])
+      const prevColumnsKey = JSON.stringify(buildPaidOptionInfoColumns(sourceColumns))
+      const nextColumnsKey = JSON.stringify(nextColumns)
+      if (prevColumnsKey === nextColumnsKey) {
+        window.alert("옵션정보가 이미 최신입니다.")
+        return
+      }
       markManualInputDirty()
-      updateManualDraft((prev: any) => ({
-        ...prev,
+      const nextDraft = {
+        ...sourceDraft,
         paidOptionInfoColumns: cloneData(nextColumns),
-      }))
+      }
+      manualDraftRef.current = nextDraft
+      setManualDraft(nextDraft)
+      manualPreviewDraftRef.current = nextDraft
+      setManualPreviewDraft(nextDraft)
       window.alert("옵션정보를 불러왔습니다.")
     } catch (error: any) {
       const message = String(error?.message || "옵션정보를 불러오지 못했습니다.")
