@@ -462,6 +462,32 @@ function buildRevenueRows(rows: any[]) {
   }))
 }
 
+function buildRevenueRowsWithComputedTotal(rows: any[]) {
+  const normalizedRows = buildRevenueRows(rows || [])
+  const baseRows = normalizedRows.filter((row) => String(row?.label || "").trim() !== "합계")
+  if (!baseRows.length) return normalizedRows
+
+  const totalMonths = Array.from({ length: 12 }, (_, monthIndex) =>
+    baseRows.reduce((sum, row) => sum + toNumber(row?.months?.[monthIndex]), 0),
+  )
+  const totalRow =
+    normalizedRows.find((row) => String(row?.label || "").trim() === "합계") || {
+      key: "total",
+      label: "합계",
+      months: Array(12).fill(0),
+    }
+
+  return [
+    ...baseRows,
+    {
+      ...totalRow,
+      key: totalRow.key || "total",
+      label: "합계",
+      months: totalMonths,
+    },
+  ]
+}
+
 const goalRowTemplate2026 = [
   { month: "1월", netTarget: 45, targetContracts: 6149, quarterNetTarget: 105, monthlyActual: 47, quarterActual: 106, gap: 1 },
   { month: "2월", netTarget: 30, targetContracts: 6179, quarterNetTarget: "", monthlyActual: 24, quarterActual: "", gap: "" },
@@ -5013,6 +5039,7 @@ export function DashboardShell({
       const draft = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
       const latestData = pendingDataRef.current || data
       const latestWeeklyReport = latestData?.weeklyReport || weeklyReport
+      const normalizedRevenueRows = buildRevenueRowsWithComputedTotal(draft.revenueRows || [])
       const draftSummary = applyWeeklyAutoSummary(draft.manualSummary || {})
       const draftRevenueDisplay = buildRevenueDisplaySet({
         revenueHeaderText: draft.revenueHeaderText,
@@ -5022,9 +5049,13 @@ export function DashboardShell({
         additionalContractCount: draft.additionalContractCount,
         additionalSales: draft.additionalSales || [],
         manualSummary: draftSummary,
-        revenueRows: draft.revenueRows || [],
+        revenueRows: normalizedRevenueRows,
         fallbackSelectedCount: weeklyNetAutoCount,
       })
+      const nextManualDraft = {
+        ...draft,
+        revenueRows: cloneData(normalizedRevenueRows),
+      }
       const nextWeekly = {
         ...latestWeeklyReport,
         // Persist the exact values currently shown in the manual input view so
@@ -5036,7 +5067,7 @@ export function DashboardShell({
         subtitleTwo: draftRevenueDisplay.subtitleTwo,
         revenueNoteText: draft.revenueNoteText,
         manualSummary: draftSummary,
-        revenueRows: cloneData(draft.revenueRows || []),
+        revenueRows: cloneData(normalizedRevenueRows),
         goalRows: cloneData(buildGoalRows(draft.goalRows || [])),
         industryStats: cloneData(draft.industryStats || []),
         paidOptionInfoColumns: cloneData(draft.paidOptionInfoColumns || []),
@@ -5050,8 +5081,8 @@ export function DashboardShell({
           { immediate: true, updatedViews: ["manual-input", "weekly-report"] },
         )
         isSyncingManualDraftRef.current = true
-        manualDraftRef.current = draft
-        setManualDraft(draft)
+        manualDraftRef.current = nextManualDraft
+        setManualDraft(nextManualDraft)
         manualPreviewDraftRef.current = null
         setManualPreviewDraft(null)
       } catch {
@@ -5141,7 +5172,7 @@ export function DashboardShell({
   const manualRevenueSubtitleOne = manualRevenueDisplay.subtitleOne
   const manualRevenueSubtitleTwo = manualRevenueDisplay.subtitleTwo
   const manualRevenueRows = useMemo(
-    () => buildRevenueRows(manualDisplayDraft.revenueRows || []),
+    () => buildRevenueRowsWithComputedTotal(manualDisplayDraft.revenueRows || []),
     [manualDisplayDraft.revenueRows],
   )
   const reportRevenueDisplay = buildRevenueDisplaySet({
@@ -5157,7 +5188,10 @@ export function DashboardShell({
   })
   // Weekly report should reference the persisted manual-input values, just like
   // an Excel cell reference to saved cells.
-  const reportRevenueRows = buildRevenueRows(weeklyReport.revenueRows || [])
+  const reportRevenueRows = useMemo(
+    () => buildRevenueRowsWithComputedTotal(weeklyReport.revenueRows || []),
+    [weeklyReport.revenueRows],
+  )
   const displayBaseDate = formatDateDashed(getUpcomingThursday())
   const revenueHeaderText = reportRevenueDisplay.header
   const revenueSubtitleOne = reportRevenueDisplay.subtitleOne
