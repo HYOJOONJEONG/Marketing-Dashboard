@@ -252,6 +252,11 @@ function buildCounts(records: any[], categories: any[]) {
   }
   for (const cat of categories) {
     const code = cat.category_code
+    if (code === "BOND") {
+      // 해외채권은 동일 사용자ID가 여러 행에 있을 수 있으므로 엑셀/상세목록의 행 건수 기준으로 집계합니다.
+      counts[code] = records.filter((row) => row.category_code === code).length
+      continue
+    }
     if (code === "SOFR") {
       let sum = 0
       for (const row of active.filter((r) => r.category_code === code)) {
@@ -272,7 +277,7 @@ function buildCounts(records: any[], categories: any[]) {
       counts[code] = new Set(ids).size
       continue
     }
-    if (["BOND", "LME"].includes(code)) {
+    if (code === "LME") {
       counts[code] = getUniqueCount(code)
       continue
     }
@@ -338,12 +343,14 @@ export async function GET(req: Request) {
       let value = seedMap.get(key) || 0
       if (basis === "latest") value = latestMap.get(key) ?? value
       if (basis === "date") value = dateMap.get(key) ?? value
+      if (key === "BOND") value = computedCounts.BOND || value
       if (key === "INDEX") value = computedCounts.INDEX || 0
       return { ...cat, count_value: value }
     })
 
     const filteredRawRecords = optionRecordsRaw.filter((row: any) => {
-      if (activeOnly && Number(row.is_active) !== 1) return false
+      const rowCategory = normalizeCategoryCode(row.category_code)
+      if (activeOnly && rowCategory !== "BOND" && Number(row.is_active) !== 1) return false
       if (activeOnly && row.category_code === "INDEX" && !isCountableIndexRecord(row)) return false
       if (categoryFilter !== "all" && row.category_code !== categoryFilter) return false
       const normalizedStatus = normalizeStatus(row.status)
