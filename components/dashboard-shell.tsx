@@ -6301,29 +6301,31 @@ export function DashboardShell({
           {currentUser ? (
             <div className="mt-auto px-1 pt-6">
               <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
+                <div className="space-y-3">
                   <div className="min-w-0">
-                    <div className="text-[15px] font-black tracking-[-0.03em] text-slate-900">현재 접속 인원</div>
+                    <div className="whitespace-nowrap text-[15px] font-black tracking-[-0.03em] text-slate-900">현재 접속 인원</div>
                     <div className="mt-1 text-[12px] font-semibold text-emerald-600">
                       {activePresenceUsers.length}명 접속 중
                     </div>
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                  <div className="flex min-w-0 items-center gap-2">
                     <button
                       type="button"
                       onClick={() => void sendPopupMessageToAll()}
-                      className="inline-flex h-8 items-center rounded-full bg-blue-50 px-2.5 text-[12px] font-semibold text-blue-700 transition hover:bg-blue-100"
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700 transition hover:bg-blue-100"
+                      aria-label="현재 접속자 전체에게 메시지 보내기"
+                      title="현재 접속자 전체에게 메시지 보내기"
                     >
-                      전체 팝업
+                      <MessageSquare className="h-4 w-4" />
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsPresenceListOpen((prev) => !prev)}
-                      className="inline-flex h-8 items-center gap-1 rounded-full bg-slate-50 px-2.5 text-[12px] font-semibold text-slate-500 transition hover:bg-slate-100"
+                      className="inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-full bg-slate-50 px-2.5 text-[12px] font-semibold text-slate-500 transition hover:bg-slate-100"
                     >
-                      전체 보기
+                      <span className="truncate">전체 보기</span>
                       <ChevronDown
-                        className={`h-3.5 w-3.5 transition duration-200 ${isPresenceListOpen ? "rotate-180" : ""}`}
+                        className={`h-3.5 w-3.5 shrink-0 transition duration-200 ${isPresenceListOpen ? "rotate-180" : ""}`}
                       />
                     </button>
                   </div>
@@ -6407,9 +6409,11 @@ export function DashboardShell({
                               <button
                                 type="button"
                                 onClick={() => void sendPopupMessage([user.userId], user.userName)}
-                                className="mt-1 shrink-0 rounded-lg border border-blue-100 bg-white px-2 py-1 text-[11px] font-bold text-blue-700 transition hover:border-blue-200 hover:bg-blue-50"
+                                className="mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 transition hover:border-blue-200 hover:bg-blue-50"
+                                aria-label={`${user.userName}에게 메시지 보내기`}
+                                title={`${user.userName}에게 메시지 보내기`}
                               >
-                                팝업
+                                <MessageSquare className="h-4 w-4" />
                               </button>
                             ) : null}
                           </div>
