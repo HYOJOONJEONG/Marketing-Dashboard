@@ -133,6 +133,19 @@ export type ActivityLogRecord = {
   createdAt: string
 }
 
+export type PopupMessageRecord = {
+  id: string
+  senderUserId: string
+  senderName: string
+  recipientUserId: string
+  title: string
+  body: string
+  dedupeKey?: string | null
+  readAt?: string | null
+  createdAt: string
+  expiresAt: string
+}
+
 export type PermissionChangeLogRecord = {
   id: string
   targetUserId: string
@@ -166,6 +179,7 @@ export type AuthState = {
   users: UserRecord[]
   userSessions: UserSessionRecord[]
   presenceSessions: PresenceSessionRecord[]
+  popupMessages: PopupMessageRecord[]
   activityLogs: ActivityLogRecord[]
   permissionChangeLogs: PermissionChangeLogRecord[]
   userChangeLogs: UserChangeLogRecord[]

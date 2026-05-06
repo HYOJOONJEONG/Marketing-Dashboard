@@ -7,6 +7,7 @@ import {
   RoleKey,
   TeamRecord,
   UserTestIdEntry,
+  PopupMessageRecord,
   UserRecord,
   getUserColorToken,
 } from "@/lib/auth/model"
@@ -272,6 +273,7 @@ function createSeedState(): AuthState {
     users,
     userSessions: [],
     presenceSessions: [],
+    popupMessages: [],
     activityLogs: [],
     permissionChangeLogs: [],
     userChangeLogs: [],
@@ -420,6 +422,27 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
   })
 }
 
+function normalizePopupMessages(state: AuthState) {
+  const now = Date.now()
+  const activeUserIds = new Set((state.users || []).filter((user) => user.active && !user.deletedAt).map((user) => user.id))
+  state.popupMessages = (Array.isArray((state as any).popupMessages) ? (state as any).popupMessages : [])
+    .map((message: any) => ({
+      id: String(message?.id || `popup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+      senderUserId: String(message?.senderUserId || ""),
+      senderName: String(message?.senderName || "시스템"),
+      recipientUserId: String(message?.recipientUserId || ""),
+      title: String(message?.title || "알림").slice(0, 80),
+      body: String(message?.body || "").slice(0, 500),
+      dedupeKey: message?.dedupeKey ? String(message.dedupeKey) : null,
+      readAt: message?.readAt ? String(message.readAt) : null,
+      createdAt: String(message?.createdAt || nowIso()),
+      expiresAt: String(message?.expiresAt || new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString()),
+    }))
+    .filter((message: PopupMessageRecord) => activeUserIds.has(message.recipientUserId) && toTimestamp(message.expiresAt) > now)
+    .sort((a: PopupMessageRecord, b: PopupMessageRecord) => toTimestamp(b.createdAt) - toTimestamp(a.createdAt))
+    .slice(0, 200)
+}
+
 export async function readAuthState(): Promise<AuthState> {
   try {
     const parsed = await readAuthSystem<AuthState>()
@@ -429,6 +452,7 @@ export async function readAuthState(): Promise<AuthState> {
       normalizeLegacyAdminAccount(parsed)
       normalizeRequiredDirectoryUsers(parsed)
       normalizeUserTitles(parsed)
+      normalizePopupMessages(parsed)
       return parsed
     }
     const seeded = createSeedState()
@@ -487,6 +511,10 @@ function preserveConcurrentSessionState(draft: AuthState, latest: AuthState) {
   draft.activityLogs = mergeById(draft.activityLogs || [], latest.activityLogs || [])
     .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt))
     .slice(0, 500)
+  draft.popupMessages = mergeById(draft.popupMessages || [], latest.popupMessages || [])
+    .filter((message) => toTimestamp(message.expiresAt) > Date.now())
+    .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt))
+    .slice(0, 200)
 }
 
 export async function updateAuthState(
@@ -591,6 +619,52 @@ export function listPresenceUsers(state: AuthState) {
 
 export function listOnlinePresence(state: AuthState) {
   return listPresenceUsers(state).filter((user) => user.status !== "offline")
+}
+
+export function appendPopupMessage(
+  state: AuthState,
+  payload: Omit<PopupMessageRecord, "id" | "createdAt" | "expiresAt" | "readAt"> & {
+    id?: string
+    createdAt?: string
+    expiresAt?: string
+    readAt?: string | null
+  },
+) {
+  normalizePopupMessages(state)
+  const now = payload.createdAt || nowIso()
+  const expiresAt = payload.expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  if (payload.dedupeKey) {
+    const exists = state.popupMessages.some(
+      (message) =>
+        message.recipientUserId === payload.recipientUserId &&
+        message.dedupeKey === payload.dedupeKey &&
+        toTimestamp(message.expiresAt) > Date.now(),
+    )
+    if (exists) return null
+  }
+  const message: PopupMessageRecord = {
+    id: payload.id || `popup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: now,
+    expiresAt,
+    readAt: payload.readAt ?? null,
+    senderUserId: payload.senderUserId,
+    senderName: payload.senderName,
+    recipientUserId: payload.recipientUserId,
+    title: payload.title,
+    body: payload.body,
+    dedupeKey: payload.dedupeKey ?? null,
+  }
+  state.popupMessages.unshift(message)
+  state.popupMessages = state.popupMessages.slice(0, 200)
+  return message
+}
+
+export function listUnreadPopupMessages(state: AuthState, userId: string) {
+  normalizePopupMessages(state)
+  return state.popupMessages
+    .filter((message) => message.recipientUserId === userId && !message.readAt)
+    .sort((a, b) => toTimestamp(a.createdAt) - toTimestamp(b.createdAt))
+    .slice(0, 5)
 }
 
 export function appendActivityLog(

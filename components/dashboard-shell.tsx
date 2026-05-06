@@ -2,7 +2,7 @@
 
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronDown, KeyRound, LogOut, Menu, UserRound, X } from "lucide-react"
+import { ChevronDown, KeyRound, LogOut, Menu, MessageSquare, UserRound, X } from "lucide-react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
 import { DailyReportPage } from "./daily-report/daily-report-page"
 import {
@@ -120,6 +120,14 @@ type PresenceUser = {
   currentSection: string
   status: PresenceStatus
   color: { bg: string; text: string; border: string; hex: string }
+}
+
+type PopupMessage = {
+  id: string
+  senderName: string
+  title: string
+  body: string
+  createdAt: string
 }
 
 function getPresenceDotClass(status: PresenceStatus) {
@@ -1641,6 +1649,7 @@ export function DashboardShell({
   const [nextPassword, setNextPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [presenceUsers, setPresenceUsers] = useState<PresenceUser[]>([])
+  const [popupMessages, setPopupMessages] = useState<PopupMessage[]>([])
   const [manualPresenceStatus, setManualPresenceStatus] = useState<"away" | null>(null)
   const [manualDraft, setManualDraft] = useState<any>(() =>
     buildManualDraftFromWeekly(
@@ -2058,8 +2067,10 @@ export function DashboardShell({
         try {
           const payload = JSON.parse(event.data)
           setPresenceUsers(Array.isArray(payload?.presenceUsers) ? payload.presenceUsers : [])
+          setPopupMessages(Array.isArray(payload?.popupMessages) ? payload.popupMessages : [])
         } catch {
           setPresenceUsers([])
+          setPopupMessages([])
         }
       }
       eventSource.onerror = () => {
@@ -2765,6 +2776,90 @@ export function DashboardShell({
       },
       { immediate: true, updatedViews: ["daily-report"] },
     )
+    void notifyDailyTeamCompletion(nextDailyReportState)
+  }
+
+  async function notifyDailyTeamCompletion(nextDailyReportState: any) {
+    try {
+      await fetch("/api/popup-messages/daily-completion", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          date: dailyReportDate,
+          reports: Array.isArray(nextDailyReportState?.reports) ? nextDailyReportState.reports : [],
+        }),
+      })
+    } catch {
+      // Daily report saves must not fail because a popup notification failed.
+    }
+  }
+
+  async function acknowledgePopupMessage(messageId: string) {
+    setPopupMessages((prev) => prev.filter((message) => message.id !== messageId))
+    try {
+      await fetch("/api/popup-messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "read", messageIds: [messageId] }),
+      })
+    } catch {
+      // The next stream tick may show it again if the read marker failed.
+    }
+  }
+
+  async function sendPopupMessage(targetUserIds: string[], label: string) {
+    const body = window.prompt(`${label}에게 보낼 팝업 메시지를 입력해주세요.`)
+    const message = String(body || "").trim()
+    if (!message) return
+    try {
+      const response = await fetch("/api/popup-messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          targetUserIds,
+          title: "업무 알림",
+          body: message,
+        }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || !payload?.ok) {
+        window.alert(payload?.error || "메시지를 보내지 못했습니다.")
+        return
+      }
+      window.alert(`${payload.sent || 0}명에게 팝업 메시지를 보냈습니다.`)
+    } catch {
+      window.alert("메시지를 보내지 못했습니다. 잠시 후 다시 시도해주세요.")
+    }
+  }
+
+  async function sendPopupMessageToAll() {
+    const targets = activePresenceUsers.map((user) => user.userId).filter((userId) => userId && userId !== currentUser?.id)
+    if (!targets.length) {
+      window.alert("메시지를 보낼 접속자가 없습니다.")
+      return
+    }
+    const body = window.prompt("현재 접속자 전체에게 보낼 팝업 메시지를 입력해주세요.")
+    const message = String(body || "").trim()
+    if (!message) return
+    try {
+      const response = await fetch("/api/popup-messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          targetUserIds: targets,
+          title: "업무 알림",
+          body: message,
+        }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || !payload?.ok) {
+        window.alert(payload?.error || "메시지를 보내지 못했습니다.")
+        return
+      }
+      window.alert(`${payload.sent || 0}명에게 팝업 메시지를 보냈습니다.`)
+    } catch {
+      window.alert("메시지를 보내지 못했습니다. 잠시 후 다시 시도해주세요.")
+    }
   }
 
   useEffect(() => {
@@ -5767,6 +5862,41 @@ export function DashboardShell({
 
   return (
     <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
+      {popupMessages.length > 0 ? (
+        <div className="fixed bottom-4 right-4 z-[70] w-[min(360px,calc(100vw-32px))] space-y-2">
+          {popupMessages.slice(0, 3).map((message) => (
+            <div key={message.id} className="overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-2xl shadow-slate-900/12">
+              <div className="flex items-start gap-3 border-b border-slate-100 bg-blue-50/70 px-4 py-3">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+                  <MessageSquare className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[14px] font-black text-slate-950">{message.title || "업무 알림"}</div>
+                  <div className="mt-0.5 truncate text-[12px] font-semibold text-blue-700">{message.senderName || "시스템"}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void acknowledgePopupMessage(message.id)}
+                  className="rounded-lg p-1 text-slate-400 transition hover:bg-white hover:text-slate-700"
+                  aria-label="팝업 메시지 닫기"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="px-4 py-3">
+                <div className="whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-700">{message.body}</div>
+                <button
+                  type="button"
+                  onClick={() => void acknowledgePopupMessage(message.id)}
+                  className="mt-3 h-9 w-full rounded-xl bg-slate-900 text-[13px] font-bold text-white transition hover:bg-slate-800"
+                >
+                  확인
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="mx-auto flex min-h-screen max-w-[1720px]">
         <button
           type="button"
@@ -6178,16 +6308,25 @@ export function DashboardShell({
                       {activePresenceUsers.length}명 접속 중
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsPresenceListOpen((prev) => !prev)}
-                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-slate-50 px-2.5 text-[12px] font-semibold text-slate-500 transition hover:bg-slate-100"
-                  >
-                    전체 보기
-                    <ChevronDown
-                      className={`h-3.5 w-3.5 transition duration-200 ${isPresenceListOpen ? "rotate-180" : ""}`}
-                    />
-                  </button>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => void sendPopupMessageToAll()}
+                      className="inline-flex h-8 items-center rounded-full bg-blue-50 px-2.5 text-[12px] font-semibold text-blue-700 transition hover:bg-blue-100"
+                    >
+                      전체 팝업
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsPresenceListOpen((prev) => !prev)}
+                      className="inline-flex h-8 items-center gap-1 rounded-full bg-slate-50 px-2.5 text-[12px] font-semibold text-slate-500 transition hover:bg-slate-100"
+                    >
+                      전체 보기
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition duration-200 ${isPresenceListOpen ? "rotate-180" : ""}`}
+                      />
+                    </button>
+                  </div>
                 </div>
 
                 <button
@@ -6264,6 +6403,15 @@ export function DashboardShell({
                                 {user.currentPage ? <span className="break-keep">{user.currentPage}</span> : null}
                               </div>
                             </div>
+                            {user.userId !== currentUser?.id ? (
+                              <button
+                                type="button"
+                                onClick={() => void sendPopupMessage([user.userId], user.userName)}
+                                className="mt-1 shrink-0 rounded-lg border border-blue-100 bg-white px-2 py-1 text-[11px] font-bold text-blue-700 transition hover:border-blue-200 hover:bg-blue-50"
+                              >
+                                팝업
+                              </button>
+                            ) : null}
                           </div>
                         )
                       })}
