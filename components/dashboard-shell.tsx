@@ -7088,14 +7088,9 @@ export function DashboardShell({
                 <button
                   type="button"
                   onClick={handleManualUpdate}
-                  disabled={isPending}
                   title="저장"
                   aria-label="저장"
-                  className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-2xl px-4 text-[13px] font-bold ${
-                    !isPending
-                      ? "bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] hover:bg-blue-700"
-                      : "border border-slate-200 bg-slate-100 text-slate-400"
-                  }`}
+                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-2xl bg-blue-600 px-4 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] hover:bg-blue-700"
                 >
                   <SaveIcon className={isPending ? "h-[18px] w-[18px] animate-pulse" : "h-[18px] w-[18px]"} />
                   <span>저장</span>
