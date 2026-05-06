@@ -6405,12 +6405,12 @@ export function DashboardShell({
                                   {user.userName}
                                 </span>
                               </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-slate-500">
-                                <span className="break-keep">{user.teamName || "팀 미지정"}</span>
-                                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-[12px] text-slate-500">
+                                <span className="min-w-0 max-w-full truncate">{user.teamName || "팀 미지정"}</span>
+                                <span className="inline-flex shrink-0 whitespace-nowrap rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
                                   {getPresenceLabel(user.status)}
                                 </span>
-                                {user.currentPage ? <span className="break-keep">{user.currentPage}</span> : null}
+                                {user.currentPage ? <span className="min-w-0 max-w-full truncate">{user.currentPage}</span> : null}
                               </div>
                             </div>
                             {user.userId !== currentUser?.id ? (
