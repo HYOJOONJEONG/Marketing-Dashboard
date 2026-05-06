@@ -463,12 +463,38 @@ function buildRevenueRows(rows: any[]) {
 }
 
 function buildRevenueRowsWithComputedTotal(rows: any[]) {
-  const normalizedRows = buildRevenueRows(rows || [])
+  const fallbackLabels = ["매출순증", "위약금", "이전비", "합계"]
+  const fallbackKeys = ["sales", "penalty", "move", "total"]
+  const normalizedRows = (Array.isArray(rows) ? rows : []).map((row, index) => ({
+    ...row,
+    key: row?.key || fallbackKeys[index] || `row-${index}`,
+    label: sanitizeSummaryText(row?.label, fallbackLabels[index] || `항목 ${index + 1}`),
+    months: Array.from({ length: 12 }, (_, monthIndex) => sanitizeCellValue(row?.months?.[monthIndex], "")),
+  }))
   const baseRows = normalizedRows.filter((row) => String(row?.label || "").trim() !== "합계")
   if (!baseRows.length) return normalizedRows
 
+  const lastActiveMonthIndex = baseRows.reduce((lastIndex, row) => {
+    const rowLastIndex = (row.months || []).reduce((latest: number, value: unknown, monthIndex: number) => {
+      const text = String(value ?? "").trim()
+      if (!text) return latest
+      return parseLooseNumber(text) !== 0 ? monthIndex : latest
+    }, -1)
+    return Math.max(lastIndex, rowLastIndex)
+  }, -1)
+  const displayBaseRows = baseRows.map((row) => ({
+    ...row,
+    months: (row.months || []).map((value: unknown, monthIndex: number) => {
+      const text = sanitizeCellValue(value, "")
+      if (monthIndex > lastActiveMonthIndex && parseLooseNumber(text) === 0) return ""
+      return text
+    }),
+  }))
+
   const totalMonths = Array.from({ length: 12 }, (_, monthIndex) =>
-    baseRows.reduce((sum, row) => sum + toNumber(row?.months?.[monthIndex]), 0),
+    displayBaseRows.some((row) => String(row?.months?.[monthIndex] ?? "").trim() !== "")
+      ? displayBaseRows.reduce((sum, row) => sum + toNumber(row?.months?.[monthIndex]), 0)
+      : "",
   )
   const totalRow =
     normalizedRows.find((row) => String(row?.label || "").trim() === "합계") || {
@@ -478,7 +504,7 @@ function buildRevenueRowsWithComputedTotal(rows: any[]) {
     }
 
   return [
-    ...baseRows,
+    ...displayBaseRows,
     {
       ...totalRow,
       key: totalRow.key || "total",
@@ -3095,6 +3121,7 @@ export function DashboardShell({
     setManualDraft(nextDraft)
     manualPreviewDraftRef.current = nextDraft
     setManualPreviewDraft(nextDraft)
+    window.alert("해지확정현황을 불러왔습니다.")
   }
 
   function updateManualTerminationOverviewCell(rowIndex: number, valueIndex: number, value: string) {
@@ -5314,15 +5341,15 @@ export function DashboardShell({
               {(() => {
                 const baseRows = manualRevenueRows.filter((row) => row.label !== "합계")
                 const revenueTotalMonths = monthLabels.map((_, monthIndex) =>
-                  baseRows.reduce((sum: number, row) => sum + toNumber(row.months?.[monthIndex]), 0),
+                  baseRows.some((row) => String(row.months?.[monthIndex] ?? "").trim() !== "")
+                    ? baseRows.reduce((sum: number, row) => sum + toNumber(row.months?.[monthIndex]), 0)
+                    : "",
                 )
-                const rawRevenueRows = Array.isArray(manualDisplayDraft.revenueRows) ? manualDisplayDraft.revenueRows : []
                 return manualRevenueRows.map((row, rowIndex) => {
                   const isTotalRow = row.label === "합계"
-                  const rawMonths = Array.isArray(rawRevenueRows[rowIndex]?.months) ? rawRevenueRows[rowIndex].months : []
                   const displayMonths = isTotalRow
                     ? revenueTotalMonths
-                    : monthLabels.map((_, monthIndex) => rawMonths[monthIndex] ?? row.months?.[monthIndex] ?? "")
+                    : monthLabels.map((_, monthIndex) => row.months?.[monthIndex] ?? "")
                   const total = (displayMonths || []).reduce((sum: number, value: unknown) => sum + toNumber(value), 0)
                   return (
                     <tr key={row.key || rowIndex}>
