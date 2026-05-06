@@ -733,6 +733,8 @@ const reportTerminationColumnsStatic = ["계약만료", "비용절감", "퇴사"
 const reportIndustryColumnsStatic = ["국내증권", "국내은행", "외국계", "자산운용", "보험사", "일반기업", "공사/정부", "연기금", "기타금융", "합계"] as const
 
 const terminationReasonAlias: Record<string, string> = {
+  "사용자퇴사": "퇴사",
+  "사용자이동퇴사": "퇴사",
   "휴직/장기출장": "휴직,장기출장",
   "휴직·장기출장": "휴직,장기출장",
   "휴직,장기출장": "휴직,장기출장",
@@ -805,9 +807,11 @@ function buildTerminationOverviewRowsWithComputedTotals(rows: any[]) {
     const values = Array.from({ length: reportTerminationColumnsStatic.length }, (_, index) =>
       sanitizeCellValue(row.values?.[index], ""),
     )
-    values[reportTerminationColumnsStatic.length - 1] = computeTerminationRowTotal(
-      values.slice(0, reportTerminationColumnsStatic.length - 1),
-    )
+    if (!String(values[reportTerminationColumnsStatic.length - 1] ?? "").trim()) {
+      values[reportTerminationColumnsStatic.length - 1] = computeTerminationRowTotal(
+        values.slice(0, reportTerminationColumnsStatic.length - 1),
+      )
+    }
     return { ...row, values }
   })
   const cumulativeRow = normalizedRows.find((row) => row.label === "누적")
@@ -6612,7 +6616,7 @@ export function DashboardShell({
                             const column = reportTerminationColumns[index]
                             const isTotalColumn = column === "합계"
                             const totalValue = isTotalColumn
-                              ? computeTerminationRowTotal((row.values || []).slice(0, reportTerminationColumns.length - 1))
+                              ? String(value ?? "").trim() || computeTerminationRowTotal((row.values || []).slice(0, reportTerminationColumns.length - 1))
                               : value
                             return (
                               <td key={`${row.label}-${column}`} className={`${weeklyTdClass} ${row.label === "비율" ? "font-semibold" : ""}`}>
