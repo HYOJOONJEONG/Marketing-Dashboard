@@ -122,6 +122,42 @@ function matchesSearchQuery(value: unknown, query: string, identifierQuery: stri
   return false
 }
 
+function getContractSearchText(row: Record<string, unknown>) {
+  return [
+    row.companyName,
+    row.departmentName,
+    row.idCode,
+    row.industry,
+    row.contractMonth,
+    toContractMonthInputValue(row.contractMonth),
+    row.recommender,
+    row.documentStatus,
+    row.replacementType,
+    row.note,
+  ]
+}
+
+function compareContractValue(rowA: Record<string, unknown>, rowB: Record<string, unknown>, key: string) {
+  if (key === "contractMonth") {
+    return parseContractMonthKey(rowA.contractMonth) - parseContractMonthKey(rowB.contractMonth)
+  }
+  if (key === "idCode") {
+    return normalizeSearchIdentifier(rowA.idCode).localeCompare(normalizeSearchIdentifier(rowB.idCode), "ko", {
+      numeric: true,
+      sensitivity: "base",
+    })
+  }
+  return String(rowA[key] ?? "").localeCompare(String(rowB[key] ?? ""), "ko", {
+    numeric: true,
+    sensitivity: "base",
+  })
+}
+
+function sortContractsByKey<T extends Record<string, unknown>>(items: T[], key: string, dir: "asc" | "desc") {
+  const factor = dir === "asc" ? 1 : -1
+  return [...items].sort((a, b) => compareContractValue(a, b, key) * factor)
+}
+
 function formatMoney(value: unknown) {
   return `${formatNumber(value)}원`
 }
@@ -1970,32 +2006,25 @@ export function DashboardShell({
     contracts.forEach((row: any) => {
       if (row?.contractMonth) values.add(String(row.contractMonth))
     })
-    return ["all", ...Array.from(values)]
+    return ["all", ...Array.from(values).sort((a, b) => parseContractMonthKey(b) - parseContractMonthKey(a))]
   }, [contracts])
   const filteredContracts = useMemo(() => {
-    if (!isContractsView) return []
-    const query = deferredContractQuery.trim().toLowerCase()
+    const rawQuery = deferredContractQuery.trim()
+    const query = rawQuery.toLowerCase()
+    const identifierQuery = normalizeSearchIdentifier(rawQuery)
     return contracts.filter((row: any) => {
       if (contractStatusFilter !== "all" && row.documentStatus !== contractStatusFilter) return false
       if (contractReplacementFilter !== "all" && (row.replacementType || "신규") !== contractReplacementFilter) return false
       if (contractMonthFilter !== "all" && row.contractMonth !== contractMonthFilter) return false
-      if (!query) return true
-      return [
-        row.companyName,
-        row.departmentName,
-        row.idCode,
-        row.industry,
-        row.contractMonth,
-        row.recommender,
-        row.note,
-      ]
+      if (!query && !identifierQuery) return true
+      return getContractSearchText(row)
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query))
+        .some((value) => matchesSearchQuery(value, query, identifierQuery))
     })
-  }, [contracts, deferredContractQuery, contractStatusFilter, contractReplacementFilter, contractMonthFilter, isContractsView])
+  }, [contracts, deferredContractQuery, contractStatusFilter, contractReplacementFilter, contractMonthFilter])
   const sortedContracts = useMemo(
-    () => (isContractsView ? sortByKey(filteredContracts, contractSort.key, contractSort.dir) : []),
-    [filteredContracts, contractSort, isContractsView],
+    () => sortContractsByKey(filteredContracts, contractSort.key, contractSort.dir),
+    [filteredContracts, contractSort],
   )
   const sortedWeeklySelectionContracts = useMemo(
     () => (isWeeklySelectionView ? sortByKey(contracts, weeklySelectionSort.key, weeklySelectionSort.dir) : []),
