@@ -4,6 +4,8 @@ import { resolveRequestSession } from "@/lib/auth/session"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+const PRESENCE_STREAM_INTERVAL_MS = 20 * 1000
+
 function encode(payload: unknown) {
   return new TextEncoder().encode(`data: ${JSON.stringify(payload)}\n\n`)
 }
@@ -53,7 +55,7 @@ export async function GET() {
       void send()
       timer = setInterval(() => {
         void send()
-      }, 5000)
+      }, PRESENCE_STREAM_INTERVAL_MS)
     },
     cancel() {
       closed = true

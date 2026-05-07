@@ -18,6 +18,8 @@ type Props = {
   showDashboardButton?: boolean
 }
 
+const HEADER_PRESENCE_HEARTBEAT_INTERVAL_MS = 45 * 1000
+
 export function WorkspaceHeader({ currentPage, currentSection, currentUser, showDashboardButton = false }: Props) {
   const router = useRouter()
   const heartbeatIdRef = useRef(`conn-${Math.random().toString(36).slice(2, 10)}`)
@@ -96,6 +98,7 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
     const sendHeartbeat = async () => {
+      if (document.visibilityState === "hidden") return
       try {
         await fetch("/api/presence/heartbeat", {
           method: "POST",
@@ -112,6 +115,8 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
     }
 
     const connect = () => {
+      if (eventSource) return
+      if (document.visibilityState === "hidden") return
       eventSource = new EventSource("/api/presence/stream")
       eventSource.onmessage = (event) => {
         if (!alive) return
@@ -124,17 +129,31 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
       }
       eventSource.onerror = () => {
         eventSource?.close()
+        eventSource = null
       }
     }
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void sendHeartbeat()
+        connect()
+      } else {
+        eventSource?.close()
+        eventSource = null
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
     void sendHeartbeat()
     heartbeatTimer = setInterval(() => {
+      if (document.visibilityState === "hidden") return
       void sendHeartbeat()
-    }, 15000)
+    }, HEADER_PRESENCE_HEARTBEAT_INTERVAL_MS)
     connect()
 
     return () => {
       alive = false
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
       if (heartbeatTimer) clearInterval(heartbeatTimer)
       if (eventSource) eventSource.close()
     }

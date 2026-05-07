@@ -14,7 +14,7 @@ import {
 import { normalizeAssignedIndustries } from "@/lib/industry-groups"
 import { readAuthSystem, writeAuthSystem } from "@/lib/shared-db-store"
 
-const PRESENCE_TIMEOUT_MS = 45 * 1000
+const PRESENCE_TIMEOUT_MS = 120 * 1000
 const PRESENCE_IDLE_MS = 7 * 60 * 1000
 
 let authWriteQueue: Promise<void> = Promise.resolve()

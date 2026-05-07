@@ -44,6 +44,8 @@ type CollectionTabKey = "integrated" | "long-term" | "delivery"
 type SectionKey = "dailyReport" | "performance" | "termination"
 
 const LOCAL_STORAGE_KEY = "infobiz-dashboard-state-v1"
+const PRESENCE_HEARTBEAT_INTERVAL_MS = 45 * 1000
+const DAILY_REPORT_POLL_INTERVAL_MS = 60 * 1000
 
 const viewTitles: Record<ViewKey, string> = {
   "daily-report": "업무일지",
@@ -2044,6 +2046,7 @@ export function DashboardShell({
     }
 
     const sendHeartbeat = async () => {
+      if (document.visibilityState === "hidden") return
       try {
         await fetch("/api/presence/heartbeat", {
           method: "POST",
@@ -2062,6 +2065,8 @@ export function DashboardShell({
     }
 
     const connect = () => {
+      if (eventSource) return
+      if (document.visibilityState === "hidden") return
       eventSource = new EventSource("/api/presence/stream")
       eventSource.onmessage = (event) => {
         if (!alive) return
@@ -2079,6 +2084,7 @@ export function DashboardShell({
       }
       eventSource.onerror = () => {
         eventSource?.close()
+        eventSource = null
       }
     }
 
@@ -2090,6 +2096,10 @@ export function DashboardShell({
       if (document.visibilityState === "visible") {
         markActivity()
         void sendHeartbeat()
+        if (!eventSource || eventSource.readyState === EventSource.CLOSED) connect()
+      } else {
+        eventSource?.close()
+        eventSource = null
       }
     }
 
@@ -2103,8 +2113,9 @@ export function DashboardShell({
 
     void sendHeartbeat()
     heartbeatTimer = setInterval(() => {
+      if (document.visibilityState === "hidden") return
       void sendHeartbeat()
-    }, 15000)
+    }, PRESENCE_HEARTBEAT_INTERVAL_MS)
     connect()
 
     return () => {
@@ -2957,6 +2968,7 @@ export function DashboardShell({
     if (view !== "daily-report") return
     let cancelled = false
     const timer = window.setInterval(async () => {
+      if (document.visibilityState === "hidden") return
       try {
         const response = await fetch("/api/dashboard", { cache: "no-store" })
         if (!response.ok) return
@@ -2968,7 +2980,7 @@ export function DashboardShell({
       } catch {
         // Ignore transient polling issues for collaborative daily reports.
       }
-    }, 15000)
+    }, DAILY_REPORT_POLL_INTERVAL_MS)
     return () => {
       cancelled = true
       window.clearInterval(timer)
