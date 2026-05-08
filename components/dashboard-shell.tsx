@@ -3138,8 +3138,9 @@ export function DashboardShell({
   }
 
   function getCreateButtonLabel(status: CreateStatus, idleLabel = "등록") {
-    if (status === "saving") return "저장 중..."
-    if (status === "success") return "등록완료"
+    const isSaveCreate = idleLabel.includes("저장")
+    if (status === "saving") return isSaveCreate ? "등록&저장 중..." : "저장 중..."
+    if (status === "success") return isSaveCreate ? "등록&저장 완료" : "등록완료"
     return idleLabel
   }
 
@@ -7857,7 +7858,7 @@ export function DashboardShell({
                         {terminationEntryMode === "termination" ? "해지 입력" : "청구보류 입력"}
                       </div>
                       <div className="mt-1 text-[12px] text-slate-500">
-                        필수 항목을 입력한 뒤 등록하면 현재 시트에 바로 반영됩니다.
+                        필수 항목을 입력한 뒤 등록&저장하면 현재 시트에 바로 저장됩니다.
                       </div>
                     </div>
                     <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
@@ -7931,7 +7932,7 @@ export function DashboardShell({
                           disabled={terminationCreateStatus !== "idle"}
                           className={getCreateButtonClass(terminationCreateStatus)}
                         >
-                          {getCreateButtonLabel(terminationCreateStatus)}
+                          {getCreateButtonLabel(terminationCreateStatus, "등록&저장")}
                         </button>
                       </div>
                     </div>
@@ -8003,7 +8004,7 @@ export function DashboardShell({
                           disabled={holdCreateStatus !== "idle"}
                           className={getCreateButtonClass(holdCreateStatus)}
                         >
-                          {getCreateButtonLabel(holdCreateStatus)}
+                          {getCreateButtonLabel(holdCreateStatus, "등록&저장")}
                         </button>
                       </div>
                     </div>
