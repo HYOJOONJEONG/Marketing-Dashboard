@@ -18,7 +18,28 @@ type Props = {
   showDashboardButton?: boolean
 }
 
-const HEADER_PRESENCE_HEARTBEAT_INTERVAL_MS = 45 * 1000
+const HEADER_PRESENCE_HEARTBEAT_RUSH_INTERVAL_MS = 15 * 1000
+const HEADER_PRESENCE_HEARTBEAT_DEFAULT_INTERVAL_MS = 45 * 1000
+
+function getKstHour() {
+  const formattedHour = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    hour12: false,
+  }).format(new Date())
+  return Number(formattedHour) % 24
+}
+
+function isDailyReportRushHourKst() {
+  const hour = getKstHour()
+  return hour >= 16 && hour < 18
+}
+
+function getHeaderPresenceHeartbeatIntervalMs() {
+  return isDailyReportRushHourKst()
+    ? HEADER_PRESENCE_HEARTBEAT_RUSH_INTERVAL_MS
+    : HEADER_PRESENCE_HEARTBEAT_DEFAULT_INTERVAL_MS
+}
 
 export function WorkspaceHeader({ currentPage, currentSection, currentUser, showDashboardButton = false }: Props) {
   const router = useRouter()
@@ -95,7 +116,7 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
   useEffect(() => {
     let alive = true
     let eventSource: EventSource | null = null
-    let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+    let heartbeatTimer: ReturnType<typeof setTimeout> | null = null
 
     const sendHeartbeat = async () => {
       if (document.visibilityState === "hidden") return
@@ -143,18 +164,24 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
       }
     }
 
+    const scheduleHeartbeat = () => {
+      if (!alive) return
+      heartbeatTimer = setTimeout(() => {
+        if (!alive) return
+        if (document.visibilityState !== "hidden") void sendHeartbeat()
+        scheduleHeartbeat()
+      }, getHeaderPresenceHeartbeatIntervalMs())
+    }
+
     document.addEventListener("visibilitychange", handleVisibilityChange)
     void sendHeartbeat()
-    heartbeatTimer = setInterval(() => {
-      if (document.visibilityState === "hidden") return
-      void sendHeartbeat()
-    }, HEADER_PRESENCE_HEARTBEAT_INTERVAL_MS)
+    scheduleHeartbeat()
     connect()
 
     return () => {
       alive = false
       document.removeEventListener("visibilitychange", handleVisibilityChange)
-      if (heartbeatTimer) clearInterval(heartbeatTimer)
+      if (heartbeatTimer) clearTimeout(heartbeatTimer)
       if (eventSource) eventSource.close()
     }
   }, [currentPage, currentSection])

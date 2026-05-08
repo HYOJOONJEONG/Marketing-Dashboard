@@ -44,8 +44,32 @@ type CollectionTabKey = "integrated" | "long-term" | "delivery"
 type SectionKey = "dailyReport" | "performance" | "termination"
 
 const LOCAL_STORAGE_KEY = "infobiz-dashboard-state-v1"
-const PRESENCE_HEARTBEAT_INTERVAL_MS = 45 * 1000
-const DAILY_REPORT_POLL_INTERVAL_MS = 60 * 1000
+const PRESENCE_HEARTBEAT_RUSH_INTERVAL_MS = 15 * 1000
+const PRESENCE_HEARTBEAT_DEFAULT_INTERVAL_MS = 45 * 1000
+const DAILY_REPORT_POLL_RUSH_INTERVAL_MS = 10 * 1000
+const DAILY_REPORT_POLL_DEFAULT_INTERVAL_MS = 60 * 1000
+
+function getKstHour() {
+  const formattedHour = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    hour12: false,
+  }).format(new Date())
+  return Number(formattedHour) % 24
+}
+
+function isDailyReportRushHourKst() {
+  const hour = getKstHour()
+  return hour >= 16 && hour < 18
+}
+
+function getPresenceHeartbeatIntervalMs() {
+  return isDailyReportRushHourKst() ? PRESENCE_HEARTBEAT_RUSH_INTERVAL_MS : PRESENCE_HEARTBEAT_DEFAULT_INTERVAL_MS
+}
+
+function getDailyReportPollIntervalMs() {
+  return isDailyReportRushHourKst() ? DAILY_REPORT_POLL_RUSH_INTERVAL_MS : DAILY_REPORT_POLL_DEFAULT_INTERVAL_MS
+}
 
 const viewTitles: Record<ViewKey, string> = {
   "daily-report": "업무일지",
@@ -2038,7 +2062,7 @@ export function DashboardShell({
     if (!currentUser?.id) return
     let alive = true
     let eventSource: EventSource | null = null
-    let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+    let heartbeatTimer: ReturnType<typeof setTimeout> | null = null
 
     const markActivity = () => {
       if (manualPresenceStatus === "away") return
@@ -2107,22 +2131,28 @@ export function DashboardShell({
       lastActivityAtRef.current = Date.now()
     }
 
+    const scheduleHeartbeat = () => {
+      if (!alive) return
+      heartbeatTimer = setTimeout(() => {
+        if (!alive) return
+        if (document.visibilityState !== "hidden") void sendHeartbeat()
+        scheduleHeartbeat()
+      }, getPresenceHeartbeatIntervalMs())
+    }
+
     const activityEvents: Array<keyof WindowEventMap> = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"]
     activityEvents.forEach((eventName) => window.addEventListener(eventName, handleActivity, { passive: true }))
     document.addEventListener("visibilitychange", handleVisibilityChange)
 
     void sendHeartbeat()
-    heartbeatTimer = setInterval(() => {
-      if (document.visibilityState === "hidden") return
-      void sendHeartbeat()
-    }, PRESENCE_HEARTBEAT_INTERVAL_MS)
+    scheduleHeartbeat()
     connect()
 
     return () => {
       alive = false
       activityEvents.forEach((eventName) => window.removeEventListener(eventName, handleActivity))
       document.removeEventListener("visibilitychange", handleVisibilityChange)
-      if (heartbeatTimer) clearInterval(heartbeatTimer)
+      if (heartbeatTimer) clearTimeout(heartbeatTimer)
       if (eventSource) eventSource.close()
     }
   }, [currentUser?.id, manualPresenceStatus, view])
@@ -2967,7 +2997,9 @@ export function DashboardShell({
   useEffect(() => {
     if (view !== "daily-report") return
     let cancelled = false
-    const timer = window.setInterval(async () => {
+    let timer: number | null = null
+
+    const refreshDailyReport = async () => {
       if (document.visibilityState === "hidden") return
       try {
         const response = await fetch("/api/dashboard", { cache: "no-store" })
@@ -2980,10 +3012,20 @@ export function DashboardShell({
       } catch {
         // Ignore transient polling issues for collaborative daily reports.
       }
-    }, DAILY_REPORT_POLL_INTERVAL_MS)
+    }
+
+    const scheduleRefresh = () => {
+      if (cancelled) return
+      timer = window.setTimeout(() => {
+        if (cancelled) return
+        void refreshDailyReport().finally(scheduleRefresh)
+      }, getDailyReportPollIntervalMs())
+    }
+
+    scheduleRefresh()
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      if (timer) window.clearTimeout(timer)
     }
   }, [view])
 
