@@ -150,6 +150,7 @@ type PresenceUser = {
 
 type PopupMessage = {
   id: string
+  senderUserId: string
   senderName: string
   title: string
   body: string
@@ -2853,6 +2854,36 @@ export function DashboardShell({
       })
     } catch {
       // The next stream tick may show it again if the read marker failed.
+    }
+  }
+
+  async function replyToPopupMessage(message: PopupMessage) {
+    if (!message.senderUserId || message.senderUserId === currentUser?.id) {
+      window.alert("답장을 보낼 대상이 없습니다.")
+      return
+    }
+    const body = window.prompt(`${message.senderName || "보낸 사람"}에게 답장할 내용을 입력해주세요.`)
+    const replyBody = String(body || "").trim()
+    if (!replyBody) return
+    try {
+      const response = await fetch("/api/popup-messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          targetUserIds: [message.senderUserId],
+          title: `답장: ${message.title || "업무 알림"}`,
+          body: replyBody,
+        }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || !payload?.ok) {
+        window.alert(payload?.error || "답장을 보내지 못했습니다.")
+        return
+      }
+      await acknowledgePopupMessage(message.id)
+      window.alert("답장을 보냈습니다.")
+    } catch {
+      window.alert("답장을 보내지 못했습니다. 잠시 후 다시 시도해주세요.")
     }
   }
 
@@ -5947,13 +5978,23 @@ export function DashboardShell({
               </div>
               <div className="px-4 py-3">
                 <div className="whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-700">{message.body}</div>
-                <button
-                  type="button"
-                  onClick={() => void acknowledgePopupMessage(message.id)}
-                  className="mt-3 h-9 w-full rounded-xl bg-slate-900 text-[13px] font-bold text-white transition hover:bg-slate-800"
-                >
-                  확인
-                </button>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void replyToPopupMessage(message)}
+                    className="h-9 rounded-xl bg-blue-600 text-[13px] font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!message.senderUserId || message.senderUserId === currentUser?.id}
+                  >
+                    답장
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void acknowledgePopupMessage(message.id)}
+                    className="h-9 rounded-xl border border-slate-200 bg-white text-[13px] font-bold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    닫기
+                  </button>
+                </div>
               </div>
             </div>
           ))}
