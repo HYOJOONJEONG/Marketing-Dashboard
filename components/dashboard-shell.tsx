@@ -135,6 +135,17 @@ const manualSummaryMatrixRows = [
 
 type PresenceStatus = "online" | "away" | "offline"
 type CreateStatus = "idle" | "saving" | "success"
+type ContractSortKey =
+  | "createdAt"
+  | "companyName"
+  | "departmentName"
+  | "idCode"
+  | "industry"
+  | "contractMonth"
+  | "recommender"
+  | "documentStatus"
+  | "replacementType"
+  | "note"
 
 type PresenceUser = {
   userId: string
@@ -224,6 +235,9 @@ function getContractSearchText(row: Record<string, unknown>) {
 }
 
 function compareContractValue(rowA: Record<string, unknown>, rowB: Record<string, unknown>, key: string) {
+  if (key === "createdAt") {
+    return parseDateKey(rowA.createdAt) - parseDateKey(rowB.createdAt)
+  }
   if (key === "contractMonth") {
     return parseContractMonthKey(rowA.contractMonth) - parseContractMonthKey(rowB.contractMonth)
   }
@@ -1708,21 +1722,15 @@ export function DashboardShell({
   const [contractReplacementFilter, setContractReplacementFilter] = useState("all")
   const [contractMonthFilter, setContractMonthFilter] = useState("all")
   const [contractSort, setContractSort] = useState<{
-    key:
-      | "companyName"
-      | "departmentName"
-      | "idCode"
-      | "industry"
-      | "contractMonth"
-      | "recommender"
-      | "documentStatus"
-      | "replacementType"
-      | "note"
+    key: ContractSortKey
     dir: "asc" | "desc"
   }>({
     key: "contractMonth",
     dir: "desc",
   })
+  const [recentContractId, setRecentContractId] = useState<string | null>(null)
+  const [recentTerminationId, setRecentTerminationId] = useState<string | null>(null)
+  const [recentHoldId, setRecentHoldId] = useState<string | null>(null)
   const [weeklySelectionSort, setWeeklySelectionSort] = useState<{
     key:
       | "includedInWeekly"
@@ -3154,6 +3162,13 @@ export function DashboardShell({
     return `h-10 rounded-2xl px-4 text-[14px] font-semibold whitespace-nowrap transition ${colorClass}`
   }
 
+  function flashRecentRow(setter: React.Dispatch<React.SetStateAction<string | null>>, rowId: string) {
+    setter(rowId)
+    window.setTimeout(() => {
+      setter((current) => (current === rowId ? null : current))
+    }, 2800)
+  }
+
   function hasDuplicateContractId(idCode: unknown) {
     const normalizedId = normalizeCustomerIdentifier(idCode)
     if (!normalizedId) return false
@@ -3539,6 +3554,7 @@ export function DashboardShell({
         if (!response.ok || !payload?.ok || !payload?.data) {
           throw new Error(payload?.error || `계약 등록 실패 (${response.status})`)
         }
+        const createdId = String(payload?.contract?.id || nextContract.id)
         setData(payload.data)
         pendingDataRef.current = payload.data
         clearDirtyViews(["contracts"])
@@ -3556,6 +3572,12 @@ export function DashboardShell({
           documentStatus: "미회수",
           replacementType: "신규",
         })
+        setContractQuery("")
+        setContractStatusFilter("all")
+        setContractReplacementFilter("all")
+        setContractMonthFilter("all")
+        setContractSort({ key: "createdAt", dir: "desc" })
+        flashRecentRow(setRecentContractId, createdId)
         setContractCreateStatus("success")
       } catch (error: any) {
         setContractCreateStatus("idle")
@@ -4780,6 +4802,11 @@ export function DashboardShell({
         { throwOnError: true },
       )
       resetTerminationDraft()
+      setTerminationQuery("")
+      setTerminationReasonFilter("all")
+      setTerminationDateFilter("all")
+      setTerminationSort({ key: "receivedDate", dir: "desc" })
+      flashRecentRow(setRecentTerminationId, nextItem.id)
       setTerminationCreateStatus("success")
     } catch {
       setTerminationCreateStatus("idle")
@@ -4829,6 +4856,11 @@ export function DashboardShell({
         { throwOnError: true },
       )
       resetHoldDraft()
+      setHoldQuery("")
+      setHoldReceivedDateFilter("all")
+      setHoldEndDateFilter("all")
+      setHoldSort({ key: "receivedDate", dir: "desc" })
+      flashRecentRow(setRecentHoldId, nextItem.id)
       setHoldCreateStatus("success")
     } catch {
       setHoldCreateStatus("idle")
@@ -7259,7 +7291,7 @@ export function DashboardShell({
                     {sortedContracts.map((row: any, index: number) => {
                       const editing = editingContractId === row.id
                       return (
-                        <tr key={row.id}>
+                        <tr key={row.id} className={recentContractId === row.id ? "recent-row-flash" : undefined}>
                           <td className={`${tdClass} w-[52px] px-2 py-2 text-center text-[12px]`}>{index + 1}</td>
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
                             {editing ? <input className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]" value={editingContractDraft.companyName || ""} onChange={(e)=>updateEditingContractDraft("companyName", e.target.value)} /> : <span className="block truncate">{row.companyName}</span>}
@@ -8153,7 +8185,7 @@ export function DashboardShell({
                         const editing = editingTerminationId === row.id
                         return (
                         <React.Fragment key={row.id}>
-                        <tr className={editing ? "bg-blue-50/40" : row.selected ? "bg-rose-50" : ""}>
+                        <tr className={`${editing ? "bg-blue-50/40" : row.selected ? "bg-rose-50" : ""} ${recentTerminationId === row.id ? "recent-row-flash" : ""}`}>
                           <td className={`${tdClass} text-center tabular-nums`}>{index + 1}</td>
                           <td className={`${tdClass} text-center`}>
                             <input
@@ -8439,7 +8471,7 @@ export function DashboardShell({
                         const editing = editingHoldId === row.id
                         return (
                           <React.Fragment key={row.id}>
-                          <tr className={editing ? "bg-blue-50/40" : undefined}>
+                          <tr className={`${editing ? "bg-blue-50/40" : ""} ${recentHoldId === row.id ? "recent-row-flash" : ""}`}>
                           <td className={`${tdClass} text-center`}>
                             <input
                               type="checkbox"
