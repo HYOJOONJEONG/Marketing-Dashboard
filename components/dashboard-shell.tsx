@@ -8152,7 +8152,8 @@ export function DashboardShell({
                       {terminationItems.map((row: any, index: number) => {
                         const editing = editingTerminationId === row.id
                         return (
-                        <tr key={row.id} className={row.selected ? "bg-rose-50" : ""}>
+                        <React.Fragment key={row.id}>
+                        <tr className={editing ? "bg-blue-50/40" : row.selected ? "bg-rose-50" : ""}>
                           <td className={`${tdClass} text-center tabular-nums`}>{index + 1}</td>
                           <td className={`${tdClass} text-center`}>
                             <input
@@ -8161,32 +8162,17 @@ export function DashboardShell({
                               onChange={() => toggleTerminationSelected(row.id)}
                             />
                           </td>
-                          <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="date" className="h-9 w-36 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.receivedDate || ""} onChange={(e)=>updateEditingTerminationDraft("receivedDate", e.target.value)} {...receivedDatePickerOnlyProps} /> : normalizeDate(row.receivedDate)}</td>
-                          <td className={tdClass}>{editing ? <input className="h-9 w-full min-w-[110px] rounded-xl border border-amber-300 bg-amber-50 px-3 text-[13px] text-slate-800" value={editingTerminationDraft.manager || ""} onChange={(e)=>updateEditingTerminationDraft("manager", e.target.value)} /> : row.manager}</td>
-                          <td className={tdClass}>{editing ? <input className="h-9 w-full min-w-[110px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.customerId || ""} onChange={(e)=>updateEditingTerminationDraft("customerId", e.target.value)} /> : row.customerId}</td>
-                          <td className={`${tdClass} whitespace-nowrap`}>{editing ? <input className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.companyName || ""} onChange={(e)=>updateEditingTerminationDraft("companyName", e.target.value)} /> : row.companyName}</td>
-                          <td className={`${tdClass} whitespace-nowrap`}>{editing ? <input className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.departmentName || ""} onChange={(e)=>updateEditingTerminationDraft("departmentName", e.target.value)} /> : row.departmentName}</td>
-                          <td className={tdClass}>
-                            {editing ? (
-                              <div className="space-y-2">
-                                <select className="h-9 w-full min-w-[120px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.reason || "계약만료"} onChange={(e)=>updateEditingTerminationDraft("reason", e.target.value)}>
-                                  {["계약만료","비용절감","활용도 저조","사용자퇴사","타사대체","조직개편","비용미납","폐업","합병매각","휴직/장기출장","기타"].map((item) => <option key={item} value={item}>{item}</option>)}
-                                </select>
-                                {editingTerminationDraft.reason === "기타" && (
-                                  <input className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.reasonDetail || ""} onChange={(e)=>updateEditingTerminationDraft("reasonDetail", e.target.value)} placeholder="기타 사유" />
-                                )}
-                              </div>
-                            ) : row.reason}
-                          </td>
-                          <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{editing ? <input type="date" className="h-9 w-36 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.terminationDate || ""} onChange={(e)=>updateEditingTerminationDraft("terminationDate", e.target.value)} /> : normalizeDate(row.terminationDate)}</td>
-                          <td className={`${tdClass} text-right tabular-nums`}>{editing ? <input className="h-9 w-28 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.penalty || ""} onChange={(e)=>updateEditingTerminationDraft("penalty", e.target.value)} /> : row.penalty ? formatNumber(row.penalty) : ""}</td>
+                          <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.receivedDate)}</td>
+                          <td className={tdClass}>{row.manager}</td>
+                          <td className={tdClass}>{row.customerId}</td>
+                          <td className={`${tdClass} whitespace-nowrap`}>{row.companyName}</td>
+                          <td className={`${tdClass} whitespace-nowrap`}>{row.departmentName}</td>
+                          <td className={tdClass}>{row.reason}</td>
+                          <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.terminationDate)}</td>
+                          <td className={`${tdClass} text-right tabular-nums`}>{row.penalty ? formatNumber(row.penalty) : ""}</td>
                           <td className={`${tdClass} text-center`}>
                             {editing ? (
-                              <div className="flex items-center justify-center gap-2 whitespace-nowrap">
-                                <button type="button" onClick={() => handleTerminationUpdate(row.id)} className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white">수정완료</button>
-                                <button type="button" onClick={() => handleDeleteTerminationRow(row.id)} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">삭제</button>
-                                <button type="button" onClick={() => { setEditingTerminationId(null); setEditingTerminationDraft({}) }} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">취소</button>
-                              </div>
+                              <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-bold text-blue-700">수정 중</span>
                             ) : (
                               <button
                                 type="button"
@@ -8198,6 +8184,62 @@ export function DashboardShell({
                             )}
                           </td>
                         </tr>
+                          {editing ? (
+                            <tr className="bg-blue-50/40">
+                              <td colSpan={11} className="border-t border-blue-100 px-4 py-3">
+                                <div className="rounded-2xl border border-blue-100 bg-white p-3 shadow-sm">
+                                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
+                                    <label className="space-y-1">
+                                      <div className="text-[11px] font-semibold text-slate-500">접수일</div>
+                                      <input type="date" className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.receivedDate || ""} onChange={(e)=>updateEditingTerminationDraft("receivedDate", e.target.value)} {...receivedDatePickerOnlyProps} />
+                                    </label>
+                                    <label className="space-y-1">
+                                      <div className="text-[11px] font-semibold text-slate-500">담당자</div>
+                                      <input className="h-9 w-full rounded-xl border border-amber-300 bg-amber-50 px-3 text-[13px] text-slate-800" value={editingTerminationDraft.manager || ""} onChange={(e)=>updateEditingTerminationDraft("manager", e.target.value)} />
+                                    </label>
+                                    <label className="space-y-1">
+                                      <div className="text-[11px] font-semibold text-slate-500">고객번호</div>
+                                      <input className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.customerId || ""} onChange={(e)=>updateEditingTerminationDraft("customerId", e.target.value)} />
+                                    </label>
+                                    <label className="space-y-1">
+                                      <div className="text-[11px] font-semibold text-slate-500">고객사</div>
+                                      <input className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.companyName || ""} onChange={(e)=>updateEditingTerminationDraft("companyName", e.target.value)} />
+                                    </label>
+                                    <label className="space-y-1">
+                                      <div className="text-[11px] font-semibold text-slate-500">고객 부서</div>
+                                      <input className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.departmentName || ""} onChange={(e)=>updateEditingTerminationDraft("departmentName", e.target.value)} />
+                                    </label>
+                                    <label className="space-y-1">
+                                      <div className="text-[11px] font-semibold text-slate-500">해지 사유</div>
+                                      <select className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.reason || "계약만료"} onChange={(e)=>updateEditingTerminationDraft("reason", e.target.value)}>
+                                        {["계약만료","비용절감","활용도 저조","사용자퇴사","타사대체","조직개편","비용미납","폐업","합병매각","휴직/장기출장","기타"].map((item) => <option key={item} value={item}>{item}</option>)}
+                                      </select>
+                                    </label>
+                                    {editingTerminationDraft.reason === "기타" && (
+                                      <label className="space-y-1">
+                                        <div className="text-[11px] font-semibold text-slate-500">기타 사유</div>
+                                        <input className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.reasonDetail || ""} onChange={(e)=>updateEditingTerminationDraft("reasonDetail", e.target.value)} placeholder="기타 사유" />
+                                      </label>
+                                    )}
+                                    <label className="space-y-1">
+                                      <div className="text-[11px] font-semibold text-slate-500">해지일</div>
+                                      <input type="date" className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.terminationDate || ""} onChange={(e)=>updateEditingTerminationDraft("terminationDate", e.target.value)} />
+                                    </label>
+                                    <label className="space-y-1">
+                                      <div className="text-[11px] font-semibold text-slate-500">위약금</div>
+                                      <input className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingTerminationDraft.penalty || ""} onChange={(e)=>updateEditingTerminationDraft("penalty", e.target.value)} />
+                                    </label>
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap justify-end gap-2">
+                                    <button type="button" onClick={() => handleTerminationUpdate(row.id)} className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white">수정완료 및 저장</button>
+                                    <button type="button" onClick={() => handleDeleteTerminationRow(row.id)} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">삭제</button>
+                                    <button type="button" onClick={() => { setEditingTerminationId(null); setEditingTerminationDraft({}) }} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">취소</button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                          </React.Fragment>
                       )})}
                     </tbody>
                   </table>
@@ -8489,7 +8531,7 @@ export function DashboardShell({
                                     </label>
                                   </div>
                                   <div className="mt-3 flex flex-wrap justify-end gap-2">
-                                    <button type="button" onClick={() => handleHoldUpdate(row.id)} className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white">수정완료</button>
+                                    <button type="button" onClick={() => handleHoldUpdate(row.id)} className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white">수정완료 및 저장</button>
                                     <button type="button" onClick={() => handleMoveHoldToTermination(row.id)} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">해지이동</button>
                                     <button type="button" onClick={() => handleDeleteHoldRow(row.id)} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">삭제</button>
                                     <button type="button" onClick={() => { setEditingHoldId(null); setEditingHoldDraft({}) }} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">취소</button>
