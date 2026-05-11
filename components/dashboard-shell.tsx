@@ -4620,8 +4620,14 @@ export function DashboardShell({
     }
   }
 
-  function persistTerminationData(nextData: any) {
-    void persist(nextData, { updatedViews: ["termination"] })
+  function persistTerminationData(nextData: any, options: { throwOnError?: boolean } = {}) {
+    const savePromise = persist(nextData, { immediate: true, updatedViews: ["termination"] })
+    if (!options.throwOnError) {
+      void savePromise.catch(() => {
+        // persist() already restores the previous state and alerts the user on immediate save failures.
+      })
+    }
+    return savePromise
   }
 
   function toggleTerminationSelected(itemId: string) {
@@ -4731,7 +4737,7 @@ export function DashboardShell({
     })
   }
 
-  function handleTerminationCreate() {
+  async function handleTerminationCreate() {
     if (!selectedSheet) return
     if (!terminationDraft.customerId.trim() || !terminationDraft.companyName.trim()) {
       window.alert("고객번호와 고객사는 필수입니다.")
@@ -4768,12 +4774,19 @@ export function DashboardShell({
           }
         : sheet,
     )
-    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
-    resetTerminationDraft()
-    setTerminationCreateStatus("success")
+    try {
+      await persistTerminationData(
+        { ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } },
+        { throwOnError: true },
+      )
+      resetTerminationDraft()
+      setTerminationCreateStatus("success")
+    } catch {
+      setTerminationCreateStatus("idle")
+    }
   }
 
-  function handleHoldCreate() {
+  async function handleHoldCreate() {
     if (!selectedSheet) return
     if (!holdDraft.customerId.trim() || !holdDraft.companyName.trim()) {
       window.alert("고객번호와 고객사는 필수입니다.")
@@ -4810,9 +4823,16 @@ export function DashboardShell({
           }
         : sheet,
     )
-    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
-    resetHoldDraft()
-    setHoldCreateStatus("success")
+    try {
+      await persistTerminationData(
+        { ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } },
+        { throwOnError: true },
+      )
+      resetHoldDraft()
+      setHoldCreateStatus("success")
+    } catch {
+      setHoldCreateStatus("idle")
+    }
   }
 
   function toggleTerminationSort(
