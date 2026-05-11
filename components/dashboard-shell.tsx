@@ -7354,7 +7354,7 @@ export function DashboardShell({
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
                             {editing ? (
                               <div className="flex flex-wrap items-center justify-center gap-1">
-                                {canEditContracts ? <button type="button" onClick={() => handleContractUpdate(row.id)} className="rounded-lg bg-blue-600 px-2 py-1.5 text-[11px] font-semibold text-white whitespace-nowrap">수정완료</button> : null}
+                                {canEditContracts ? <button type="button" onClick={() => handleContractUpdate(row.id)} className="rounded-lg bg-blue-600 px-2 py-1.5 text-[11px] font-semibold text-white whitespace-nowrap">수정완료 및 저장</button> : null}
                                 {canDeleteContracts ? <button type="button" onClick={() => handleContractDelete(row.id)} className="rounded-lg bg-rose-50 px-2 py-1.5 text-[11px] font-semibold text-rose-700 whitespace-nowrap">삭제</button> : null}
                                 <button type="button" onClick={() => { setEditingContractId(null); setEditingContractDraft({}) }} className="rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-semibold whitespace-nowrap">취소</button>
                               </div>
