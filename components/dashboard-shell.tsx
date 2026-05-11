@@ -339,12 +339,16 @@ function getSafeTerminationTeamLabel(value: unknown) {
 }
 
 function getSafeTerminationGuidelines(value: unknown) {
-  const fallback = ["1. 해지 발생 시 본부장님 보고 진행", "2. CRM 및 해지 리스트 등록"]
+  const fallback = ["1. 해지 발생 시 선보고 진행", "2. CRM 및 해지 리스트 등록"]
   if (!Array.isArray(value) || value.length === 0) return fallback
   const mapped = value
     .map((item) => String(item ?? "").trim())
     .filter(Boolean)
-    .map((item, idx) => (isBrokenKoreanText(item) ? fallback[idx] || fallback[fallback.length - 1] : item))
+    .map((item, idx) =>
+      isBrokenKoreanText(item)
+        ? fallback[idx] || fallback[fallback.length - 1]
+        : item.replace("해지 발생 시 본부장님 보고 진행", "해지 발생 시 선보고 진행"),
+    )
   return mapped.length ? mapped : fallback
 }
 

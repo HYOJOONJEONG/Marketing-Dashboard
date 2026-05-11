@@ -184,7 +184,7 @@ try {
       weeklyTerminationCount = @($openItems).Count
       weeklyBillingHoldCount = @($holdItems).Count
       teamLabel = "인포Biz본부 인포Biz1팀"
-      guidelines = @("1. 해지 발생 시 본부장님 보고 진행", "2. CRM 및 해지 리스트 등록")
+      guidelines = @("1. 해지 발생 시 선보고 진행", "2. CRM 및 해지 리스트 등록")
       items = @($openItems)
       holdItems = @($holdItems)
       confirmedItems = @($dedupConfirmed)
