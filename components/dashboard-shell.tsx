@@ -5001,7 +5001,7 @@ export function DashboardShell({
     }
   }
 
-  function handleTerminationUpdate(rowId: string) {
+  async function handleTerminationUpdate(rowId: string) {
     const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
     if (!latestSheet) return
     const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
@@ -5029,9 +5029,16 @@ export function DashboardShell({
           }
         : sheet,
     )
-    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
-    setEditingTerminationId(null)
-    setEditingTerminationDraft({})
+    try {
+      await persistTerminationData(
+        { ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } },
+        { throwOnError: true },
+      )
+      setEditingTerminationId(null)
+      setEditingTerminationDraft({})
+    } catch {
+      // persist() already restores the previous state and alerts the user on immediate save failures.
+    }
   }
 
   function handleDeleteTerminationRow(rowId: string) {
@@ -5104,7 +5111,7 @@ export function DashboardShell({
     return { latestData, latestTermination, latestSheet }
   }
 
-  function handleHoldUpdate(rowId: string) {
+  async function handleHoldUpdate(rowId: string) {
     const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
     if (!latestSheet) return
     const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
@@ -5132,9 +5139,16 @@ export function DashboardShell({
           }
         : sheet,
     )
-    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
-    setEditingHoldId(null)
-    setEditingHoldDraft({})
+    try {
+      await persistTerminationData(
+        { ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } },
+        { throwOnError: true },
+      )
+      setEditingHoldId(null)
+      setEditingHoldDraft({})
+    } catch {
+      // persist() already restores the previous state and alerts the user on immediate save failures.
+    }
   }
 
   function handleDeleteHoldRow(rowId: string) {
