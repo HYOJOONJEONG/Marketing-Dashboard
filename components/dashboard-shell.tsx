@@ -5526,7 +5526,7 @@ export function DashboardShell({
   const currentMenuUpdatedAt = data?.ui?.menuUpdatedAt?.[view]
   const currentViewDirty = Boolean(dirtyViews[view])
   const hasUnsavedChanges = Object.values(dirtyViews).some(Boolean)
-  const showHeaderSave = !["daily-report", "weekly-report", "contracts", "weekly-selection", "manual-input"].includes(view)
+  const showHeaderSave = !["daily-report", "weekly-report", "contracts", "weekly-selection", "manual-input", "termination"].includes(view)
 
   const manualRevenueSection = useMemo(
     () => (
