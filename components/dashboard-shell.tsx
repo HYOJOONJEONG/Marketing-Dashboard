@@ -374,6 +374,12 @@ function normalizeDate(value: unknown) {
   return String(value ?? "")
 }
 
+function formatDateOnlyDotted(value: unknown) {
+  const digits = String(value ?? "").replace(/[^\d]/g, "")
+  if (digits.length >= 8) return `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6, 8)}`
+  return normalizeDate(value)
+}
+
 function normalizeMonth(value: unknown) {
   const digits = String(value ?? "").replace(/[^\d]/g, "")
   if (digits.length === 4) return `20${digits.slice(0, 2)}.${digits.slice(2, 4)}`
@@ -7290,7 +7296,7 @@ export function DashboardShell({
                         <tr key={row.id} className={recentContractId === row.id ? "recent-row-flash" : undefined}>
                           <td className={`${tdClass} w-[52px] px-2 py-2 text-center text-[12px]`}>{index + 1}</td>
                           <td className={`${tdClass} px-2 py-2 text-center text-[12px] tabular-nums`}>
-                            {normalizeDate(row.createdAt || row.registeredDate || row.updatedAt)}
+                            {formatDateOnlyDotted(row.createdAt || row.registeredDate || row.updatedAt)}
                           </td>
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
                             {editing ? <input className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]" value={editingContractDraft.companyName || ""} onChange={(e)=>updateEditingContractDraft("companyName", e.target.value)} /> : <span className="block truncate">{row.companyName}</span>}
