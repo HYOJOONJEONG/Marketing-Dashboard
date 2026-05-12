@@ -6,7 +6,7 @@ import { DashboardShell } from "@/components/dashboard-shell"
 import { buildPermissionIndex, filterContractsForUser, hasPermission } from "@/lib/auth/permissions"
 import { requirePageAuth } from "@/lib/auth/server"
 import { getUserColorToken } from "@/lib/auth/model"
-import { ensureDailyDirectoryUsers, sortDailyDirectoryUsers } from "@/lib/daily-report"
+import { ensureDailyDirectoryUsers, isDailyReportTeam, sortDailyDirectoryUsers } from "@/lib/daily-report"
 import { readDashboardState } from "@/lib/shared-db-store"
 
 const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
@@ -58,7 +58,8 @@ export default async function Page({
             displayOrder: Number(user.displayOrder ?? 99),
             avatarEmoji: user.avatarEmoji || null,
           }
-        }),
+        })
+        .filter((user) => isDailyReportTeam(user.teamName)),
     ),
   )
 

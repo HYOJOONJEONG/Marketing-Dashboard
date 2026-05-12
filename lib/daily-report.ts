@@ -46,6 +46,8 @@ const TEAM_ORDER: Record<string, number> = {
   인포Biz2팀: 3,
 }
 
+const DAILY_REPORT_TEAM_NAMES = new Set(["본부", "인포Biz1팀", "인포Biz2팀"])
+
 const USER_ORDER: Record<string, number> = {
   이상철: 1,
   신무길: 1,
@@ -73,6 +75,10 @@ export function getDailyTeamOrder(teamName: string) {
   return TEAM_ORDER[safeString(teamName)] ?? 99
 }
 
+export function isDailyReportTeam(teamName: string) {
+  return DAILY_REPORT_TEAM_NAMES.has(safeString(teamName))
+}
+
 export function getDailyDisplayOrder(name: string) {
   return USER_ORDER[safeString(name)] ?? 99
 }
@@ -88,7 +94,7 @@ export function sortDailyDirectoryUsers<T extends { teamOrder?: number; displayO
 }
 
 export function ensureDailyDirectoryUsers(users: DailyDirectoryUser[]) {
-  const nextUsers = [...users]
+  const nextUsers = users.filter((user) => isDailyReportTeam(user.teamName))
   const teamTwoUser = nextUsers.find((user) => safeString(user.teamName) === "인포Biz2팀")
   const hasOtherEntry = nextUsers.some(
     (user) => safeString(user.teamName) === "인포Biz2팀" && safeString(user.name) === "기타",
