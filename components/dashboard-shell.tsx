@@ -4889,18 +4889,7 @@ export function DashboardShell({
     )
   }
 
-  function toggleContractSort(
-    key:
-      | "companyName"
-      | "departmentName"
-      | "idCode"
-      | "industry"
-      | "contractMonth"
-      | "recommender"
-      | "documentStatus"
-      | "replacementType"
-      | "note",
-  ) {
+  function toggleContractSort(key: ContractSortKey) {
     setContractSort((prev) =>
       prev.key === key
         ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
@@ -7262,6 +7251,9 @@ export function DashboardShell({
                     <tr>
                       <th className={`${thClass} w-[52px] px-2 py-2 text-center text-[12px]`}>No.</th>
                       <th className={`${thClass} px-2 py-2 text-[12px]`}>
+                        {renderSortLabel("등록일", contractSort.key === "createdAt", contractSort.dir, () => toggleContractSort("createdAt"))}
+                      </th>
+                      <th className={`${thClass} px-2 py-2 text-[12px]`}>
                         {renderSortLabel("회사명", contractSort.key === "companyName", contractSort.dir, () => toggleContractSort("companyName"))}
                       </th>
                       <th className={`${thClass} px-2 py-2 text-[12px]`}>
@@ -7297,6 +7289,9 @@ export function DashboardShell({
                       return (
                         <tr key={row.id} className={recentContractId === row.id ? "recent-row-flash" : undefined}>
                           <td className={`${tdClass} w-[52px] px-2 py-2 text-center text-[12px]`}>{index + 1}</td>
+                          <td className={`${tdClass} px-2 py-2 text-center text-[12px] tabular-nums`}>
+                            {normalizeDate(row.createdAt || row.registeredDate || row.updatedAt)}
+                          </td>
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
                             {editing ? <input className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]" value={editingContractDraft.companyName || ""} onChange={(e)=>updateEditingContractDraft("companyName", e.target.value)} /> : <span className="block truncate">{row.companyName}</span>}
                           </td>
