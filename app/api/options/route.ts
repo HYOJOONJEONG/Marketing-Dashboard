@@ -356,7 +356,7 @@ export async function GET(req: Request) {
       const normalizedStatus = normalizeStatus(row.status)
       if (statusFilter !== "all" && normalizedStatus !== statusFilter) return false
       if (!search) return true
-      const target = `${row.company_name || ""} ${row.user_id || ""} ${row.requester_name || ""} ${row.department || ""}`.toLowerCase()
+      const target = `${row.company_name || ""} ${row.user_id || ""} ${row.department || ""}`.toLowerCase()
       return target.includes(search)
     })
 
@@ -365,6 +365,7 @@ export async function GET(req: Request) {
         const resolvedIndustry = resolveIndustry(row, companyIndustryMap, row.category_code)
         return {
           ...row,
+          requester_name: "",
           category_name_ko: row.category_name_ko || CATEGORY_LABELS[row.category_code] || row.category_code,
           sub_type: resolvedIndustry,
           industry: resolvedIndustry,
@@ -418,6 +419,7 @@ export async function POST(req: Request) {
       const resolvedIndustry = resolveIndustry(record, companyIndustryMap, categoryCode)
       const nextRecord = {
         ...record,
+        requester_name: "",
         record_id: recordId,
         category_code: categoryCode,
         category_name_ko: categoryLabel,

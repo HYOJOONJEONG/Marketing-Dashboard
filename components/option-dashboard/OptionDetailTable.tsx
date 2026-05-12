@@ -140,9 +140,8 @@ export function OptionDetailTable({
         { key: "row_no", label: "NO", headerClass: "w-[4%]", cellClass: "whitespace-nowrap text-center" },
         { key: "sub_type", label: "업종", headerClass: "w-[8%]", cellClass: "whitespace-nowrap text-center" },
         { key: "user_id", label: "아이디", headerClass: "w-[10%]", cellClass: "whitespace-nowrap" },
-        { key: "company_name", label: "기관", headerClass: "w-[12%]", cellClass: "whitespace-normal break-all leading-4" },
-        { key: "department", label: "부서", headerClass: "w-[10%]", cellClass: "whitespace-normal break-all leading-4" },
-        { key: "requester_name", label: "사용자명", headerClass: "w-[8%]", cellClass: "whitespace-normal break-all leading-4 text-center" },
+        { key: "company_name", label: "기관", headerClass: "w-[14%]", cellClass: "whitespace-normal break-all leading-4" },
+        { key: "department", label: "부서", headerClass: "w-[12%]", cellClass: "whitespace-normal break-all leading-4" },
         { key: "billing_month", label: "청구월", headerClass: "w-[7%]", cellClass: "whitespace-nowrap text-center" },
         { key: "dedicated", label: "전용여부", headerClass: "w-[7%]", cellClass: "whitespace-nowrap text-center" },
         { key: "quantity", label: "수량", headerClass: "w-[5%]", cellClass: "whitespace-nowrap text-center" },
@@ -159,10 +158,9 @@ export function OptionDetailTable({
       ? [
           { key: "row_no", label: "NO", headerClass: "w-[4%]", cellClass: "whitespace-nowrap text-center" },
           { key: "sub_type", label: "업종", headerClass: "w-[7%]", cellClass: "whitespace-normal break-all" },
-          { key: "company_name", label: "회사명", headerClass: "w-[9%]", cellClass: "whitespace-normal break-all" },
+          { key: "company_name", label: "회사명", headerClass: "w-[12%]", cellClass: "whitespace-normal break-all" },
           { key: "user_id", label: "사용자ID", headerClass: "w-[12%]", cellClass: "whitespace-normal break-all" },
-          { key: "department", label: "부서", headerClass: "w-[13%]", cellClass: "whitespace-normal break-all" },
-          { key: "requester_name", label: "사용자명", headerClass: "w-[13%]", cellClass: "whitespace-normal break-all" },
+          { key: "department", label: "부서", headerClass: "w-[16%]", cellClass: "whitespace-normal break-all" },
           { key: "billing_month", label: "청구월", headerClass: "w-[10%]", cellClass: "whitespace-normal break-all" },
           { key: "status", label: "상태", headerClass: "w-[7%]", cellClass: "whitespace-nowrap text-center" },
           {
@@ -179,7 +177,6 @@ export function OptionDetailTable({
           { key: "company_name", label: "회사명", headerClass: "w-36", cellClass: "whitespace-nowrap" },
           { key: "user_id", label: "사용자ID", headerClass: "w-36", cellClass: "whitespace-nowrap" },
           { key: "department", label: "부서", headerClass: "w-36", cellClass: "whitespace-nowrap" },
-          { key: "requester_name", label: "사용자명", headerClass: "w-32", cellClass: "whitespace-nowrap" },
           { key: "billing_month", label: "청구월", headerClass: "w-28", cellClass: "whitespace-nowrap" },
           { key: "status", label: "상태", headerClass: "w-24", cellClass: "whitespace-nowrap text-center" },
           {
@@ -457,10 +454,6 @@ export function OptionDetailTable({
               <input value={newRecord?.department || ""} onChange={(event) => handleNewChange("department", event.target.value)} placeholder="부서" className={inputClass} />
             </div>
             <div className="col-span-2">
-              <div className={labelClass}>사용자명</div>
-              <input value={newRecord?.requester_name || ""} onChange={(event) => handleNewChange("requester_name", event.target.value)} placeholder="사용자명" className={inputClass} />
-            </div>
-            <div className="col-span-2">
               <div className={labelClass}>청구월</div>
               <input value={newRecord?.billing_month || ""} onChange={(event) => handleNewChange("billing_month", event.target.value)} placeholder="청구월" className={inputClass} />
             </div>
@@ -476,7 +469,7 @@ export function OptionDetailTable({
               <div className={labelClass}>권유자</div>
               <input value={newRecord?.recommender || ""} onChange={(event) => handleNewChange("recommender", event.target.value)} placeholder="권유자" className={inputClass} />
             </div>
-            <div className="col-span-4">
+            <div className="col-span-6">
               <div className={labelClass}>비고</div>
               <input value={newRecord?.note || ""} onChange={(event) => handleNewChange("note", event.target.value)} placeholder="비고" className={inputClass} />
             </div>
@@ -515,10 +508,6 @@ export function OptionDetailTable({
             <div className="col-span-2">
               <div className={labelClass}>부서</div>
               <input value={newRecord?.department || ""} onChange={(event) => handleNewChange("department", event.target.value)} placeholder="부서" className={inputClass} />
-            </div>
-            <div className="col-span-2">
-              <div className={labelClass}>사용자명</div>
-              <input value={newRecord?.requester_name || ""} onChange={(event) => handleNewChange("requester_name", event.target.value)} placeholder="사용자명" className={inputClass} />
             </div>
             <div className="col-span-2">
               <div className={labelClass}>청구월</div>

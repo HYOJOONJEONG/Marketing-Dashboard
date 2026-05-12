@@ -168,11 +168,9 @@ export async function fetchOptionDashboardData(args: {
     conditions.push("is_active = 1")
   }
   if (args.query) {
-    conditions.push(
-      "(company_name LIKE ? OR user_id LIKE ? OR requester_name LIKE ? OR department LIKE ?)",
-    )
+    conditions.push("(company_name LIKE ? OR user_id LIKE ? OR department LIKE ?)")
     const like = `%${args.query}%`
-    params.push(like, like, like, like)
+    params.push(like, like, like)
   }
   const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""
 
@@ -180,7 +178,7 @@ export async function fetchOptionDashboardData(args: {
   try {
     records = queryRows(
       db,
-      `SELECT category_code, sub_type, company_name, user_id, department, requester_name, billing_month, status, note, is_active
+      `SELECT category_code, sub_type, company_name, user_id, department, '' AS requester_name, billing_month, status, note, is_active
        FROM option_records
        ${whereClause}
        ORDER BY category_code ASC, company_name ASC`,
