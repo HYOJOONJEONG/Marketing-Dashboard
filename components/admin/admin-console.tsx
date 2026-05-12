@@ -335,30 +335,13 @@ export function AdminConsole({ currentUser, permissions }: Props) {
           ) : null}
 
           {currentTab === "users" && (
-            <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
                 <div>
                   <h2 className="text-xl font-black tracking-[-0.03em] text-slate-950">사용자관리</h2>
                   <p className="mt-1 text-sm text-slate-500">사용자 추가, 팀/직급 변경, 활성화/비활성화, 삭제를 관리합니다.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setNewUserDraft((prev) => ({
-                      ...prev,
-                      name: "임성균",
-                      loginId: "임성균",
-                      title: prev.title || "사원",
-                      teamId: securityTeam?.id || prev.teamId || teams[0]?.id || "",
-                    }))
-                  }
-                  className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700"
-                >
-                  임성균/정보보안 입력
-                </button>
-              </div>
 
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="mb-3 text-sm font-black text-slate-800">사용자 추가</div>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_160px_180px_1fr_auto]">
                   <input
