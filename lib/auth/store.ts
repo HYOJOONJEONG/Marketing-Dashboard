@@ -117,6 +117,13 @@ const DEFAULT_DIRECTORY_USERS = [
   { name: "이상철", team: "본부", role: "director" as RoleKey },
 ] as const
 
+const REQUIRED_TEAMS = [
+  { id: "team-hq", code: "HQ", name: "본부", teamOrder: 1 },
+  { id: "team-infobiz1", code: "INFOBIZ1", name: "인포Biz1팀", teamOrder: 2 },
+  { id: "team-infobiz2", code: "INFOBIZ2", name: "인포Biz2팀", teamOrder: 3 },
+  { id: "team-security", code: "SECURITY", name: "정보보안", teamOrder: 4 },
+] as const
+
 function getUserTitle(name: string, fallbackRole?: RoleKey) {
   return USER_TITLE_BY_NAME[String(name || "").trim()] || (
     fallbackRole === "director" ? "본부장" :
@@ -127,11 +134,7 @@ function getUserTitle(name: string, fallbackRole?: RoleKey) {
 }
 
 function createSeedTeams(now: string): TeamRecord[] {
-  return [
-    { id: "team-hq", code: "HQ", name: "본부", teamOrder: 1, createdAt: now, updatedAt: now },
-    { id: "team-infobiz1", code: "INFOBIZ1", name: "인포Biz1팀", teamOrder: 2, createdAt: now, updatedAt: now },
-    { id: "team-infobiz2", code: "INFOBIZ2", name: "인포Biz2팀", teamOrder: 3, createdAt: now, updatedAt: now },
-  ]
+  return REQUIRED_TEAMS.map((team) => ({ ...team, createdAt: now, updatedAt: now }))
 }
 
 function createSeedUsers(now: string, teams: TeamRecord[]): UserRecord[] {
@@ -280,12 +283,29 @@ function createSeedState(): AuthState {
   }
 }
 
+function normalizeRequiredTeams(state: AuthState) {
+  const now = nowIso()
+  const teams = Array.isArray(state.teams) ? state.teams : []
+  REQUIRED_TEAMS.forEach((requiredTeam) => {
+    const existing = teams.find((team) => team.id === requiredTeam.id || team.name === requiredTeam.name || team.code === requiredTeam.code)
+    if (existing) {
+      existing.code = existing.code || requiredTeam.code
+      existing.name = existing.name || requiredTeam.name
+      existing.teamOrder = Number(existing.teamOrder ?? requiredTeam.teamOrder)
+      existing.updatedAt = existing.updatedAt || now
+      return
+    }
+    teams.push({
+      ...requiredTeam,
+      createdAt: now,
+      updatedAt: now,
+    })
+  })
+  state.teams = teams
+}
+
 function normalizeTeamOrders(state: AuthState) {
-  const teamOrderByName: Record<string, number> = {
-    본부: 1,
-    인포Biz1팀: 2,
-    인포Biz2팀: 3,
-  }
+  const teamOrderByName = Object.fromEntries(REQUIRED_TEAMS.map((team) => [team.name, team.teamOrder]))
   state.teams = state.teams.map((team) => ({
     ...team,
     teamOrder: Number(team.teamOrder ?? teamOrderByName[team.name] ?? 99),
@@ -447,6 +467,7 @@ export async function readAuthState(): Promise<AuthState> {
   try {
     const parsed = await readAuthSystem<AuthState>()
     if (parsed?.users) {
+      normalizeRequiredTeams(parsed)
       normalizeTeamOrders(parsed)
       normalizeFullAccessRolePermissions(parsed)
       normalizeLegacyAdminAccount(parsed)

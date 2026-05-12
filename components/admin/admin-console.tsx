@@ -67,6 +67,13 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   const [selectedUserId, setSelectedUserId] = useState("")
   const [selectedPermissionUserId, setSelectedPermissionUserId] = useState("")
   const [contractFilter, setContractFilter] = useState("")
+  const [newUserDraft, setNewUserDraft] = useState({
+    name: "",
+    loginId: "",
+    title: "사원",
+    teamId: "",
+    password: "",
+  })
   const [message, setMessage] = useState("")
   const [isPending, startTransition] = useTransition()
 
@@ -104,6 +111,7 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   const industryOptions = bootstrap?.industryOptions || []
 
   const selectedUser = useMemo(() => users.find((user: any) => user.id === selectedUserId) || null, [users, selectedUserId])
+  const securityTeam = useMemo(() => teams.find((team: any) => team.name === "정보보안") || null, [teams])
   const filteredUsers = useMemo(() => {
     const query = userSearch.trim().toLowerCase()
     return users.filter((user: any) => {
@@ -123,6 +131,14 @@ export function AdminConsole({ currentUser, permissions }: Props) {
         .some((value: string) => String(value).toLowerCase().includes(query))
     })
   }, [contracts, contractFilter])
+
+  useEffect(() => {
+    if (!teams.length) return
+    setNewUserDraft((prev) => ({
+      ...prev,
+      teamId: prev.teamId || securityTeam?.id || teams[0]?.id || "",
+    }))
+  }, [securityTeam?.id, teams])
 
   const selectedUserPermissionIndex = useMemo(
     () => userPermissionMap[selectedPermissionUserId] || {},
@@ -147,16 +163,34 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   }
 
   const createUser = () => {
-    const name = window.prompt("추가할 사용자명을 입력하세요.")
-    if (!name) return
-    const title = window.prompt("직급을 입력하세요. (본부장/팀장/부장/과장/대리/사원)", "사원") || "사원"
+    const name = newUserDraft.name.trim()
+    const loginId = (newUserDraft.loginId || newUserDraft.name).trim()
+    const title = newUserDraft.title || "사원"
     const role = inferRoleFromTitle(title)
-    const teamId = teams[0]?.id || ""
+    const teamId = newUserDraft.teamId || securityTeam?.id || teams[0]?.id || ""
+    if (!name || !loginId || !teamId) {
+      setMessage("이름, 로그인ID, 팀을 입력해주세요.")
+      return
+    }
     runAction(async () => {
       await fetchJson("/api/admin/users", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, loginId: name, title, role, teamId }),
+        body: JSON.stringify({
+          name,
+          loginId,
+          title,
+          role,
+          teamId,
+          password: newUserDraft.password.trim(),
+        }),
+      })
+      setNewUserDraft({
+        name: "",
+        loginId: "",
+        title: "사원",
+        teamId,
+        password: "",
       })
     })
   }
@@ -307,9 +341,82 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                   <h2 className="text-xl font-black tracking-[-0.03em] text-slate-950">사용자관리</h2>
                   <p className="mt-1 text-sm text-slate-500">사용자 추가, 팀/직급 변경, 활성화/비활성화, 삭제를 관리합니다.</p>
                 </div>
-                <button type="button" onClick={createUser} className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white">
-                  사용자 추가
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNewUserDraft((prev) => ({
+                      ...prev,
+                      name: "임성균",
+                      loginId: "임성균",
+                      title: prev.title || "사원",
+                      teamId: securityTeam?.id || prev.teamId || teams[0]?.id || "",
+                    }))
+                  }
+                  className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700"
+                >
+                  임성균/정보보안 입력
                 </button>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 text-sm font-black text-slate-800">사용자 추가</div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_160px_180px_1fr_auto]">
+                  <input
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                    placeholder="이름"
+                    value={newUserDraft.name}
+                    onChange={(event) =>
+                      setNewUserDraft((prev) => ({
+                        ...prev,
+                        name: event.target.value,
+                        loginId: prev.loginId || event.target.value,
+                      }))
+                    }
+                  />
+                  <input
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                    placeholder="로그인ID"
+                    value={newUserDraft.loginId}
+                    onChange={(event) => setNewUserDraft((prev) => ({ ...prev, loginId: event.target.value }))}
+                  />
+                  <select
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                    value={newUserDraft.title}
+                    onChange={(event) => setNewUserDraft((prev) => ({ ...prev, title: event.target.value }))}
+                  >
+                    {TITLE_OPTIONS.map((title) => (
+                      <option key={`new-user-title-${title}`} value={title}>
+                        {title}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                    value={newUserDraft.teamId}
+                    onChange={(event) => setNewUserDraft((prev) => ({ ...prev, teamId: event.target.value }))}
+                  >
+                    {teams.map((team: any) => (
+                      <option key={`new-user-team-${team.id}`} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                    placeholder="개별 비밀번호(선택)"
+                    type="password"
+                    value={newUserDraft.password}
+                    onChange={(event) => setNewUserDraft((prev) => ({ ...prev, password: event.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    onClick={createUser}
+                    disabled={isPending || !newUserDraft.name.trim()}
+                    className="h-11 rounded-2xl bg-slate-950 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    추가&저장
+                  </button>
+                </div>
               </div>
 
               <div className="mt-4 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
