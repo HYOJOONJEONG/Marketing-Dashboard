@@ -3476,9 +3476,14 @@ export function DashboardShell({
 
     startTransition(async () => {
       try {
+        const latestResponse = await fetch("/api/dashboard", { cache: "no-store" }).catch(() => null)
+        const latestData = latestResponse?.ok ? await latestResponse.json().catch(() => null) : null
+        const sourceData = latestData && typeof latestData === "object" ? latestData : data
+        const sourceCollection = sourceData?.collection || collection
+        const sourceContracts = Array.isArray(sourceData?.contracts) ? sourceData.contracts : contracts
         const baseDate = normalizeDate(weeklyReport?.baseDate || new Date().toISOString().slice(0, 10))
         const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
-        const existingRows = collection.integrated || []
+        const existingRows = sourceCollection.integrated || []
         const existingKeys = new Set(
           existingRows.map((row: any) => `${row.idCode || ""}|${row.claimMonth || ""}|${row.companyName || ""}`),
         )
@@ -3499,12 +3504,12 @@ export function DashboardShell({
           }))
 
         const selectedIds = new Set(includedContracts.map((row: any) => row.id))
-        const nextContracts = contracts.filter((row: any) => !selectedIds.has(row.id))
+        const nextContracts = sourceContracts.filter((row: any) => !selectedIds.has(row.id))
         const nextData = {
-          ...data,
+          ...sourceData,
           contracts: nextContracts,
           collection: {
-            ...collection,
+            ...sourceCollection,
             integrated: [...movedRows, ...existingRows],
             yearFilter: currentYear,
             statusFilter: "all",
