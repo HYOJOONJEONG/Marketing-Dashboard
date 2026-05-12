@@ -86,6 +86,9 @@ export type UserRecord = {
   authStrategy: "common" | "admin" | "individual"
   passwordHash?: string | null
   passwordSalt?: string | null
+  twoFactorEnabled?: boolean
+  twoFactorSecret?: string | null
+  twoFactorConfirmedAt?: string | null
   createdAt: string
   updatedAt: string
 }

@@ -140,6 +140,7 @@ export async function resolveRequestSession() {
   if (!session) return null
   const user = findUserById(state, session.userId)
   if (!user || !user.active) return null
+  if (!user.twoFactorEnabled) return null
 
   return {
     sessionId,
