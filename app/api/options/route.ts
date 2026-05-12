@@ -210,6 +210,23 @@ async function loadMock() {
   }
 }
 
+function scrubOptionPrivacyFields(mock: any) {
+  if (!mock || typeof mock !== "object") return false
+  if (!Array.isArray(mock.optionRecords)) return false
+  let changed = false
+  mock.optionRecords = mock.optionRecords.map((record: any) => {
+    if (!record || typeof record !== "object") return record
+    if (record.requester_name === "" && record.contact === "") return record
+    changed = true
+    return {
+      ...record,
+      requester_name: "",
+      contact: "",
+    }
+  })
+  return changed
+}
+
 async function loadAppStateIndustryMap() {
   try {
     const appState = (await readDashboardState<any>(APP_STATE_PATH)) || {}
@@ -233,6 +250,7 @@ async function loadAppStateIndustryMap() {
 }
 
 async function saveMock(payload: any) {
+  scrubOptionPrivacyFields(payload)
   await writeOptionsMock(payload)
   getResponseCache.clear()
 }
@@ -310,6 +328,14 @@ export async function GET(req: Request) {
 
   try {
     const mock = await loadMock()
+    const privacyScrubbed = scrubOptionPrivacyFields(mock)
+    if (privacyScrubbed) {
+      await writeOptionsMock(mock, {
+        menuLabel: "유료 옵션 정보 현황",
+        changeLabel: "옵션 개인정보 필드 정리",
+      })
+      getResponseCache.clear()
+    }
     const appStateIndustryMap = await loadAppStateIndustryMap()
     const categories = (mock.categories || []).map((cat: any) => ({
       ...cat,
@@ -366,6 +392,7 @@ export async function GET(req: Request) {
         return {
           ...row,
           requester_name: "",
+          contact: "",
           category_name_ko: row.category_name_ko || CATEGORY_LABELS[row.category_code] || row.category_code,
           sub_type: resolvedIndustry,
           industry: resolvedIndustry,
@@ -402,6 +429,7 @@ export async function POST(req: Request) {
     const payload = await req.json()
     const action = payload?.action
     const mock = await loadMock()
+    scrubOptionPrivacyFields(mock)
     const appStateIndustryMap = await loadAppStateIndustryMap()
     const categories = mock.categories || []
     const optionRecords = mock.optionRecords || []
@@ -420,6 +448,7 @@ export async function POST(req: Request) {
       const nextRecord = {
         ...record,
         requester_name: "",
+        contact: "",
         record_id: recordId,
         category_code: categoryCode,
         category_name_ko: categoryLabel,
@@ -460,6 +489,7 @@ export async function POST(req: Request) {
       seedCounts,
       historyCounts,
     }
+    scrubOptionPrivacyFields(nextMock)
     await writeOptionsMock(nextMock, {
       menuLabel: "유료 옵션 정보 현황",
       changeLabel: action === "delete" ? "옵션 행 삭제" : "옵션 행 저장",
