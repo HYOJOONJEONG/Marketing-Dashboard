@@ -2595,7 +2595,9 @@ export function DashboardShell({
   }
   const filteredTerminationItemsBase = useMemo(() => {
     if (!isTerminationView) return []
-    const query = deferredTerminationQuery.trim().toLowerCase()
+    const rawQuery = deferredTerminationQuery.trim()
+    const query = rawQuery.toLowerCase()
+    const identifierQuery = normalizeSearchIdentifier(rawQuery)
     const rows = selectedSheet?.items || []
     return rows.filter((row: any) => {
       if (terminationSort.key === "terminationDate" && !String(row.terminationDate || "").trim()) {
@@ -2612,10 +2614,10 @@ export function DashboardShell({
           if (normalized !== terminationReasonFilter) return false
         }
       }
-      if (!query) return true
-      return [row.companyName, row.departmentName, row.customerId, row.manager, row.reason]
+      if (!query && !identifierQuery) return true
+      return [row.companyName, row.departmentName, row.customerId, row.idCode, row.id, row.manager, row.reason]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query))
+        .some((value) => matchesSearchQuery(value, query, identifierQuery))
       })
     }, [selectedSheet, deferredTerminationQuery, terminationReasonFilter, terminationDateFilter, terminationSort.key, isTerminationView])
   const terminationReasonOptions = useMemo(() => {
