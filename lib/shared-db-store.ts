@@ -434,13 +434,16 @@ async function readDashboardSlices<T>(): Promise<T | null> {
 export async function readDashboardState<T>(fallbackFilePath?: string): Promise<T | null> {
   const raw = await readRawValue(STORE_KEYS.dashboard)
   const base = parseJsonObject<Record<string, unknown>>(raw)
-    || (fallbackFilePath ? await seedFromFileIfMissing<Record<string, unknown>>(STORE_KEYS.dashboard, fallbackFilePath) : null)
   const sliced = await readDashboardSlices<T>()
   if (base && sliced && typeof sliced === "object" && !Array.isArray(sliced)) {
     return { ...base, ...(sliced as Record<string, unknown>) } as T
   }
   if (base) return base as T
   if (sliced) return sliced
+  const seeded = fallbackFilePath
+    ? await seedFromFileIfMissing<Record<string, unknown>>(STORE_KEYS.dashboard, fallbackFilePath)
+    : null
+  if (seeded) return seeded as T
   return null
 }
 
