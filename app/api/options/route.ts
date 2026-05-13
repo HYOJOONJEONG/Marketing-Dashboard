@@ -161,15 +161,15 @@ function resolveIndustry(
   const rawIndustry = String(row?.industry || "").trim()
   const normalizedSubType = normalizeIndustry(rawSubType)
   const normalizedIndustry = normalizeIndustry(rawIndustry)
-  const mappedIndustry = lookupIndustryByCompany(company, companyIndustryMap) || ""
   const code = String(categoryCode || row?.category_code || "").trim()
   const isGeneric =
     !rawSubType || rawSubType === code || rawSubType === (CATEGORY_LABELS[code] || "")
+  if (normalizedSubType) return normalizedSubType
+  if (normalizedIndustry) return normalizedIndustry
+  if (!isGeneric && rawSubType) return rawSubType
+  const mappedIndustry = lookupIndustryByCompany(company, companyIndustryMap) || ""
   return (
-    normalizedSubType ||
-    normalizedIndustry ||
     mappedIndustry ||
-    (isGeneric ? "" : rawSubType) ||
     inferIndustryFromCompany(company)
   )
 }
@@ -377,11 +377,8 @@ export async function GET(req: Request) {
 
     let records: any[] = []
     if (includeRecords) {
-      const appStateIndustryMap = await loadAppStateIndustryMap()
       const companyIndustryMap = buildCompanyIndustryMap(optionRecordsRaw)
-      for (const [company, industry] of appStateIndustryMap.entries()) {
-        companyIndustryMap.set(company, industry)
-      }
+      const resolvedIndustryCache = new Map<string, string>()
       records = optionRecordsRaw
         .filter((row: any) => {
           const rowCategory = normalizeCategoryCode(row.category_code)
@@ -395,7 +392,12 @@ export async function GET(req: Request) {
           return target.includes(search)
         })
         .map((row: any) => {
-          const resolvedIndustry = resolveIndustry(row, companyIndustryMap, row.category_code)
+          const industryCacheKey = `${row.category_code || ""}|${row.company_name || ""}|${row.sub_type || ""}|${row.industry || ""}`
+          let resolvedIndustry = resolvedIndustryCache.get(industryCacheKey)
+          if (resolvedIndustry === undefined) {
+            resolvedIndustry = resolveIndustry(row, companyIndustryMap, row.category_code)
+            resolvedIndustryCache.set(industryCacheKey, resolvedIndustry)
+          }
           return {
             ...row,
             requester_name: "",
