@@ -79,6 +79,15 @@ const DASHBOARD_SLICE_KEYS: Record<string, string> = {
   paidOptionSourceColumns: "dashboard_paid_option_source_columns",
 }
 
+const PROTECTED_LEGACY_DASHBOARD_KEYS = new Set([
+  "ui",
+  "currentYear",
+  "years",
+  "availableYears",
+  "weeklyReport",
+  "paidOptionSourceColumns",
+])
+
 function kvConfigured() {
   return Boolean(KV_REST_API_URL && KV_REST_API_TOKEN)
 }
@@ -137,6 +146,7 @@ function buildAnalysis(valueByKey: Record<string, string>) {
     .filter(([sourceKey, storeKey]) => legacyTopKeys.includes(sourceKey) && !valueByKey[storeKey])
     .map(([sourceKey]) => sourceKey)
   const extraLegacyKeys = legacyTopKeys.filter((key) => !DASHBOARD_SLICE_KEYS[key])
+  const protectedLegacyKeys = legacyTopKeys.filter((key) => PROTECTED_LEGACY_DASHBOARD_KEYS.has(key))
   const legacyCompactBytes = legacyRaw ? byteLength(compactJsonString(legacyRaw)) : 0
   const legacyWasteBytes = Math.max(0, byteLength(legacyRaw) - legacyCompactBytes)
 
@@ -146,10 +156,12 @@ function buildAnalysis(valueByKey: Record<string, string>) {
       label: "구버전 전체 대시보드 저장본",
       bytes: byteLength(legacyRaw),
       note:
-        existingSlices.length > 0
+        protectedLegacyKeys.length > 0
+          ? `수동입력/주간실적보고 보호 항목이 포함되어 있어 원본 삭제 없이 누락 분리 저장본만 보강합니다. 누락 ${missingSlices.length}개.`
+          : existingSlices.length > 0
           ? `분리 저장본 ${existingSlices.length}개와 중복 가능성이 있습니다. 누락 ${missingSlices.length}개, 미지원 필드 ${extraLegacyKeys.length}개.`
           : "아직 분리 저장본이 없어 바로 제거하면 안 됩니다.",
-      risk: extraLegacyKeys.length ? "review" : existingSlices.length ? "safe" : "keep",
+      risk: extraLegacyKeys.length || protectedLegacyKeys.length ? "review" : existingSlices.length ? "safe" : "keep",
     })
   }
 
@@ -213,6 +225,7 @@ function buildAnalysis(valueByKey: Record<string, string>) {
       existingSliceCount: existingSlices.length,
       missingSlices,
       extraLegacyKeys,
+      protectedLegacyKeys,
       canMigrateAndPrune: Boolean(legacyRaw) && extraLegacyKeys.length === 0,
     },
   }
@@ -443,7 +456,7 @@ async function compactPersistentStore() {
   return { beforeBytes, afterBytes, savedBytes: Math.max(0, beforeBytes - afterBytes) }
 }
 
-function buildDashboardSlicePayloads(legacyRaw: string, existingValues: Record<string, string>) {
+function buildDashboardMigrationPlan(legacyRaw: string, existingValues: Record<string, string>) {
   const legacy = parseJsonValue(legacyRaw)
   if (!legacy || typeof legacy !== "object" || Array.isArray(legacy)) {
     throw new Error("legacy dashboard_state is not a valid object")
@@ -453,12 +466,18 @@ function buildDashboardSlicePayloads(legacyRaw: string, existingValues: Record<s
   if (extraKeys.length) {
     throw new Error(`unsupported legacy dashboard fields: ${extraKeys.join(", ")}`)
   }
-  return Object.entries(DASHBOARD_SLICE_KEYS)
+  const protectedLegacyKeys = Object.keys(legacyObject).filter((key) => PROTECTED_LEGACY_DASHBOARD_KEYS.has(key))
+  const payloads = Object.entries(DASHBOARD_SLICE_KEYS)
     .filter(([sourceKey, storeKey]) => Object.prototype.hasOwnProperty.call(legacyObject, sourceKey) && !existingValues[storeKey])
     .map(([sourceKey, storeKey]) => ({
       storeKey,
       value: JSON.stringify(legacyObject[sourceKey] ?? null),
     }))
+  return {
+    payloads,
+    protectedLegacyKeys,
+    compactedLegacyRaw: compactJsonString(legacyRaw),
+  }
 }
 
 async function migrateAndPruneLocalLegacyDashboard() {
@@ -469,12 +488,17 @@ async function migrateAndPruneLocalLegacyDashboard() {
   if (!legacyRaw) return { beforeBytes, afterBytes: beforeBytes, savedBytes: 0, migratedSlices: 0, deletedLegacy: false }
 
   const existingValues = Object.fromEntries(Object.entries(kvStore).map(([key, row]) => [key, String(row?.value || "")]))
-  const payloads = buildDashboardSlicePayloads(legacyRaw, existingValues)
+  const { payloads, protectedLegacyKeys, compactedLegacyRaw } = buildDashboardMigrationPlan(legacyRaw, existingValues)
   const now = new Date().toISOString()
   payloads.forEach((item) => {
     kvStore[item.storeKey] = { value: item.value, updated_at: now }
   })
-  delete kvStore.dashboard_state
+  const shouldKeepLegacy = protectedLegacyKeys.length > 0
+  if (shouldKeepLegacy) {
+    kvStore.dashboard_state = { value: compactedLegacyRaw, updated_at: kvStore.dashboard_state?.updated_at || now }
+  } else {
+    delete kvStore.dashboard_state
+  }
   store.kv_store = kvStore
   store.kv_audit_log = normalizeAuditRows(store.kv_audit_log || [])
   const nextRaw = JSON.stringify(store)
@@ -486,7 +510,9 @@ async function migrateAndPruneLocalLegacyDashboard() {
     afterBytes,
     savedBytes: Math.max(0, beforeBytes - afterBytes),
     migratedSlices: payloads.length,
-    deletedLegacy: true,
+    deletedLegacy: !shouldKeepLegacy,
+    protectedLegacy: shouldKeepLegacy,
+    protectedLegacyKeys,
   }
 }
 
@@ -502,22 +528,29 @@ async function migrateAndPrunePersistentLegacyDashboard() {
   keys.forEach((key, index) => {
     existingValues[key] = String(kvConfigured() ? results[index + 1]?.result || "" : results[index + 1] || "")
   })
-  const payloads = buildDashboardSlicePayloads(legacyRaw, existingValues)
+  const { payloads, protectedLegacyKeys, compactedLegacyRaw } = buildDashboardMigrationPlan(legacyRaw, existingValues)
   const writeCommands = payloads.map((item) => ["SET", kvValueKey(item.storeKey), item.value])
-  const deleteCommand = ["DEL", kvValueKey("dashboard_state")]
+  const shouldKeepLegacy = protectedLegacyKeys.length > 0
+  const legacyCommand = shouldKeepLegacy
+    ? compactedLegacyRaw !== legacyRaw
+      ? ["SET", kvValueKey("dashboard_state"), compactedLegacyRaw]
+      : null
+    : ["DEL", kvValueKey("dashboard_state")]
   if (kvConfigured()) {
-    await kvPipeline([...writeCommands, deleteCommand])
+    await kvPipeline(legacyCommand ? [...writeCommands, legacyCommand] : writeCommands)
   } else {
     for (const command of writeCommands) await redisCommand(REDIS_URL, command)
-    await redisCommand(REDIS_URL, deleteCommand)
+    if (legacyCommand) await redisCommand(REDIS_URL, legacyCommand)
   }
-  const afterBytes = payloads.reduce((sum, item) => sum + byteLength(item.value), 0)
+  const afterBytes = payloads.reduce((sum, item) => sum + byteLength(item.value), 0) + (shouldKeepLegacy ? byteLength(compactedLegacyRaw) : 0)
   return {
     beforeBytes: byteLength(legacyRaw),
     afterBytes,
     savedBytes: Math.max(0, byteLength(legacyRaw) - afterBytes),
     migratedSlices: payloads.length,
-    deletedLegacy: true,
+    deletedLegacy: !shouldKeepLegacy,
+    protectedLegacy: shouldKeepLegacy,
+    protectedLegacyKeys,
   }
 }
 

@@ -43,6 +43,7 @@ type MemoryStats = {
       existingSliceCount: number
       missingSlices: string[]
       extraLegacyKeys: string[]
+      protectedLegacyKeys: string[]
       canMigrateAndPrune: boolean
     }
   }
@@ -171,7 +172,11 @@ export function StorageMemoryPanel({ canRestore = false }: { canRestore?: boolea
   const runLegacyCleanup = () => {
     const legacy = stats?.analysis?.legacyDashboard
     if (!legacy?.canMigrateAndPrune) return
-    if (!window.confirm("구버전 전체 대시보드 저장본을 분리 저장본으로 보존한 뒤 제거합니다. 이미 분리 저장된 최신 데이터는 덮어쓰지 않습니다. 계속할까요?")) return
+    const keepsProtectedLegacy = Boolean(legacy.protectedLegacyKeys?.length)
+    const confirmMessage = keepsProtectedLegacy
+      ? "수동입력/주간실적보고 보호 데이터가 포함되어 있어 구버전 원본은 삭제하지 않고, 누락된 분리 저장본만 보강합니다. 계속할까요?"
+      : "구버전 전체 대시보드 저장본을 분리 저장본으로 보존한 뒤 제거합니다. 이미 분리 저장된 최신 데이터는 덮어쓰지 않습니다. 계속할까요?"
+    if (!window.confirm(confirmMessage)) return
     setCleanupMessage("")
     setError("")
     startTransition(async () => {
@@ -182,7 +187,11 @@ export function StorageMemoryPanel({ canRestore = false }: { canRestore?: boolea
           body: JSON.stringify({ action: "migrateLegacyDashboard" }),
         })
         setStats(payload.stats)
-        setCleanupMessage(`구버전 저장본 정리 완료: ${formatBytes(payload.cleanup?.savedBytes || 0)} 절감`)
+        setCleanupMessage(
+          payload.cleanup?.protectedLegacy
+            ? "보호 대상 포함: 구버전 원본은 보존했고, 누락된 분리 저장본만 보강했습니다."
+            : `구버전 저장본 정리 완료: ${formatBytes(payload.cleanup?.savedBytes || 0)} 절감`,
+        )
       } catch (err: any) {
         setError(String(err?.message || "구버전 저장본 정리에 실패했습니다."))
       }
@@ -279,7 +288,9 @@ export function StorageMemoryPanel({ canRestore = false }: { canRestore?: boolea
     {
       key: "legacy",
       label: "구버전 저장본 정리",
-      note: "분리 저장 후 남은 과거 저장본 제거",
+      note: legacyDashboard?.protectedLegacyKeys?.length
+        ? "수동입력/주간실적보고 보호 중: 원본 보존"
+        : "분리 저장 후 남은 과거 저장본 제거",
       icon: Archive,
       tone: "amber" as const,
       onClick: runLegacyCleanup,
