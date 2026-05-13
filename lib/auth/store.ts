@@ -391,10 +391,32 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
     김대일: 4,
   }
 
+  const replaceUserReferences = (fromUserId: string, toUserId: string) => {
+    if (!fromUserId || !toUserId || fromUserId === toUserId) return
+    state.userSessions = (state.userSessions || []).map((session) =>
+      session.userId === fromUserId ? { ...session, userId: toUserId } : session,
+    )
+    state.presenceSessions = (state.presenceSessions || []).map((session) =>
+      session.userId === fromUserId ? { ...session, userId: toUserId } : session,
+    )
+    state.userPermissionOverrides = (state.userPermissionOverrides || []).map((item) =>
+      item.userId === fromUserId ? { ...item, userId: toUserId } : item,
+    )
+    state.popupMessages = (state.popupMessages || []).map((message) => ({
+      ...message,
+      senderUserId: message.senderUserId === fromUserId ? toUserId : message.senderUserId,
+      recipientUserId: message.recipientUserId === fromUserId ? toUserId : message.recipientUserId,
+    }))
+  }
+
   DEFAULT_DIRECTORY_USERS.forEach((seedUser) => {
+    const canonicalId = buildUserId(seedUser.name)
     const teamId = String(teamIdByName.get(seedUser.team) || state.teams[0]?.id || "")
     const existing =
-      state.users.find((user) => user.id === buildUserId(seedUser.name)) ||
+      state.users.find((user) => !user.deletedAt && user.id === canonicalId) ||
+      state.users.find((user) => !user.deletedAt && user.loginId === seedUser.name) ||
+      state.users.find((user) => !user.deletedAt && user.name === seedUser.name) ||
+      state.users.find((user) => user.id === canonicalId) ||
       state.users.find((user) => user.loginId === seedUser.name) ||
       state.users.find((user) => user.name === seedUser.name)
 
@@ -402,7 +424,14 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
       if (existing.deletedAt) {
         return
       }
-      existing.id = buildUserId(seedUser.name)
+      const previousId = existing.id
+      if (previousId !== canonicalId) {
+        state.users = state.users.filter(
+          (user) => user === existing || !(user.id === canonicalId && user.deletedAt),
+        )
+        replaceUserReferences(previousId, canonicalId)
+      }
+      existing.id = canonicalId
       existing.loginId = seedUser.name
       existing.name = seedUser.name
       existing.role = seedUser.role

@@ -310,7 +310,15 @@ export function DailyReportPage({
     [presenceUsers],
   )
   const safeReportState = useMemo(() => normalizeClientDailyReportState(reportState), [reportState])
-  const fallbackUserId = currentUser?.id || safeDirectoryUsers[0]?.id || ""
+  const currentDirectoryUser = useMemo(
+    () =>
+      safeDirectoryUsers.find((user) => user.id === currentUser?.id) ||
+      safeDirectoryUsers.find((user) => user.name === currentUser?.name && user.teamName === currentUser?.teamName) ||
+      safeDirectoryUsers.find((user) => user.name === currentUser?.name) ||
+      null,
+    [currentUser?.id, currentUser?.name, currentUser?.teamName, safeDirectoryUsers],
+  )
+  const fallbackUserId = currentDirectoryUser?.id || safeDirectoryUsers[0]?.id || currentUser?.id || ""
 
   const [selectedUserId, setSelectedUserId] = useState(fallbackUserId)
   const [draft, setDraft] = useState({ reportBody: "", plannedTasks: "" })

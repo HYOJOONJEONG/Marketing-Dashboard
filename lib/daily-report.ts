@@ -131,7 +131,14 @@ export function normalizeDailyReportState(raw: any, directoryUsers: DailyDirecto
   const normalizedUsers = sortDailyDirectoryUsers(directoryUsers)
 
   const seededReports = normalizedUsers.map((user) => {
-    const existing = reports.find((row: any) => safeString(row?.date) === date && safeString(row?.userId) === user.id)
+    const existing =
+      reports.find((row: any) => safeString(row?.date) === date && safeString(row?.userId) === user.id) ||
+      reports.find(
+        (row: any) =>
+          safeString(row?.date) === date &&
+          safeString(row?.userName) === user.name &&
+          (!safeString(row?.teamName) || safeString(row?.teamName) === user.teamName),
+      )
     return {
       id: safeString(existing?.id) || `daily-${date}-${user.id}`,
       date,

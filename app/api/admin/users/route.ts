@@ -38,27 +38,47 @@ export async function POST(request: Request) {
     }
     const now = new Date().toISOString()
     const passwordData = password ? createIndividualPassword(password) : null
-    const nextUser: UserRecord = {
-      id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      loginId,
-      name,
-      title,
-      assignedIndustries,
-      role: role as RoleKey,
-      teamId,
-      active: true,
-      deletedAt: null,
-      authStrategy: passwordData ? "individual" : "common",
-      passwordHash: passwordData?.hash || null,
-      passwordSalt: passwordData?.salt || null,
-      createdAt: now,
-      updatedAt: now,
-    }
-    state.users.unshift(nextUser)
+    const deletedUser = state.users.find((user) => user.deletedAt && (user.loginId === loginId || user.name === name))
+    const nextUser: UserRecord =
+      deletedUser || {
+        id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        loginId,
+        name,
+        title,
+        assignedIndustries,
+        role: role as RoleKey,
+        teamId,
+        active: true,
+        deletedAt: null,
+        authStrategy: passwordData ? "individual" : "common",
+        passwordHash: passwordData?.hash || null,
+        passwordSalt: passwordData?.salt || null,
+        twoFactorEnabled: false,
+        twoFactorSecret: null,
+        twoFactorConfirmedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      }
+    nextUser.loginId = loginId
+    nextUser.name = name
+    nextUser.title = title
+    nextUser.assignedIndustries = assignedIndustries
+    nextUser.role = role as RoleKey
+    nextUser.teamId = teamId
+    nextUser.active = true
+    nextUser.deletedAt = null
+    nextUser.authStrategy = passwordData ? "individual" : "common"
+    nextUser.passwordHash = passwordData?.hash || null
+    nextUser.passwordSalt = passwordData?.salt || null
+    nextUser.twoFactorEnabled = false
+    nextUser.twoFactorSecret = null
+    nextUser.twoFactorConfirmedAt = null
+    nextUser.updatedAt = now
+    if (!deletedUser) state.users.unshift(nextUser)
     appendActivityLog(state, {
       actorUserId: auth.context.user.id,
       actorName: auth.context.user.name,
-      actionType: "user_create",
+      actionType: deletedUser ? "user_restore" : "user_create",
       targetType: "user",
       targetId: nextUser.id,
       pageKey: "userManagement",
