@@ -1,7 +1,6 @@
 "use client"
 
 import { Eye, EyeOff, KeyRound, Lock, ShieldCheck, Smartphone, UserRound } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { useState } from "react"
 
 type TwoFactorState = {
@@ -19,7 +18,6 @@ const EMPTY_TWO_FACTOR: TwoFactorState = {
 }
 
 export function LoginPage() {
-  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [loginId, setLoginId] = useState("")
   const [password, setPassword] = useState("")
@@ -60,8 +58,7 @@ export function LoginPage() {
         setError(payload?.error || "로그인에 실패했습니다.")
         return
       }
-      router.replace("/daily-report")
-      router.refresh()
+      window.location.replace("/daily-report")
     } catch (loginError) {
       setError(
         loginError instanceof DOMException && loginError.name === "AbortError"

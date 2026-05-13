@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       target.twoFactorSecret = twoFactorSecret
       target.twoFactorEnabled = false
       target.updatedAt = new Date().toISOString()
-    })
+    }, { preserveConcurrentSessions: false })
   }
 
   if (!twoFactorEnabled) {
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       target.twoFactorEnabled = true
       target.twoFactorConfirmedAt = new Date().toISOString()
       target.updatedAt = target.twoFactorConfirmedAt
-    })
+    }, { preserveConcurrentSessions: false })
   } else {
     if (!otpCode) {
       const payload = await buildTwoFactorPayload(result.user.loginId || result.user.name, twoFactorSecret, false)

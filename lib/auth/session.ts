@@ -80,7 +80,7 @@ export async function createUserSession(user: UserRecord, requestMeta: { ipAddre
       sessionId,
       success: true,
     })
-  })
+  }, { preserveConcurrentSessions: false })
 
   const cookieStore = await cookies()
   cookieStore.set(SESSION_COOKIE, pack(sessionId), {
