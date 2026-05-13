@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import React, { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react"
+import React, { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronDown, KeyRound, LogOut, Menu, MessageSquare, UserRound, X } from "lucide-react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
@@ -230,6 +230,19 @@ function getContractSearchText(row: Record<string, unknown>) {
     row.recommender,
     row.documentStatus,
     row.replacementType,
+    row.note,
+  ]
+}
+
+function getTerminationSearchText(row: Record<string, unknown>) {
+  return [
+    row.companyName,
+    row.departmentName,
+    row.customerId,
+    row.idCode,
+    row.id,
+    row.manager,
+    row.reason,
     row.note,
   ]
 }
@@ -1976,7 +1989,6 @@ export function DashboardShell({
     dir: "desc",
   })
   const [terminationQuery, setTerminationQuery] = useState("")
-  const deferredTerminationQuery = useDeferredValue(terminationQuery)
   const [terminationReasonFilter, setTerminationReasonFilter] = useState("all")
   const [terminationDateFilter, setTerminationDateFilter] = useState("all")
   const [holdSort, setHoldSort] = useState<{ key: "receivedDate" | "startDate" | "endDate"; dir: "asc" | "desc" }>({
@@ -2595,12 +2607,13 @@ export function DashboardShell({
   }
   const filteredTerminationItemsBase = useMemo(() => {
     if (!isTerminationView) return []
-    const rawQuery = deferredTerminationQuery.trim()
+    const rawQuery = terminationQuery.trim()
     const query = rawQuery.toLowerCase()
     const identifierQuery = normalizeSearchIdentifier(rawQuery)
     const rows = selectedSheet?.items || []
+    const isSearching = Boolean(query || identifierQuery)
     return rows.filter((row: any) => {
-      if (terminationSort.key === "terminationDate" && !String(row.terminationDate || "").trim()) {
+      if (!isSearching && terminationSort.key === "terminationDate" && !String(row.terminationDate || "").trim()) {
         return false
       }
       if (terminationDateFilter !== "all" && normalizeDate(row.terminationDate) !== terminationDateFilter) {
@@ -2615,11 +2628,11 @@ export function DashboardShell({
         }
       }
       if (!query && !identifierQuery) return true
-      return [row.companyName, row.departmentName, row.customerId, row.idCode, row.id, row.manager, row.reason]
+      return getTerminationSearchText(row)
         .filter(Boolean)
         .some((value) => matchesSearchQuery(value, query, identifierQuery))
       })
-    }, [selectedSheet, deferredTerminationQuery, terminationReasonFilter, terminationDateFilter, terminationSort.key, isTerminationView])
+    }, [selectedSheet, terminationQuery, terminationReasonFilter, terminationDateFilter, terminationSort.key, isTerminationView])
   const terminationReasonOptions = useMemo(() => {
     const base = reportTerminationColumnsStatic.slice(0, -1)
     return ["all", ...base, "기타"]
