@@ -109,7 +109,7 @@ export function useOptionDashboardData(params: Params) {
       setSummaryData(cached.data)
     }
 
-    setLoading(true)
+    setLoading(!cached)
     setError(null)
     const controller = new AbortController()
     fetch(`/api/options?${summaryQuery}`, { signal: controller.signal, cache: "no-store" })
@@ -156,7 +156,7 @@ export function useOptionDashboardData(params: Params) {
       setRecords(cached.data.records)
     }
 
-    setDetailLoading(true)
+    setDetailLoading(!cached?.data?.records)
     const controller = new AbortController()
     fetch(`/api/options?${detailQuery}`, { signal: controller.signal, cache: "no-store" })
       .then(async (res) => {

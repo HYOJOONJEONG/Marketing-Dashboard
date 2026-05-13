@@ -88,7 +88,7 @@ export function OptionDashboardPage() {
   return (
     <div className="space-y-4" id="option-dashboard-section">
       <div className={`${cardClass} p-5`}>
-        {loading && <div className="mb-2 text-[12px] text-slate-500">데이터 동기화 중...</div>}
+        {loading && !data && <div className="mb-2 text-[12px] text-slate-500">데이터 동기화 중...</div>}
         {error && <div className="text-[12px] text-rose-500">{error}</div>}
         {!error && (
           <SummaryCards

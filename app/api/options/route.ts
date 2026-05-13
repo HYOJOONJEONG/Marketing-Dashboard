@@ -39,6 +39,7 @@ const APP_STATE_PATH = path.join(process.cwd(), "data", "app-state.json")
 
 const GET_CACHE_TTL_MS = 12 * 1000
 const getResponseCache = new Map<string, { expiresAt: number; payload: any }>()
+let industryMapCache: { expiresAt: number; value: Map<string, string> } | null = null
 
 function normalizeCategoryCode(value: unknown) {
   return String(value ?? "").trim()
@@ -228,6 +229,9 @@ function scrubOptionPrivacyFields(mock: any) {
 }
 
 async function loadAppStateIndustryMap() {
+  if (industryMapCache && industryMapCache.expiresAt > Date.now()) {
+    return new Map(industryMapCache.value)
+  }
   try {
     const appState = (await readDashboardState<any>(APP_STATE_PATH)) || {}
     const map = new Map<string, string>()
@@ -243,6 +247,7 @@ async function loadAppStateIndustryMap() {
     for (const row of integrated) put(row?.companyName, row?.industry)
     const longTerm = Array.isArray(appState?.collection?.longTerm) ? appState.collection.longTerm : []
     for (const row of longTerm) put(row?.companyName, row?.industry)
+    industryMapCache = { expiresAt: Date.now() + 60 * 1000, value: new Map(map) }
     return new Map(map)
   } catch {
     return new Map<string, string>()
@@ -253,6 +258,7 @@ async function saveMock(payload: any) {
   scrubOptionPrivacyFields(payload)
   await writeOptionsMock(payload)
   getResponseCache.clear()
+  industryMapCache = null
 }
 
 function buildCounts(records: any[], categories: any[]) {
@@ -336,17 +342,12 @@ export async function GET(req: Request) {
       })
       getResponseCache.clear()
     }
-    const appStateIndustryMap = await loadAppStateIndustryMap()
     const categories = (mock.categories || []).map((cat: any) => ({
       ...cat,
       category_name_ko: cat.category_name_ko || CATEGORY_LABELS[cat.category_code] || cat.category_code,
     }))
     const optionRecordsRaw = mock.optionRecords || []
     const computedCounts = buildCounts(optionRecordsRaw, categories)
-    const companyIndustryMap = buildCompanyIndustryMap(optionRecordsRaw)
-    for (const [company, industry] of appStateIndustryMap.entries()) {
-      companyIndustryMap.set(company, industry)
-    }
     const historyCounts = mock.historyCounts || []
     const seedCounts = mock.seedCounts || []
     const historyDates = Array.from<string>(
@@ -374,42 +375,49 @@ export async function GET(req: Request) {
       return { ...cat, count_value: value }
     })
 
-    const filteredRawRecords = optionRecordsRaw.filter((row: any) => {
-      const rowCategory = normalizeCategoryCode(row.category_code)
-      if (activeOnly && rowCategory !== "BOND" && Number(row.is_active) !== 1) return false
-      if (activeOnly && row.category_code === "INDEX" && !isCountableIndexRecord(row)) return false
-      if (categoryFilter !== "all" && row.category_code !== categoryFilter) return false
-      const normalizedStatus = normalizeStatus(row.status)
-      if (statusFilter !== "all" && normalizedStatus !== statusFilter) return false
-      if (!search) return true
-      const target = `${row.company_name || ""} ${row.user_id || ""} ${row.department || ""}`.toLowerCase()
-      return target.includes(search)
-    })
-
-    const records = filteredRawRecords
-      .map((row: any) => {
-        const resolvedIndustry = resolveIndustry(row, companyIndustryMap, row.category_code)
-        return {
-          ...row,
-          requester_name: "",
-          contact: "",
-          category_name_ko: row.category_name_ko || CATEGORY_LABELS[row.category_code] || row.category_code,
-          sub_type: resolvedIndustry,
-          industry: resolvedIndustry,
-          status: normalizeStatus(row.status),
-        }
-      })
-
-      const responsePayload = {
-        source: "mock",
-        basis,
-        date,
-        categories,
-        cards,
-        historyDates,
-        records: includeRecords ? records : [],
-        views: { v_dashboard_card_counts: [], v_current_active_counts: [] },
+    let records: any[] = []
+    if (includeRecords) {
+      const appStateIndustryMap = await loadAppStateIndustryMap()
+      const companyIndustryMap = buildCompanyIndustryMap(optionRecordsRaw)
+      for (const [company, industry] of appStateIndustryMap.entries()) {
+        companyIndustryMap.set(company, industry)
       }
+      records = optionRecordsRaw
+        .filter((row: any) => {
+          const rowCategory = normalizeCategoryCode(row.category_code)
+          if (activeOnly && rowCategory !== "BOND" && Number(row.is_active) !== 1) return false
+          if (activeOnly && row.category_code === "INDEX" && !isCountableIndexRecord(row)) return false
+          if (categoryFilter !== "all" && row.category_code !== categoryFilter) return false
+          const normalizedStatus = normalizeStatus(row.status)
+          if (statusFilter !== "all" && normalizedStatus !== statusFilter) return false
+          if (!search) return true
+          const target = `${row.company_name || ""} ${row.user_id || ""} ${row.department || ""}`.toLowerCase()
+          return target.includes(search)
+        })
+        .map((row: any) => {
+          const resolvedIndustry = resolveIndustry(row, companyIndustryMap, row.category_code)
+          return {
+            ...row,
+            requester_name: "",
+            contact: "",
+            category_name_ko: row.category_name_ko || CATEGORY_LABELS[row.category_code] || row.category_code,
+            sub_type: resolvedIndustry,
+            industry: resolvedIndustry,
+            status: normalizeStatus(row.status),
+          }
+        })
+    }
+
+    const responsePayload = {
+      source: "mock",
+      basis,
+      date,
+      categories,
+      cards,
+      historyDates,
+      records,
+      views: { v_dashboard_card_counts: [], v_current_active_counts: [] },
+    }
 
     getResponseCache.set(cacheKey, {
       expiresAt: Date.now() + GET_CACHE_TTL_MS,
