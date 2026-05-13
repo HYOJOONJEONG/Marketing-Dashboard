@@ -19,9 +19,11 @@ const KV_REST_API_TOKEN =
   process.env.UPSTASH_REDIS_REST_READ_ONLY_TOKEN?.trim() ||
   ""
 const REDIS_URL = process.env.REDIS_URL?.trim() || ""
-const MEMORY_LIMIT_BYTES = Math.max(
+const CONFIGURED_MEMORY_LIMIT_BYTES = Number(process.env.SHARED_KV_MEMORY_LIMIT_BYTES || process.env.REDIS_MEMORY_LIMIT_BYTES || 0)
+const LOCAL_MEMORY_LIMIT_BYTES = Math.max(1, CONFIGURED_MEMORY_LIMIT_BYTES || 30 * 1024 * 1024)
+const PERSISTENT_MEMORY_LIMIT_BYTES = Math.max(
   1,
-  Number(process.env.SHARED_KV_MEMORY_LIMIT_BYTES || process.env.REDIS_MEMORY_LIMIT_BYTES || 30 * 1024 * 1024),
+  CONFIGURED_MEMORY_LIMIT_BYTES || Number(process.env.REDIS_PLAN_MEMORY_LIMIT_BYTES || 250 * 1024 * 1024),
 )
 const AUDIT_RETAIN_LIMIT = Math.max(20, Math.min(500, Number(process.env.SHARED_KV_AUDIT_RETAIN_LIMIT || 200)))
 const AUDIT_SNAPSHOT_LIMIT = Math.max(0, Number(process.env.SHARED_KV_AUDIT_SNAPSHOT_LIMIT || 20000))
@@ -355,7 +357,7 @@ async function getPersistentStats() {
   const auditBytes = auditCount * 1200
   const estimatedBytes = dataBytes + auditBytes
   const usedBytes = redisInfo.usedMemory || estimatedBytes
-  const limitBytes = redisInfo.maxMemory || MEMORY_LIMIT_BYTES
+  const limitBytes = redisInfo.maxMemory || PERSISTENT_MEMORY_LIMIT_BYTES
   return {
     source: kvConfigured() ? "Upstash/Vercel Redis REST" : "Redis URL",
     usedBytes,
@@ -391,9 +393,9 @@ async function getLocalStats() {
   return {
     source: "Local JSON",
     usedBytes,
-    freeBytes: Math.max(0, MEMORY_LIMIT_BYTES - usedBytes),
-    limitBytes: MEMORY_LIMIT_BYTES,
-    percent: Math.min(100, (usedBytes / MEMORY_LIMIT_BYTES) * 100),
+    freeBytes: Math.max(0, LOCAL_MEMORY_LIMIT_BYTES - usedBytes),
+    limitBytes: LOCAL_MEMORY_LIMIT_BYTES,
+    percent: Math.min(100, (usedBytes / LOCAL_MEMORY_LIMIT_BYTES) * 100),
     auditCount: auditRows.length,
     auditBytes,
     redisKeyCount: entries.length,
@@ -401,7 +403,7 @@ async function getLocalStats() {
     estimatedBytes: usedBytes,
     details: details.sort((a, b) => b.bytes - a.bytes),
     analysis: buildAnalysis(valueByKey),
-    recommendations: buildRecommendations(usedBytes, auditBytes, MEMORY_LIMIT_BYTES),
+    recommendations: buildRecommendations(usedBytes, auditBytes, LOCAL_MEMORY_LIMIT_BYTES),
   }
 }
 
