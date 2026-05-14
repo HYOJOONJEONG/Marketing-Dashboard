@@ -1,7 +1,7 @@
 "use client"
 
 import { Eye, EyeOff, KeyRound, Lock, ShieldCheck, Smartphone, UserRound } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 type TwoFactorState = {
   required: boolean
@@ -18,19 +18,36 @@ const EMPTY_TWO_FACTOR: TwoFactorState = {
 }
 
 export function LoginPage() {
+  const formRef = useRef<HTMLFormElement | null>(null)
+  const otpInputRef = useRef<HTMLInputElement | null>(null)
+  const submittedOtpRef = useRef("")
   const [showPassword, setShowPassword] = useState(false)
   const [loginId, setLoginId] = useState("")
   const [password, setPassword] = useState("")
   const [otpCode, setOtpCode] = useState("")
   const [twoFactor, setTwoFactor] = useState<TwoFactorState>(EMPTY_TWO_FACTOR)
+  const [notice, setNotice] = useState("")
   const [error, setError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!twoFactor.required) return
+    otpInputRef.current?.focus()
+  }, [twoFactor.required])
+
+  useEffect(() => {
+    if (!twoFactor.required || isSubmitting || otpCode.length !== 6) return
+    if (submittedOtpRef.current === otpCode) return
+    submittedOtpRef.current = otpCode
+    formRef.current?.requestSubmit()
+  }, [isSubmitting, otpCode, twoFactor.required])
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (isSubmitting) return
 
     setError("")
+    setNotice("")
     setIsSubmitting(true)
 
     const controller = new AbortController()
@@ -51,7 +68,13 @@ export function LoginPage() {
           qrDataUrl: payload.qrDataUrl || null,
           manualSecret: payload.manualSecret || null,
         })
-        setError(payload?.error || "인증앱의 6자리 코드를 입력해주세요.")
+        if (response.ok) {
+          setNotice(payload?.message || "인증앱의 6자리 코드를 입력해주세요.")
+          setError("")
+        } else {
+          setNotice("")
+          setError(payload?.error || "인증번호가 올바르지 않습니다.")
+        }
         return
       }
       if (!response.ok || !payload?.ok) {
@@ -114,7 +137,7 @@ export function LoginPage() {
               <div className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">Secure Login</div>
               <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950">계정 인증</h2>
 
-              <form className="mt-8 space-y-5" onSubmit={handleLogin}>
+              <form ref={formRef} className="mt-8 space-y-5" onSubmit={handleLogin}>
                 <label className="block">
                   <span className="mb-2 block text-sm font-semibold text-slate-700">이름(ID)</span>
                   <div className="flex h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 focus-within:border-blue-400 focus-within:bg-white">
@@ -128,6 +151,9 @@ export function LoginPage() {
                         setLoginId(event.target.value)
                         setTwoFactor(EMPTY_TWO_FACTOR)
                         setOtpCode("")
+                        setNotice("")
+                        setError("")
+                        submittedOtpRef.current = ""
                       }}
                       aria-label="이름 또는 로그인 아이디"
                     />
@@ -148,6 +174,9 @@ export function LoginPage() {
                         setPassword(event.target.value)
                         setTwoFactor(EMPTY_TWO_FACTOR)
                         setOtpCode("")
+                        setNotice("")
+                        setError("")
+                        submittedOtpRef.current = ""
                       }}
                       aria-label="비밀번호"
                     />
@@ -164,21 +193,38 @@ export function LoginPage() {
 
                 {twoFactor.required ? (
                   <label className="block">
-                    <span className="mb-2 block text-sm font-semibold text-slate-700">2FA 인증번호</span>
-                    <div className="flex h-12 items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 focus-within:border-blue-400 focus-within:bg-white">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <span className="block text-sm font-semibold text-slate-700">2FA 인증번호</span>
+                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
+                        6자리 입력 시 자동 확인
+                      </span>
+                    </div>
+                    <div className="flex h-[52px] items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 shadow-[0_10px_26px_rgba(37,99,235,0.08)] focus-within:border-blue-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100">
                       <KeyRound className="h-4 w-4 text-blue-500" />
                       <input
+                        ref={otpInputRef}
                         autoComplete="one-time-code"
                         inputMode="numeric"
                         maxLength={6}
-                        className="h-full w-full bg-transparent text-center font-mono text-[18px] tracking-[0.3em] text-slate-900 outline-none"
+                        className="h-full w-full bg-transparent text-center font-mono text-[20px] font-black tracking-[0.38em] text-slate-950 outline-none"
                         placeholder="000000"
                         value={otpCode}
-                        onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                        onChange={(event) => {
+                          const nextCode = event.target.value.replace(/\D/g, "").slice(0, 6)
+                          setOtpCode(nextCode)
+                          setError("")
+                          if (nextCode.length < 6) submittedOtpRef.current = ""
+                        }}
                         aria-label="2FA 인증번호"
                       />
                     </div>
                   </label>
+                ) : null}
+
+                {notice ? (
+                  <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700" role="status">
+                    {notice}
+                  </div>
                 ) : null}
 
                 {error ? (

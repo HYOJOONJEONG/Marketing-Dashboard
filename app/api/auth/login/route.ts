@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic"
 
 async function buildTwoFactorPayload(loginId: string, secret: string, setup: boolean, error?: string) {
   const otpauthUrl = createTotpUri({ loginId, secret })
+  const message = setup ? "인증앱 등록 후 6자리 코드를 입력해주세요." : "인증앱의 6자리 코드를 입력해주세요."
   const qrDataUrl = setup
     ? await QRCode.toDataURL(otpauthUrl, {
         margin: 1,
@@ -25,7 +26,8 @@ async function buildTwoFactorPayload(loginId: string, secret: string, setup: boo
     ok: false,
     requiresTwoFactor: true,
     twoFactorSetupRequired: setup,
-    error: error || (setup ? "인증앱 등록 후 6자리 코드를 입력해주세요." : "인증앱의 6자리 코드를 입력해주세요."),
+    message,
+    error: error || "",
     qrDataUrl,
     manualSecret: setup ? secret : null,
   }
@@ -68,7 +70,7 @@ export async function POST(request: Request) {
   if (!twoFactorEnabled) {
     if (!otpCode) {
       const payload = await buildTwoFactorPayload(result.user.loginId || result.user.name, twoFactorSecret, true)
-      return NextResponse.json(payload, { status: 401 })
+      return NextResponse.json(payload)
     }
     if (!verifyTotpCode(twoFactorSecret, otpCode)) {
       const payload = await buildTwoFactorPayload(result.user.loginId || result.user.name, twoFactorSecret, true, "인증번호가 올바르지 않습니다.")
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
   } else {
     if (!otpCode) {
       const payload = await buildTwoFactorPayload(result.user.loginId || result.user.name, twoFactorSecret, false)
-      return NextResponse.json(payload, { status: 401 })
+      return NextResponse.json(payload)
     }
     if (!verifyTotpCode(twoFactorSecret, otpCode)) {
       const payload = await buildTwoFactorPayload(result.user.loginId || result.user.name, twoFactorSecret, false, "인증번호가 올바르지 않습니다.")
