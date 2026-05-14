@@ -322,11 +322,14 @@ export function DailyReportPage({
 
   const [selectedUserId, setSelectedUserId] = useState(fallbackUserId)
   const [draft, setDraft] = useState({ reportBody: "", plannedTasks: "" })
+  const [isDraftDirty, setIsDraftDirty] = useState(false)
   const [statusMessage, setStatusMessage] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [copiedTarget, setCopiedTarget] = useState<"team1" | "team2" | null>(null)
   const [mobileSection, setMobileSection] = useState<MobileDailySection>("write")
   const [timeUntilReset, setTimeUntilReset] = useState(() => getTimeUntilSeoulMidnight())
+  const selectedUserIdRef = useRef(selectedUserId)
+  const isSavingRef = useRef(false)
 
   const todayEntries = useMemo(
     () => getDailyReportsByDate(safeReportState, currentDate, safeDirectoryUsers),
@@ -447,11 +450,16 @@ export function DailyReportPage({
   }, [fallbackUserId, selectedUserId, todayEntries])
 
   useEffect(() => {
-    setDraft({
-      reportBody: selectedEntry?.reportBody || "",
-      plannedTasks: selectedEntry?.plannedTasks || "",
-    })
-  }, [selectedEntry?.reportBody, selectedEntry?.plannedTasks, selectedUserId])
+    const userChanged = selectedUserIdRef.current !== selectedUserId
+    if (userChanged || !isDraftDirty) {
+      setDraft({
+        reportBody: selectedEntry?.reportBody || "",
+        plannedTasks: selectedEntry?.plannedTasks || "",
+      })
+      setIsDraftDirty(false)
+    }
+    selectedUserIdRef.current = selectedUserId
+  }, [isDraftDirty, selectedEntry?.reportBody, selectedEntry?.plannedTasks, selectedUserId])
 
   useEffect(() => {
     const target = focus === "status" ? statusRef.current : documentRef.current
@@ -486,6 +494,8 @@ export function DailyReportPage({
 
   async function commitReport(mode: "draft" | "submit") {
     if (!selectedEntry) return
+    if (isSavingRef.current) return
+    isSavingRef.current = true
     setStatusMessage("")
     setIsSaving(true)
     try {
@@ -497,19 +507,23 @@ export function DailyReportPage({
           submittedAt: mode === "submit" ? now : null,
           statusOverride: mode === "submit" ? null : null,
           updatedAt: now,
-        }
+      }
       const nextState = upsertDailyReportEntry(safeReportState, nextEntry)
       await onSaveState(nextState)
+      setIsDraftDirty(false)
       setStatusMessage(mode === "submit" ? `${nextEntry.userName} 업무일지를 제출했습니다.` : `${nextEntry.userName} 업무일지를 저장했습니다.`)
     } catch {
       setStatusMessage("저장 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.")
     } finally {
+      isSavingRef.current = false
       setIsSaving(false)
     }
   }
 
   async function handleCancelSubmission() {
     if (!selectedEntry) return
+    if (isSavingRef.current) return
+    isSavingRef.current = true
     setStatusMessage("")
     setIsSaving(true)
     try {
@@ -522,10 +536,12 @@ export function DailyReportPage({
       }
       const nextState = upsertDailyReportEntry(safeReportState, nextEntry)
       await onSaveState(nextState)
+      setIsDraftDirty(false)
       setStatusMessage(`${nextEntry.userName} 업무일지 제출을 취소했습니다.`)
     } catch {
       setStatusMessage("제출 취소 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.")
     } finally {
+      isSavingRef.current = false
       setIsSaving(false)
     }
   }
@@ -722,7 +738,10 @@ export function DailyReportPage({
                         <span className="text-[12px] font-semibold text-slate-500">업무일지 본문</span>
                         <textarea
                           value={draft.reportBody}
-                          onChange={(event) => setDraft((prev) => ({ ...prev, reportBody: event.target.value }))}
+                          onChange={(event) => {
+                            setIsDraftDirty(true)
+                            setDraft((prev) => ({ ...prev, reportBody: event.target.value }))
+                          }}
                           rows={12}
                           className="min-h-[380px] w-full rounded-[24px] border border-slate-200 bg-white px-5 py-5 text-[14px] leading-7 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 sm:min-h-[320px]"
                           placeholder="금일 진행한 업무를 입력해주세요."
@@ -732,7 +751,10 @@ export function DailyReportPage({
                         <span className="text-[12px] font-semibold text-slate-500">예정사항</span>
                         <textarea
                           value={draft.plannedTasks}
-                        onChange={(event) => setDraft((prev) => ({ ...prev, plannedTasks: event.target.value }))}
+                        onChange={(event) => {
+                          setIsDraftDirty(true)
+                          setDraft((prev) => ({ ...prev, plannedTasks: event.target.value }))
+                        }}
                         rows={1}
                         className="min-h-[56px] w-full rounded-[20px] border border-slate-200 bg-white px-4 py-3 text-[14px] leading-6 text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
                         placeholder="내일 예정 업무 또는 follow-up을 입력해주세요."

@@ -47,11 +47,88 @@ const DASHBOARD_STATE_SLICE_KEYS = [
 
 type DashboardStateSliceKey = (typeof DASHBOARD_STATE_SLICE_KEYS)[number]
 
+function safeText(value: unknown) {
+  return String(value ?? "").trim()
+}
+
 function isOwnedContractForUser(contract: any, user: any) {
   const createdBy = String(contract?.createdBy || "").trim()
   const recommenderUserId = String(contract?.recommenderUserId || "").trim()
   const recommender = String(contract?.recommender || "").trim()
   return createdBy === user.id || recommenderUserId === user.id || recommender === user.name
+}
+
+function parseTimestamp(value: unknown) {
+  const time = Date.parse(String(value || ""))
+  return Number.isFinite(time) ? time : 0
+}
+
+function dailyReportEntryKey(entry: any) {
+  const date = safeText(entry?.date)
+  const teamName = safeText(entry?.teamName)
+  const userName = safeText(entry?.userName)
+  const userId = safeText(entry?.userId)
+  const id = safeText(entry?.id)
+  if (date && teamName && userName) return `${date}::${teamName}::${userName}`
+  if (date && userId) return `${date}::${userId}`
+  return id || `${Date.now()}::${Math.random()}`
+}
+
+function dailyReportEntryWeight(entry: any) {
+  return [
+    safeText(entry?.reportBody),
+    safeText(entry?.plannedTasks),
+    safeText(entry?.submittedAt),
+  ].filter(Boolean).length
+}
+
+function pickLatestDailyReportEntry(existing: any, incoming: any) {
+  if (!existing) return incoming
+  const existingTime = parseTimestamp(existing?.updatedAt || existing?.submittedAt)
+  const incomingTime = parseTimestamp(incoming?.updatedAt || incoming?.submittedAt)
+  if (incomingTime > existingTime) return { ...existing, ...incoming }
+  if (incomingTime < existingTime) return existing
+  return dailyReportEntryWeight(incoming) >= dailyReportEntryWeight(existing) ? { ...existing, ...incoming } : existing
+}
+
+function mergeDailyReportState(existingDailyReport: any, incomingDailyReport: any) {
+  if (!incomingDailyReport || typeof incomingDailyReport !== "object" || Array.isArray(incomingDailyReport)) {
+    return incomingDailyReport
+  }
+
+  const mergedReports = new Map<string, any>()
+  const existingReports = Array.isArray(existingDailyReport?.reports) ? existingDailyReport.reports : []
+  const incomingReports = Array.isArray(incomingDailyReport?.reports) ? incomingDailyReport.reports : []
+
+  existingReports.forEach((entry: any) => {
+    mergedReports.set(dailyReportEntryKey(entry), entry)
+  })
+  incomingReports.forEach((entry: any) => {
+    const key = dailyReportEntryKey(entry)
+    mergedReports.set(key, pickLatestDailyReportEntry(mergedReports.get(key), entry))
+  })
+
+  const summaryMap = new Map<string, any>()
+  const mergeSummary = (summary: any) => {
+    const key = [
+      safeText(summary?.date),
+      safeText(summary?.createdBy),
+      safeText(summary?.content),
+    ].join("::")
+    const existing = summaryMap.get(key)
+    if (!existing || parseTimestamp(summary?.createdAt) >= parseTimestamp(existing?.createdAt)) {
+      summaryMap.set(key, summary)
+    }
+  }
+  ;(Array.isArray(existingDailyReport?.aiSummaries) ? existingDailyReport.aiSummaries : []).forEach(mergeSummary)
+  ;(Array.isArray(incomingDailyReport?.aiSummaries) ? incomingDailyReport.aiSummaries : []).forEach(mergeSummary)
+
+  return {
+    ...existingDailyReport,
+    ...incomingDailyReport,
+    reports: Array.from(mergedReports.values()),
+    aiSummaries: Array.from(summaryMap.values()),
+  }
 }
 
 function mergeContractsForScope(existingContracts: any[], incomingContracts: any[], user: any, scope: ReturnType<typeof getContractAccessScope>) {
@@ -137,9 +214,11 @@ export async function PUT(request: Request) {
     ).filter((key: unknown): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))
     const canWritePartialDirectly = isPartial && changedKeys.length > 0 && !Array.isArray(incomingBody?.contracts)
     let nextBody = incomingBody
+    let existingDataForMerge: any = null
 
     if (!canWritePartialDirectly) {
       const existingData = (await readDashboardState<any>(DATA_PATH)) || (await readDashboardState<any>(FALLBACK_PATH)) || EMPTY_DASHBOARD
+      existingDataForMerge = existingData
       const scope = getContractAccessScope(session.user, permissions)
       const nextContracts = mergeContractsForScope(
         Array.isArray(existingData?.contracts) ? existingData.contracts : [],
@@ -151,6 +230,18 @@ export async function PUT(request: Request) {
         ...existingData,
         ...incomingBody,
         ...(Array.isArray(incomingBody?.contracts) ? { contracts: nextContracts } : {}),
+      }
+    }
+
+    if (changedKeys.includes("dailyReport") && incomingBody?.dailyReport) {
+      const existingData =
+        existingDataForMerge ||
+        (await readDashboardState<any>(DATA_PATH)) ||
+        (await readDashboardState<any>(FALLBACK_PATH)) ||
+        EMPTY_DASHBOARD
+      nextBody = {
+        ...nextBody,
+        dailyReport: mergeDailyReportState(existingData?.dailyReport, incomingBody.dailyReport),
       }
     }
 

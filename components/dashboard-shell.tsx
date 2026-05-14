@@ -40,6 +40,57 @@ function collectStateKeysForViews(views: ViewKey[]) {
   return Array.from(new Set(views.flatMap((viewKey) => VIEW_STATE_KEYS[viewKey] || [])))
 }
 
+function safeDailyText(value: unknown) {
+  return String(value ?? "").trim()
+}
+
+function parseDailyTimestamp(value: unknown) {
+  const time = Date.parse(String(value || ""))
+  return Number.isFinite(time) ? time : 0
+}
+
+function dailyEntryKey(entry: any) {
+  const date = safeDailyText(entry?.date)
+  const teamName = safeDailyText(entry?.teamName)
+  const userName = safeDailyText(entry?.userName)
+  const userId = safeDailyText(entry?.userId)
+  const id = safeDailyText(entry?.id)
+  if (date && teamName && userName) return `${date}::${teamName}::${userName}`
+  if (date && userId) return `${date}::${userId}`
+  return id || `${Date.now()}::${Math.random()}`
+}
+
+function pickLatestDailyEntry(current: any, incoming: any) {
+  if (!current) return incoming
+  const currentTime = parseDailyTimestamp(current?.updatedAt || current?.submittedAt)
+  const incomingTime = parseDailyTimestamp(incoming?.updatedAt || incoming?.submittedAt)
+  return incomingTime >= currentTime ? { ...current, ...incoming } : current
+}
+
+function mergeDailyReportClientState(currentDailyReport: any, incomingDailyReport: any) {
+  if (!incomingDailyReport || typeof incomingDailyReport !== "object" || Array.isArray(incomingDailyReport)) {
+    return currentDailyReport
+  }
+  const merged = new Map<string, any>()
+  ;(Array.isArray(currentDailyReport?.reports) ? currentDailyReport.reports : []).forEach((entry: any) => {
+    merged.set(dailyEntryKey(entry), entry)
+  })
+  ;(Array.isArray(incomingDailyReport?.reports) ? incomingDailyReport.reports : []).forEach((entry: any) => {
+    const key = dailyEntryKey(entry)
+    merged.set(key, pickLatestDailyEntry(merged.get(key), entry))
+  })
+  return {
+    ...currentDailyReport,
+    ...incomingDailyReport,
+    reports: Array.from(merged.values()),
+    aiSummaries: Array.isArray(incomingDailyReport?.aiSummaries)
+      ? incomingDailyReport.aiSummaries
+      : Array.isArray(currentDailyReport?.aiSummaries)
+        ? currentDailyReport.aiSummaries
+        : [],
+  }
+}
+
 type CollectionTabKey = "integrated" | "long-term" | "delivery"
 type SectionKey = "dailyReport" | "performance" | "termination"
 
@@ -1790,6 +1841,7 @@ export function DashboardShell({
   const pendingPayloadRef = useRef<string | null>(null)
   const pendingDataRef = useRef<any | null>(null)
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const dailyReportSaveInFlightRef = useRef(false)
   const localStorageCacheTimerRef = useRef<number | null>(null)
   const manualSaveTimerRef = useRef<number | null>(null)
   const lastHistoryAtRef = useRef<number>(0)
@@ -2848,13 +2900,18 @@ export function DashboardShell({
   }
 
   async function persistDailyReportState(nextDailyReportState: any) {
-    await persist(
-      {
-        ...data,
-        dailyReport: nextDailyReportState,
-      },
-      { immediate: true, updatedViews: ["daily-report"] },
-    )
+    dailyReportSaveInFlightRef.current = true
+    try {
+      await persist(
+        {
+          ...(pendingDataRef.current || data),
+          dailyReport: nextDailyReportState,
+        },
+        { immediate: true, updatedViews: ["daily-report"] },
+      )
+    } finally {
+      dailyReportSaveInFlightRef.current = false
+    }
     void notifyDailyTeamCompletion(nextDailyReportState)
   }
 
@@ -3065,13 +3122,21 @@ export function DashboardShell({
 
     const refreshDailyReport = async () => {
       if (document.visibilityState === "hidden") return
+      if (dailyReportSaveInFlightRef.current || dirtyViewsRef.current["daily-report"]) return
       try {
-        const response = await fetch("/api/dashboard", { cache: "no-store" })
+        const response = await fetch("/api/dashboard?slice=dailyReport", { cache: "no-store" })
         if (!response.ok) return
         const latest = await response.json()
         if (cancelled) return
+        if (dailyReportSaveInFlightRef.current || dirtyViewsRef.current["daily-report"]) return
         if (latest?.dailyReport) {
-          setData((prev: any) => ({ ...prev, dailyReport: latest.dailyReport, ui: latest.ui || prev.ui }))
+          setData((prev: any) => {
+            const mergedDailyReport = mergeDailyReportClientState(prev?.dailyReport, latest.dailyReport)
+            const nextData = { ...prev, dailyReport: mergedDailyReport, ui: latest.ui || prev.ui }
+            pendingDataRef.current = nextData
+            scheduleLocalDashboardCache(nextData)
+            return nextData
+          })
         }
       } catch {
         // Ignore transient polling issues for collaborative daily reports.
