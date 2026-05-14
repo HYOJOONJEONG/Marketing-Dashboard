@@ -3,7 +3,7 @@
 import type { ReactNode } from "react"
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, MessageSquare, OctagonAlert, UserRound } from "lucide-react"
+import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, LogOut, MessageSquare, OctagonAlert, UserRound } from "lucide-react"
 import type { PopupMessageRecord, UserTestIdEntry } from "@/lib/auth/model"
 
 type Props = {
@@ -173,6 +173,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
   const [bulkEndId, setBulkEndId] = useState("")
   const [testIdMessage, setTestIdMessage] = useState("")
   const [messageHistory, setMessageHistory] = useState<PopupMessageRecord[]>(data.messageHistory || [])
+  const [isLogoutPending, setIsLogoutPending] = useState(false)
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -222,6 +223,16 @@ export function PersonalDashboard({ currentUser, data }: Props) {
       setProfileMessage("내 프로필 설정이 저장되었습니다.")
       router.refresh()
     })
+  }
+
+  const logout = async () => {
+    if (isLogoutPending) return
+    setIsLogoutPending(true)
+    try {
+      await fetch("/api/auth/logout", { method: "POST" }).catch(() => null)
+    } finally {
+      window.location.replace("/")
+    }
   }
 
   const addTestIds = (ids: string[]) => {
@@ -337,6 +348,15 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                 >
                   <ArrowLeft className="h-4 w-4 text-slate-400" />
                   대시보드 돌아가기
+                </button>
+                <button
+                  type="button"
+                  onClick={logout}
+                  disabled={isLogoutPending}
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white transition hover:bg-slate-800 disabled:opacity-60 sm:flex-none"
+                >
+                  <LogOut className="h-4 w-4" />
+                  {isLogoutPending ? "로그아웃 중..." : "로그아웃"}
                 </button>
                 <div className="relative">
                   <button

@@ -79,7 +79,7 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
   const logout = () => {
     startTransition(async () => {
       await fetch("/api/auth/logout", { method: "POST" }).catch(() => null)
-      router.refresh()
+      window.location.replace("/")
     })
   }
 
