@@ -130,30 +130,35 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const existingData = (await readDashboardState<any>(DATA_PATH)) || (await readDashboardState<any>(FALLBACK_PATH)) || EMPTY_DASHBOARD
     const isPartial = Boolean(body?.partial && body?.data && typeof body.data === "object" && !Array.isArray(body.data))
     const incomingBody = isPartial ? body.data : body
     const changedKeys = (
       Array.isArray(body?.changedKeys) ? body.changedKeys : []
     ).filter((key: unknown): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))
-    const scope = getContractAccessScope(session.user, permissions)
-    const nextContracts = mergeContractsForScope(
-      Array.isArray(existingData?.contracts) ? existingData.contracts : [],
-      Array.isArray(incomingBody?.contracts) ? incomingBody.contracts : [],
-      session.user,
-      scope,
-    )
-    const nextBody = {
-      ...existingData,
-      ...incomingBody,
-      ...(Array.isArray(incomingBody?.contracts) ? { contracts: nextContracts } : {}),
+    const canWritePartialDirectly = isPartial && changedKeys.length > 0 && !Array.isArray(incomingBody?.contracts)
+    let nextBody = incomingBody
+
+    if (!canWritePartialDirectly) {
+      const existingData = (await readDashboardState<any>(DATA_PATH)) || (await readDashboardState<any>(FALLBACK_PATH)) || EMPTY_DASHBOARD
+      const scope = getContractAccessScope(session.user, permissions)
+      const nextContracts = mergeContractsForScope(
+        Array.isArray(existingData?.contracts) ? existingData.contracts : [],
+        Array.isArray(incomingBody?.contracts) ? incomingBody.contracts : [],
+        session.user,
+        scope,
+      )
+      nextBody = {
+        ...existingData,
+        ...incomingBody,
+        ...(Array.isArray(incomingBody?.contracts) ? { contracts: nextContracts } : {}),
+      }
     }
 
     await writeDashboardState(nextBody, {
       menuLabel: "Dashboard",
       changeLabel: "Save dashboard state",
     }, isPartial && changedKeys.length ? changedKeys : undefined)
-    await updateAuthState((state) => {
+    void updateAuthState((state) => {
       appendActivityLog(state, {
         actorUserId: session.user.id,
         actorName: session.user.name,
@@ -167,7 +172,7 @@ export async function PUT(request: Request) {
         sessionId: session.sessionId,
         success: true,
       })
-    })
+    }).catch(() => undefined)
     return NextResponse.json({ ok: true })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save dashboard state"
