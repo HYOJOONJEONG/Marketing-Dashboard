@@ -2191,7 +2191,7 @@ export function DashboardShell({
   const handleLogout = () => {
     startAccountTransition(async () => {
       await fetch("/api/auth/logout", { method: "POST" }).catch(() => null)
-      router.refresh()
+      window.location.replace("/")
     })
   }
   const handlePasswordChange = () => {

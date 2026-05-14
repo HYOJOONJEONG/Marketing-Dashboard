@@ -31,6 +31,16 @@ function shouldUseSecureCookie() {
   return process.env.VERCEL === "1"
 }
 
+export function getSessionCookieOptions(expires: Date) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: shouldUseSecureCookie(),
+    path: "/",
+    expires,
+  }
+}
+
 function sign(value: string) {
   return crypto.createHmac("sha256", SESSION_SECRET).update(value).digest("hex")
 }
@@ -83,27 +93,12 @@ export async function createUserSession(user: UserRecord, requestMeta: { ipAddre
   }, { preserveConcurrentSessions: false })
 
   const cookieStore = await cookies()
-  cookieStore.set(SESSION_COOKIE, pack(sessionId), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: shouldUseSecureCookie(),
-    path: "/",
-    expires: new Date(expiresAt),
-  })
+  cookieStore.set(SESSION_COOKIE, pack(sessionId), getSessionCookieOptions(new Date(expiresAt)))
 
   return sessionId
 }
 
-export async function clearUserSession(sessionId?: string | null) {
-  const cookieStore = await cookies()
-  cookieStore.set(SESSION_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: shouldUseSecureCookie(),
-    path: "/",
-    expires: new Date(0),
-  })
-
+export async function removeUserSessionRecord(sessionId?: string | null) {
   if (!sessionId) return
   await updateAuthState((state) => {
     const existing = state.userSessions.find((session) => session.id === sessionId)
@@ -127,6 +122,12 @@ export async function clearUserSession(sessionId?: string | null) {
       })
     }
   }, { preserveConcurrentSessions: false })
+}
+
+export async function clearUserSession(sessionId?: string | null) {
+  const cookieStore = await cookies()
+  cookieStore.set(SESSION_COOKIE, "", getSessionCookieOptions(new Date(0)))
+  await removeUserSessionRecord(sessionId)
 }
 
 export async function resolveRequestSession() {
