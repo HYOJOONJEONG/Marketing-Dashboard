@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { DailyDirectoryUser } from "@/lib/daily-report"
+import type { PopupMessageRecord, UserTestIdEntry } from "@/lib/auth/model"
 
 type Props = {
   initialData: any
@@ -15,9 +16,12 @@ type Props = {
     teamName: string
     avatarEmoji?: string | null
     color: { bg: string; text: string; border: string; hex: string }
+    assignedIndustries?: string[]
+    testIdEntries?: UserTestIdEntry[]
   }
   directoryUsers: DailyDirectoryUser[]
   permissions: Record<string, Record<string, boolean>>
+  personalMessageHistory?: PopupMessageRecord[]
 }
 
 export function DashboardWorkspace({
@@ -27,6 +31,7 @@ export function DashboardWorkspace({
   currentUser,
   directoryUsers,
   permissions,
+  personalMessageHistory = [],
 }: Props) {
   const [currentSection, setCurrentSection] = useState(initialView)
 
@@ -39,6 +44,7 @@ export function DashboardWorkspace({
         currentUser={currentUser}
         directoryUsers={directoryUsers}
         permissions={permissions}
+        personalMessageHistory={personalMessageHistory}
         onViewChange={setCurrentSection}
       />
     </div>

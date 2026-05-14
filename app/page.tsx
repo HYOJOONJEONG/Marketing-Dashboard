@@ -6,6 +6,7 @@ import { DashboardShell } from "@/components/dashboard-shell"
 import { buildPermissionIndex, filterContractsForUser, hasPermission } from "@/lib/auth/permissions"
 import { requirePageAuth } from "@/lib/auth/server"
 import { getUserColorToken } from "@/lib/auth/model"
+import type { PopupMessageRecord } from "@/lib/auth/model"
 import { ensureDailyDirectoryUsers, isDailyReportTeam, sortDailyDirectoryUsers } from "@/lib/daily-report"
 import { readDashboardState } from "@/lib/shared-db-store"
 
@@ -75,6 +76,10 @@ export default async function Page({
         : hasPermission(permissionIndex, "newContractsList", "view")
         ? "contracts"
         : "daily-report")
+  const personalMessageHistory = (Array.isArray(auth.state.popupMessages) ? auth.state.popupMessages : [])
+    .filter((message: PopupMessageRecord) => message.recipientUserId === auth.user.id)
+    .sort((a: PopupMessageRecord, b: PopupMessageRecord) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 50)
 
   return (
     <DashboardWorkspace
@@ -88,9 +93,12 @@ export default async function Page({
         teamName: auth.teamName,
         avatarEmoji: auth.user.avatarEmoji || null,
         color: getUserColorToken(auth.user.id),
+        assignedIndustries: auth.user.assignedIndustries || [],
+        testIdEntries: auth.user.testIdEntries || [],
       }}
       directoryUsers={directoryUsers}
       permissions={permissionIndex as any}
+      personalMessageHistory={personalMessageHistory}
     />
   )
 }

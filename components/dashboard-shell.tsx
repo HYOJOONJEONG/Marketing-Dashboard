@@ -5,11 +5,15 @@ import { useRouter } from "next/navigation"
 import { ChevronDown, KeyRound, LogOut, Menu, MessageSquare, UserRound, X } from "lucide-react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
 import { DailyReportPage } from "./daily-report/daily-report-page"
+import { PersonalDashboard } from "./me/personal-dashboard"
+import { getIndustryGroupLabel } from "@/lib/industry-groups"
+import { buildPersonalDashboardData } from "@/lib/personal-dashboard"
 import {
   DailyDirectoryUser,
   createEmptyDailyReportState,
   normalizeDailyReportState,
 } from "@/lib/daily-report"
+import type { PopupMessageRecord, UserTestIdEntry } from "@/lib/auth/model"
 
 type ViewKey =
   | "daily-report"
@@ -20,6 +24,7 @@ type ViewKey =
   | "collection"
   | "option-dashboard"
   | "termination"
+  | "my-page"
 
 const VIEW_STATE_KEYS: Record<ViewKey, string[]> = {
   "daily-report": ["dailyReport", "ui"],
@@ -30,6 +35,7 @@ const VIEW_STATE_KEYS: Record<ViewKey, string[]> = {
   "collection": ["collection", "currentYear", "years", "availableYears", "ui"],
   "option-dashboard": ["ui"],
   "termination": ["termination", "ui"],
+  "my-page": ["ui"],
 }
 
 function pickTopLevelState(source: any, keys: string[]) {
@@ -131,6 +137,7 @@ const viewTitles: Record<ViewKey, string> = {
   collection: "계약서통합관리",
   "option-dashboard": "유료 옵션 정보 현황",
   termination: "해지 진행사항",
+  "my-page": "내 페이지",
 }
 
 const manualSummaryAutoFields = new Set([
@@ -1725,6 +1732,7 @@ export function DashboardShell({
   currentUser,
   directoryUsers,
   permissions,
+  personalMessageHistory = [],
   onViewChange,
 }: {
   initialData: any
@@ -1737,9 +1745,12 @@ export function DashboardShell({
     teamName: string
     avatarEmoji?: string | null
     color?: { bg: string; text: string; border: string; hex: string }
+    assignedIndustries?: string[]
+    testIdEntries?: UserTestIdEntry[]
   } | null
   directoryUsers: DailyDirectoryUser[]
   permissions?: Record<string, Record<string, boolean>> | null
+  personalMessageHistory?: PopupMessageRecord[]
   onViewChange?: (view: ViewKey) => void
 }) {
   const router = useRouter()
@@ -1896,6 +1907,7 @@ export function DashboardShell({
     canViewCollections ? "collection" : null,
     canViewOptionDashboard ? "option-dashboard" : null,
     canViewTermination ? "termination" : null,
+    currentUser ? "my-page" : null,
   ].filter(Boolean) as ViewKey[]
 
   function updateManualDraft(updater: any) {
@@ -2074,6 +2086,39 @@ export function DashboardShell({
     () => buildPaidOptionInfoColumns(data.paidOptionSourceColumns || weeklyReport.paidOptionInfoColumns || []),
     [data.paidOptionSourceColumns, weeklyReport.paidOptionInfoColumns],
   )
+  const personalDashboardData = useMemo(() => {
+    if (!currentUser) return null
+    const industryOptions = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(data?.contracts)
+            ? data.contracts.map((row: any) => getIndustryGroupLabel(row?.industry, row?.companyName))
+            : []),
+          ...(Array.isArray(data?.collection?.integrated)
+            ? data.collection.integrated.map((row: any) => getIndustryGroupLabel(row?.industry, row?.companyName))
+            : []),
+          ...(Array.isArray(data?.collection?.longTerm)
+            ? data.collection.longTerm.map((row: any) => getIndustryGroupLabel(row?.industry, row?.companyName))
+            : []),
+        ]
+          .map((value) => String(value || "").trim())
+          .filter(Boolean),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "ko"))
+
+    return {
+      ...buildPersonalDashboardData(
+        {
+          ...(currentUser as any),
+          assignedIndustries: currentUser.assignedIndustries || [],
+          testIdEntries: currentUser.testIdEntries || [],
+        },
+        data,
+      ),
+      industryOptions,
+      messageHistory: personalMessageHistory,
+    }
+  }, [currentUser, data, personalMessageHistory])
 
   const selectedSheet = useMemo(
     () => termination.sheets?.[0] || null,
@@ -5642,7 +5687,7 @@ export function DashboardShell({
   const currentMenuUpdatedAt = data?.ui?.menuUpdatedAt?.[view]
   const currentViewDirty = Boolean(dirtyViews[view])
   const hasUnsavedChanges = Object.values(dirtyViews).some(Boolean)
-  const showHeaderSave = !["daily-report", "weekly-report", "contracts", "weekly-selection", "manual-input", "termination"].includes(view)
+  const showHeaderSave = !["daily-report", "weekly-report", "contracts", "weekly-selection", "manual-input", "termination", "my-page"].includes(view)
 
   const manualRevenueSection = useMemo(
     () => (
@@ -6230,9 +6275,10 @@ export function DashboardShell({
                   >
                     <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
                       <div className="space-y-1">
-                        <a
-                          href="/me"
+                        <button
+                          type="button"
                           onClick={() => {
+                            setView("my-page")
                             setIsUserMenuOpen(false)
                             setIsPasswordOpen(false)
                             setIsSidebarOpen(false)
@@ -6241,7 +6287,7 @@ export function DashboardShell({
                         >
                           <UserRound className="ml-1 h-[18px] w-[18px] text-slate-400" />
                           <span className="flex-1 text-[14px] font-bold tracking-[-0.03em] text-slate-800">내 페이지</span>
-                        </a>
+                        </button>
                         <button
                           type="button"
                           onClick={() => {
@@ -6731,7 +6777,7 @@ export function DashboardShell({
                   <span>PDF</span>
                 </button>
               )}
-              {view !== "daily-report" ? (
+              {view !== "daily-report" && view !== "my-page" ? (
                 <>
                   <div className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-700">
                     {currentYear}년도
@@ -6772,6 +6818,29 @@ export function DashboardShell({
               onSaveState={persistDailyReportState}
             />
           )}
+
+          {view === "my-page" && currentUser && personalDashboardData ? (
+            <PersonalDashboard
+              embedded
+              currentUser={{
+                id: currentUser.id,
+                name: currentUser.name,
+                role: currentUser.role,
+                teamName: currentUser.teamName,
+                avatarEmoji: currentUser.avatarEmoji || null,
+                color:
+                  currentUser.color || {
+                    bg: "bg-slate-100",
+                    text: "text-slate-700",
+                    border: "border-slate-200",
+                    hex: "#475569",
+                  },
+                assignedIndustries: currentUser.assignedIndustries || [],
+                testIdEntries: currentUser.testIdEntries || [],
+              }}
+              data={personalDashboardData}
+            />
+          ) : null}
 
           {view === "weekly-report" && (
             <div className="weekly-report-print space-y-4">

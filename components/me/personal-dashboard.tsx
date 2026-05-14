@@ -28,11 +28,12 @@ type Props = {
     industryOptions: string[]
     messageHistory?: PopupMessageRecord[]
   }
+  embedded?: boolean
 }
 
 type MobileMyPageSection = "contracts" | "pending" | "termination" | "hold" | "testIds" | "messages"
 
-const cardClass = "rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
+const cardClass = "rounded-2xl border border-slate-200/90 bg-white p-4 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
 const avatarOptions = ["😀", "😎", "🧑‍💼", "📈", "💼", "🦊", "🐯", "⭐", "🚀", "🧠", "🫶", "🔥", "🐻", "🐼", "🦁", "🐸", "🌈", "⚡", "🎯", "🎧", "☕", "🍀", "🪐", "🎨"]
 
 function formatValue(value: unknown, fallback = "-") {
@@ -103,13 +104,13 @@ function MetricCard({
   icon: ReactNode
 }) {
   return (
-    <div className={`${cardClass} overflow-hidden p-5`}>
+    <div className={`${cardClass} overflow-hidden p-3.5`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-slate-500">{title}</div>
-          <div className="mt-4 text-[26px] font-black tracking-[-0.05em] text-slate-950">{value}</div>
+          <div className="text-[12px] font-semibold text-slate-500">{title}</div>
+          <div className="mt-2 text-[22px] font-black tracking-[-0.04em] text-slate-950">{value}</div>
         </div>
-        <div className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl ${tone}`}>{icon}</div>
+        <div className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}>{icon}</div>
       </div>
     </div>
   )
@@ -123,11 +124,11 @@ function MobileDataCard({
   rows: Array<{ label: string; value: ReactNode }>
 }) {
   return (
-    <div className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
       <div className="text-[14px] font-bold text-slate-950">{title}</div>
       <div className="mt-3 space-y-2.5">
         {rows.map((row) => (
-          <div key={row.label} className="rounded-2xl bg-slate-50 px-3.5 py-3">
+          <div key={row.label} className="rounded-xl bg-slate-50 px-3 py-2.5">
             <div className="text-[11px] font-semibold text-slate-400">{row.label}</div>
             <div className="mt-1 text-[14px] font-semibold text-slate-800">{row.value}</div>
           </div>
@@ -157,7 +158,7 @@ function buildRangeTestIds(startId: string, endId: string) {
   return Array.from({ length: end - start + 1 }, (_, index) => `E${String(start + index).padStart(6, "0")}`)
 }
 
-export function PersonalDashboard({ currentUser, data }: Props) {
+export function PersonalDashboard({ currentUser, data, embedded = false }: Props) {
   const router = useRouter()
   const [profileMessage, setProfileMessage] = useState("")
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>(data.assignedIndustries || [])
@@ -317,20 +318,20 @@ export function PersonalDashboard({ currentUser, data }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef6ff_0%,#f8fbff_36%,#f3f6fb_100%)] px-3 py-3 sm:px-4">
-      <div className="mx-auto max-w-[1680px]">
-        <div className="space-y-4">
-          <section className={`${cardClass} relative z-20 overflow-visible p-4`}>
+    <div className={embedded ? "bg-transparent" : "min-h-screen bg-[radial-gradient(circle_at_top,#eef6ff_0%,#f8fbff_36%,#f3f6fb_100%)] px-3 py-3 sm:px-4"}>
+      <div className={embedded ? "max-w-none" : "mx-auto max-w-[1680px]"}>
+        <div className="space-y-3">
+          <section className={`${cardClass} relative z-20 overflow-visible p-3.5`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <div
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border ${currentUser.color.border} ${currentUser.color.bg} text-[22px] shadow-sm`}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${currentUser.color.border} ${currentUser.color.bg} text-[19px] shadow-sm`}
                 >
                   {selectedAvatar || currentUser.avatarEmoji || currentUser.name.slice(0, 1)}
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-[20px] font-black tracking-[-0.05em] text-slate-950">{currentUser.name}</span>
+                    <span className="truncate text-[17px] font-black tracking-[-0.04em] text-slate-950">{currentUser.name}</span>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-600">{currentUser.role}</span>
                     <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[12px] font-semibold text-blue-700">{currentUser.teamName}</span>
                     <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-semibold text-emerald-700">
@@ -341,23 +342,27 @@ export function PersonalDashboard({ currentUser, data }: Props) {
               </div>
 
               <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => router.push("/")}
-                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none"
-                >
-                  <ArrowLeft className="h-4 w-4 text-slate-400" />
-                  대시보드 돌아가기
-                </button>
-                <button
-                  type="button"
-                  onClick={logout}
-                  disabled={isLogoutPending}
-                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white transition hover:bg-slate-800 disabled:opacity-60 sm:flex-none"
-                >
-                  <LogOut className="h-4 w-4" />
-                  {isLogoutPending ? "로그아웃 중..." : "로그아웃"}
-                </button>
+                {!embedded ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => router.push("/")}
+                      className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none"
+                    >
+                      <ArrowLeft className="h-4 w-4 text-slate-400" />
+                      대시보드 돌아가기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={logout}
+                      disabled={isLogoutPending}
+                      className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-[13px] font-bold text-white transition hover:bg-slate-800 disabled:opacity-60 sm:flex-none"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      {isLogoutPending ? "로그아웃 중..." : "로그아웃"}
+                    </button>
+                  </>
+                ) : null}
                 <div className="relative">
                   <button
                     type="button"
@@ -365,7 +370,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                       setIsAvatarOpen(false)
                       setIsIndustryOpen((prev) => !prev)
                     }}
-                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none"
+                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none"
                   >
                     담당 업종 선택
                     <ChevronDown className={`h-4 w-4 text-slate-400 transition ${isIndustryOpen ? "rotate-180" : ""}`} />
@@ -405,7 +410,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                       setIsIndustryOpen(false)
                       setIsAvatarOpen((prev) => !prev)
                     }}
-                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none"
+                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none"
                   >
                     <UserRound className="h-4 w-4 text-slate-400" />
                     아바타 변경
@@ -448,7 +453,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
                   type="button"
                   onClick={saveProfile}
                   disabled={isPending}
-                  className="inline-flex h-10 flex-1 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-60 sm:flex-none"
+                  className="inline-flex h-9 flex-1 items-center justify-center rounded-xl bg-slate-950 px-3 text-[13px] font-bold text-white disabled:opacity-60 sm:flex-none"
                 >
                   {isPending ? "저장 중..." : "프로필 저장"}
                 </button>
@@ -457,7 +462,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             {profileMessage ? <div className="mt-3 text-sm text-slate-500">{profileMessage}</div> : null}
           </section>
 
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <section className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-6">
             <MetricCard
               title="나의 시험아이디"
               value={testIdEntries.length}
@@ -524,7 +529,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             <div className={`${cardClass} ${mobileSection === "messages" ? "block" : "hidden"} lg:block`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">내 메시지</h3>
+                  <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">내 메시지</h3>
                   <p className="mt-1 text-sm text-slate-500">최근 7일 팝업 메시지를 확인합니다. 메시지는 최대 200개 정책 안에서 보관됩니다.</p>
                 </div>
                 <div className="rounded-2xl bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700">
@@ -582,7 +587,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             <div className={`${cardClass} ${mobileSection === "testIds" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">1. 시험아이디 관리</h3>
+                  <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">시험아이디 관리</h3>
                   <p className="mt-1 text-sm text-slate-500">개별 등록 또는 연속 등록 후 회사명, 부서, 담당자, 연락처, 비고를 기록할 수 있습니다.</p>
                 </div>
                 <div className="rounded-2xl bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700">
@@ -731,7 +736,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             <div className={`${cardClass} ${mobileSection === "contracts" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">2. 내 신규계약 리스트</h3>
+                  <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">내 신규계약 리스트</h3>
                   <p className="mt-1 text-sm text-slate-500">이름 기준으로 등록된 신규계약을 월별 흐름까지 함께 보여줍니다.</p>
                 </div>
                 <div className="rounded-2xl bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600">
@@ -820,7 +825,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             <div className={`${cardClass} ${mobileSection === "pending" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">3. 내 이름으로 된 계약서 미회수 현황</h3>
+                  <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">내 이름으로 된 계약서 미회수 현황</h3>
                   <p className="mt-1 text-sm text-slate-500">선택한 담당 업종 기준으로 미회수 계약서만 모아 보여줍니다.</p>
                 </div>
                 <div className="rounded-2xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
@@ -902,7 +907,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             <div className={`${cardClass} ${mobileSection === "termination" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">4. 나의 해지 리스트</h3>
+                  <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">나의 해지 리스트</h3>
                   <p className="mt-1 text-sm text-slate-500">해지 예정인 계약건만 보여줍니다.</p>
                 </div>
                 <div className="rounded-2xl bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700">
@@ -981,7 +986,7 @@ export function PersonalDashboard({ currentUser, data }: Props) {
             <div className={`${cardClass} ${mobileSection === "hold" ? "block" : "hidden"} lg:block`}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-[22px] font-black tracking-[-0.04em] text-slate-950">5. 나의 청구보류 리스트</h3>
+                    <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">나의 청구보류 리스트</h3>
                   <p className="mt-1 text-sm text-slate-500">현재 내 이름으로 관리 중인 청구보류 건의 시작일과 종료일을 함께 보여줍니다.</p>
                   </div>
                 <div className="rounded-2xl bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
