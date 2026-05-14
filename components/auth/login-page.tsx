@@ -1,6 +1,6 @@
 "use client"
 
-import { Eye, EyeOff, KeyRound, Lock, ShieldCheck, Smartphone, UserRound } from "lucide-react"
+import { Eye, EyeOff, KeyRound, Loader2, Lock, ShieldCheck, Smartphone, UserRound } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 type TwoFactorState = {
@@ -29,6 +29,7 @@ export function LoginPage() {
   const [notice, setNotice] = useState("")
   const [error, setError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
   useEffect(() => {
     if (!twoFactor.required) return
@@ -36,15 +37,15 @@ export function LoginPage() {
   }, [twoFactor.required])
 
   useEffect(() => {
-    if (!twoFactor.required || isSubmitting || otpCode.length !== 6) return
+    if (!twoFactor.required || isSubmitting || isRedirecting || otpCode.length !== 6) return
     if (submittedOtpRef.current === otpCode) return
     submittedOtpRef.current = otpCode
     formRef.current?.requestSubmit()
-  }, [isSubmitting, otpCode, twoFactor.required])
+  }, [isRedirecting, isSubmitting, otpCode, twoFactor.required])
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (isSubmitting) return
+    if (isSubmitting || isRedirecting) return
 
     setError("")
     setNotice("")
@@ -52,6 +53,7 @@ export function LoginPage() {
 
     const controller = new AbortController()
     const timeoutId = window.setTimeout(() => controller.abort(), 10000)
+    let keepPending = false
 
     try {
       const response = await fetch("/api/auth/login", {
@@ -81,8 +83,12 @@ export function LoginPage() {
         setError(payload?.error || "로그인에 실패했습니다.")
         return
       }
+      keepPending = true
+      setIsRedirecting(true)
+      setNotice("대시보드로 이동 중입니다.")
       window.location.replace("/daily-report")
     } catch (loginError) {
+      setIsRedirecting(false)
       setError(
         loginError instanceof DOMException && loginError.name === "AbortError"
           ? "로그인 응답이 지연되고 있습니다. 서버 상태를 확인한 뒤 다시 시도해주세요."
@@ -90,9 +96,14 @@ export function LoginPage() {
       )
     } finally {
       window.clearTimeout(timeoutId)
-      setIsSubmitting(false)
+      if (!keepPending) {
+        setIsSubmitting(false)
+      }
     }
   }
+
+  const isEnteringDashboard = isRedirecting || (isSubmitting && twoFactor.required && otpCode.length === 6)
+  const submitLabel = isEnteringDashboard ? "대시보드 들어가는 중..." : isSubmitting ? "확인 중..." : twoFactor.required ? "2FA 확인 후 로그인" : "다음"
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#e0f2fe_0%,#f8fafc_34%,#eef6ff_100%)] px-4 py-10">
@@ -153,6 +164,7 @@ export function LoginPage() {
                         setOtpCode("")
                         setNotice("")
                         setError("")
+                        setIsRedirecting(false)
                         submittedOtpRef.current = ""
                       }}
                       aria-label="이름 또는 로그인 아이디"
@@ -176,6 +188,7 @@ export function LoginPage() {
                         setOtpCode("")
                         setNotice("")
                         setError("")
+                        setIsRedirecting(false)
                         submittedOtpRef.current = ""
                       }}
                       aria-label="비밀번호"
@@ -213,6 +226,8 @@ export function LoginPage() {
                           const nextCode = event.target.value.replace(/\D/g, "").slice(0, 6)
                           setOtpCode(nextCode)
                           setError("")
+                          setNotice("")
+                          setIsRedirecting(false)
                           if (nextCode.length < 6) submittedOtpRef.current = ""
                         }}
                         aria-label="2FA 인증번호"
@@ -235,10 +250,11 @@ export function LoginPage() {
 
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-slate-950 text-[15px] font-bold text-white shadow-[0_16px_40px_rgba(15,23,42,0.18)] transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isSubmitting || isRedirecting}
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-[15px] font-bold text-white shadow-[0_16px_40px_rgba(15,23,42,0.18)] transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-85"
                 >
-                  {isSubmitting ? "확인 중..." : twoFactor.required ? "2FA 확인 후 로그인" : "다음"}
+                  {isSubmitting || isRedirecting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {submitLabel}
                 </button>
               </form>
             </div>
