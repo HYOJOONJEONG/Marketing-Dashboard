@@ -44,6 +44,7 @@ export async function POST(request: Request) {
   const loginId = String(body?.loginId || "").trim()
   const password = String(body?.password || "")
   const otpCode = String(body?.otpCode || "").trim()
+  const resetTwoFactor = Boolean(body?.resetTwoFactor)
   if (!loginId || !password) {
     return NextResponse.json({ ok: false, error: "이름(ID)과 비밀번호를 입력해주세요." }, { status: 400 })
   }
@@ -55,6 +56,29 @@ export async function POST(request: Request) {
 
   let twoFactorSecret = result.user.twoFactorSecret || ""
   const twoFactorEnabled = Boolean(result.user.twoFactorEnabled)
+
+  if (resetTwoFactor) {
+    twoFactorSecret = createTotpSecret()
+    await updateAuthState((state) => {
+      const target = state.users.find((user) => user.id === result.user.id)
+      if (!target) return
+      target.twoFactorSecret = twoFactorSecret
+      target.twoFactorEnabled = false
+      target.twoFactorConfirmedAt = null
+      target.updatedAt = new Date().toISOString()
+      state.userSessions = state.userSessions.filter((session) => session.userId !== target.id)
+      state.presenceSessions = state.presenceSessions.filter((session) => session.userId !== target.id)
+    }, { preserveConcurrentSessions: false })
+    const payload = await buildTwoFactorPayload(
+      result.user.loginId || result.user.name,
+      twoFactorSecret,
+      true,
+    )
+    return NextResponse.json({
+      ...payload,
+      message: "인증앱을 새로 등록한 뒤 6자리 코드를 입력해주세요.",
+    })
+  }
 
   if (!twoFactorSecret) {
     twoFactorSecret = createTotpSecret()

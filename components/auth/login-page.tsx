@@ -8,6 +8,7 @@ type TwoFactorState = {
   setupRequired: boolean
   qrDataUrl: string | null
   manualSecret: string | null
+  resetAvailable: boolean
 }
 
 const EMPTY_TWO_FACTOR: TwoFactorState = {
@@ -15,6 +16,7 @@ const EMPTY_TWO_FACTOR: TwoFactorState = {
   setupRequired: false,
   qrDataUrl: null,
   manualSecret: null,
+  resetAvailable: false,
 }
 
 export function LoginPage() {
@@ -43,13 +45,16 @@ export function LoginPage() {
     formRef.current?.requestSubmit()
   }, [isRedirecting, isSubmitting, otpCode, twoFactor.required])
 
-  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const submitLogin = async (resetTwoFactor = false) => {
     if (isSubmitting || isRedirecting) return
 
     setError("")
     setNotice("")
     setIsSubmitting(true)
+    if (resetTwoFactor) {
+      setOtpCode("")
+      submittedOtpRef.current = ""
+    }
 
     const controller = new AbortController()
     const timeoutId = window.setTimeout(() => controller.abort(), 10000)
@@ -59,16 +64,20 @@ export function LoginPage() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ loginId, password, otpCode }),
+        body: JSON.stringify({ loginId, password, otpCode: resetTwoFactor ? "" : otpCode, resetTwoFactor }),
         signal: controller.signal,
       })
       const payload = await response.json().catch(() => null)
       if (payload?.requiresTwoFactor) {
+        if (payload.twoFactorSetupRequired) {
+          submittedOtpRef.current = ""
+        }
         setTwoFactor({
           required: true,
           setupRequired: Boolean(payload.twoFactorSetupRequired),
           qrDataUrl: payload.qrDataUrl || null,
           manualSecret: payload.manualSecret || null,
+          resetAvailable: !Boolean(payload.twoFactorSetupRequired),
         })
         if (response.ok) {
           setNotice(payload?.message || "인증앱의 6자리 코드를 입력해주세요.")
@@ -100,6 +109,18 @@ export function LoginPage() {
         setIsSubmitting(false)
       }
     }
+  }
+
+  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await submitLogin(false)
+  }
+
+  const requestTwoFactorReset = () => {
+    if (isSubmitting || isRedirecting) return
+    const confirmed = window.confirm("기존 인증앱 연결을 초기화하고 새 QR을 발급할까요? 새 QR 등록 후 6자리 코드를 입력해야 로그인됩니다.")
+    if (!confirmed) return
+    void submitLogin(true)
   }
 
   const isEnteringDashboard = isRedirecting || (isSubmitting && twoFactor.required && otpCode.length === 6)
@@ -233,6 +254,16 @@ export function LoginPage() {
                         aria-label="2FA 인증번호"
                       />
                     </div>
+                    {twoFactor.resetAvailable ? (
+                      <button
+                        type="button"
+                        onClick={requestTwoFactorReset}
+                        disabled={isSubmitting || isRedirecting}
+                        className="mt-2 inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        인증앱 재등록 / 새 QR 발급
+                      </button>
+                    ) : null}
                   </label>
                 ) : null}
 
