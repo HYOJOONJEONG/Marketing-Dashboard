@@ -99,6 +99,23 @@ async function fetchProfileUpdate(body: Record<string, unknown>) {
   }
 }
 
+async function fetchTestIdUpdate(body: Record<string, unknown>) {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 10000)
+  try {
+    const response = await fetch("/api/auth/test-ids", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    const payload = await response.json().catch(() => null)
+    return { response, payload }
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
 function terminationBadgeClass(label: string) {
   if (label === "해지 진행") {
     return "border-orange-200 bg-orange-50 text-orange-700"
@@ -348,7 +365,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
     setTestIdMessage("")
     setIsTestIdSaving(true)
     try {
-      const { response, payload } = await fetchProfileUpdate({ testIdEntries, confirmClearTestIds })
+      const { response, payload } = await fetchTestIdUpdate({ testIdEntries, confirmClearTestIds })
       if (!response.ok || !payload?.ok) {
         setTestIdMessage(payload?.error || "시험아이디 저장에 실패했습니다.")
         return
