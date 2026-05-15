@@ -104,8 +104,8 @@ const LOCAL_STORAGE_KEY = "infobiz-dashboard-state-v1"
 const LAST_VIEW_SESSION_KEY = "infobiz-last-dashboard-view"
 const PRESENCE_HEARTBEAT_RUSH_INTERVAL_MS = 15 * 1000
 const PRESENCE_HEARTBEAT_DEFAULT_INTERVAL_MS = 45 * 1000
-const DAILY_REPORT_POLL_RUSH_INTERVAL_MS = 10 * 1000
-const DAILY_REPORT_POLL_DEFAULT_INTERVAL_MS = 60 * 1000
+const DAILY_REPORT_POLL_RUSH_INTERVAL_MS = 5 * 1000
+const DAILY_REPORT_POLL_DEFAULT_INTERVAL_MS = 20 * 1000
 
 function getKstHour() {
   const formattedHour = new Intl.DateTimeFormat("en-US", {
@@ -2972,6 +2972,7 @@ export function DashboardShell({
         setData(previousData)
         pendingDataRef.current = previousData
         scheduleLocalDashboardCache(previousData)
+        clearDirtyViews(updatedViews)
         window.alert("저장에 실패해서 이전 상태로 되돌렸습니다. 잠시 후 다시 시도해주세요.")
         throw error
       })
@@ -3213,13 +3214,13 @@ export function DashboardShell({
 
     const refreshDailyReport = async () => {
       if (document.visibilityState === "hidden") return
-      if (dailyReportSaveInFlightRef.current || dirtyViewsRef.current["daily-report"]) return
+      if (dailyReportSaveInFlightRef.current) return
       try {
         const response = await fetch("/api/dashboard?slice=dailyReport", { cache: "no-store" })
         if (!response.ok) return
         const latest = await response.json()
         if (cancelled) return
-        if (dailyReportSaveInFlightRef.current || dirtyViewsRef.current["daily-report"]) return
+        if (dailyReportSaveInFlightRef.current) return
         if (latest?.dailyReport) {
           setData((prev: any) => {
             const mergedDailyReport = mergeDailyReportClientState(prev?.dailyReport, latest.dailyReport)
@@ -3242,10 +3243,17 @@ export function DashboardShell({
       }, getDailyReportPollIntervalMs())
     }
 
-    scheduleRefresh()
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return
+      void refreshDailyReport()
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    void refreshDailyReport().finally(scheduleRefresh)
     return () => {
       cancelled = true
       if (timer) window.clearTimeout(timer)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
     }
   }, [view])
 
