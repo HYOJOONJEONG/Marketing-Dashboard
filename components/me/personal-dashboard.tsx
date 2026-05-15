@@ -82,6 +82,23 @@ function formatMessageTime(value: unknown) {
   }).format(date)
 }
 
+async function fetchProfileUpdate(body: Record<string, unknown>) {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 10000)
+  try {
+    const response = await fetch("/api/auth/profile", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    const payload = await response.json().catch(() => null)
+    return { response, payload }
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
 function terminationBadgeClass(label: string) {
   if (label === "해지 진행") {
     return "border-orange-200 bg-orange-50 text-orange-700"
@@ -165,7 +182,9 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
   const [selectedAvatar, setSelectedAvatar] = useState<string>(String(currentUser.avatarEmoji || "").trim())
   const [isIndustryOpen, setIsIndustryOpen] = useState(false)
   const [isAvatarOpen, setIsAvatarOpen] = useState(false)
-  const [isPending, startTransition] = useTransition()
+  const [, startTransition] = useTransition()
+  const [isProfileSaving, setIsProfileSaving] = useState(false)
+  const [isTestIdSaving, setIsTestIdSaving] = useState(false)
   const [mobileSection, setMobileSection] = useState<MobileMyPageSection>("testIds")
   const [testIdEntries, setTestIdEntries] = useState<UserTestIdEntry[]>(currentUser.testIdEntries || [])
   const [testIdMode, setTestIdMode] = useState<"single" | "bulk">("single")
@@ -204,18 +223,15 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
     )
   }
 
-  const saveProfile = () => {
+  const saveProfile = async () => {
+    if (isProfileSaving) return
     setProfileMessage("")
-    startTransition(async () => {
-      const response = await fetch("/api/auth/profile", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          assignedIndustries: selectedIndustries,
-          avatarEmoji: selectedAvatar || null,
-        }),
+    setIsProfileSaving(true)
+    try {
+      const { response, payload } = await fetchProfileUpdate({
+        assignedIndustries: selectedIndustries,
+        avatarEmoji: selectedAvatar || null,
       })
-      const payload = await response.json().catch(() => null)
       if (!response.ok || !payload?.ok) {
         setProfileMessage(payload?.error || "프로필 저장에 실패했습니다.")
         return
@@ -223,8 +239,13 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
       setSelectedIndustries(Array.isArray(payload?.assignedIndustries) ? payload.assignedIndustries : selectedIndustries)
       setSelectedAvatar(String(payload?.avatarEmoji || "").trim())
       setProfileMessage("내 프로필 설정이 저장되었습니다.")
-      router.refresh()
-    })
+      startTransition(() => router.refresh())
+    } catch (error) {
+      const aborted = error instanceof DOMException && error.name === "AbortError"
+      setProfileMessage(aborted ? "저장 요청이 지연되어 중단했습니다. 잠시 후 다시 눌러주세요." : "프로필 저장 중 오류가 발생했습니다.")
+    } finally {
+      setIsProfileSaving(false)
+    }
   }
 
   const logout = async () => {
@@ -287,23 +308,25 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
     setTestIdEntries((prev) => prev.filter((entry) => entry.id !== entryId))
   }
 
-  const saveTestIdEntries = () => {
+  const saveTestIdEntries = async () => {
+    if (isTestIdSaving) return
     setTestIdMessage("")
-    startTransition(async () => {
-      const response = await fetch("/api/auth/profile", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ testIdEntries }),
-      })
-      const payload = await response.json().catch(() => null)
+    setIsTestIdSaving(true)
+    try {
+      const { response, payload } = await fetchProfileUpdate({ testIdEntries })
       if (!response.ok || !payload?.ok) {
         setTestIdMessage(payload?.error || "시험아이디 저장에 실패했습니다.")
         return
       }
       setTestIdEntries(Array.isArray(payload?.testIdEntries) ? payload.testIdEntries : testIdEntries)
       setTestIdMessage("시험아이디 관리 항목이 저장되었습니다.")
-      router.refresh()
-    })
+      startTransition(() => router.refresh())
+    } catch (error) {
+      const aborted = error instanceof DOMException && error.name === "AbortError"
+      setTestIdMessage(aborted ? "저장 요청이 지연되어 중단했습니다. 잠시 후 다시 눌러주세요." : "시험아이디 저장 중 오류가 발생했습니다.")
+    } finally {
+      setIsTestIdSaving(false)
+    }
   }
 
   const markMessageRead = (messageId: string) => {
@@ -453,10 +476,10 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                 <button
                   type="button"
                   onClick={saveProfile}
-                  disabled={isPending}
+                  disabled={isProfileSaving}
                   className="inline-flex h-9 flex-1 items-center justify-center rounded-xl bg-slate-950 px-3 text-[13px] font-bold text-white disabled:opacity-60 sm:flex-none"
                 >
-                  {isPending ? "저장 중..." : "프로필 저장"}
+                  {isProfileSaving ? "저장 중..." : "프로필 저장"}
                 </button>
                 <div className="relative">
                   <button
@@ -604,10 +627,10 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                 <button
                   type="button"
                   onClick={saveTestIdEntries}
-                  disabled={isPending}
+                  disabled={isTestIdSaving}
                   className="inline-flex h-8 items-center justify-center rounded-lg bg-slate-950 px-3 text-[12px] font-bold text-white disabled:opacity-60"
                 >
-                  {isPending ? "저장 중" : `${testIdEntries.length}건 저장`}
+                  {isTestIdSaving ? "저장 중" : `${testIdEntries.length}건 저장`}
                 </button>
               </div>
 
