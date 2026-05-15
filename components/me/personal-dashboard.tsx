@@ -611,62 +611,59 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                 </button>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setTestIdMode("single")}
-                  className={`rounded-lg px-3 py-1.5 text-[12px] font-bold transition ${testIdMode === "single" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
-                >
-                  개별등록
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTestIdMode("bulk")}
-                  className={`rounded-lg px-3 py-1.5 text-[12px] font-bold transition ${testIdMode === "bulk" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
-                >
-                  여러개 등록
-                </button>
-              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <div className="inline-flex h-9 shrink-0 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setTestIdMode("single")}
+                    className={`rounded-md px-3 text-[12px] font-bold transition ${
+                      testIdMode === "single" ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-white"
+                    }`}
+                  >
+                    개별등록
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTestIdMode("bulk")}
+                    className={`rounded-md px-3 text-[12px] font-bold transition ${
+                      testIdMode === "bulk" ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-white"
+                    }`}
+                  >
+                    여러개등록
+                  </button>
+                </div>
 
-              {testIdMode === "single" ? (
-                <div className="mt-2 grid gap-2 md:grid-cols-[240px_64px]">
+                {testIdMode === "single" ? (
                   <input
                     value={singleTestId}
                     onChange={(event) => setSingleTestId(event.target.value)}
                     placeholder="예: E260403"
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:w-[220px]"
                   />
-                  <button
-                    type="button"
-                    onClick={() => addTestIds([singleTestId])}
-                    className="inline-flex h-9 w-16 items-center justify-center rounded-lg bg-blue-600 text-[12px] font-bold text-white transition hover:bg-blue-700"
-                  >
-                    등록
-                  </button>
-                </div>
-              ) : (
-                <div className="mt-2 grid gap-2 md:grid-cols-[180px_180px_80px]">
-                  <input
-                    value={bulkStartId}
-                    onChange={(event) => setBulkStartId(event.target.value)}
-                    placeholder="시작 아이디 예: E260403"
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                  />
-                  <input
-                    value={bulkEndId}
-                    onChange={(event) => setBulkEndId(event.target.value)}
-                    placeholder="끝 아이디 예: E260408"
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => addTestIds(buildRangeTestIds(bulkStartId, bulkEndId))}
-                    className="inline-flex h-9 w-20 items-center justify-center rounded-lg bg-blue-600 text-[12px] font-bold text-white transition hover:bg-blue-700"
-                  >
-                    등록
-                  </button>
-                </div>
-              )}
+                ) : (
+                  <>
+                    <input
+                      value={bulkStartId}
+                      onChange={(event) => setBulkStartId(event.target.value)}
+                      placeholder="시작 예: E260403"
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:w-[170px]"
+                    />
+                    <input
+                      value={bulkEndId}
+                      onChange={(event) => setBulkEndId(event.target.value)}
+                      placeholder="끝 예: E260408"
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:w-[170px]"
+                    />
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => (testIdMode === "single" ? addTestIds([singleTestId]) : addTestIds(buildRangeTestIds(bulkStartId, bulkEndId)))}
+                  className="inline-flex h-9 w-16 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-[12px] font-bold text-white transition hover:bg-blue-700"
+                >
+                  등록
+                </button>
+              </div>
 
               {testIdMessage ? <div className="mt-2 text-[12px] text-slate-500">{testIdMessage}</div> : null}
 
