@@ -629,7 +629,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               </div>
 
               {testIdMode === "single" ? (
-                <div className="mt-2 grid gap-2 md:grid-cols-[240px_auto]">
+                <div className="mt-2 grid gap-2 md:grid-cols-[240px_64px]">
                   <input
                     value={singleTestId}
                     onChange={(event) => setSingleTestId(event.target.value)}
@@ -639,13 +639,13 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                   <button
                     type="button"
                     onClick={() => addTestIds([singleTestId])}
-                    className="inline-flex h-9 items-center justify-center rounded-lg bg-blue-600 px-4 text-[12px] font-bold text-white transition hover:bg-blue-700"
+                    className="inline-flex h-9 w-16 items-center justify-center rounded-lg bg-blue-600 text-[12px] font-bold text-white transition hover:bg-blue-700"
                   >
                     등록
                   </button>
                 </div>
               ) : (
-                <div className="mt-2 grid gap-2 md:grid-cols-[180px_180px_auto]">
+                <div className="mt-2 grid gap-2 md:grid-cols-[180px_180px_80px]">
                   <input
                     value={bulkStartId}
                     onChange={(event) => setBulkStartId(event.target.value)}
@@ -661,9 +661,9 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                   <button
                     type="button"
                     onClick={() => addTestIds(buildRangeTestIds(bulkStartId, bulkEndId))}
-                    className="inline-flex h-9 items-center justify-center rounded-lg bg-blue-600 px-4 text-[12px] font-bold text-white transition hover:bg-blue-700"
+                    className="inline-flex h-9 w-20 items-center justify-center rounded-lg bg-blue-600 text-[12px] font-bold text-white transition hover:bg-blue-700"
                   >
-                    여러개 등록
+                    등록
                   </button>
                 </div>
               )}
@@ -752,12 +752,18 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {data.myContractMonthlySummary.length ? (
                   data.myContractMonthlySummary.map((item) => (
-                    <div key={item.month} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-                      <span className="text-[11px] font-bold text-slate-600">{item.month}</span>
-                      <span className="text-[13px] font-black text-slate-950">{item.total}</span>
-                      <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-500">
-                        <span>미{item.pending}</span>
-                        <span>회{item.recovered}</span>
+                    <div key={item.month} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-[0_4px_12px_rgba(15,23,42,0.04)]">
+                      <span className="rounded-md bg-slate-900 px-1.5 py-0.5 text-[10px] font-black text-white">{item.month}</span>
+                      <span className="min-w-7 text-right text-[13px] font-black text-slate-950">{item.total}건</span>
+                      <div className="flex items-center gap-1">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                          미회수 {item.pending}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                          회수 {item.recovered}
+                        </span>
                       </div>
                     </div>
                   ))
