@@ -31,7 +31,7 @@ type Props = {
   embedded?: boolean
 }
 
-type MobileMyPageSection = "contracts" | "pending" | "termination" | "hold" | "testIds" | "messages"
+type MobileMyPageSection = "contracts" | "pending" | "termination" | "hold" | "testIds"
 
 const cardClass = "rounded-2xl border border-slate-200/90 bg-white p-4 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
 const avatarOptions = ["😀", "😎", "🧑‍💼", "📈", "💼", "🦊", "🐯", "⭐", "🚀", "🧠", "🫶", "🔥", "🐻", "🐼", "🦁", "🐸", "🌈", "⚡", "🎯", "🎧", "☕", "🍀", "🪐", "🎨"]
@@ -174,6 +174,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
   const [bulkEndId, setBulkEndId] = useState("")
   const [testIdMessage, setTestIdMessage] = useState("")
   const [messageHistory, setMessageHistory] = useState<PopupMessageRecord[]>(data.messageHistory || [])
+  const [isMessageBoxOpen, setIsMessageBoxOpen] = useState(false)
   const [isLogoutPending, setIsLogoutPending] = useState(false)
 
   useEffect(() => {
@@ -457,12 +458,87 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                 >
                   {isPending ? "저장 중..." : "프로필 저장"}
                 </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsIndustryOpen(false)
+                      setIsAvatarOpen(false)
+                      setIsMessageBoxOpen((prev) => !prev)
+                    }}
+                    className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 transition hover:bg-indigo-100"
+                    aria-label="내 메시지함"
+                    title="내 메시지함"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    {unreadMessageCount ? (
+                      <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white">
+                        {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
+                      </span>
+                    ) : null}
+                  </button>
+                  {isMessageBoxOpen ? (
+                    <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-[min(360px,calc(100vw-32px))] rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-[13px] font-black text-slate-950">메시지함</div>
+                          <div className="mt-0.5 text-[11px] font-semibold text-slate-400">미확인 {unreadMessageCount}건</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsMessageBoxOpen(false)}
+                          className="h-7 rounded-lg border border-slate-200 px-2 text-[11px] font-bold text-slate-500 transition hover:bg-slate-50"
+                        >
+                          닫기
+                        </button>
+                      </div>
+                      <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                        {messageHistory.length ? (
+                          messageHistory.map((message) => {
+                            const unread = !message.readAt
+                            return (
+                              <div
+                                key={message.id}
+                                className={`rounded-xl border px-3 py-2 ${
+                                  unread ? "border-indigo-200 bg-indigo-50/80" : "border-slate-200 bg-white"
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="truncate text-[12px] font-black text-slate-900">{message.title || "업무 알림"}</div>
+                                    <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
+                                      {message.senderName || "시스템"} · {formatMessageTime(message.createdAt)}
+                                    </div>
+                                  </div>
+                                  {unread ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => markMessageRead(message.id)}
+                                      className="h-7 shrink-0 rounded-lg bg-slate-950 px-2 text-[11px] font-bold text-white"
+                                    >
+                                      읽음
+                                    </button>
+                                  ) : null}
+                                </div>
+                                <div className="mt-2 line-clamp-3 whitespace-pre-wrap break-words text-[12px] leading-5 text-slate-700">{message.body}</div>
+                              </div>
+                            )
+                          })
+                        ) : (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-8 text-center text-[12px] font-semibold text-slate-400">
+                            받은 메시지가 없습니다.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
             {profileMessage ? <div className="mt-3 text-sm text-slate-500">{profileMessage}</div> : null}
           </section>
 
-          <section className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-6">
+          <section className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
             <MetricCard
               title="나의 시험아이디"
               value={testIdEntries.length}
@@ -493,12 +569,6 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               tone="bg-amber-50 text-amber-700"
               icon={<CirclePause className="h-5 w-5" />}
             />
-            <MetricCard
-              title="내 메시지"
-              value={messageHistory.length}
-              tone="bg-indigo-50 text-indigo-700"
-              icon={<MessageSquare className="h-5 w-5" />}
-            />
           </section>
 
           <section className="lg:hidden">
@@ -509,7 +579,6 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                   { key: "pending", label: "미회수" },
                   { key: "termination", label: "해지" },
                   { key: "hold", label: "청구보류" },
-                  { key: "messages", label: "메시지" },
                 ].map((item) => (
                 <button
                   key={item.key}
@@ -525,139 +594,86 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
             </div>
           </section>
 
-          <section className="space-y-5">
-            <div className={`${cardClass} ${mobileSection === "messages" ? "block" : "hidden"} lg:block`}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">내 메시지</h3>
-                  <p className="mt-1 text-sm text-slate-500">최근 7일 팝업 메시지를 확인합니다. 메시지는 최대 200개 정책 안에서 보관됩니다.</p>
-                </div>
-                <div className="rounded-2xl bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700">
-                  미확인 {unreadMessageCount}건
-                </div>
-              </div>
-
-              <div className="mt-5 space-y-3">
-                {messageHistory.length ? (
-                  messageHistory.map((message) => {
-                    const unread = !message.readAt
-                    return (
-                      <div
-                        key={message.id}
-                        className={`rounded-2xl border px-4 py-3 ${
-                          unread ? "border-indigo-200 bg-indigo-50/70" : "border-slate-200 bg-white"
-                        }`}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[14px] font-black text-slate-950">{message.title || "업무 알림"}</span>
-                              {unread ? (
-                                <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[11px] font-bold text-white">미확인</span>
-                              ) : (
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500">확인됨</span>
-                              )}
-                            </div>
-                            <div className="mt-1 text-[12px] font-semibold text-slate-500">
-                              {message.senderName || "시스템"} · {formatMessageTime(message.createdAt)}
-                            </div>
-                          </div>
-                          {unread ? (
-                            <button
-                              type="button"
-                              onClick={() => markMessageRead(message.id)}
-                              className="h-8 shrink-0 rounded-xl bg-slate-950 px-3 text-[12px] font-bold text-white"
-                            >
-                              읽음
-                            </button>
-                          ) : null}
-                        </div>
-                        <div className="mt-3 whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-700">{message.body}</div>
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
-                    받은 팝업 메시지가 없습니다.
-                  </div>
-                )}
-              </div>
-            </div>
-
+          <section className="space-y-3">
             <div className={`${cardClass} ${mobileSection === "testIds" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">시험아이디 관리</h3>
-                  <p className="mt-1 text-sm text-slate-500">개별 등록 또는 연속 등록 후 회사명, 부서, 담당자, 연락처, 비고를 기록할 수 있습니다.</p>
+                  <p className="mt-0.5 text-[12px] text-slate-500">등록 후 표에서 바로 수정합니다.</p>
                 </div>
-                <div className="rounded-2xl bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700">
-                  {testIdEntries.length}건
-                </div>
+                <button
+                  type="button"
+                  onClick={saveTestIdEntries}
+                  disabled={isPending}
+                  className="inline-flex h-8 items-center justify-center rounded-lg bg-slate-950 px-3 text-[12px] font-bold text-white disabled:opacity-60"
+                >
+                  {isPending ? "저장 중" : `${testIdEntries.length}건 저장`}
+                </button>
               </div>
 
-              <div className="mt-5 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-1.5">
                 <button
                   type="button"
                   onClick={() => setTestIdMode("single")}
-                  className={`rounded-2xl px-4 py-2 text-sm font-bold transition ${testIdMode === "single" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
+                  className={`rounded-lg px-3 py-1.5 text-[12px] font-bold transition ${testIdMode === "single" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
                 >
                   개별등록
                 </button>
                 <button
                   type="button"
                   onClick={() => setTestIdMode("bulk")}
-                  className={`rounded-2xl px-4 py-2 text-sm font-bold transition ${testIdMode === "bulk" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
+                  className={`rounded-lg px-3 py-1.5 text-[12px] font-bold transition ${testIdMode === "bulk" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
                 >
                   여러개 등록
                 </button>
               </div>
 
               {testIdMode === "single" ? (
-                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="mt-2 grid gap-2 md:grid-cols-[240px_auto]">
                   <input
                     value={singleTestId}
                     onChange={(event) => setSingleTestId(event.target.value)}
                     placeholder="예: E260403"
-                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                   />
                   <button
                     type="button"
                     onClick={() => addTestIds([singleTestId])}
-                    className="inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700"
+                    className="inline-flex h-9 items-center justify-center rounded-lg bg-blue-600 px-4 text-[12px] font-bold text-white transition hover:bg-blue-700"
                   >
                     등록
                   </button>
                 </div>
               ) : (
-                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                <div className="mt-2 grid gap-2 md:grid-cols-[180px_180px_auto]">
                   <input
                     value={bulkStartId}
                     onChange={(event) => setBulkStartId(event.target.value)}
                     placeholder="시작 아이디 예: E260403"
-                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                   />
                   <input
                     value={bulkEndId}
                     onChange={(event) => setBulkEndId(event.target.value)}
                     placeholder="끝 아이디 예: E260408"
-                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                   />
                   <button
                     type="button"
                     onClick={() => addTestIds(buildRangeTestIds(bulkStartId, bulkEndId))}
-                    className="inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700"
+                    className="inline-flex h-9 items-center justify-center rounded-lg bg-blue-600 px-4 text-[12px] font-bold text-white transition hover:bg-blue-700"
                   >
                     여러개 등록
                   </button>
                 </div>
               )}
 
-              {testIdMessage ? <div className="mt-3 text-sm text-slate-500">{testIdMessage}</div> : null}
+              {testIdMessage ? <div className="mt-2 text-[12px] text-slate-500">{testIdMessage}</div> : null}
 
-              <div className="mt-5 overflow-x-auto rounded-[24px] border border-slate-200">
+              <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
                 {testIdEntries.length ? (
-                  <div className="min-w-[980px]">
-                    <div className="grid grid-cols-[120px_170px_170px_140px_160px_minmax(240px,1fr)_88px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[12px] font-bold text-slate-500">
+                  <div className="min-w-[840px]">
+                    <div className="grid grid-cols-[100px_130px_130px_110px_120px_minmax(180px,1fr)_60px] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500">
                       <div>시험아이디</div>
                       <div>회사명</div>
                       <div>부서</div>
@@ -670,44 +686,44 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                       {testIdEntries.map((entry) => (
                         <div
                           key={entry.id}
-                          className="grid grid-cols-[120px_170px_170px_140px_160px_minmax(240px,1fr)_88px] gap-3 px-4 py-3"
+                          className="grid grid-cols-[100px_130px_130px_110px_120px_minmax(180px,1fr)_60px] gap-2 px-3 py-2"
                         >
-                          <div className="flex items-center text-[13px] font-black text-slate-950">{entry.testId}</div>
+                          <div className="flex items-center text-[12px] font-black text-slate-950">{entry.testId}</div>
                           <input
                             value={entry.companyName}
                             onChange={(event) => updateTestIdEntry(entry.id, "companyName", event.target.value)}
                             placeholder="회사명"
-                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                           />
                           <input
                             value={entry.departmentName}
                             onChange={(event) => updateTestIdEntry(entry.id, "departmentName", event.target.value)}
                             placeholder="부서"
-                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                           />
                           <input
                             value={entry.assigneeName}
                             onChange={(event) => updateTestIdEntry(entry.id, "assigneeName", event.target.value)}
                             placeholder="담당자"
-                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                           />
                           <input
                             value={entry.contact}
                             onChange={(event) => updateTestIdEntry(entry.id, "contact", event.target.value)}
                             placeholder="연락처"
-                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                           />
                           <input
                             value={entry.note}
                             onChange={(event) => updateTestIdEntry(entry.id, "note", event.target.value)}
                             placeholder="비고"
-                            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                           />
                           <div className="flex items-start justify-end">
                             <button
                               type="button"
                               onClick={() => removeTestIdEntry(entry.id)}
-                              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                              className="h-8 rounded-lg border border-rose-200 bg-rose-50 px-2 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100"
                             >
                               삭제
                             </button>
@@ -717,19 +733,8 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                     </div>
                   </div>
                 ) : (
-                  <div className="px-4 py-8 text-center text-sm text-slate-400">등록된 시험아이디가 없습니다.</div>
+                  <div className="px-3 py-6 text-center text-[12px] text-slate-400">등록된 시험아이디가 없습니다.</div>
                 )}
-              </div>
-
-              <div className="mt-5 flex justify-end">
-                <button
-                  type="button"
-                  onClick={saveTestIdEntries}
-                  disabled={isPending}
-                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-bold text-white disabled:opacity-60"
-                >
-                  {isPending ? "저장 중..." : "시험아이디 저장"}
-                </button>
               </div>
             </div>
 
@@ -737,29 +742,27 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">내 신규계약 리스트</h3>
-                  <p className="mt-1 text-sm text-slate-500">이름 기준으로 등록된 신규계약을 월별 흐름까지 함께 보여줍니다.</p>
+                  <p className="mt-0.5 text-[12px] text-slate-500">월별 요약과 상세 계약을 한 화면에서 확인합니다.</p>
                 </div>
-                <div className="rounded-2xl bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600">
+                <div className="rounded-lg bg-slate-50 px-3 py-1.5 text-[12px] font-semibold text-slate-600">
                   총 {data.myContracts.length}건
                 </div>
               </div>
 
-              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="mt-3 flex flex-wrap gap-1.5">
                 {data.myContractMonthlySummary.length ? (
                   data.myContractMonthlySummary.map((item) => (
-                    <div key={item.month} className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4">
-                      <div className="text-sm font-bold text-slate-900">{item.month}</div>
-                      <div className="mt-4 flex items-end justify-between gap-3">
-                        <div className="text-[28px] font-black tracking-[-0.04em] text-slate-950">{item.total}</div>
-                        <div className="text-right text-xs text-slate-500">
-                          <div>미회수 {item.pending}</div>
-                          <div>회수 {item.recovered}</div>
-                        </div>
+                    <div key={item.month} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+                      <span className="text-[11px] font-bold text-slate-600">{item.month}</span>
+                      <span className="text-[13px] font-black text-slate-950">{item.total}</span>
+                      <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-500">
+                        <span>미{item.pending}</span>
+                        <span>회{item.recovered}</span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="rounded-[24px] border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-400">
+                  <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-[12px] text-slate-400">
                     등록된 신규계약이 없습니다.
                   </div>
                 )}
@@ -787,12 +790,12 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                 )}
               </div>
 
-              <div className="mt-5 hidden overflow-x-auto rounded-[24px] border border-slate-200 lg:block">
-                <table className="w-full text-sm">
+              <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200 lg:block">
+                <table className="w-full text-[12px]">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
                       {["회사명", "부서", "ID", "업종", "계약월", "계약서 상태"].map((head) => (
-                        <th key={head} className="px-4 py-3 text-left font-semibold">
+                        <th key={head} className="px-3 py-2 text-left font-semibold">
                           {head}
                         </th>
                       ))}
@@ -802,17 +805,17 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                     {data.myContracts.length ? (
                       data.myContracts.slice(0, 40).map((row) => (
                         <tr key={row.id} className="border-t border-slate-200">
-                          <td className="px-4 py-3">{formatValue(row.companyName)}</td>
-                          <td className="px-4 py-3">{formatValue(row.departmentName)}</td>
-                          <td className="px-4 py-3">{formatValue(row.idCode)}</td>
-                          <td className="px-4 py-3">{formatValue(row.industryGroup || row.industry)}</td>
-                          <td className="px-4 py-3">{formatValue(row.contractMonth)}</td>
-                          <td className="px-4 py-3">{formatValue(row.documentStatus)}</td>
+                          <td className="px-3 py-2">{formatValue(row.companyName)}</td>
+                          <td className="px-3 py-2">{formatValue(row.departmentName)}</td>
+                          <td className="px-3 py-2">{formatValue(row.idCode)}</td>
+                          <td className="px-3 py-2">{formatValue(row.industryGroup || row.industry)}</td>
+                          <td className="px-3 py-2">{formatValue(row.contractMonth)}</td>
+                          <td className="px-3 py-2">{formatValue(row.documentStatus)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">
+                        <td colSpan={6} className="px-3 py-6 text-center text-[12px] text-slate-400">
                           등록된 신규계약이 없습니다.
                         </td>
                       </tr>
@@ -826,22 +829,22 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">내 이름으로 된 계약서 미회수 현황</h3>
-                  <p className="mt-1 text-sm text-slate-500">선택한 담당 업종 기준으로 미회수 계약서만 모아 보여줍니다.</p>
+                  <p className="mt-1 text-[12px] text-slate-500">담당 업종 기준 미회수 계약서입니다.</p>
                 </div>
-                <div className="rounded-2xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                <div className="rounded-lg bg-emerald-50 px-3 py-1.5 text-[12px] font-semibold text-emerald-700">
                   {pendingDocuments.length}건
                 </div>
               </div>
 
-              <div className="mt-5 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-1.5">
                 {selectedIndustryLabels.length ? (
                   selectedIndustryLabels.map((industry) => (
-                    <span key={industry} className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                    <span key={industry} className="rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
                       {industry}
                     </span>
                   ))
                 ) : (
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">담당 업종 미지정</span>
+                  <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">담당 업종 미지정</span>
                 )}
               </div>
 
@@ -867,12 +870,12 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                 )}
               </div>
 
-              <div className="mt-5 hidden overflow-x-auto rounded-[24px] border border-slate-200 lg:block">
-                <table className="w-full text-sm">
+              <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200 lg:block">
+                <table className="w-full text-[12px]">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
                       {["회사명", "부서", "ID", "업종", "청구월", "상태"].map((head) => (
-                        <th key={head} className="px-4 py-3 text-left font-semibold">
+                        <th key={head} className="px-3 py-2 text-left font-semibold">
                           {head}
                         </th>
                       ))}
@@ -882,17 +885,17 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                     {pendingDocuments.length ? (
                       pendingDocuments.map((row) => (
                         <tr key={row.id} className="border-t border-slate-200">
-                          <td className="px-4 py-3">{formatValue(row.companyName)}</td>
-                          <td className="px-4 py-3">{formatValue(row.departmentName)}</td>
-                          <td className="px-4 py-3">{formatValue(row.idCode)}</td>
-                          <td className="px-4 py-3">{formatValue(row.industryGroup || row.industry)}</td>
-                          <td className="px-4 py-3">{formatValue(row.claimMonth)}</td>
-                          <td className="px-4 py-3">{formatValue(row.status)}</td>
+                          <td className="px-3 py-2">{formatValue(row.companyName)}</td>
+                          <td className="px-3 py-2">{formatValue(row.departmentName)}</td>
+                          <td className="px-3 py-2">{formatValue(row.idCode)}</td>
+                          <td className="px-3 py-2">{formatValue(row.industryGroup || row.industry)}</td>
+                          <td className="px-3 py-2">{formatValue(row.claimMonth)}</td>
+                          <td className="px-3 py-2">{formatValue(row.status)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">
+                        <td colSpan={6} className="px-3 py-6 text-center text-[12px] text-slate-400">
                           {selectedIndustryLabels.length ? "미회수 계약서가 없습니다." : "담당 업종을 선택해주세요."}
                         </td>
                       </tr>
@@ -903,14 +906,14 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
             </div>
           </section>
 
-          <section className="space-y-5">
+          <section className="space-y-3">
             <div className={`${cardClass} ${mobileSection === "termination" ? "block" : "hidden"} lg:block`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">나의 해지 리스트</h3>
-                  <p className="mt-1 text-sm text-slate-500">해지 예정인 계약건만 보여줍니다.</p>
+                  <p className="mt-1 text-[12px] text-slate-500">해지 예정 계약건입니다.</p>
                 </div>
-                <div className="rounded-2xl bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700">
+                <div className="rounded-lg bg-orange-50 px-3 py-1.5 text-[12px] font-semibold text-orange-700">
                   {data.myTerminationRows.length}건
                 </div>
               </div>
@@ -944,12 +947,12 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                 )}
               </div>
 
-              <div className="mt-5 hidden overflow-x-auto rounded-[24px] border border-slate-200 lg:block">
-                <table className="w-full text-sm">
+              <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200 lg:block">
+                <table className="w-full text-[12px]">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
                       {["구분", "고객사", "부서", "고객번호", "사유", "해지일"].map((head) => (
-                        <th key={head} className="px-4 py-3 text-left font-semibold">
+                        <th key={head} className="px-3 py-2 text-left font-semibold">
                           {head}
                         </th>
                       ))}
@@ -959,21 +962,21 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                     {data.myTerminationRows.length ? (
                       data.myTerminationRows.map((row) => (
                         <tr key={row.id} className="border-t border-slate-200">
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${terminationBadgeClass(row.sectionLabel)}`}>
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex rounded-lg border px-2 py-0.5 text-[11px] font-semibold ${terminationBadgeClass(row.sectionLabel)}`}>
                               {row.sectionLabel}
                             </span>
                           </td>
-                          <td className="px-4 py-3">{formatValue(row.companyName)}</td>
-                          <td className="px-4 py-3">{formatValue(row.departmentName)}</td>
-                          <td className="px-4 py-3">{formatValue(row.customerId)}</td>
-                          <td className="px-4 py-3">{formatValue(row.reason)}</td>
-                          <td className="px-4 py-3">{formatValue(row.terminationDate)}</td>
+                          <td className="px-3 py-2">{formatValue(row.companyName)}</td>
+                          <td className="px-3 py-2">{formatValue(row.departmentName)}</td>
+                          <td className="px-3 py-2">{formatValue(row.customerId)}</td>
+                          <td className="px-3 py-2">{formatValue(row.reason)}</td>
+                          <td className="px-3 py-2">{formatValue(row.terminationDate)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">
+                        <td colSpan={6} className="px-3 py-6 text-center text-[12px] text-slate-400">
                           배정된 해지 리스트가 없습니다.
                         </td>
                       </tr>
@@ -984,12 +987,12 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
             </div>
 
             <div className={`${cardClass} ${mobileSection === "hold" ? "block" : "hidden"} lg:block`}>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">나의 청구보류 리스트</h3>
-                  <p className="mt-1 text-sm text-slate-500">현재 내 이름으로 관리 중인 청구보류 건의 시작일과 종료일을 함께 보여줍니다.</p>
-                  </div>
-                <div className="rounded-2xl bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">나의 청구보류 리스트</h3>
+                  <p className="mt-1 text-[12px] text-slate-500">관리 중인 청구보류 기간입니다.</p>
+                </div>
+                <div className="rounded-lg bg-amber-50 px-3 py-1.5 text-[12px] font-semibold text-amber-700">
                   {data.myHoldRows.length}건
                 </div>
               </div>
@@ -1024,12 +1027,12 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                 )}
               </div>
 
-              <div className="mt-5 hidden overflow-x-auto rounded-[24px] border border-slate-200 lg:block">
-                <table className="w-full text-sm">
+              <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200 lg:block">
+                <table className="w-full text-[12px]">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
                       {["구분", "고객사", "부서", "고객번호", "사유", "시작일", "종료일"].map((head) => (
-                        <th key={head} className="px-4 py-3 text-left font-semibold">
+                        <th key={head} className="px-3 py-2 text-left font-semibold">
                           {head}
                         </th>
                       ))}
@@ -1039,22 +1042,22 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                     {data.myHoldRows.length ? (
                       data.myHoldRows.map((row) => (
                         <tr key={row.id} className="border-t border-slate-200">
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${terminationBadgeClass(row.sectionLabel)}`}>
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex rounded-lg border px-2 py-0.5 text-[11px] font-semibold ${terminationBadgeClass(row.sectionLabel)}`}>
                               {row.sectionLabel}
                             </span>
                           </td>
-                          <td className="px-4 py-3">{formatValue(row.companyName)}</td>
-                          <td className="px-4 py-3">{formatValue(row.departmentName)}</td>
-                          <td className="px-4 py-3">{formatValue(row.customerId)}</td>
-                          <td className="px-4 py-3">{formatValue(row.reason)}</td>
-                          <td className="px-4 py-3">{formatMonthDisplay(row.startDate)}</td>
-                          <td className="px-4 py-3">{formatMonthDisplay(row.endDate)}</td>
+                          <td className="px-3 py-2">{formatValue(row.companyName)}</td>
+                          <td className="px-3 py-2">{formatValue(row.departmentName)}</td>
+                          <td className="px-3 py-2">{formatValue(row.customerId)}</td>
+                          <td className="px-3 py-2">{formatValue(row.reason)}</td>
+                          <td className="px-3 py-2">{formatMonthDisplay(row.startDate)}</td>
+                          <td className="px-3 py-2">{formatMonthDisplay(row.endDate)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">
+                        <td colSpan={7} className="px-3 py-6 text-center text-[12px] text-slate-400">
                           배정된 청구보류 리스트가 없습니다.
                         </td>
                       </tr>
