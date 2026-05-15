@@ -3,7 +3,7 @@
 import type { ReactNode } from "react"
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, LogOut, MessageSquare, OctagonAlert, UserRound } from "lucide-react"
+import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, LogOut, MessageSquare, OctagonAlert, Plus, Save, UserRound } from "lucide-react"
 import type { PopupMessageRecord, UserTestIdEntry } from "@/lib/auth/model"
 
 type Props = {
@@ -113,21 +113,38 @@ function MetricCard({
   title,
   value,
   tone,
+  accent,
+  caption,
+  progress,
   icon,
 }: {
   title: string
   value: number
   tone: string
+  accent: string
+  caption: string
+  progress: number
   icon: ReactNode
 }) {
+  const barWidth = `${Math.max(12, Math.min(100, progress))}%`
   return (
-    <div className={`${cardClass} overflow-hidden p-3.5`}>
+    <div className={`${cardClass} relative overflow-hidden p-3.5`}>
+      <div className={`absolute inset-x-0 top-0 h-1 ${accent}`} />
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[12px] font-semibold text-slate-500">{title}</div>
-          <div className="mt-2 text-[22px] font-black tracking-[-0.04em] text-slate-950">{value}</div>
+          <div className="text-[12px] font-bold text-slate-500">{title}</div>
+          <div className="mt-1.5 flex items-end gap-1.5">
+            <span className="text-[24px] font-black tracking-[-0.04em] text-slate-950">{value}</span>
+            <span className="pb-1 text-[11px] font-bold text-slate-400">건</span>
+          </div>
         </div>
         <div className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}>{icon}</div>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+          <div className={`h-full rounded-full ${accent}`} style={{ width: barWidth }} />
+        </div>
+        <span className="whitespace-nowrap text-[11px] font-bold text-slate-500">{caption}</span>
       </div>
     </div>
   )
@@ -578,30 +595,45 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               title="나의 시험아이디"
               value={testIdEntries.length}
               tone="bg-sky-50 text-sky-700"
+              accent="bg-sky-500"
+              caption="등록 ID"
+              progress={Math.min(100, testIdEntries.length * 8)}
               icon={<Hash className="h-5 w-5" />}
             />
             <MetricCard
               title="내 신규계약"
               value={data.myContracts.length}
               tone="bg-blue-50 text-blue-700"
+              accent="bg-blue-500"
+              caption="계약"
+              progress={Math.min(100, data.myContracts.length * 10)}
               icon={<FileSignature className="h-5 w-5" />}
             />
             <MetricCard
               title="내 미회수 계약서"
               value={pendingDocuments.length}
               tone="bg-emerald-50 text-emerald-700"
+              accent="bg-emerald-500"
+              caption="미회수"
+              progress={Math.min(100, pendingDocuments.length * 10)}
               icon={<FolderClock className="h-5 w-5" />}
             />
             <MetricCard
               title="나의 해지 리스트"
               value={data.myTerminationRows.length}
               tone="bg-orange-50 text-orange-700"
+              accent="bg-orange-500"
+              caption="해지"
+              progress={Math.min(100, data.myTerminationRows.length * 10)}
               icon={<OctagonAlert className="h-5 w-5" />}
             />
             <MetricCard
               title="나의 청구보류 리스트"
               value={data.myHoldRows.length}
               tone="bg-amber-50 text-amber-700"
+              accent="bg-amber-500"
+              caption="보류"
+              progress={Math.min(100, data.myHoldRows.length * 10)}
               icon={<CirclePause className="h-5 w-5" />}
             />
           </section>
@@ -636,78 +668,101 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">시험아이디 관리</h3>
                   <p className="mt-0.5 text-[12px] text-slate-500">등록 후 표에서 바로 수정합니다.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={saveTestIdEntries}
-                  disabled={isTestIdSaving}
-                  className="inline-flex h-8 items-center justify-center rounded-lg bg-slate-950 px-3 text-[12px] font-bold text-white disabled:opacity-60"
-                >
-                  {isTestIdSaving ? "저장 중" : `${testIdEntries.length}건 저장`}
-                </button>
+                <div className="rounded-lg bg-sky-50 px-3 py-1.5 text-[12px] font-bold text-sky-700">
+                  {testIdEntries.length}건
+                </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <div className="inline-flex h-9 shrink-0 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 shadow-inner">
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <div className="mb-1 text-[11px] font-bold text-slate-500">등록 방식</div>
+                    <div className="inline-flex h-10 shrink-0 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() => setTestIdMode("single")}
+                        className={`rounded-lg px-3 text-[12px] font-bold transition ${
+                          testIdMode === "single" ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        개별등록
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTestIdMode("bulk")}
+                        className={`rounded-lg px-3 text-[12px] font-bold transition ${
+                          testIdMode === "bulk" ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        여러개등록
+                      </button>
+                    </div>
+                  </div>
+
+                  {testIdMode === "single" ? (
+                    <label className="block w-full sm:w-[220px]">
+                      <span className="mb-1 block text-[11px] font-bold text-slate-500">시험아이디</span>
+                      <input
+                        value={singleTestId}
+                        onChange={(event) => setSingleTestId(event.target.value)}
+                        placeholder="예: E260403"
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                  ) : (
+                    <>
+                      <label className="block w-full sm:w-[165px]">
+                        <span className="mb-1 block text-[11px] font-bold text-slate-500">시작 ID</span>
+                        <input
+                          value={bulkStartId}
+                          onChange={(event) => setBulkStartId(event.target.value)}
+                          placeholder="E260403"
+                          className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="block w-full sm:w-[165px]">
+                        <span className="mb-1 block text-[11px] font-bold text-slate-500">끝 ID</span>
+                        <input
+                          value={bulkEndId}
+                          onChange={(event) => setBulkEndId(event.target.value)}
+                          placeholder="E260408"
+                          className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="block w-full sm:w-[210px]">
+                        <span className="mb-1 block text-[11px] font-bold text-slate-500">회사명 일괄</span>
+                        <input
+                          value={bulkCompanyName}
+                          onChange={(event) => setBulkCompanyName(event.target.value)}
+                          placeholder="회사명"
+                          className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                    </>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => setTestIdMode("single")}
-                    className={`rounded-md px-3 text-[12px] font-bold transition ${
-                      testIdMode === "single" ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-white"
-                    }`}
+                    onClick={() =>
+                      testIdMode === "single"
+                        ? addTestIds([singleTestId])
+                        : addTestIds(buildRangeTestIds(bulkStartId, bulkEndId), bulkCompanyName)
+                    }
+                    className="inline-flex h-10 w-20 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-[13px] font-bold text-white shadow-sm transition hover:bg-blue-700"
                   >
-                    개별등록
+                    <Plus className="h-4 w-4" />
+                    등록
                   </button>
                   <button
                     type="button"
-                    onClick={() => setTestIdMode("bulk")}
-                    className={`rounded-md px-3 text-[12px] font-bold transition ${
-                      testIdMode === "bulk" ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-white"
-                    }`}
+                    onClick={saveTestIdEntries}
+                    disabled={isTestIdSaving}
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-slate-950 px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
                   >
-                    여러개등록
+                    <Save className="h-4 w-4" />
+                    {isTestIdSaving ? "저장 중" : "목록 저장"}
                   </button>
                 </div>
-
-                {testIdMode === "single" ? (
-                  <input
-                    value={singleTestId}
-                    onChange={(event) => setSingleTestId(event.target.value)}
-                    placeholder="예: E260403"
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:w-[220px]"
-                  />
-                ) : (
-                  <>
-                    <input
-                      value={bulkStartId}
-                      onChange={(event) => setBulkStartId(event.target.value)}
-                      placeholder="시작 예: E260403"
-                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:w-[170px]"
-                    />
-                    <input
-                      value={bulkEndId}
-                      onChange={(event) => setBulkEndId(event.target.value)}
-                      placeholder="끝 예: E260408"
-                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:w-[170px]"
-                    />
-                    <input
-                      value={bulkCompanyName}
-                      onChange={(event) => setBulkCompanyName(event.target.value)}
-                      placeholder="회사명 일괄 입력"
-                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:w-[190px]"
-                    />
-                  </>
-                )}
-                <button
-                  type="button"
-                  onClick={() =>
-                    testIdMode === "single"
-                      ? addTestIds([singleTestId])
-                      : addTestIds(buildRangeTestIds(bulkStartId, bulkEndId), bulkCompanyName)
-                  }
-                  className="inline-flex h-9 w-16 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-[12px] font-bold text-white transition hover:bg-blue-700"
-                >
-                  등록
-                </button>
               </div>
 
               {testIdMessage ? <div className="mt-2 text-[12px] text-slate-500">{testIdMessage}</div> : null}
