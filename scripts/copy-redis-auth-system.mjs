@@ -5,6 +5,16 @@ const SOURCE_REDIS_URL = process.env.OLD_REDIS_URL || process.env.SOURCE_REDIS_U
 const TARGET_REDIS_URL = process.env.NEW_REDIS_URL || process.env.TARGET_REDIS_URL || ""
 const APPLY = process.argv.includes("--apply")
 const REPLACE = process.argv.includes("--replace")
+const EXCLUDED_USER_NAMES = [
+  ...(process.env.EXCLUDE_USER_NAMES || "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean),
+  ...process.argv
+    .filter((arg) => arg.startsWith("--exclude-user="))
+    .map((arg) => arg.slice("--exclude-user=".length).trim())
+    .filter(Boolean),
+]
 const AUTH_KEY = "shared-kv:value:auth_system"
 
 function encodeCommand(parts) {
@@ -104,7 +114,7 @@ async function redisCommand(redisUrl, parts) {
 
 function summarizeAuth(raw) {
   if (!raw) return { exists: false, users: 0, enabled2fa: 0, usersWithTestIds: 0, testIds: 0 }
-  const parsed = JSON.parse(raw)
+  const parsed = sanitizeAuthSystem(JSON.parse(raw))
   const users = Array.isArray(parsed.users) ? parsed.users : []
   return {
     exists: true,
@@ -114,6 +124,49 @@ function summarizeAuth(raw) {
     testIds: users.reduce(
       (total, user) => total + (Array.isArray(user.testIdEntries) ? user.testIdEntries.length : 0),
       0,
+    ),
+  }
+}
+
+function shouldExcludeUser(user) {
+  if (!EXCLUDED_USER_NAMES.length) return false
+  const values = [user?.name, user?.loginId, user?.id].map((value) => String(value || "").trim())
+  return EXCLUDED_USER_NAMES.some((name) => values.includes(name))
+}
+
+function sanitizeAuthSystem(auth) {
+  if (!auth || typeof auth !== "object") return auth
+  const users = Array.isArray(auth.users) ? auth.users : []
+  const excludedIds = new Set(users.filter(shouldExcludeUser).map((user) => String(user.id || "")))
+  const excludedNames = new Set(EXCLUDED_USER_NAMES)
+  if (!excludedIds.size && !excludedNames.size) return auth
+
+  return {
+    ...auth,
+    users: users.filter((user) => !shouldExcludeUser(user)),
+    userSessions: (Array.isArray(auth.userSessions) ? auth.userSessions : []).filter(
+      (session) => !excludedIds.has(String(session?.userId || "")),
+    ),
+    presenceSessions: (Array.isArray(auth.presenceSessions) ? auth.presenceSessions : []).filter(
+      (session) => !excludedIds.has(String(session?.userId || "")),
+    ),
+    popupMessages: (Array.isArray(auth.popupMessages) ? auth.popupMessages : []).filter(
+      (message) =>
+        !excludedIds.has(String(message?.senderUserId || "")) &&
+        !excludedIds.has(String(message?.recipientUserId || "")) &&
+        !excludedNames.has(String(message?.senderName || "").trim()),
+    ),
+    userPermissionOverrides: (Array.isArray(auth.userPermissionOverrides) ? auth.userPermissionOverrides : []).filter(
+      (override) => !excludedIds.has(String(override?.userId || "")),
+    ),
+    userChangeLogs: (Array.isArray(auth.userChangeLogs) ? auth.userChangeLogs : []).filter(
+      (log) => !excludedIds.has(String(log?.targetUserId || "")),
+    ),
+    activityLogs: (Array.isArray(auth.activityLogs) ? auth.activityLogs : []).filter(
+      (log) =>
+        !excludedIds.has(String(log?.actorUserId || "")) &&
+        !excludedIds.has(String(log?.targetId || "")) &&
+        !excludedNames.has(String(log?.actorName || "").trim()),
     ),
   }
 }
@@ -160,9 +213,9 @@ function mergeUsers(sourceUsers, targetUsers) {
 }
 
 function mergeAuthSystems(sourceRaw, targetRaw) {
-  const source = JSON.parse(sourceRaw)
+  const source = sanitizeAuthSystem(JSON.parse(sourceRaw))
   if (REPLACE || !targetRaw) return source
-  const target = JSON.parse(targetRaw)
+  const target = sanitizeAuthSystem(JSON.parse(targetRaw))
   return {
     ...target,
     ...source,
@@ -201,6 +254,9 @@ async function main() {
 
   console.log("Source auth:", sourceSummary)
   console.log("Target auth:", targetSummary)
+  if (EXCLUDED_USER_NAMES.length) {
+    console.log("Excluded users:", EXCLUDED_USER_NAMES)
+  }
 
   if (!sourceSummary.exists) {
     throw new Error(`Source Redis does not have ${AUTH_KEY}.`)
