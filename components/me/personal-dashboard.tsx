@@ -230,6 +230,24 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
   const [messageHistory, setMessageHistory] = useState<PopupMessageRecord[]>(data.messageHistory || [])
   const [isMessageBoxOpen, setIsMessageBoxOpen] = useState(false)
   const [isLogoutPending, setIsLogoutPending] = useState(false)
+  const incomingTestIdSignature = useMemo(
+    () =>
+      (currentUser.testIdEntries || [])
+        .map((entry) =>
+          [
+            entry.id,
+            entry.testId,
+            entry.companyName,
+            entry.departmentName,
+            entry.assigneeName,
+            entry.contact,
+            entry.note,
+            entry.updatedAt,
+          ].join("\u001f"),
+        )
+        .join("\u001e"),
+    [currentUser.testIdEntries],
+  )
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -237,6 +255,10 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
       setMobileSection("testIds")
     }
   }, [])
+
+  useEffect(() => {
+    setTestIdEntries(currentUser.testIdEntries || [])
+  }, [currentUser.id, incomingTestIdSignature])
 
   const pendingDocuments = useMemo(() => {
     return (data.pendingDocumentSource || []).filter((row) => {
@@ -767,88 +789,167 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
 
               {testIdMessage ? <div className="mt-2 text-[12px] text-slate-500">{testIdMessage}</div> : null}
 
-              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_22px_rgba(15,23,42,0.04)]">
-                {testIdEntries.length ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[900px] border-separate border-spacing-0 text-[13px]">
-                      <thead>
-                        <tr className="bg-slate-50 text-[11px] font-black text-slate-500">
-                          {["시험아이디", "회사명", "부서", "담당자", "연락처", "비고", ""].map((head) => (
-                            <th key={head || "actions"} className="border-b border-slate-200 px-3 py-2.5 text-left">
-                              {head}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {testIdEntries.map((entry) => (
-                          <tr key={entry.id} className="group bg-white transition hover:bg-blue-50/40">
-                            <td className="whitespace-nowrap px-3 py-2.5">
-                              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-black text-slate-900">
-                                <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
-                                {entry.testId}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2">
-                              <input
-                                value={entry.companyName}
-                                onChange={(event) => updateTestIdEntry(entry.id, "companyName", event.target.value)}
-                                placeholder="회사명"
-                                className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                              />
-                            </td>
-                            <td className="px-2 py-2">
+              {testIdEntries.length ? (
+                <>
+                  <div className="mt-3 space-y-3 md:hidden">
+                    {testIdEntries.map((entry, index) => (
+                      <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_8px_20px_rgba(15,23,42,0.05)]">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">No. {index + 1}</div>
+                            <div className="mt-1 inline-flex max-w-full items-center gap-2 rounded-full border border-sky-100 bg-sky-50 px-3 py-1.5 text-[14px] font-black text-sky-800">
+                              <span className="h-2 w-2 rounded-full bg-sky-500" />
+                              <span className="truncate">{entry.testId}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeTestIdEntry(entry.id)}
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
+                            aria-label={`${entry.testId} 삭제`}
+                            title="삭제"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        <div className="mt-3 grid gap-2">
+                          <label className="block">
+                            <span className="mb-1 block text-[11px] font-bold text-slate-500">회사명</span>
+                            <input
+                              value={entry.companyName}
+                              onChange={(event) => updateTestIdEntry(entry.id, "companyName", event.target.value)}
+                              placeholder="회사명"
+                              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[14px] font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                            />
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="block">
+                              <span className="mb-1 block text-[11px] font-bold text-slate-500">부서</span>
                               <input
                                 value={entry.departmentName}
                                 onChange={(event) => updateTestIdEntry(entry.id, "departmentName", event.target.value)}
                                 placeholder="부서"
-                                className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[14px] text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                               />
-                            </td>
-                            <td className="px-2 py-2">
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-[11px] font-bold text-slate-500">담당자</span>
                               <input
                                 value={entry.assigneeName}
                                 onChange={(event) => updateTestIdEntry(entry.id, "assigneeName", event.target.value)}
                                 placeholder="담당자"
-                                className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[14px] text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                               />
-                            </td>
-                            <td className="px-2 py-2">
-                              <input
-                                value={entry.contact}
-                                onChange={(event) => updateTestIdEntry(entry.id, "contact", event.target.value)}
-                                placeholder="연락처"
-                                className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                              />
-                            </td>
-                            <td className="px-2 py-2">
-                              <input
-                                value={entry.note}
-                                onChange={(event) => updateTestIdEntry(entry.id, "note", event.target.value)}
-                                placeholder="비고"
-                                className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                              />
-                            </td>
-                            <td className="w-12 px-2 py-2 text-right">
-                              <button
-                                type="button"
-                                onClick={() => removeTestIdEntry(entry.id)}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                                aria-label={`${entry.testId} 삭제`}
-                                title="삭제"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                            </label>
+                          </div>
+                          <label className="block">
+                            <span className="mb-1 block text-[11px] font-bold text-slate-500">연락처</span>
+                            <input
+                              value={entry.contact}
+                              onChange={(event) => updateTestIdEntry(entry.id, "contact", event.target.value)}
+                              placeholder="연락처"
+                              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[14px] text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-[11px] font-bold text-slate-500">비고</span>
+                            <input
+                              value={entry.note}
+                              onChange={(event) => updateTestIdEntry(entry.id, "note", event.target.value)}
+                              placeholder="비고"
+                              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[14px] text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ) : (
-                  <div className="px-3 py-8 text-center text-[12px] font-semibold text-slate-400">등록된 시험아이디가 없습니다.</div>
-                )}
-              </div>
+
+                  <div className="mt-3 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_22px_rgba(15,23,42,0.04)] md:block">
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[900px] border-separate border-spacing-0 text-[13px]">
+                        <thead>
+                          <tr className="bg-slate-50 text-[11px] font-black text-slate-500">
+                            {["시험아이디", "회사명", "부서", "담당자", "연락처", "비고", ""].map((head) => (
+                              <th key={head || "actions"} className="border-b border-slate-200 px-3 py-2.5 text-left">
+                                {head}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {testIdEntries.map((entry) => (
+                            <tr key={entry.id} className="group bg-white transition hover:bg-blue-50/40">
+                              <td className="whitespace-nowrap px-3 py-2.5">
+                                <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-black text-slate-900">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                                  {entry.testId}
+                                </span>
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  value={entry.companyName}
+                                  onChange={(event) => updateTestIdEntry(entry.id, "companyName", event.target.value)}
+                                  placeholder="회사명"
+                                  className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  value={entry.departmentName}
+                                  onChange={(event) => updateTestIdEntry(entry.id, "departmentName", event.target.value)}
+                                  placeholder="부서"
+                                  className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  value={entry.assigneeName}
+                                  onChange={(event) => updateTestIdEntry(entry.id, "assigneeName", event.target.value)}
+                                  placeholder="담당자"
+                                  className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  value={entry.contact}
+                                  onChange={(event) => updateTestIdEntry(entry.id, "contact", event.target.value)}
+                                  placeholder="연락처"
+                                  className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  value={entry.note}
+                                  onChange={(event) => updateTestIdEntry(entry.id, "note", event.target.value)}
+                                  placeholder="비고"
+                                  className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                                />
+                              </td>
+                              <td className="w-12 px-2 py-2 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => removeTestIdEntry(entry.id)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                                  aria-label={`${entry.testId} 삭제`}
+                                  title="삭제"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-8 text-center text-[12px] font-semibold text-slate-400">
+                  등록된 시험아이디가 없습니다.
+                </div>
+              )}
             </div>
 
             <div className={`${cardClass} ${mobileSection === "contracts" ? "block" : "hidden"}`}>
