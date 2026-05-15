@@ -9,6 +9,7 @@ type TwoFactorState = {
   qrDataUrl: string | null
   manualSecret: string | null
   resetAvailable: boolean
+  issuedAt: string | null
 }
 
 const EMPTY_TWO_FACTOR: TwoFactorState = {
@@ -17,6 +18,7 @@ const EMPTY_TWO_FACTOR: TwoFactorState = {
   qrDataUrl: null,
   manualSecret: null,
   resetAvailable: false,
+  issuedAt: null,
 }
 
 export function LoginPage() {
@@ -57,7 +59,7 @@ export function LoginPage() {
     }
 
     const controller = new AbortController()
-    const timeoutId = window.setTimeout(() => controller.abort(), 10000)
+    const timeoutId = window.setTimeout(() => controller.abort(), 20000)
     let keepPending = false
 
     try {
@@ -77,7 +79,8 @@ export function LoginPage() {
           setupRequired: Boolean(payload.twoFactorSetupRequired),
           qrDataUrl: payload.qrDataUrl || null,
           manualSecret: payload.manualSecret || null,
-          resetAvailable: !Boolean(payload.twoFactorSetupRequired),
+          resetAvailable: Boolean(payload.twoFactorResetAvailable ?? true),
+          issuedAt: payload.issuedAt || null,
         })
         if (response.ok) {
           setNotice(payload?.message || "인증앱의 6자리 코드를 입력해주세요.")
@@ -118,7 +121,7 @@ export function LoginPage() {
 
   const requestTwoFactorReset = () => {
     if (isSubmitting || isRedirecting) return
-    const confirmed = window.confirm("기존 인증앱 연결을 초기화하고 새 QR을 발급할까요? 새 QR 등록 후 6자리 코드를 입력해야 로그인됩니다.")
+    const confirmed = window.confirm("새 QR을 발급할까요? 기존 인증앱 코드는 폐기되고, 새 QR 등록 후 6자리 코드를 입력해야 로그인됩니다.")
     if (!confirmed) return
     void submitLogin(true)
   }
@@ -153,8 +156,14 @@ export function LoginPage() {
               )}
               {twoFactor.setupRequired ? (
                 <div className="mt-4 rounded-2xl bg-slate-900 px-4 py-3 text-xs leading-5 text-slate-300">
-                  Google Authenticator, Microsoft Authenticator 등으로 QR을 스캔한 뒤 6자리 코드를 입력하세요.
-                  {twoFactor.manualSecret ? <div className="mt-2 break-all font-mono text-blue-100">{twoFactor.manualSecret}</div> : null}
+                  <div>Google Authenticator, Microsoft Authenticator 등으로 QR을 스캔한 뒤 6자리 코드를 입력하세요.</div>
+                  {twoFactor.issuedAt ? <div className="mt-1 text-slate-400">발급시각 {new Date(twoFactor.issuedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</div> : null}
+                  {twoFactor.manualSecret ? (
+                    <div className="mt-2 rounded-xl bg-white/8 px-3 py-2">
+                      <div className="font-semibold text-slate-400">QR이 안 잡히면 수동 입력키</div>
+                      <div className="mt-1 break-all font-mono text-blue-100">{twoFactor.manualSecret}</div>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="mt-4 rounded-2xl bg-slate-900 px-4 py-3 text-xs leading-5 text-slate-300">
@@ -259,9 +268,9 @@ export function LoginPage() {
                         type="button"
                         onClick={requestTwoFactorReset}
                         disabled={isSubmitting || isRedirecting}
-                        className="mt-2 inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-wait disabled:opacity-60"
+                        className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                       >
-                        인증앱 재등록 / 새 QR 발급
+                        {twoFactor.setupRequired ? "새 QR 다시 발급" : "인증앱 재등록 / 새 QR 발급"}
                       </button>
                     ) : null}
                   </label>

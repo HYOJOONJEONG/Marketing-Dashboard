@@ -12,8 +12,11 @@ export const dynamic = "force-dynamic"
 async function buildTwoFactorPayload(loginId: string, secret: string, setup: boolean, error?: string) {
   const otpauthUrl = createTotpUri({ loginId, secret })
   const message = setup ? "인증앱 등록 후 6자리 코드를 입력해주세요." : "인증앱의 6자리 코드를 입력해주세요."
-  const qrDataUrl = setup
-    ? await QRCode.toDataURL(otpauthUrl, {
+  let qrDataUrl: string | null = null
+  let qrError = ""
+  if (setup) {
+    try {
+      qrDataUrl = await QRCode.toDataURL(otpauthUrl, {
         margin: 1,
         width: 220,
         color: {
@@ -21,15 +24,21 @@ async function buildTwoFactorPayload(loginId: string, secret: string, setup: boo
           light: "#ffffff",
         },
       })
-    : null
+    } catch (caught) {
+      qrError = caught instanceof Error ? caught.message : "QR 생성 실패"
+    }
+  }
   return {
     ok: false,
     requiresTwoFactor: true,
     twoFactorSetupRequired: setup,
+    twoFactorResetAvailable: true,
     message,
     error: error || "",
     qrDataUrl,
     manualSecret: setup ? secret : null,
+    qrError,
+    issuedAt: new Date().toISOString(),
   }
 }
 
@@ -59,13 +68,14 @@ export async function POST(request: Request) {
 
   if (resetTwoFactor) {
     twoFactorSecret = createTotpSecret()
+    const resetAt = new Date().toISOString()
     await updateAuthState((state) => {
       const target = state.users.find((user) => user.id === result.user.id)
       if (!target) return
       target.twoFactorSecret = twoFactorSecret
       target.twoFactorEnabled = false
       target.twoFactorConfirmedAt = null
-      target.updatedAt = new Date().toISOString()
+      target.updatedAt = resetAt
       state.userSessions = state.userSessions.filter((session) => session.userId !== target.id)
       state.presenceSessions = state.presenceSessions.filter((session) => session.userId !== target.id)
     }, { preserveConcurrentSessions: false })
@@ -76,7 +86,7 @@ export async function POST(request: Request) {
     )
     return NextResponse.json({
       ...payload,
-      message: "인증앱을 새로 등록한 뒤 6자리 코드를 입력해주세요.",
+      message: "새 QR을 발급했습니다. 인증앱에 새로 등록한 뒤 6자리 코드를 입력해주세요.",
     })
   }
 
