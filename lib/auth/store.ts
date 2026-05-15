@@ -591,19 +591,65 @@ function preserveConcurrentSessionState(draft: AuthState, latest: AuthState) {
     .slice(0, 200)
 }
 
+const USER_SECURITY_FIELDS: Array<keyof UserRecord> = [
+  "authStrategy",
+  "passwordHash",
+  "passwordSalt",
+  "twoFactorEnabled",
+  "twoFactorSecret",
+  "twoFactorConfirmedAt",
+]
+
+function userSecurityFingerprint(user?: UserRecord | null) {
+  if (!user) return ""
+  return JSON.stringify(
+    Object.fromEntries(
+      USER_SECURITY_FIELDS.map((field) => [field, user[field] ?? null]),
+    ),
+  )
+}
+
+function preserveConcurrentUserSecurityState(draft: AuthState, current: AuthState, latest: AuthState) {
+  const currentById = new Map((current.users || []).map((user) => [user.id, user]))
+  const latestById = new Map((latest.users || []).map((user) => [user.id, user]))
+  draft.users = (draft.users || []).map((user) => {
+    const currentUser = currentById.get(user.id)
+    const latestUser = latestById.get(user.id)
+    if (!currentUser || !latestUser) return user
+    const draftChangedSecurity = userSecurityFingerprint(user) !== userSecurityFingerprint(currentUser)
+    const latestChangedSecurity = userSecurityFingerprint(latestUser) !== userSecurityFingerprint(currentUser)
+    if (draftChangedSecurity || !latestChangedSecurity) return user
+    return {
+      ...user,
+      authStrategy: latestUser.authStrategy,
+      passwordHash: latestUser.passwordHash ?? null,
+      passwordSalt: latestUser.passwordSalt ?? null,
+      twoFactorEnabled: latestUser.twoFactorEnabled,
+      twoFactorSecret: latestUser.twoFactorSecret ?? null,
+      twoFactorConfirmedAt: latestUser.twoFactorConfirmedAt ?? null,
+    }
+  })
+}
+
 export async function updateAuthState(
   mutator: (draft: AuthState) => void | Promise<void>,
-  options: { preserveConcurrentSessions?: boolean } = {},
+  options: { preserveConcurrentSessions?: boolean; preserveUserSecurity?: boolean } = {},
 ) {
   let nextState: AuthState | null = null
   const preserveSessions = options.preserveConcurrentSessions !== false
+  const preserveUserSecurity = options.preserveUserSecurity !== false
   authWriteQueue = authWriteQueue.then(async () => {
     const current = await readAuthState()
     const draft = JSON.parse(JSON.stringify(current)) as AuthState
     await mutator(draft)
-    if (preserveSessions) {
+    if (preserveSessions || preserveUserSecurity) {
       const latest = await readAuthState()
-      preserveConcurrentSessionState(draft, latest)
+      if (preserveUserSecurity) {
+        preserveConcurrentUserSecurityState(draft, current, latest)
+      }
+      if (preserveSessions) {
+        preserveConcurrentSessionState(draft, latest)
+      }
     }
     nextState = draft
     await writeAuthState(draft)

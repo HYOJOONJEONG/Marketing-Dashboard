@@ -1,6 +1,7 @@
 "use client"
 
 import { Eye, EyeOff, KeyRound, Loader2, Lock, ShieldCheck, Smartphone, UserRound } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 
 type TwoFactorState = {
@@ -22,6 +23,7 @@ const EMPTY_TWO_FACTOR: TwoFactorState = {
 }
 
 export function LoginPage() {
+  const router = useRouter()
   const formRef = useRef<HTMLFormElement | null>(null)
   const otpInputRef = useRef<HTMLInputElement | null>(null)
   const submittedOtpRef = useRef("")
@@ -34,6 +36,10 @@ export function LoginPage() {
   const [error, setError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isRedirecting, setIsRedirecting] = useState(false)
+
+  useEffect(() => {
+    router.prefetch("/daily-report?view=daily-report")
+  }, [router])
 
   useEffect(() => {
     if (!twoFactor.required) return
@@ -98,7 +104,7 @@ export function LoginPage() {
       keepPending = true
       setIsRedirecting(true)
       setNotice("대시보드로 이동 중입니다.")
-      window.location.replace("/daily-report")
+      router.replace(payload?.redirectTo || "/daily-report?view=daily-report")
     } catch (loginError) {
       setIsRedirecting(false)
       setError(

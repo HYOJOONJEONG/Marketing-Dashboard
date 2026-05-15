@@ -12,6 +12,7 @@ import {
 const SESSION_COOKIE = "infobiz_session"
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12
 const SESSION_SECRET = process.env.AUTH_SESSION_SECRET?.trim() || "local-dev-session-secret"
+type SessionStateMutator = (state: AuthState, target: UserRecord) => void | Promise<void>
 
 function readBooleanEnv(value: string | undefined) {
   const normalized = value?.trim().toLowerCase()
@@ -59,17 +60,26 @@ function unpack(cookieValue: string | undefined | null) {
   return sessionId
 }
 
-export async function createUserSession(user: UserRecord, requestMeta: { ipAddress: string; userAgent: string }) {
+export async function createUserSessionWithStateUpdate(
+  user: UserRecord,
+  requestMeta: { ipAddress: string; userAgent: string },
+  mutateState?: SessionStateMutator,
+) {
   const now = new Date()
   const sessionId = `sess-${crypto.randomUUID()}`
   const sessionToken = crypto.randomUUID()
   const expiresAt = new Date(now.getTime() + SESSION_TTL_MS).toISOString()
 
-  await updateAuthState((state) => {
+  await updateAuthState(async (state) => {
+    const target = findUserById(state, user.id)
+    if (!target) throw new Error("세션을 생성할 사용자를 찾을 수 없습니다.")
+    if (mutateState) {
+      await mutateState(state, target)
+    }
     pruneExpiredSessions(state)
     state.userSessions.unshift({
       id: sessionId,
-      userId: user.id,
+      userId: target.id,
       sessionToken,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
@@ -78,14 +88,14 @@ export async function createUserSession(user: UserRecord, requestMeta: { ipAddre
       userAgent: requestMeta.userAgent,
     })
     appendActivityLog(state, {
-      actorUserId: user.id,
-      actorName: user.name,
+      actorUserId: target.id,
+      actorName: target.name,
       actionType: "login",
       targetType: "session",
       targetId: sessionId,
       pageKey: "login",
       beforeValue: "",
-      afterValue: JSON.stringify({ role: user.role, teamId: user.teamId }),
+      afterValue: JSON.stringify({ role: target.role, teamId: target.teamId }),
       ipAddress: requestMeta.ipAddress,
       sessionId,
       success: true,
@@ -96,6 +106,10 @@ export async function createUserSession(user: UserRecord, requestMeta: { ipAddre
   cookieStore.set(SESSION_COOKIE, pack(sessionId), getSessionCookieOptions(new Date(expiresAt)))
 
   return sessionId
+}
+
+export async function createUserSession(user: UserRecord, requestMeta: { ipAddress: string; userAgent: string }) {
+  return createUserSessionWithStateUpdate(user, requestMeta)
 }
 
 export async function removeUserSessionRecord(sessionId?: string | null) {

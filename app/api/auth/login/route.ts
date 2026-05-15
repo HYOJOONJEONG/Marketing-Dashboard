@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import QRCode from "qrcode"
 import { validateCredentials } from "@/lib/auth/auth-service"
-import { createUserSession } from "@/lib/auth/session"
+import { createUserSessionWithStateUpdate } from "@/lib/auth/session"
 import { getRequestIp, getRequestUserAgent } from "@/lib/auth/server"
 import { createTotpSecret, createTotpUri, verifyTotpCode } from "@/lib/auth/totp"
 import { updateAuthState } from "@/lib/auth/store"
@@ -54,6 +54,7 @@ export async function POST(request: Request) {
   const password = String(body?.password || "")
   const otpCode = String(body?.otpCode || "").trim()
   const resetTwoFactor = Boolean(body?.resetTwoFactor)
+  const requestStartedAt = Date.now()
   if (!loginId || !password) {
     return NextResponse.json({ ok: false, error: "이름(ID)과 비밀번호를 입력해주세요." }, { status: 400 })
   }
@@ -110,14 +111,6 @@ export async function POST(request: Request) {
       const payload = await buildTwoFactorPayload(result.user.loginId || result.user.name, twoFactorSecret, true, "인증번호가 올바르지 않습니다.")
       return NextResponse.json(payload, { status: 401 })
     }
-    await updateAuthState((state) => {
-      const target = state.users.find((user) => user.id === result.user.id)
-      if (!target) return
-      target.twoFactorSecret = twoFactorSecret
-      target.twoFactorEnabled = true
-      target.twoFactorConfirmedAt = new Date().toISOString()
-      target.updatedAt = target.twoFactorConfirmedAt
-    }, { preserveConcurrentSessions: false })
   } else {
     if (!otpCode) {
       const payload = await buildTwoFactorPayload(result.user.loginId || result.user.name, twoFactorSecret, false)
@@ -129,13 +122,27 @@ export async function POST(request: Request) {
     }
   }
 
-  await createUserSession(result.user, {
-    ipAddress: getRequestIp(request),
-    userAgent: getRequestUserAgent(request),
-  })
+  await createUserSessionWithStateUpdate(
+    result.user,
+    {
+      ipAddress: getRequestIp(request),
+      userAgent: getRequestUserAgent(request),
+    },
+    !twoFactorEnabled
+      ? (_state, target) => {
+          const confirmedAt = new Date().toISOString()
+          target.twoFactorSecret = twoFactorSecret
+          target.twoFactorEnabled = true
+          target.twoFactorConfirmedAt = confirmedAt
+          target.updatedAt = confirmedAt
+        }
+      : undefined,
+  )
 
   return NextResponse.json({
     ok: true,
+    redirectTo: "/daily-report?view=daily-report",
+    elapsedMs: Date.now() - requestStartedAt,
     user: {
       id: result.user.id,
       name: result.user.name,
