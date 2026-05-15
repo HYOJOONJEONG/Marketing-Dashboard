@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { useEffect, useMemo, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, LogOut, MessageSquare, OctagonAlert, Plus, Save, Trash2, UserRound } from "lucide-react"
 import type { PopupMessageRecord, UserTestIdEntry } from "@/lib/auth/model"
@@ -219,6 +219,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
   const [, startTransition] = useTransition()
   const [isProfileSaving, setIsProfileSaving] = useState(false)
   const [isTestIdSaving, setIsTestIdSaving] = useState(false)
+  const [isTestIdDirty, setIsTestIdDirty] = useState(false)
   const [mobileSection, setMobileSection] = useState<MobileMyPageSection>("testIds")
   const [testIdEntries, setTestIdEntries] = useState<UserTestIdEntry[]>(currentUser.testIdEntries || [])
   const [testIdMode, setTestIdMode] = useState<"single" | "bulk">("single")
@@ -256,9 +257,48 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
     }
   }, [])
 
+  const refreshTestIdsFromSession = useCallback(async () => {
+    if (isTestIdDirty || isTestIdSaving) return
+    try {
+      const response = await fetch("/api/auth/session", { cache: "no-store" })
+      const payload = await response.json().catch(() => null)
+      const nextEntries = payload?.authenticated && Array.isArray(payload?.user?.testIdEntries)
+        ? payload.user.testIdEntries
+        : null
+      if (nextEntries) {
+        setTestIdEntries(nextEntries)
+      }
+    } catch {
+      // 화면 동기화 보조 요청이므로 실패해도 기존 화면을 유지합니다.
+    }
+  }, [isTestIdDirty, isTestIdSaving])
+
   useEffect(() => {
+    if (isTestIdDirty || isTestIdSaving) return
     setTestIdEntries(currentUser.testIdEntries || [])
-  }, [currentUser.id, incomingTestIdSignature])
+  }, [currentUser.id, incomingTestIdSignature, isTestIdDirty, isTestIdSaving, currentUser.testIdEntries])
+
+  useEffect(() => {
+    void refreshTestIdsFromSession()
+  }, [refreshTestIdsFromSession])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const handleFocus = () => {
+      void refreshTestIdsFromSession()
+    }
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void refreshTestIdsFromSession()
+      }
+    }
+    window.addEventListener("focus", handleFocus)
+    document.addEventListener("visibilitychange", handleVisibility)
+    return () => {
+      window.removeEventListener("focus", handleFocus)
+      document.removeEventListener("visibilitychange", handleVisibility)
+    }
+  }, [refreshTestIdsFromSession])
 
   const pendingDocuments = useMemo(() => {
     return (data.pendingDocumentSource || []).filter((row) => {
@@ -322,6 +362,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
       setTestIdMessage("시험아이디 형식을 확인해주세요. 예: E260403")
       return
     }
+    setIsTestIdDirty(true)
     setTestIdEntries((prev) => {
       const existingMap = new Map(prev.map((entry) => [entry.testId, entry]))
       const now = new Date().toISOString()
@@ -359,6 +400,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
   }
 
   const updateTestIdEntry = (entryId: string, field: keyof UserTestIdEntry, value: string) => {
+    setIsTestIdDirty(true)
     setTestIdEntries((prev) =>
       prev.map((entry) =>
         entry.id === entryId
@@ -373,6 +415,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
   }
 
   const removeTestIdEntry = (entryId: string) => {
+    setIsTestIdDirty(true)
     setTestIdEntries((prev) => prev.filter((entry) => entry.id !== entryId))
   }
 
@@ -393,6 +436,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
         return
       }
       setTestIdEntries(Array.isArray(payload?.testIdEntries) ? payload.testIdEntries : testIdEntries)
+      setIsTestIdDirty(false)
       setTestIdMessage("시험아이디 관리 항목이 저장되었습니다.")
       startTransition(() => router.refresh())
     } catch (error) {
@@ -439,13 +483,13 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                 </div>
               </div>
 
-              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+              <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
                 {!embedded ? (
                   <>
                     <button
                       type="button"
                       onClick={() => router.push("/")}
-                      className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none"
+                      className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 sm:h-9 sm:w-auto"
                     >
                       <ArrowLeft className="h-4 w-4 text-slate-400" />
                       대시보드 돌아가기
@@ -454,21 +498,21 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                       type="button"
                       onClick={logout}
                       disabled={isLogoutPending}
-                      className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-[13px] font-bold text-white transition hover:bg-slate-800 disabled:opacity-60 sm:flex-none"
+                      className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-slate-950 px-3 text-[13px] font-bold text-white transition hover:bg-slate-800 disabled:opacity-60 sm:h-9 sm:w-auto"
                     >
                       <LogOut className="h-4 w-4" />
                       {isLogoutPending ? "로그아웃 중..." : "로그아웃"}
                     </button>
                   </>
                 ) : null}
-                <div className="relative">
+                <div className="relative min-w-0">
                   <button
                     type="button"
                     onClick={() => {
                       setIsAvatarOpen(false)
                       setIsIndustryOpen((prev) => !prev)
                     }}
-                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none"
+                    className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 sm:h-9 sm:w-auto"
                   >
                     담당 업종 선택
                     <ChevronDown className={`h-4 w-4 text-slate-400 transition ${isIndustryOpen ? "rotate-180" : ""}`} />
@@ -501,14 +545,14 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                   ) : null}
                 </div>
 
-                <div className="relative">
+                <div className="relative min-w-0">
                   <button
                     type="button"
                     onClick={() => {
                       setIsIndustryOpen(false)
                       setIsAvatarOpen((prev) => !prev)
                     }}
-                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none"
+                    className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 sm:h-9 sm:w-auto"
                   >
                     <UserRound className="h-4 w-4 text-slate-400" />
                     아바타 변경
@@ -551,11 +595,11 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                   type="button"
                   onClick={saveProfile}
                   disabled={isProfileSaving}
-                  className="inline-flex h-9 flex-1 items-center justify-center rounded-xl bg-slate-950 px-3 text-[13px] font-bold text-white disabled:opacity-60 sm:flex-none"
+                  className="col-span-2 inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-xl bg-slate-950 px-3 text-[13px] font-bold text-white disabled:opacity-60 sm:col-span-1 sm:h-9 sm:w-auto"
                 >
                   {isProfileSaving ? "저장 중..." : "프로필 저장"}
                 </button>
-                <div className="relative">
+                <div className="relative col-span-2 justify-self-start sm:col-span-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -563,7 +607,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                       setIsAvatarOpen(false)
                       setIsMessageBoxOpen((prev) => !prev)
                     }}
-                    className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 transition hover:bg-indigo-100"
+                    className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 transition hover:bg-indigo-100 sm:h-9 sm:w-9"
                     aria-label="내 메시지함"
                     title="내 메시지함"
                   >
