@@ -191,6 +191,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
   const [singleTestId, setSingleTestId] = useState("")
   const [bulkStartId, setBulkStartId] = useState("")
   const [bulkEndId, setBulkEndId] = useState("")
+  const [bulkCompanyName, setBulkCompanyName] = useState("")
   const [testIdMessage, setTestIdMessage] = useState("")
   const [messageHistory, setMessageHistory] = useState<PopupMessageRecord[]>(data.messageHistory || [])
   const [isMessageBoxOpen, setIsMessageBoxOpen] = useState(false)
@@ -258,8 +259,9 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
     }
   }
 
-  const addTestIds = (ids: string[]) => {
+  const addTestIds = (ids: string[], defaultCompanyName = "") => {
     const normalizedIds = ids.map(normalizeTestId).filter(Boolean)
+    const companyName = defaultCompanyName.trim()
     if (!normalizedIds.length) {
       setTestIdMessage("시험아이디 형식을 확인해주세요. 예: E260403")
       return
@@ -268,11 +270,20 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
       const existingMap = new Map(prev.map((entry) => [entry.testId, entry]))
       const now = new Date().toISOString()
       normalizedIds.forEach((testId) => {
-        if (!existingMap.has(testId)) {
+        const existing = existingMap.get(testId)
+        if (existing) {
+          if (companyName) {
+            existingMap.set(testId, {
+              ...existing,
+              companyName,
+              updatedAt: now,
+            })
+          }
+        } else {
           existingMap.set(testId, {
             id: `test-id-${testId}-${Math.random().toString(36).slice(2, 8)}`,
             testId,
-            companyName: "",
+            companyName,
             departmentName: "",
             assigneeName: "",
             contact: "",
@@ -287,7 +298,8 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
     setSingleTestId("")
     setBulkStartId("")
     setBulkEndId("")
-    setTestIdMessage(`${normalizedIds.length}건의 시험아이디를 목록에 추가했습니다.`)
+    setBulkCompanyName("")
+    setTestIdMessage(companyName ? `${normalizedIds.length}건의 시험아이디에 ${companyName}을(를) 일괄 적용했습니다.` : `${normalizedIds.length}건의 시험아이디를 목록에 추가했습니다.`)
   }
 
   const updateTestIdEntry = (entryId: string, field: keyof UserTestIdEntry, value: string) => {
@@ -677,11 +689,21 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                       placeholder="끝 예: E260408"
                       className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:w-[170px]"
                     />
+                    <input
+                      value={bulkCompanyName}
+                      onChange={(event) => setBulkCompanyName(event.target.value)}
+                      placeholder="회사명 일괄 입력"
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:w-[190px]"
+                    />
                   </>
                 )}
                 <button
                   type="button"
-                  onClick={() => (testIdMode === "single" ? addTestIds([singleTestId]) : addTestIds(buildRangeTestIds(bulkStartId, bulkEndId)))}
+                  onClick={() =>
+                    testIdMode === "single"
+                      ? addTestIds([singleTestId])
+                      : addTestIds(buildRangeTestIds(bulkStartId, bulkEndId), bulkCompanyName)
+                  }
                   className="inline-flex h-9 w-16 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-[12px] font-bold text-white transition hover:bg-blue-700"
                 >
                   등록
