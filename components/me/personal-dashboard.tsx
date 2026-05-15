@@ -3,7 +3,7 @@
 import type { ReactNode } from "react"
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, LogOut, MessageSquare, OctagonAlert, Plus, Save, UserRound } from "lucide-react"
+import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, LogOut, MessageSquare, OctagonAlert, Plus, Save, Trash2, UserRound } from "lucide-react"
 import type { PopupMessageRecord, UserTestIdEntry } from "@/lib/auth/model"
 
 type Props = {
@@ -339,10 +339,16 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
 
   const saveTestIdEntries = async () => {
     if (isTestIdSaving) return
+    const hadTestIdsOnLoad = (currentUser.testIdEntries || []).length > 0
+    let confirmClearTestIds = false
+    if (hadTestIdsOnLoad && testIdEntries.length === 0) {
+      confirmClearTestIds = window.confirm("등록된 시험아이디가 모두 삭제된 상태입니다. 전체 삭제로 저장할까요?")
+      if (!confirmClearTestIds) return
+    }
     setTestIdMessage("")
     setIsTestIdSaving(true)
     try {
-      const { response, payload } = await fetchProfileUpdate({ testIdEntries })
+      const { response, payload } = await fetchProfileUpdate({ testIdEntries, confirmClearTestIds })
       if (!response.ok || !payload?.ok) {
         setTestIdMessage(payload?.error || "시험아이디 저장에 실패했습니다.")
         return
@@ -744,70 +750,86 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
 
               {testIdMessage ? <div className="mt-2 text-[12px] text-slate-500">{testIdMessage}</div> : null}
 
-              <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
+              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_22px_rgba(15,23,42,0.04)]">
                 {testIdEntries.length ? (
-                  <div className="min-w-[840px]">
-                    <div className="grid grid-cols-[100px_130px_130px_110px_120px_minmax(180px,1fr)_60px] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500">
-                      <div>시험아이디</div>
-                      <div>회사명</div>
-                      <div>부서</div>
-                      <div>담당자</div>
-                      <div>연락처</div>
-                      <div>비고</div>
-                      <div>관리</div>
-                    </div>
-                    <div className="divide-y divide-slate-200">
-                      {testIdEntries.map((entry) => (
-                        <div
-                          key={entry.id}
-                          className="grid grid-cols-[100px_130px_130px_110px_120px_minmax(180px,1fr)_60px] gap-2 px-3 py-2"
-                        >
-                          <div className="flex items-center text-[12px] font-black text-slate-950">{entry.testId}</div>
-                          <input
-                            value={entry.companyName}
-                            onChange={(event) => updateTestIdEntry(entry.id, "companyName", event.target.value)}
-                            placeholder="회사명"
-                            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                          />
-                          <input
-                            value={entry.departmentName}
-                            onChange={(event) => updateTestIdEntry(entry.id, "departmentName", event.target.value)}
-                            placeholder="부서"
-                            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                          />
-                          <input
-                            value={entry.assigneeName}
-                            onChange={(event) => updateTestIdEntry(entry.id, "assigneeName", event.target.value)}
-                            placeholder="담당자"
-                            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                          />
-                          <input
-                            value={entry.contact}
-                            onChange={(event) => updateTestIdEntry(entry.id, "contact", event.target.value)}
-                            placeholder="연락처"
-                            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                          />
-                          <input
-                            value={entry.note}
-                            onChange={(event) => updateTestIdEntry(entry.id, "note", event.target.value)}
-                            placeholder="비고"
-                            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                          />
-                          <div className="flex items-start justify-end">
-                            <button
-                              type="button"
-                              onClick={() => removeTestIdEntry(entry.id)}
-                              className="h-8 rounded-lg border border-rose-200 bg-rose-50 px-2 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100"
-                            >
-                              삭제
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[900px] border-separate border-spacing-0 text-[13px]">
+                      <thead>
+                        <tr className="bg-slate-50 text-[11px] font-black text-slate-500">
+                          {["시험아이디", "회사명", "부서", "담당자", "연락처", "비고", ""].map((head) => (
+                            <th key={head || "actions"} className="border-b border-slate-200 px-3 py-2.5 text-left">
+                              {head}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {testIdEntries.map((entry) => (
+                          <tr key={entry.id} className="group bg-white transition hover:bg-blue-50/40">
+                            <td className="whitespace-nowrap px-3 py-2.5">
+                              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-black text-slate-900">
+                                <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                                {entry.testId}
+                              </span>
+                            </td>
+                            <td className="px-2 py-2">
+                              <input
+                                value={entry.companyName}
+                                onChange={(event) => updateTestIdEntry(entry.id, "companyName", event.target.value)}
+                                placeholder="회사명"
+                                className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input
+                                value={entry.departmentName}
+                                onChange={(event) => updateTestIdEntry(entry.id, "departmentName", event.target.value)}
+                                placeholder="부서"
+                                className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input
+                                value={entry.assigneeName}
+                                onChange={(event) => updateTestIdEntry(entry.id, "assigneeName", event.target.value)}
+                                placeholder="담당자"
+                                className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input
+                                value={entry.contact}
+                                onChange={(event) => updateTestIdEntry(entry.id, "contact", event.target.value)}
+                                placeholder="연락처"
+                                className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input
+                                value={entry.note}
+                                onChange={(event) => updateTestIdEntry(entry.id, "note", event.target.value)}
+                                placeholder="비고"
+                                className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                              />
+                            </td>
+                            <td className="w-12 px-2 py-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => removeTestIdEntry(entry.id)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                                aria-label={`${entry.testId} 삭제`}
+                                title="삭제"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 ) : (
-                  <div className="px-3 py-6 text-center text-[12px] text-slate-400">등록된 시험아이디가 없습니다.</div>
+                  <div className="px-3 py-8 text-center text-[12px] font-semibold text-slate-400">등록된 시험아이디가 없습니다.</div>
                 )}
               </div>
             </div>

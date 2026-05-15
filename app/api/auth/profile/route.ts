@@ -60,7 +60,14 @@ export async function PATCH(request: Request) {
     if (!target) throw new Error("사용자 정보를 찾을 수 없습니다.")
     if (assignedIndustries) target.assignedIndustries = assignedIndustries
     if (hasAvatarEmoji) target.avatarEmoji = avatarEmoji ?? null
-    if (hasTestIdEntries) target.testIdEntries = testIdEntries || []
+    if (hasTestIdEntries) {
+      const previousTestIds = Array.isArray(target.testIdEntries) ? target.testIdEntries : []
+      const shouldClearAll = previousTestIds.length > 0 && (testIdEntries || []).length === 0
+      if (shouldClearAll && !body?.confirmClearTestIds) {
+        throw new Error("기존 시험아이디가 있어 빈 목록 저장을 막았습니다. 전체 삭제가 맞으면 다시 확인 후 저장해주세요.")
+      }
+      target.testIdEntries = testIdEntries || []
+    }
     target.updatedAt = new Date().toISOString()
     nextAssignedIndustries = normalizeAssignedIndustries(target.assignedIndustries)
     nextAvatarEmoji = target.avatarEmoji ? String(target.avatarEmoji).trim() : null

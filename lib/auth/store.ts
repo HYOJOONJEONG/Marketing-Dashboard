@@ -12,7 +12,7 @@ import {
   getUserColorToken,
 } from "@/lib/auth/model"
 import { normalizeAssignedIndustries } from "@/lib/industry-groups"
-import { readAuthSystem, writeAuthSystem } from "@/lib/shared-db-store"
+import { isSharedDbSeedingAllowed, readAuthSystem, writeAuthSystem } from "@/lib/shared-db-store"
 
 const PRESENCE_TIMEOUT_MS = 120 * 1000
 const PRESENCE_IDLE_MS = 7 * 60 * 1000
@@ -505,6 +505,9 @@ export async function readAuthState(): Promise<AuthState> {
       normalizePopupMessages(parsed)
       return parsed
     }
+    if (!isSharedDbSeedingAllowed()) {
+      throw new Error("Auth system is missing. Refusing to seed default users in this environment.")
+    }
     const seeded = createSeedState()
     try {
       await writeAuthSystem(seeded, {
@@ -516,7 +519,10 @@ export async function readAuthState(): Promise<AuthState> {
       // so login can still work if writes are unavailable.
     }
     return seeded
-  } catch {
+  } catch (error) {
+    if (!isSharedDbSeedingAllowed()) {
+      throw error
+    }
     return createSeedState()
   }
 }

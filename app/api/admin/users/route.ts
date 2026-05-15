@@ -39,6 +39,14 @@ export async function POST(request: Request) {
     const now = new Date().toISOString()
     const passwordData = password ? createIndividualPassword(password) : null
     const deletedUser = state.users.find((user) => user.deletedAt && (user.loginId === loginId || user.name === name))
+    const preservedTwoFactor = deletedUser
+      ? {
+          enabled: Boolean(deletedUser.twoFactorEnabled),
+          secret: deletedUser.twoFactorSecret || null,
+          confirmedAt: deletedUser.twoFactorConfirmedAt || null,
+        }
+      : null
+    const preservedTestIdEntries = Array.isArray(deletedUser?.testIdEntries) ? deletedUser.testIdEntries : []
     const nextUser: UserRecord =
       deletedUser || {
         id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -70,9 +78,17 @@ export async function POST(request: Request) {
     nextUser.authStrategy = passwordData ? "individual" : "common"
     nextUser.passwordHash = passwordData?.hash || null
     nextUser.passwordSalt = passwordData?.salt || null
-    nextUser.twoFactorEnabled = false
-    nextUser.twoFactorSecret = null
-    nextUser.twoFactorConfirmedAt = null
+    if (preservedTwoFactor) {
+      nextUser.twoFactorEnabled = preservedTwoFactor.enabled
+      nextUser.twoFactorSecret = preservedTwoFactor.secret
+      nextUser.twoFactorConfirmedAt = preservedTwoFactor.confirmedAt
+      nextUser.testIdEntries = preservedTestIdEntries
+    } else {
+      nextUser.twoFactorEnabled = false
+      nextUser.twoFactorSecret = null
+      nextUser.twoFactorConfirmedAt = null
+      nextUser.testIdEntries = []
+    }
     nextUser.updatedAt = now
     if (!deletedUser) state.users.unshift(nextUser)
     appendActivityLog(state, {
@@ -117,6 +133,41 @@ export async function PATCH(request: Request) {
 
     if (fieldName === "assignedIndustries") {
       nextValue = normalizeAssignedIndustries(nextValue)
+    }
+
+    if (fieldName === "twoFactorReset") {
+      const beforeValue = JSON.stringify({
+        enabled: Boolean(target.twoFactorEnabled),
+        hadSecret: Boolean(target.twoFactorSecret),
+        confirmedAt: target.twoFactorConfirmedAt || null,
+      })
+      target.twoFactorEnabled = false
+      target.twoFactorSecret = null
+      target.twoFactorConfirmedAt = null
+      target.updatedAt = new Date().toISOString()
+      state.userSessions = state.userSessions.filter((session) => session.userId !== target.id)
+      state.presenceSessions = state.presenceSessions.filter((session) => session.userId !== target.id)
+      appendUserChangeLog(state, {
+        targetUserId: target.id,
+        changedByAdminId: auth.context.user.id,
+        fieldName,
+        beforeValue,
+        afterValue: "2FA reset",
+      })
+      appendActivityLog(state, {
+        actorUserId: auth.context.user.id,
+        actorName: auth.context.user.name,
+        actionType: "user_update",
+        targetType: "user",
+        targetId: target.id,
+        pageKey: "userManagement",
+        beforeValue,
+        afterValue: JSON.stringify({ twoFactorReset: true }),
+        ipAddress: getRequestIp(request),
+        sessionId: auth.context.sessionId,
+        success: true,
+      })
+      return
     }
 
     if (fieldName === "name") {

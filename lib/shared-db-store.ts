@@ -19,7 +19,10 @@ const KV_REST_API_TOKEN =
 const REDIS_URL = process.env.REDIS_URL?.trim() || ""
 const SHARED_DB_READ_ONLY = process.env.SHARED_DB_READ_ONLY === "1"
 const SHARED_DB_REQUIRE_CENTRAL = process.env.SHARED_DB_REQUIRE_CENTRAL === "1"
-const SHARED_DB_ALLOW_SEED = process.env.SHARED_DB_ALLOW_SEED !== "0"
+const SHARED_DB_ALLOW_SEED =
+  process.env.SHARED_DB_ALLOW_SEED == null
+    ? process.env.VERCEL !== "1"
+    : process.env.SHARED_DB_ALLOW_SEED !== "0"
 const SHARED_DB_ALLOW_REMOTE_WRITE_FROM_LOCAL = process.env.SHARED_DB_ALLOW_REMOTE_WRITE_FROM_LOCAL === "1"
 const CENTRAL_DB_TIMEOUT_MS = Number(process.env.CENTRAL_DB_TIMEOUT_MS || (process.env.VERCEL === "1" ? 5000 : 1500))
 const AUDIT_SNAPSHOT_LIMIT = Math.max(0, Number(process.env.SHARED_KV_AUDIT_SNAPSHOT_LIMIT || 20000))
@@ -127,6 +130,10 @@ export function getSharedDbEnvironmentStatus() {
         ? "live"
         : "muted",
   } as const
+}
+
+export function isSharedDbSeedingAllowed() {
+  return SHARED_DB_ALLOW_SEED
 }
 
 function kvConfigured() {

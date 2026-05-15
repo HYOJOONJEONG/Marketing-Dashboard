@@ -206,6 +206,12 @@ export function AdminConsole({ currentUser, permissions }: Props) {
     })
   }
 
+  const resetUserTwoFactor = () => {
+    if (!selectedUser) return
+    if (!window.confirm(`${selectedUser.name}님의 2FA를 초기화할까요? 다음 로그인 때 새 QR을 등록해야 합니다.`)) return
+    updateUser("twoFactorReset", true)
+  }
+
   const deleteUser = (userId: string) => {
     if (!window.confirm("이 사용자를 삭제 또는 비활성화 처리할까요?")) return
     runAction(async () => {
@@ -567,6 +573,13 @@ export function AdminConsole({ currentUser, permissions }: Props) {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={resetUserTwoFactor}
+                          className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700"
+                        >
+                          2FA 초기화
+                        </button>
                         <button
                           type="button"
                           onClick={() => updateUser("active", !selectedUser.active)}
