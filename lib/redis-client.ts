@@ -9,6 +9,9 @@ type PendingCommand<T = RespValue> = {
   timer: ReturnType<typeof setTimeout>
 }
 
+const REDIS_COMMAND_TIMEOUT_MS = Math.max(1000, Math.min(10000, Number(process.env.REDIS_COMMAND_TIMEOUT_MS || 3000)))
+const REDIS_IDLE_RECONNECT_MS = Math.max(5000, Number(process.env.REDIS_IDLE_RECONNECT_MS || 30000))
+
 function encodeCommand(parts: Array<string | number>) {
   const chunks = [`*${parts.length}\r\n`]
   for (const part of parts) {
@@ -63,6 +66,7 @@ class RedisSocketClient {
   private queue: Promise<void> = Promise.resolve()
   private pending: PendingCommand | null = null
   private buffer = Buffer.alloc(0)
+  private lastUsedAt = 0
   private readonly url: URL
   private readonly authParts: Array<string | number> | null
 
@@ -75,8 +79,14 @@ class RedisSocketClient {
 
   async command<T = RespValue>(parts: Array<string | number>) {
     const run = async () => {
-      await this.ensureReady()
-      return this.writeAndRead<T>(parts, 1)
+      try {
+        await this.ensureReady()
+        return await this.writeAndRead<T>(parts, 1)
+      } catch (firstError) {
+        this.reset(firstError instanceof Error ? firstError : new Error(String(firstError)))
+        await this.ensureReady()
+        return this.writeAndRead<T>(parts, 1)
+      }
     }
     const next = this.queue.catch(() => undefined).then(run)
     this.queue = next.then(() => undefined, () => undefined)
@@ -84,6 +94,9 @@ class RedisSocketClient {
   }
 
   private openSocket() {
+    if (this.connected && Date.now() - this.lastUsedAt > REDIS_IDLE_RECONNECT_MS) {
+      this.reset()
+    }
     if (this.connected && this.socket && !this.socket.destroyed) return Promise.resolve()
     if (this.connecting) return this.connecting
 
@@ -101,8 +114,10 @@ class RedisSocketClient {
       const connectEvent = this.url.protocol === "rediss:" ? "secureConnect" : "connect"
       const onConnect = () => {
         cleanup()
+        socket.setNoDelay(true)
         socket.setKeepAlive(true, 30000)
         this.connected = true
+        this.lastUsedAt = Date.now()
         resolve()
       }
       const onError = (error: Error) => {
@@ -150,7 +165,7 @@ class RedisSocketClient {
       }
       const timer = setTimeout(() => {
         this.reset(new Error("Redis command timed out"))
-      }, 10000)
+      }, REDIS_COMMAND_TIMEOUT_MS)
       this.pending = { expectedResponses, resolve: resolve as (value: RespValue) => void, reject, timer }
       socket.write(encodeCommand(parts), (error) => {
         if (error) this.reset(error)
@@ -173,6 +188,7 @@ class RedisSocketClient {
       const pending = this.pending
       this.pending = null
       this.buffer = this.buffer.slice(current)
+      this.lastUsedAt = Date.now()
       clearTimeout(pending.timer)
       pending.resolve(value)
     } catch (error) {
