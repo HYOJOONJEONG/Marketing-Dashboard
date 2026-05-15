@@ -4,6 +4,7 @@ import tls from "node:tls"
 const SOURCE_REDIS_URL = process.env.OLD_REDIS_URL || process.env.SOURCE_REDIS_URL || ""
 const TARGET_REDIS_URL = process.env.NEW_REDIS_URL || process.env.TARGET_REDIS_URL || ""
 const APPLY = process.argv.includes("--apply")
+const REPLACE = process.argv.includes("--replace")
 const AUTH_KEY = "shared-kv:value:auth_system"
 
 function encodeCommand(parts) {
@@ -117,6 +118,77 @@ function summarizeAuth(raw) {
   }
 }
 
+function timestampValue(value) {
+  const time = new Date(String(value || "")).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+function mergeArrayById(sourceItems, targetItems) {
+  const byId = new Map()
+  for (const item of Array.isArray(targetItems) ? targetItems : []) {
+    if (item?.id) byId.set(String(item.id), item)
+  }
+  for (const item of Array.isArray(sourceItems) ? sourceItems : []) {
+    if (item?.id) byId.set(String(item.id), item)
+  }
+  return Array.from(byId.values())
+}
+
+function identityKey(user) {
+  return String(user?.loginId || user?.name || user?.id || "").trim()
+}
+
+function mergeUsers(sourceUsers, targetUsers) {
+  const merged = []
+  const sourceByIdentity = new Map()
+  for (const user of Array.isArray(sourceUsers) ? sourceUsers : []) {
+    merged.push(user)
+    const key = identityKey(user)
+    if (key) sourceByIdentity.set(key, user)
+  }
+  for (const targetUser of Array.isArray(targetUsers) ? targetUsers : []) {
+    const key = identityKey(targetUser)
+    if (!key || !sourceByIdentity.has(key)) {
+      merged.push(targetUser)
+    }
+  }
+  return merged.sort((a, b) => {
+    const orderDiff = Number(a.displayOrder || 99) - Number(b.displayOrder || 99)
+    if (orderDiff !== 0) return orderDiff
+    return String(a.name || "").localeCompare(String(b.name || ""), "ko")
+  })
+}
+
+function mergeAuthSystems(sourceRaw, targetRaw) {
+  const source = JSON.parse(sourceRaw)
+  if (REPLACE || !targetRaw) return source
+  const target = JSON.parse(targetRaw)
+  return {
+    ...target,
+    ...source,
+    teams: mergeArrayById(source.teams, target.teams),
+    roles: mergeArrayById(source.roles, target.roles),
+    permissions: mergeArrayById(source.permissions, target.permissions),
+    rolePermissions: mergeArrayById(source.rolePermissions, target.rolePermissions),
+    userPermissionOverrides: mergeArrayById(source.userPermissionOverrides, target.userPermissionOverrides),
+    users: mergeUsers(source.users, target.users),
+    userSessions: [],
+    presenceSessions: [],
+    popupMessages: mergeArrayById(source.popupMessages, target.popupMessages)
+      .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt))
+      .slice(0, 200),
+    activityLogs: mergeArrayById(source.activityLogs, target.activityLogs)
+      .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt))
+      .slice(0, 500),
+    userChangeLogs: mergeArrayById(source.userChangeLogs, target.userChangeLogs)
+      .sort((a, b) => timestampValue(b.changedAt) - timestampValue(a.changedAt))
+      .slice(0, 500),
+    permissionChangeLogs: mergeArrayById(source.permissionChangeLogs, target.permissionChangeLogs)
+      .sort((a, b) => timestampValue(b.changedAt) - timestampValue(a.changedAt))
+      .slice(0, 500),
+  }
+}
+
 async function main() {
   if (!SOURCE_REDIS_URL || !TARGET_REDIS_URL) {
     throw new Error("OLD_REDIS_URL/SOURCE_REDIS_URL and NEW_REDIS_URL/TARGET_REDIS_URL are required.")
@@ -134,14 +206,18 @@ async function main() {
     throw new Error(`Source Redis does not have ${AUTH_KEY}.`)
   }
 
+  const nextRaw = JSON.stringify(mergeAuthSystems(sourceRaw, targetRaw))
+  console.log("Mode:", REPLACE ? "replace target auth_system" : "merge source auth_system into target")
+  console.log("Target auth after planned copy:", summarizeAuth(nextRaw))
+
   if (!APPLY) {
     console.log("Dry run only. Re-run with --apply to copy auth_system into the target Redis.")
     return
   }
 
-  await redisCommand(TARGET_REDIS_URL, ["SET", AUTH_KEY, sourceRaw])
-  const nextRaw = await redisCommand(TARGET_REDIS_URL, ["GET", AUTH_KEY])
-  console.log("Copied auth_system. Target auth after copy:", summarizeAuth(nextRaw))
+  await redisCommand(TARGET_REDIS_URL, ["SET", AUTH_KEY, nextRaw])
+  const savedRaw = await redisCommand(TARGET_REDIS_URL, ["GET", AUTH_KEY])
+  console.log("Copied auth_system. Target auth after copy:", summarizeAuth(savedRaw))
 }
 
 main().catch((error) => {
