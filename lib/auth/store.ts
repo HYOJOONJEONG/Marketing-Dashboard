@@ -114,6 +114,7 @@ const DEFAULT_DIRECTORY_USERS = [
   { name: "윤옥수", team: "인포Biz2팀", role: "team_manager" as RoleKey },
   { name: "진효정", team: "인포Biz2팀", role: "staff" as RoleKey },
   { name: "김다빈", team: "인포Biz2팀", role: "staff" as RoleKey },
+  { name: "김대일", team: "인포Biz2팀", role: "staff" as RoleKey },
   { name: "이상철", team: "본부", role: "director" as RoleKey },
 ] as const
 
