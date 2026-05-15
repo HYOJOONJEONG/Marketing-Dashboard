@@ -117,6 +117,8 @@ function MetricCard({
   caption,
   progress,
   icon,
+  active,
+  onClick,
 }: {
   title: string
   value: number
@@ -125,10 +127,19 @@ function MetricCard({
   caption: string
   progress: number
   icon: ReactNode
+  active: boolean
+  onClick: () => void
 }) {
   const barWidth = `${Math.max(12, Math.min(100, progress))}%`
   return (
-    <div className={`${cardClass} relative overflow-hidden p-3.5`}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`${cardClass} relative overflow-hidden p-3.5 text-left transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)] ${
+        active ? "border-blue-300 ring-2 ring-blue-100" : ""
+      }`}
+    >
       <div className={`absolute inset-x-0 top-0 h-1 ${accent}`} />
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -146,7 +157,7 @@ function MetricCard({
         </div>
         <span className="whitespace-nowrap text-[11px] font-bold text-slate-500">{caption}</span>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -599,6 +610,8 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               caption="등록 ID"
               progress={Math.min(100, testIdEntries.length * 8)}
               icon={<Hash className="h-5 w-5" />}
+              active={mobileSection === "testIds"}
+              onClick={() => setMobileSection("testIds")}
             />
             <MetricCard
               title="내 신규계약"
@@ -608,6 +621,8 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               caption="계약"
               progress={Math.min(100, data.myContracts.length * 10)}
               icon={<FileSignature className="h-5 w-5" />}
+              active={mobileSection === "contracts"}
+              onClick={() => setMobileSection("contracts")}
             />
             <MetricCard
               title="내 미회수 계약서"
@@ -617,6 +632,8 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               caption="미회수"
               progress={Math.min(100, pendingDocuments.length * 10)}
               icon={<FolderClock className="h-5 w-5" />}
+              active={mobileSection === "pending"}
+              onClick={() => setMobileSection("pending")}
             />
             <MetricCard
               title="나의 해지 리스트"
@@ -626,6 +643,8 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               caption="해지"
               progress={Math.min(100, data.myTerminationRows.length * 10)}
               icon={<OctagonAlert className="h-5 w-5" />}
+              active={mobileSection === "termination"}
+              onClick={() => setMobileSection("termination")}
             />
             <MetricCard
               title="나의 청구보류 리스트"
@@ -635,34 +654,13 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               caption="보류"
               progress={Math.min(100, data.myHoldRows.length * 10)}
               icon={<CirclePause className="h-5 w-5" />}
+              active={mobileSection === "hold"}
+              onClick={() => setMobileSection("hold")}
             />
           </section>
 
-          <section className="lg:hidden">
-            <div className="grid grid-cols-2 gap-2 rounded-[24px] border border-slate-200 bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-                {[
-                  { key: "testIds", label: "시험ID" },
-                  { key: "contracts", label: "신규계약" },
-                  { key: "pending", label: "미회수" },
-                  { key: "termination", label: "해지" },
-                  { key: "hold", label: "청구보류" },
-                ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setMobileSection(item.key as MobileMyPageSection)}
-                  className={`rounded-2xl px-3 py-3 text-[13px] font-bold transition ${
-                    mobileSection === item.key ? "bg-blue-600 text-white shadow-sm" : "bg-slate-50 text-slate-600"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </section>
-
           <section className="space-y-3">
-            <div className={`${cardClass} ${mobileSection === "testIds" ? "block" : "hidden"} lg:block`}>
+            <div className={`${cardClass} ${mobileSection === "testIds" ? "block" : "hidden"}`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">시험아이디 관리</h3>
@@ -835,7 +833,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               </div>
             </div>
 
-            <div className={`${cardClass} ${mobileSection === "contracts" ? "block" : "hidden"} lg:block`}>
+            <div className={`${cardClass} ${mobileSection === "contracts" ? "block" : "hidden"}`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">내 신규계약 리스트</h3>
@@ -928,7 +926,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               </div>
             </div>
 
-            <div className={`${cardClass} ${mobileSection === "pending" ? "block" : "hidden"} lg:block`}>
+            <div className={`${cardClass} ${mobileSection === "pending" ? "block" : "hidden"}`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">내 이름으로 된 계약서 미회수 현황</h3>
@@ -1010,7 +1008,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
           </section>
 
           <section className="space-y-3">
-            <div className={`${cardClass} ${mobileSection === "termination" ? "block" : "hidden"} lg:block`}>
+            <div className={`${cardClass} ${mobileSection === "termination" ? "block" : "hidden"}`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">나의 해지 리스트</h3>
@@ -1089,7 +1087,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               </div>
             </div>
 
-            <div className={`${cardClass} ${mobileSection === "hold" ? "block" : "hidden"} lg:block`}>
+            <div className={`${cardClass} ${mobileSection === "hold" ? "block" : "hidden"}`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">나의 청구보류 리스트</h3>
