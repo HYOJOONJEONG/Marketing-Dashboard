@@ -101,6 +101,7 @@ type CollectionTabKey = "integrated" | "long-term" | "delivery"
 type SectionKey = "dailyReport" | "performance" | "termination"
 
 const LOCAL_STORAGE_KEY = "infobiz-dashboard-state-v1"
+const LAST_VIEW_SESSION_KEY = "infobiz-last-dashboard-view"
 const PRESENCE_HEARTBEAT_RUSH_INTERVAL_MS = 15 * 1000
 const PRESENCE_HEARTBEAT_DEFAULT_INTERVAL_MS = 45 * 1000
 const DAILY_REPORT_POLL_RUSH_INTERVAL_MS = 10 * 1000
@@ -126,6 +127,20 @@ function getPresenceHeartbeatIntervalMs() {
 
 function getDailyReportPollIntervalMs() {
   return isDailyReportRushHourKst() ? DAILY_REPORT_POLL_RUSH_INTERVAL_MS : DAILY_REPORT_POLL_DEFAULT_INTERVAL_MS
+}
+
+function isViewKey(value: unknown): value is ViewKey {
+  return (
+    value === "daily-report" ||
+    value === "weekly-report" ||
+    value === "contracts" ||
+    value === "weekly-selection" ||
+    value === "manual-input" ||
+    value === "collection" ||
+    value === "option-dashboard" ||
+    value === "termination" ||
+    value === "my-page"
+  )
 }
 
 const viewTitles: Record<ViewKey, string> = {
@@ -2126,10 +2141,41 @@ export function DashboardShell({
   )
   const normalizedTerminationOnceRef = useRef(false)
   const previousViewRef = useRef<ViewKey | null>(null)
+  const lastViewRestoredRef = useRef(false)
+
+  function syncViewLocation(nextView: ViewKey, nextCollectionTab = collectionTab) {
+    if (typeof window === "undefined") return
+    const url = new URL(window.location.href)
+    url.searchParams.set("view", nextView)
+    if (nextView === "collection") {
+      url.searchParams.set("tab", nextCollectionTab)
+    } else {
+      url.searchParams.delete("tab")
+    }
+    window.sessionStorage.setItem(LAST_VIEW_SESSION_KEY, nextView)
+    window.history.replaceState({}, "", url.toString())
+  }
+
+  function navigateToView(nextView: ViewKey) {
+    syncViewLocation(nextView)
+    setView(nextView)
+  }
 
   useEffect(() => {
     router.prefetch("/me")
   }, [router])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (lastViewRestoredRef.current) return
+    lastViewRestoredRef.current = true
+    const urlView = new URL(window.location.href).searchParams.get("view")
+    if (urlView) return
+    const savedView = window.sessionStorage.getItem(LAST_VIEW_SESSION_KEY)
+    if (isViewKey(savedView) && visibleViews.includes(savedView) && savedView !== view) {
+      setView(savedView)
+    }
+  }, [view, visibleViews])
 
   useEffect(() => {
     if (normalizedTerminationOnceRef.current) return
@@ -3205,14 +3251,7 @@ export function DashboardShell({
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const url = new URL(window.location.href)
-    url.searchParams.set("view", view)
-    if (view === "collection") {
-      url.searchParams.set("tab", collectionTab)
-    } else {
-      url.searchParams.delete("tab")
-    }
-    window.history.replaceState({}, "", url.toString())
+    syncViewLocation(view, collectionTab)
   }, [view, collectionTab])
 
   function handleUndoLastAction() {
@@ -6278,7 +6317,7 @@ export function DashboardShell({
                         <button
                           type="button"
                           onClick={() => {
-                            setView("my-page")
+                            navigateToView("my-page")
                             setIsUserMenuOpen(false)
                             setIsPasswordOpen(false)
                             setIsSidebarOpen(false)

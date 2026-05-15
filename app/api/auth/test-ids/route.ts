@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { resolveRequestSession } from "@/lib/auth/session"
 import { getRequestIp } from "@/lib/auth/server"
-import { appendActivityLog, findUserById, updateAuthState } from "@/lib/auth/store"
+import { appendActivityLog, findUserById, readAuthState, updateAuthState } from "@/lib/auth/store"
 import { UserTestIdEntry } from "@/lib/auth/model"
 
 export const runtime = "nodejs"
@@ -68,8 +68,16 @@ export async function PUT(request: Request) {
     })
   })
 
+  const confirmedState = await readAuthState()
+  const confirmedUser = findUserById(confirmedState, session.user.id)
+  const confirmedTestIdEntries = Array.isArray(confirmedUser?.testIdEntries)
+    ? confirmedUser.testIdEntries
+    : nextTestIdEntries
+
   return NextResponse.json({
     ok: true,
-    testIdEntries: nextTestIdEntries,
+    testIdEntries: confirmedTestIdEntries,
+    savedCount: confirmedTestIdEntries.length,
+    savedAt: new Date().toISOString(),
   })
 }

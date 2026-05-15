@@ -5,13 +5,36 @@ import { DashboardWorkspace } from "@/components/auth/dashboard-workspace"
 import { buildPermissionIndex, filterContractsForUser } from "@/lib/auth/permissions"
 import { requirePageAuth } from "@/lib/auth/server"
 import { getUserColorToken } from "@/lib/auth/model"
+import type { PopupMessageRecord } from "@/lib/auth/model"
 import { createEmptyDailyReportState, ensureDailyDirectoryUsers, isDailyReportTeam, sortDailyDirectoryUsers } from "@/lib/daily-report"
 import { readDashboardState } from "@/lib/shared-db-store"
 
 const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
 const FALLBACK_PATH = path.join(process.cwd(), "api-dashboard-response.json")
 
-export default async function DailyReportPageRoute() {
+const allowedDashboardViews = new Set([
+  "daily-report",
+  "weekly-report",
+  "contracts",
+  "weekly-selection",
+  "manual-input",
+  "collection",
+  "option-dashboard",
+  "termination",
+  "my-page",
+])
+
+function normalizeDashboardView(value: unknown) {
+  const text = String(value || "").trim()
+  return allowedDashboardViews.has(text) ? text : "daily-report"
+}
+
+export default async function DailyReportPageRoute({
+  searchParams,
+}: {
+  searchParams?: Promise<{ view?: string; tab?: string }>
+}) {
+  const params = (await searchParams) || {}
   let data: any
   const auth = await requirePageAuth()
 
@@ -73,11 +96,15 @@ export default async function DailyReportPageRoute() {
         .filter((user) => isDailyReportTeam(user.teamName)),
     ),
   )
+  const personalMessageHistory = (Array.isArray(auth.state.popupMessages) ? auth.state.popupMessages : [])
+    .filter((message: PopupMessageRecord) => message.recipientUserId === auth.user.id)
+    .sort((a: PopupMessageRecord, b: PopupMessageRecord) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 50)
 
   return (
     <DashboardWorkspace
       initialData={safeData}
-      initialView="daily-report"
+      initialView={normalizeDashboardView(params.view)}
       initialCollectionTab="integrated"
       currentUser={{
         id: auth.user.id,
@@ -86,9 +113,12 @@ export default async function DailyReportPageRoute() {
         teamName: auth.teamName,
         avatarEmoji: auth.user.avatarEmoji || null,
         color: getUserColorToken(auth.user.id),
+        assignedIndustries: auth.user.assignedIndustries || [],
+        testIdEntries: auth.user.testIdEntries || [],
       }}
       directoryUsers={directoryUsers}
       permissions={permissionIndex as any}
+      personalMessageHistory={personalMessageHistory}
     />
   )
 }
