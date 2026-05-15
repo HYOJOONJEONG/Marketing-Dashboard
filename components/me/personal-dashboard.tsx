@@ -739,9 +739,9 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">내 신규계약 리스트</h3>
-                  <p className="mt-0.5 text-[12px] text-slate-500">월별 요약과 상세 계약을 한 화면에서 확인합니다.</p>
+                  <p className="mt-0.5 text-[13px] text-slate-500">월별 요약과 상세 계약을 한 화면에서 확인합니다.</p>
                 </div>
-                <div className="rounded-lg bg-slate-50 px-3 py-1.5 text-[12px] font-semibold text-slate-600">
+                <div className="rounded-lg bg-slate-50 px-3 py-1.5 text-[13px] font-semibold text-slate-600">
                   총 {data.myContracts.length}건
                 </div>
               </div>
@@ -749,15 +749,15 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {data.myContractMonthlySummary.length ? (
                   data.myContractMonthlySummary.map((item) => (
-                    <div key={item.month} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-[0_4px_12px_rgba(15,23,42,0.04)]">
-                      <span className="rounded-md bg-slate-900 px-1.5 py-0.5 text-[10px] font-black text-white">{item.month}</span>
-                      <span className="min-w-7 text-right text-[13px] font-black text-slate-950">{item.total}건</span>
+                    <div key={item.month} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 shadow-[0_4px_12px_rgba(15,23,42,0.04)]">
+                      <span className="rounded-md bg-slate-900 px-1.5 py-0.5 text-[11px] font-black text-white">{item.month}</span>
+                      <span className="min-w-8 text-right text-[14px] font-black text-slate-950">{item.total}건</span>
                       <div className="flex items-center gap-1">
-                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[11px] font-bold text-amber-700">
                           <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
                           미회수 {item.pending}
                         </span>
-                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-bold text-emerald-700">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                           회수 {item.recovered}
                         </span>
@@ -765,7 +765,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                     </div>
                   ))
                 ) : (
-                  <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-[12px] text-slate-400">
+                  <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-[13px] text-slate-400">
                     등록된 신규계약이 없습니다.
                   </div>
                 )}
@@ -794,7 +794,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               </div>
 
               <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200 lg:block">
-                <table className="w-full text-[12px]">
+                <table className="w-full text-[13px]">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
                       {["회사명", "부서", "ID", "업종", "계약월", "계약서 상태"].map((head) => (
@@ -818,7 +818,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-3 py-6 text-center text-[12px] text-slate-400">
+                        <td colSpan={6} className="px-3 py-6 text-center text-[13px] text-slate-400">
                           등록된 신규계약이 없습니다.
                         </td>
                       </tr>
@@ -832,9 +832,9 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">내 이름으로 된 계약서 미회수 현황</h3>
-                  <p className="mt-1 text-[12px] text-slate-500">담당 업종 기준 미회수 계약서입니다.</p>
+                  <p className="mt-1 text-[13px] text-slate-500">담당 업종 기준 미회수 계약서입니다.</p>
                 </div>
-                <div className="rounded-lg bg-emerald-50 px-3 py-1.5 text-[12px] font-semibold text-emerald-700">
+                <div className="rounded-lg bg-emerald-50 px-3 py-1.5 text-[13px] font-semibold text-emerald-700">
                   {pendingDocuments.length}건
                 </div>
               </div>
@@ -842,12 +842,12 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {selectedIndustryLabels.length ? (
                   selectedIndustryLabels.map((industry) => (
-                    <span key={industry} className="rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                    <span key={industry} className="rounded-lg bg-blue-50 px-2.5 py-1 text-[12px] font-semibold text-blue-700">
                       {industry}
                     </span>
                   ))
                 ) : (
-                  <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">담당 업종 미지정</span>
+                  <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-500">담당 업종 미지정</span>
                 )}
               </div>
 
@@ -874,7 +874,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               </div>
 
               <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200 lg:block">
-                <table className="w-full text-[12px]">
+                <table className="w-full text-[13px]">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
                       {["회사명", "부서", "ID", "업종", "청구월", "상태"].map((head) => (
@@ -898,7 +898,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-3 py-6 text-center text-[12px] text-slate-400">
+                        <td colSpan={6} className="px-3 py-6 text-center text-[13px] text-slate-400">
                           {selectedIndustryLabels.length ? "미회수 계약서가 없습니다." : "담당 업종을 선택해주세요."}
                         </td>
                       </tr>
