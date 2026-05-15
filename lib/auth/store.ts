@@ -633,13 +633,15 @@ function preserveConcurrentUserSecurityState(draft: AuthState, current: AuthStat
 
 export async function updateAuthState(
   mutator: (draft: AuthState) => void | Promise<void>,
-  options: { preserveConcurrentSessions?: boolean; preserveUserSecurity?: boolean } = {},
+  options: { preserveConcurrentSessions?: boolean; preserveUserSecurity?: boolean; baseState?: AuthState } = {},
 ) {
   let nextState: AuthState | null = null
   const preserveSessions = options.preserveConcurrentSessions !== false
   const preserveUserSecurity = options.preserveUserSecurity !== false
   authWriteQueue = authWriteQueue.then(async () => {
-    const current = await readAuthState()
+    const current = options.baseState
+      ? JSON.parse(JSON.stringify(options.baseState)) as AuthState
+      : await readAuthState()
     const draft = JSON.parse(JSON.stringify(current)) as AuthState
     await mutator(draft)
     if (preserveSessions || preserveUserSecurity) {

@@ -64,6 +64,7 @@ export async function createUserSessionWithStateUpdate(
   user: UserRecord,
   requestMeta: { ipAddress: string; userAgent: string },
   mutateState?: SessionStateMutator,
+  baseState?: AuthState,
 ) {
   const now = new Date()
   const sessionId = `sess-${crypto.randomUUID()}`
@@ -100,7 +101,7 @@ export async function createUserSessionWithStateUpdate(
       sessionId,
       success: true,
     })
-  }, { preserveConcurrentSessions: false })
+  }, { preserveConcurrentSessions: false, baseState })
 
   const cookieStore = await cookies()
   cookieStore.set(SESSION_COOKIE, pack(sessionId), getSessionCookieOptions(new Date(expiresAt)))

@@ -137,6 +137,7 @@ export async function POST(request: Request) {
           target.updatedAt = confirmedAt
         }
       : undefined,
+    result.state,
   )
 
   return NextResponse.json({
