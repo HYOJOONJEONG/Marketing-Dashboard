@@ -114,8 +114,6 @@ function MetricCard({
   value,
   tone,
   accent,
-  caption,
-  progress,
   icon,
   active,
   onClick,
@@ -124,13 +122,10 @@ function MetricCard({
   value: number
   tone: string
   accent: string
-  caption: string
-  progress: number
   icon: ReactNode
   active: boolean
   onClick: () => void
 }) {
-  const barWidth = `${Math.max(12, Math.min(100, progress))}%`
   return (
     <button
       type="button"
@@ -150,12 +145,6 @@ function MetricCard({
           </div>
         </div>
         <div className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}>{icon}</div>
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
-          <div className={`h-full rounded-full ${accent}`} style={{ width: barWidth }} />
-        </div>
-        <span className="whitespace-nowrap text-[11px] font-bold text-slate-500">{caption}</span>
       </div>
     </button>
   )
@@ -607,8 +596,6 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               value={testIdEntries.length}
               tone="bg-sky-50 text-sky-700"
               accent="bg-sky-500"
-              caption="등록 ID"
-              progress={Math.min(100, testIdEntries.length * 8)}
               icon={<Hash className="h-5 w-5" />}
               active={mobileSection === "testIds"}
               onClick={() => setMobileSection("testIds")}
@@ -618,8 +605,6 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               value={data.myContracts.length}
               tone="bg-blue-50 text-blue-700"
               accent="bg-blue-500"
-              caption="계약"
-              progress={Math.min(100, data.myContracts.length * 10)}
               icon={<FileSignature className="h-5 w-5" />}
               active={mobileSection === "contracts"}
               onClick={() => setMobileSection("contracts")}
@@ -629,8 +614,6 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               value={pendingDocuments.length}
               tone="bg-emerald-50 text-emerald-700"
               accent="bg-emerald-500"
-              caption="미회수"
-              progress={Math.min(100, pendingDocuments.length * 10)}
               icon={<FolderClock className="h-5 w-5" />}
               active={mobileSection === "pending"}
               onClick={() => setMobileSection("pending")}
@@ -640,8 +623,6 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               value={data.myTerminationRows.length}
               tone="bg-orange-50 text-orange-700"
               accent="bg-orange-500"
-              caption="해지"
-              progress={Math.min(100, data.myTerminationRows.length * 10)}
               icon={<OctagonAlert className="h-5 w-5" />}
               active={mobileSection === "termination"}
               onClick={() => setMobileSection("termination")}
@@ -651,8 +632,6 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               value={data.myHoldRows.length}
               tone="bg-amber-50 text-amber-700"
               accent="bg-amber-500"
-              caption="보류"
-              progress={Math.min(100, data.myHoldRows.length * 10)}
               icon={<CirclePause className="h-5 w-5" />}
               active={mobileSection === "hold"}
               onClick={() => setMobileSection("hold")}
