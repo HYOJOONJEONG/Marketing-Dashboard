@@ -14,6 +14,7 @@ type Props = {
     color: { bg: string; text: string; border: string; hex: string }
   }
   permissions: Record<string, Record<string, boolean>>
+  embedded?: boolean
 }
 
 const tabs = [
@@ -57,7 +58,7 @@ async function fetchJson(url: string, init?: RequestInit) {
   return payload
 }
 
-export function AdminConsole({ currentUser, permissions }: Props) {
+export function AdminConsole({ currentUser, permissions, embedded = false }: Props) {
   const getVisibleTabs = () =>
     tabs.filter((tab) => Boolean(permissions?.[tabPermissionMap[tab.key]]?.view || permissions?.[tabPermissionMap[tab.key]]?.admin))
 
@@ -304,8 +305,10 @@ export function AdminConsole({ currentUser, permissions }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f8fc] px-4 py-4">
-      <WorkspaceHeader currentPage="관리자페이지" currentSection={currentTab} currentUser={currentUser} showDashboardButton />
+    <div className={embedded ? "space-y-4" : "min-h-screen bg-[#f6f8fc] px-4 py-4"}>
+      {!embedded ? (
+        <WorkspaceHeader currentPage="관리자페이지" currentSection={currentTab} currentUser={currentUser} showDashboardButton />
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">

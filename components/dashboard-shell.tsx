@@ -6,6 +6,7 @@ import { ChevronDown, KeyRound, LogOut, Menu, MessageSquare, UserRound, X } from
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
 import { DailyReportPage } from "./daily-report/daily-report-page"
 import { PersonalDashboard } from "./me/personal-dashboard"
+import { AdminConsole } from "./admin/admin-console"
 import { getIndustryGroupLabel } from "@/lib/industry-groups"
 import { buildPersonalDashboardData } from "@/lib/personal-dashboard"
 import {
@@ -24,6 +25,7 @@ type ViewKey =
   | "collection"
   | "option-dashboard"
   | "termination"
+  | "admin-page"
   | "my-page"
 
 const VIEW_STATE_KEYS: Record<ViewKey, string[]> = {
@@ -35,6 +37,7 @@ const VIEW_STATE_KEYS: Record<ViewKey, string[]> = {
   "collection": ["collection", "currentYear", "years", "availableYears", "ui"],
   "option-dashboard": ["ui"],
   "termination": ["termination", "ui"],
+  "admin-page": ["ui"],
   "my-page": ["ui"],
 }
 
@@ -139,6 +142,7 @@ function isViewKey(value: unknown): value is ViewKey {
     value === "collection" ||
     value === "option-dashboard" ||
     value === "termination" ||
+    value === "admin-page" ||
     value === "my-page"
   )
 }
@@ -152,6 +156,7 @@ const viewTitles: Record<ViewKey, string> = {
   collection: "계약서통합관리",
   "option-dashboard": "유료 옵션 정보 현황",
   termination: "해지 진행사항",
+  "admin-page": "관리자페이지",
   "my-page": "내 페이지",
 }
 
@@ -1922,6 +1927,7 @@ export function DashboardShell({
     canViewCollections ? "collection" : null,
     canViewOptionDashboard ? "option-dashboard" : null,
     canViewTermination ? "termination" : null,
+    canViewAdminPage ? "admin-page" : null,
     currentUser ? "my-page" : null,
   ].filter(Boolean) as ViewKey[]
 
@@ -5734,7 +5740,7 @@ export function DashboardShell({
   const currentMenuUpdatedAt = data?.ui?.menuUpdatedAt?.[view]
   const currentViewDirty = Boolean(dirtyViews[view])
   const hasUnsavedChanges = Object.values(dirtyViews).some(Boolean)
-  const showHeaderSave = !["daily-report", "weekly-report", "contracts", "weekly-selection", "manual-input", "termination", "my-page"].includes(view)
+  const showHeaderSave = !["daily-report", "weekly-report", "contracts", "weekly-selection", "manual-input", "termination", "admin-page", "my-page"].includes(view)
 
   const manualRevenueSection = useMemo(
     () => (
@@ -6634,12 +6640,18 @@ export function DashboardShell({
                 <div className="mb-2 px-3 text-[12px] font-bold uppercase tracking-[0.16em] text-slate-400">
                   관리자
                 </div>
-                <a
-                  href="/admin"
-                  className="flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold text-slate-700 transition hover:bg-slate-50"
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigateToView("admin-page")
+                    setIsSidebarOpen(false)
+                  }}
+                  className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold transition ${
+                    view === "admin-page" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                  }`}
                 >
                   관리자페이지
-                </a>
+                </button>
               </div>
             ) : null}
 
@@ -6824,7 +6836,7 @@ export function DashboardShell({
                   <span>PDF</span>
                 </button>
               )}
-              {view !== "daily-report" && view !== "my-page" ? (
+              {view !== "daily-report" && view !== "admin-page" && view !== "my-page" ? (
                 <>
                   <div className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-700">
                     {currentYear}년도
@@ -6886,6 +6898,27 @@ export function DashboardShell({
                 testIdEntries: currentUser.testIdEntries || [],
               }}
               data={personalDashboardData}
+            />
+          ) : null}
+
+          {view === "admin-page" && currentUser ? (
+            <AdminConsole
+              embedded
+              currentUser={{
+                id: currentUser.id,
+                name: currentUser.name,
+                role: currentUser.role,
+                teamName: currentUser.teamName,
+                avatarEmoji: currentUser.avatarEmoji || null,
+                color:
+                  currentUser.color || {
+                    bg: "bg-slate-100",
+                    text: "text-slate-700",
+                    border: "border-slate-200",
+                    hex: "#475569",
+                  },
+              }}
+              permissions={permissions || {}}
             />
           ) : null}
 

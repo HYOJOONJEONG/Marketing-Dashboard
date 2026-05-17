@@ -21,6 +21,7 @@ const allowedDashboardViews = new Set([
   "collection",
   "option-dashboard",
   "termination",
+  "admin-page",
   "my-page",
 ])
 
