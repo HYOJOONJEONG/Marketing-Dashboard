@@ -91,10 +91,12 @@ export function useOptionDashboardData(params: Params) {
     () => buildDetailQuery(params),
     [params.basis, params.date, params.category, params.search],
   )
+  const summaryCacheKey = `${summaryQuery}|refresh=${params.refreshKey || 0}`
+  const detailCacheKey = `${detailQuery}|refresh=${params.refreshKey || 0}`
 
   useEffect(() => {
     let mounted = true
-    const cached = responseCache.get(summaryQuery)
+    const cached = responseCache.get(summaryCacheKey)
     const isFreshCache = cached && Date.now() - cached.timestamp < CACHE_TTL_MS
     if (isFreshCache) {
       setSummaryData(cached.data)
@@ -122,7 +124,7 @@ export function useOptionDashboardData(params: Params) {
       })
       .then((json) => {
         if (!mounted) return
-        responseCache.set(summaryQuery, { timestamp: Date.now(), data: json })
+        responseCache.set(summaryCacheKey, { timestamp: Date.now(), data: json })
         setSummaryData(json)
       })
       .catch((err) => {
@@ -138,11 +140,11 @@ export function useOptionDashboardData(params: Params) {
       mounted = false
       controller.abort()
     }
-  }, [summaryQuery, params.refreshKey])
+  }, [summaryCacheKey, summaryQuery, params.refreshKey])
 
   useEffect(() => {
     let mounted = true
-    const cached = responseCache.get(detailQuery)
+    const cached = responseCache.get(detailCacheKey)
     const isFreshCache = cached && Date.now() - cached.timestamp < CACHE_TTL_MS
     if (isFreshCache) {
       setRecords(cached.data.records || [])
@@ -168,7 +170,7 @@ export function useOptionDashboardData(params: Params) {
       })
       .then((json) => {
         if (!mounted) return
-        responseCache.set(detailQuery, { timestamp: Date.now(), data: json })
+        responseCache.set(detailCacheKey, { timestamp: Date.now(), data: json })
         setRecords(json.records || [])
       })
       .catch((err) => {
@@ -185,7 +187,7 @@ export function useOptionDashboardData(params: Params) {
       mounted = false
       controller.abort()
     }
-  }, [detailQuery, params.refreshKey])
+  }, [detailCacheKey, detailQuery, params.refreshKey])
 
   const data = useMemo(() => {
     if (!summaryData) return null

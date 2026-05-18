@@ -316,31 +316,43 @@ export function OptionDetailTable({
   const handleCreate = async () => {
     if (!newRecord) return
     if (!newRecord.category_code) return
-    await onSaveRecord(newRecord)
-    setNewRecord({
-      ...newRecord,
-      record_id: `record-${Date.now()}`,
-      sub_type: "",
-      company_name: "",
-      user_id: "",
-      department: "",
-      requester_name: "",
-      billing_month: "",
-      status: "",
-      note: "",
-    })
+    try {
+      await onSaveRecord(newRecord)
+      setNewRecord({
+        ...newRecord,
+        record_id: `record-${Date.now()}`,
+        sub_type: "",
+        company_name: "",
+        user_id: "",
+        department: "",
+        requester_name: "",
+        billing_month: "",
+        status: "",
+        note: "",
+      })
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "옵션 저장에 실패했습니다.")
+    }
   }
 
   const handleSave = async () => {
     if (!draft) return
-    await onSaveRecord(draft)
-    setEditingId(null)
-    setDraft(null)
+    try {
+      await onSaveRecord(draft)
+      setEditingId(null)
+      setDraft(null)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "옵션 저장에 실패했습니다.")
+    }
   }
 
   const handleDelete = async (recordId?: string) => {
     if (!recordId) return
-    await onDeleteRecord(recordId)
+    try {
+      await onDeleteRecord(recordId)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "옵션 삭제에 실패했습니다.")
+    }
   }
 
   const renderInput = (key: keyof OptionRecord) => {

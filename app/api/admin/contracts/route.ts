@@ -38,7 +38,7 @@ export async function PATCH(request: Request) {
   await writeDashboardState(data, {
     menuLabel: "계약관리",
     changeLabel: `Admin update contract ${fieldName}`,
-  })
+  }, ["contracts"])
   await updateAuthState((state) => {
     appendActivityLog(state, {
       actorUserId: auth.context.user.id,

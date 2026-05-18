@@ -68,20 +68,28 @@ export function OptionDashboardPage() {
   }
 
   const handleSaveRecord = async (record: any) => {
-    await fetch("/api/options", {
+    const response = await fetch("/api/options", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "upsert", record }),
     })
+    const payload = await response.json().catch(() => null)
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error || `옵션 저장 실패 (${response.status})`)
+    }
     setRefreshKey((prev) => prev + 1)
   }
 
   const handleDeleteRecord = async (recordId: string) => {
-    await fetch("/api/options", {
+    const response = await fetch("/api/options", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", record_id: recordId }),
     })
+    const payload = await response.json().catch(() => null)
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error || `옵션 삭제 실패 (${response.status})`)
+    }
     setRefreshKey((prev) => prev + 1)
   }
 
