@@ -438,6 +438,28 @@ async function readDashboardSlices<T>(): Promise<T | null> {
   return Object.fromEntries(filtered) as T
 }
 
+export async function readDashboardStateSlices<T>(
+  keys: DashboardTopLevelKey[],
+  fallbackFilePath?: string,
+): Promise<T | null> {
+  const uniqueKeys = keys.filter((key, index, array) => DASHBOARD_SLICE_KEYS[key] && array.indexOf(key) === index)
+  if (!uniqueKeys.length) return null
+
+  const entries = await Promise.all(
+    uniqueKeys.map(async (key) => {
+      const raw = await readRawValue(DASHBOARD_SLICE_KEYS[key])
+      const parsed = parseJsonValue<unknown>(raw)
+      return parsed === null ? null : [key, parsed] as const
+    }),
+  )
+  const filtered = entries.filter(Boolean) as Array<readonly [string, unknown]>
+  if (filtered.length) return Object.fromEntries(filtered) as T
+
+  const fallback = fallbackFilePath ? await readDashboardState<Record<string, unknown>>(fallbackFilePath) : null
+  if (!fallback) return null
+  return Object.fromEntries(uniqueKeys.map((key) => [key, fallback[key] ?? null])) as T
+}
+
 export async function readDashboardState<T>(fallbackFilePath?: string): Promise<T | null> {
   const raw = await readRawValue(STORE_KEYS.dashboard)
   const base = parseJsonObject<Record<string, unknown>>(raw)

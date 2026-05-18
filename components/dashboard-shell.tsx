@@ -1879,6 +1879,7 @@ export function DashboardShell({
     ),
   )
   const [manualPreviewDraft, setManualPreviewDraft] = useState<any | null>(null)
+  const [paidOptionImportStatus, setPaidOptionImportStatus] = useState("")
   const [manualRevenueHeaderEdited, setManualRevenueHeaderEdited] = useState(false)
   const [contractDraft, setContractDraft] = useState<any>({
     companyName: "",
@@ -3564,6 +3565,7 @@ export function DashboardShell({
   }
 
   async function reloadPaidOptionInfo() {
+    setPaidOptionImportStatus("불러오는 중...")
     try {
       const response = await fetch(`/api/options?basis=seed&category=all&activeOnly=1&includeRecords=1&refresh=1&t=${Date.now()}`, {
         cache: "no-store",
@@ -3576,20 +3578,34 @@ export function DashboardShell({
       const sourceColumns = Array.isArray(sourceDraft?.paidOptionInfoColumns) && sourceDraft.paidOptionInfoColumns.length
         ? sourceDraft.paidOptionInfoColumns
         : paidOptionSourceColumns
-      const nextColumns = applyOptionDashboardPayloadToPaidOptionColumns(sourceColumns, payload)
+      const nextColumns = cloneData(applyOptionDashboardPayloadToPaidOptionColumns(sourceColumns, payload))
       markManualInputDirty()
       const nextDraft = {
         ...sourceDraft,
-        paidOptionInfoColumns: cloneData(nextColumns),
+        paidOptionInfoColumns: nextColumns,
       }
       manualDraftRef.current = nextDraft
       setManualDraft(nextDraft)
       manualPreviewDraftRef.current = nextDraft
       setManualPreviewDraft(nextDraft)
-      const importedSummary = nextColumns.map((column: any) => `${column.title} ${column.total}`).join(", ")
-      window.alert(`옵션정보를 불러왔습니다.\n${importedSummary}`)
+      const latestData = pendingDataRef.current || data
+      const nextData = {
+        ...latestData,
+        weeklyReport: {
+          ...(latestData?.weeklyReport || {}),
+          paidOptionInfoColumns: cloneData(nextColumns),
+        },
+        paidOptionSourceColumns: cloneData(nextColumns),
+      }
+      setData(nextData)
+      pendingDataRef.current = nextData
+      scheduleLocalDashboardCache(nextData)
+      markViewsDirty(["manual-input", "weekly-report"])
+      const importedSummary = nextColumns.map((column: any) => `${column.title} ${column.total}`).join(" · ")
+      setPaidOptionImportStatus(`반영 완료: ${importedSummary}`)
     } catch (error: any) {
       const message = String(error?.message || "옵션정보를 불러오지 못했습니다.")
+      setPaidOptionImportStatus("불러오기 실패")
       window.alert(message)
     }
   }
@@ -3807,21 +3823,38 @@ export function DashboardShell({
           recommender: contractDraft.recommender.trim(),
           note: contractDraft.note.trim(),
         }
-        const response = await fetch("/api/dashboard", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "addContract", contract: nextContract }),
-        })
-        const payload = await response.json().catch(() => null)
-        if (!response.ok || !payload?.ok || !payload?.data) {
-          throw new Error(payload?.error || `계약 등록 실패 (${response.status})`)
+        let payload: any = null
+        let lastError: any = null
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            const response = await fetch("/api/dashboard", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "addContract", contract: nextContract }),
+            })
+            payload = await response.json().catch(() => null)
+            if (response.ok && payload?.ok && payload?.data) break
+            lastError = new Error(payload?.error || `계약 등록 실패 (${response.status})`)
+          } catch (error) {
+            lastError = error
+          }
+          if (attempt === 0) {
+            await new Promise((resolve) => window.setTimeout(resolve, 350))
+          }
+        }
+        if (!payload?.ok || !payload?.data) {
+          throw lastError instanceof Error ? lastError : new Error("계약 등록 저장에 실패했습니다.")
         }
         const createdId = String(payload?.contract?.id || nextContract.id)
-        setData(payload.data)
-        pendingDataRef.current = payload.data
+        const mergedData = {
+          ...(pendingDataRef.current || data),
+          ...payload.data,
+        }
+        setData(mergedData)
+        pendingDataRef.current = mergedData
         clearDirtyViews(["contracts"])
         try {
-          window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(payload.data))
+          window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mergedData))
         } catch {}
         setContractDraft({
           companyName: "",
@@ -6042,13 +6075,20 @@ export function DashboardShell({
               <th colSpan={Math.max(1, manualPaidOptionColumns.length)} className={manualTableTitleRowClass}>
                 <div className="flex items-center justify-between gap-3">
                   <span>유료 옵션 정보</span>
-                  <button
-                    type="button"
-                    className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[12px] font-semibold tracking-[-0.01em] text-blue-700 transition hover:border-blue-300 hover:bg-blue-100"
-                    onClick={reloadPaidOptionInfo}
-                  >
-                    옵션정보 불러오기
-                  </button>
+                  <div className="flex min-w-0 items-center gap-2">
+                    {paidOptionImportStatus ? (
+                      <span className="max-w-[520px] truncate text-[11px] font-semibold text-blue-600">
+                        {paidOptionImportStatus}
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="inline-flex shrink-0 items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[12px] font-semibold tracking-[-0.01em] text-blue-700 transition hover:border-blue-300 hover:bg-blue-100"
+                      onClick={reloadPaidOptionInfo}
+                    >
+                      옵션정보 불러오기
+                    </button>
+                  </div>
                 </div>
               </th>
             </tr>
@@ -6072,7 +6112,7 @@ export function DashboardShell({
         </table>
       </div>
     ),
-    [manualPaidOptionColumns, reloadPaidOptionInfo],
+    [manualPaidOptionColumns, paidOptionImportStatus, reloadPaidOptionInfo],
   )
 
   const manualTerminationOverviewSection = useMemo(

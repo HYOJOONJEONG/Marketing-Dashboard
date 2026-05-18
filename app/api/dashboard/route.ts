@@ -4,7 +4,7 @@ import { buildPermissionIndex, filterContractsForUser, getContractAccessScope, h
 import { getRequestIp, requireApiPermission } from "@/lib/auth/server"
 import { appendActivityLog, updateAuthState } from "@/lib/auth/store"
 import { resolveRequestSession } from "@/lib/auth/session"
-import { readDashboardState, writeDashboardState } from "@/lib/shared-db-store"
+import { readDashboardState, readDashboardStateSlices, writeDashboardState } from "@/lib/shared-db-store"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -46,6 +46,22 @@ const DASHBOARD_STATE_SLICE_KEYS = [
 ] as const
 
 type DashboardStateSliceKey = (typeof DASHBOARD_STATE_SLICE_KEYS)[number]
+
+function isTransientStoreError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "")
+  return /connect|connection|socket|timeout|timed out|econn|redis/i.test(message)
+}
+
+function publicSaveErrorMessage(error: unknown, fallback: string) {
+  if (isTransientStoreError(error)) {
+    return "저장소 연결이 일시적으로 불안정합니다. 다시 시도해주세요."
+  }
+  return error instanceof Error ? error.message : fallback
+}
+
+function normalizeContractIdCode(value: unknown) {
+  return String(value ?? "").trim().replace(/\s+/g, "").toUpperCase()
+}
 
 function safeText(value: unknown) {
   return String(value ?? "").trim()
@@ -291,7 +307,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const data = (await readDashboardState<any>(DATA_PATH)) || (await readDashboardState<any>(FALLBACK_PATH)) || EMPTY_DASHBOARD
+    const data = (await readDashboardStateSlices<any>(["contracts", "ui"], FALLBACK_PATH)) || EMPTY_DASHBOARD
     const contracts = Array.isArray(data.contracts) ? data.contracts : []
     const incoming = body.contract
     const incomingId = String(incoming.id || `c${Date.now()}`)
@@ -320,6 +336,14 @@ export async function POST(request: Request) {
     if (!nextContract.companyName || !nextContract.idCode) {
       return NextResponse.json({ ok: false, error: "회사명과 아이디는 필수입니다." }, { status: 400 })
     }
+    const incomingIdCode = normalizeContractIdCode(nextContract.idCode)
+    const duplicatedId = contracts.some((row: any) => {
+      if (String(row?.id || "") === incomingId) return false
+      return normalizeContractIdCode(row?.idCode) === incomingIdCode
+    })
+    if (duplicatedId) {
+      return NextResponse.json({ ok: false, error: "중복된 ID가 존재합니다." }, { status: 409 })
+    }
 
     const withoutDuplicate = contracts.filter((row: any) => String(row?.id || "") !== incomingId)
     const updatedAt = new Date().toISOString()
@@ -339,7 +363,7 @@ export async function POST(request: Request) {
       menuLabel: "신규계약 리스트",
       changeLabel: "Register contract",
     }, ["contracts", "ui"])
-    await updateAuthState((state) => {
+    void updateAuthState((state) => {
       appendActivityLog(state, {
         actorUserId: auth.context.user.id,
         actorName: auth.context.user.name,
@@ -358,10 +382,13 @@ export async function POST(request: Request) {
         sessionId: auth.context.sessionId,
         success: true,
       })
+    }).catch((error) => {
+      console.error("Failed to append contract activity log.", error)
     })
-    return NextResponse.json({ ok: true, data: nextData, contract: nextContract })
+    return NextResponse.json({ ok: true, data: { contracts: nextData.contracts, ui: nextData.ui }, contract: nextContract })
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to register contract"
+    console.error("Failed to register contract.", error)
+    const message = publicSaveErrorMessage(error, "Failed to register contract")
     const isReadOnly = message.toLowerCase().includes("read-only")
     return NextResponse.json(
       { ok: false, error: message },
