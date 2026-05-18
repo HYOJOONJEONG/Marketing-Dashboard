@@ -101,7 +101,11 @@ export async function createUserSessionWithStateUpdate(
       sessionId,
       success: true,
     })
-  }, { preserveConcurrentSessions: false, baseState })
+  }, {
+    preserveConcurrentSessions: false,
+    preserveUserSecurity: Boolean(mutateState),
+    baseState,
+  })
 
   const cookieStore = await cookies()
   cookieStore.set(SESSION_COOKIE, pack(sessionId), getSessionCookieOptions(new Date(expiresAt)))
