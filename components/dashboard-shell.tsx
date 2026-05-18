@@ -3033,7 +3033,10 @@ export function DashboardShell({
     clearDirtyViews(viewsToCommit)
   }
 
-  function persist(nextData: any, options: { immediate?: boolean; updatedViews?: ViewKey[] } = {}) {
+  function persist(
+    nextData: any,
+    options: { immediate?: boolean; updatedViews?: ViewKey[]; suppressFailureAlert?: boolean } = {},
+  ) {
     const now = Date.now()
     const updatedViews = options.updatedViews?.length ? options.updatedViews : [view]
     const previousData = pendingDataRef.current || data
@@ -3053,7 +3056,9 @@ export function DashboardShell({
         pendingDataRef.current = previousData
         scheduleLocalDashboardCache(previousData)
         clearDirtyViews(updatedViews)
-        window.alert("저장에 실패해서 이전 상태로 되돌렸습니다. 잠시 후 다시 시도해주세요.")
+        if (!options.suppressFailureAlert) {
+          window.alert("저장에 실패해서 이전 상태로 되돌렸습니다. 잠시 후 다시 시도해주세요.")
+        }
         throw error
       })
     }
@@ -3079,7 +3084,7 @@ export function DashboardShell({
           ...(pendingDataRef.current || data),
           dailyReport: nextDailyReportState,
         },
-        { immediate: true, updatedViews: ["daily-report"] },
+        { immediate: true, updatedViews: ["daily-report"], suppressFailureAlert: true },
       )
     } finally {
       dailyReportSaveInFlightRef.current = false
@@ -3203,25 +3208,6 @@ export function DashboardShell({
       window.alert("메시지를 보내지 못했습니다. 잠시 후 다시 시도해주세요.")
     }
   }
-
-  useEffect(() => {
-    const rawDailyReport = data.dailyReport || createEmptyDailyReportState()
-    const rawReports = Array.isArray(rawDailyReport?.reports) ? rawDailyReport.reports : []
-    const rawSummaries = Array.isArray(rawDailyReport?.aiSummaries) ? rawDailyReport.aiSummaries : []
-    const needsPrune =
-      rawReports.some((row: any) => String(row?.date || "").trim() !== dailyReportDate) ||
-      rawSummaries.some((row: any) => String(row?.date || "").trim() !== dailyReportDate)
-
-    if (!needsPrune) return
-
-    void persist(
-      {
-        ...data,
-        dailyReport: normalizedDailyReport,
-      },
-      { immediate: true, updatedViews: ["daily-report"] },
-    )
-  }, [data, dailyReportDate, normalizedDailyReport, persist])
 
   flushPendingSave.current = () => {
     // Saves are intentionally manual now. This function remains as a no-op
