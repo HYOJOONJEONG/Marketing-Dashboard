@@ -213,7 +213,6 @@ export function OptionDetailTable({
   }, [])
 
   const duplicateTrackedUserIds = React.useMemo(() => {
-    if (!isBondView && !isSofrView) return new Set<string>()
     const counts = new Map<string, number>()
     records.forEach((record) => {
       const userId = normalizeUserId(record.user_id)
@@ -221,11 +220,10 @@ export function OptionDetailTable({
       counts.set(userId, (counts.get(userId) ?? 0) + 1)
     })
     return new Set(Array.from(counts.entries()).filter(([, count]) => count > 1).map(([userId]) => userId))
-  }, [isBondView, isSofrView, normalizeUserId, records])
+  }, [normalizeUserId, records])
 
-  const hasDuplicateUserId = React.useCallback(
+  const hasExistingUserId = React.useCallback(
     (userId: unknown, exceptRecordId?: string) => {
-      if (!isSofrView) return false
       const normalized = normalizeUserId(userId)
       if (!normalized) return false
       return records.some((record) => {
@@ -233,8 +231,23 @@ export function OptionDetailTable({
         return normalizeUserId(record.user_id) === normalized
       })
     },
-    [isSofrView, normalizeUserId, records],
+    [normalizeUserId, records],
   )
+
+  const hasDuplicateUserId = React.useCallback(
+    (userId: unknown, exceptRecordId?: string) => {
+      if (!isSofrView) return false
+      return hasExistingUserId(userId, exceptRecordId)
+    },
+    [hasExistingUserId, isSofrView],
+  )
+
+  const newRecordDuplicateUserId =
+    newRecord && hasExistingUserId(newRecord.user_id) ? normalizeUserId(newRecord.user_id) : ""
+  const draftDuplicateUserId =
+    draft && hasExistingUserId(draft.user_id, draft.record_id) ? normalizeUserId(draft.user_id) : ""
+  const duplicateInputClass =
+    "border-rose-300 bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200 placeholder:text-rose-300"
 
   const getRecordRowKey = React.useCallback((record: OptionRecord, index: number) => {
     return record.record_id || `${record.category_code}-${record.user_id}-${record.company_name}-${index}`
@@ -337,7 +350,7 @@ export function OptionDetailTable({
     if (!newRecord) return
     if (!newRecord.category_code) return
     if (hasDuplicateUserId(newRecord.user_id)) {
-      window.alert(`중복된 SOFR 사용자ID가 존재합니다. (${normalizeUserId(newRecord.user_id)})`)
+      window.alert(`중복된 사용자ID가 존재합니다. (${normalizeUserId(newRecord.user_id)})`)
       return
     }
     try {
@@ -362,7 +375,7 @@ export function OptionDetailTable({
   const handleSave = async () => {
     if (!draft) return
     if (hasDuplicateUserId(draft.user_id, draft.record_id)) {
-      window.alert(`중복된 SOFR 사용자ID가 존재합니다. (${normalizeUserId(draft.user_id)})`)
+      window.alert(`중복된 사용자ID가 존재합니다. (${normalizeUserId(draft.user_id)})`)
       return
     }
     try {
@@ -418,6 +431,22 @@ export function OptionDetailTable({
         </select>
       )
     }
+    if (key === "user_id") {
+      return (
+        <div className="space-y-1">
+          <input
+            value={value}
+            onChange={(event) => handleDraftChange(key, event.target.value)}
+            className={`h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-[13px] ${
+              draftDuplicateUserId ? duplicateInputClass : ""
+            }`}
+          />
+          {draftDuplicateUserId && (
+            <div className="text-[11px] font-semibold text-rose-600">중복 ID {draftDuplicateUserId}</div>
+          )}
+        </div>
+      )
+    }
     if (key === "note") {
       return (
         <textarea
@@ -442,7 +471,7 @@ export function OptionDetailTable({
         <div className="flex items-center gap-2">
           <div className="text-[15px] font-bold text-slate-900">상세 목록</div>
           <span className="text-[12px] text-slate-500">{records.length}건</span>
-          {(isBondView || isSofrView) && duplicateTrackedUserIds.size > 0 && (
+          {duplicateTrackedUserIds.size > 0 && (
             <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
               중복 ID {duplicateTrackedUserIds.size}개
             </span>
@@ -483,7 +512,15 @@ export function OptionDetailTable({
             </div>
             <div className="col-span-2">
               <div className={labelClass}>아이디</div>
-              <input value={newRecord?.user_id || ""} onChange={(event) => handleNewChange("user_id", event.target.value)} placeholder="아이디" className={inputClass} />
+              <input
+                value={newRecord?.user_id || ""}
+                onChange={(event) => handleNewChange("user_id", event.target.value)}
+                placeholder="아이디"
+                className={`${inputClass} ${newRecordDuplicateUserId ? duplicateInputClass : ""}`}
+              />
+              {newRecordDuplicateUserId && (
+                <div className="mt-1 text-[11px] font-semibold text-rose-600">중복 ID {newRecordDuplicateUserId}</div>
+              )}
             </div>
             <div className="col-span-2">
               <div className={labelClass}>기관</div>
@@ -543,7 +580,15 @@ export function OptionDetailTable({
             </div>
             <div className="col-span-2">
               <div className={labelClass}>사용자ID</div>
-              <input value={newRecord?.user_id || ""} onChange={(event) => handleNewChange("user_id", event.target.value)} placeholder="사용자ID" className={inputClass} />
+              <input
+                value={newRecord?.user_id || ""}
+                onChange={(event) => handleNewChange("user_id", event.target.value)}
+                placeholder="사용자ID"
+                className={`${inputClass} ${newRecordDuplicateUserId ? duplicateInputClass : ""}`}
+              />
+              {newRecordDuplicateUserId && (
+                <div className="mt-1 text-[11px] font-semibold text-rose-600">중복 ID {newRecordDuplicateUserId}</div>
+              )}
             </div>
             <div className="col-span-2">
               <div className={labelClass}>부서</div>
@@ -626,7 +671,7 @@ export function OptionDetailTable({
                 const isEditing = editingId && row.record_id === editingId
                 const rowKey = getRecordRowKey(row, index)
                 const rowUserId = normalizeUserId(row.user_id)
-                const isDuplicateTrackedUserId = (isBondView || isSofrView) && duplicateTrackedUserIds.has(rowUserId)
+                const isDuplicateTrackedUserId = duplicateTrackedUserIds.has(rowUserId)
                 return (
                   <tr key={row.record_id || `${row.user_id}-${index}`} className={isDuplicateTrackedUserId ? "bg-rose-50/70" : undefined}>
                     {columns.map((column) => {
