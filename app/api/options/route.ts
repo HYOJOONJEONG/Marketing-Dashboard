@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { NextResponse } from "next/server"
-import { requireApiPermission } from "@/lib/auth/server"
+import { requireAnyApiPermission, requireApiPermission } from "@/lib/auth/server"
 import { readDashboardState, readOptionsMock, writeOptionsMock } from "@/lib/shared-db-store"
 import seedOptionsMock from "@/data/options-dashboard.mock.json"
 
@@ -639,7 +639,7 @@ function buildCounts(records: any[], categories: any[]) {
 }
 
 export async function GET(req: Request) {
-  const auth = await requireApiPermission("optionDashboard", "view")
+  const auth = await requireAnyApiPermission(["optionDashboard", "manualInput", "weeklyReport"], "view")
   if (!auth.ok) return auth.response
   const { searchParams } = new URL(req.url)
   const basis = searchParams.get("basis") || "seed"
@@ -697,9 +697,7 @@ export async function GET(req: Request) {
       let value = seedMap.get(key) || 0
       if (basis === "latest") value = latestMap.get(key) ?? value
       if (basis === "date") value = dateMap.get(key) ?? value
-      if (key === "BOND") value = computedCounts.BOND || value
-      if (key === "INDEX") value = computedCounts.INDEX || 0
-      if (key === "SOFR") value = computedCounts.SOFR || 0
+      if (key !== "API") value = computedCounts[key] ?? value
       return { ...cat, count_value: value }
     })
 

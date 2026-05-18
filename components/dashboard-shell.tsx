@@ -849,12 +849,14 @@ function applySeedTotalsToPaidOptionColumns(columns: any[], cards: any[]) {
   })
   return normalizedColumns.map((column: any) => {
     const rowTotal = (column.rows || []).reduce((sum: number, row: any[]) => sum + parseLooseNumber(row?.[1]), 0)
+    const importedTotal = countByTitle.get(column.title)
     return {
       ...column,
       total:
-        column.title === "해외지수" && rowTotal > 0
+        importedTotal ||
+        (column.title === "해외지수" && rowTotal > 0
           ? `${rowTotal}건`
-          : countByTitle.get(column.title) || formatCountToKoreanUnit(column.total, "0건"),
+          : formatCountToKoreanUnit(column.total, "0건")),
     }
   })
 }
