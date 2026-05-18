@@ -751,7 +751,7 @@ const paidOptionInfoColumns = [
   },
   {
     title: "LME",
-    total: "26건",
+    total: "27건",
     rows: [
       ["국내은행", "1건"],
       ["외국계은행", "6건"],
@@ -760,7 +760,7 @@ const paidOptionInfoColumns = [
   },
   {
     title: "전광판",
-    total: "15건",
+    total: "16건",
     rows: [
       ["국내은행", "8건"],
       ["국내증권", "1건"],
@@ -772,7 +772,7 @@ const paidOptionInfoColumns = [
   },
   {
     title: "SOFR",
-    total: "171건",
+    total: "170건",
     rows: [
       ["국내은행", "37건"],
       ["국내증권", "4건"],
@@ -1885,6 +1885,7 @@ export function DashboardShell({
   )
   const [manualPreviewDraft, setManualPreviewDraft] = useState<any | null>(null)
   const [paidOptionImportStatus, setPaidOptionImportStatus] = useState("")
+  const [paidOptionImportedColumns, setPaidOptionImportedColumns] = useState<any[] | null>(null)
   const [manualRevenueHeaderEdited, setManualRevenueHeaderEdited] = useState(false)
   const [contractDraft, setContractDraft] = useState<any>({
     registrationDate: getSeoulTodayKey(),
@@ -3586,6 +3587,7 @@ export function DashboardShell({
         ? sourceDraft.paidOptionInfoColumns
         : paidOptionSourceColumns
       const nextColumns = cloneData(applyOptionDashboardPayloadToPaidOptionColumns(sourceColumns, payload))
+      setPaidOptionImportedColumns(nextColumns)
       markManualInputDirty()
       const nextDraft = {
         ...sourceDraft,
@@ -3612,6 +3614,7 @@ export function DashboardShell({
       setPaidOptionImportStatus(`반영 완료: ${importedSummary}`)
     } catch (error: any) {
       const message = String(error?.message || "옵션정보를 불러오지 못했습니다.")
+      setPaidOptionImportedColumns(null)
       setPaidOptionImportStatus("불러오기 실패")
       window.alert(message)
     }
@@ -5835,8 +5838,8 @@ export function DashboardShell({
   const monthLabels = useMemo(() => Array.from({ length: 12 }, (_, index) => `${index + 1}월`), [])
   const paidOptionColumns = buildPaidOptionInfoColumns(weeklyReport.paidOptionInfoColumns || [])
   const manualPaidOptionColumns = useMemo(
-    () => buildPaidOptionInfoColumns(manualDisplayDraft.paidOptionInfoColumns || []),
-    [manualDisplayDraft.paidOptionInfoColumns],
+    () => buildPaidOptionInfoColumns(paidOptionImportedColumns || manualDisplayDraft.paidOptionInfoColumns || []),
+    [manualDisplayDraft.paidOptionInfoColumns, paidOptionImportedColumns],
   )
   const reportTerminationColumns = [...reportTerminationColumnsStatic]
   const reportTerminationRows = useMemo(
