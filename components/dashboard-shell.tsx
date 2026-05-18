@@ -103,7 +103,6 @@ function mergeDailyReportClientState(currentDailyReport: any, incomingDailyRepor
 type CollectionTabKey = "integrated" | "long-term" | "delivery"
 type SectionKey = "dailyReport" | "performance" | "termination"
 
-const LOCAL_STORAGE_KEY = "infobiz-dashboard-state-v1"
 const LAST_VIEW_SESSION_KEY = "infobiz-last-dashboard-view"
 const PRESENCE_HEARTBEAT_RUSH_INTERVAL_MS = 15 * 1000
 const PRESENCE_HEARTBEAT_DEFAULT_INTERVAL_MS = 45 * 1000
@@ -1955,7 +1954,6 @@ export function DashboardShell({
   const pendingDataRef = useRef<any | null>(null)
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
   const dailyReportSaveInFlightRef = useRef(false)
-  const localStorageCacheTimerRef = useRef<number | null>(null)
   const manualSaveTimerRef = useRef<number | null>(null)
   const lastHistoryAtRef = useRef<number>(0)
   const dirtyViewsRef = useRef<Partial<Record<ViewKey, boolean>>>({})
@@ -2973,16 +2971,10 @@ export function DashboardShell({
   }
 
   function scheduleLocalDashboardCache(nextData: any) {
-    if (typeof window === "undefined") return
-    if (localStorageCacheTimerRef.current) {
-      window.clearTimeout(localStorageCacheTimerRef.current)
-    }
-    localStorageCacheTimerRef.current = window.setTimeout(() => {
-      localStorageCacheTimerRef.current = null
-      try {
-        window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(nextData))
-      } catch {}
-    }, 0)
+    // The dashboard now uses the shared server store as the source of truth.
+    // Serializing the full dashboard into localStorage on every edit was a
+    // major main-thread cost and the cached value was not read anywhere.
+    void nextData
   }
 
   function markViewsDirty(views: ViewKey[] = [view]) {
@@ -3044,7 +3036,7 @@ export function DashboardShell({
   function persist(nextData: any, options: { immediate?: boolean; updatedViews?: ViewKey[] } = {}) {
     const now = Date.now()
     const updatedViews = options.updatedViews?.length ? options.updatedViews : [view]
-    const previousData = cloneData(pendingDataRef.current || data)
+    const previousData = pendingDataRef.current || data
     setData(nextData)
     pendingDataRef.current = nextData
     markViewsDirty(updatedViews)
@@ -3065,9 +3057,9 @@ export function DashboardShell({
         throw error
       })
     }
-    if (now - lastHistoryAtRef.current > 500) {
+    if (!options.immediate && now - lastHistoryAtRef.current > 2000) {
       const snapshot = () => {
-        setHistoryStack((prev) => [cloneData(data), ...prev].slice(0, 20))
+        setHistoryStack((prev) => [cloneData(data), ...prev].slice(0, 5))
       }
       lastHistoryAtRef.current = now
       if ("requestIdleCallback" in window) {
@@ -3251,7 +3243,6 @@ export function DashboardShell({
   useEffect(() => {
     return () => {
       if (manualSaveTimerRef.current) window.clearTimeout(manualSaveTimerRef.current)
-      if (localStorageCacheTimerRef.current) window.clearTimeout(localStorageCacheTimerRef.current)
     }
   }, [])
 
@@ -3290,9 +3281,6 @@ export function DashboardShell({
     setCollectionYearFilter(getUpcomingThursday().getFullYear() || 2026)
     setCollectionStatusFilter(serverCollection?.statusFilter || "all")
     setCollectionSort(serverCollection?.sort || { key: "year", dir: "desc" })
-    try {
-      window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data))
-    } catch {}
   }, [])
 
   useEffect(() => {
@@ -3864,9 +3852,7 @@ export function DashboardShell({
         setData(mergedData)
         pendingDataRef.current = mergedData
         clearDirtyViews(["contracts"])
-        try {
-          window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mergedData))
-        } catch {}
+        scheduleLocalDashboardCache(mergedData)
         setContractDraft({
           registrationDate: getSeoulTodayKey(),
           companyName: "",

@@ -77,10 +77,14 @@ export function OptionDetailTable({
     [],
   )
 
-  const categoryOptions = categories.map((cat) => ({
-    value: cat.category_code,
-    label: cat.category_name_ko,
-  }))
+  const categoryOptions = React.useMemo(
+    () =>
+      categories.map((cat) => ({
+        value: cat.category_code,
+        label: cat.category_name_ko,
+      })),
+    [categories],
+  )
 
   const isBondView = selectedCategoryCode === "BOND"
   const isSignageView = selectedCategoryCode === "SIGNAGE"

@@ -13,9 +13,11 @@ export function OptionDashboardPage() {
   const [searchInput, setSearchInput] = useState("")
   const [search, setSearch] = useState("")
 
-  const { data, loading, detailLoading, error, isStale } = useOptionDashboardData({
+  const { data, loading, detailLoading, error } = useOptionDashboardData({
     basis,
     date,
+    category: categoryFilter,
+    search,
     refreshKey,
   })
 
@@ -38,7 +40,7 @@ export function OptionDashboardPage() {
     return data.categories.filter((cat) => cat.category_code !== "API")
   }, [data?.categories])
   const records = useMemo(() => {
-    if (!data?.records || isStale) return []
+    if (!data?.records) return []
     const searchTerm = search.trim().toLowerCase()
     return data.records
       .filter((row) => row.category_code !== "API")
@@ -47,7 +49,7 @@ export function OptionDashboardPage() {
         if (!searchTerm) return true
         return `${row.company_name || ""} ${row.user_id || ""} ${row.department || ""}`.toLowerCase().includes(searchTerm)
       })
-  }, [categoryFilter, data?.records, isStale, search])
+  }, [categoryFilter, data?.records, search])
 
   useEffect(() => {
     if (basis === "date" && !date && historyDates.length) {
