@@ -259,7 +259,8 @@ function normalizeSofrOptionRecords(mock: any) {
     const ids = applyIds.length ? applyIds : splitOptionUserIds(record.user_id)
 
     if (!ids.length) {
-      normalized.push({ ...record, requester_name: "", contact: "" })
+      if (record.requester_name !== "" || record.contact !== "" || Number(record.is_active) !== 1) changed = true
+      normalized.push({ ...record, requester_name: "", contact: "", is_active: 1 })
       continue
     }
 
@@ -270,6 +271,7 @@ function normalizeSofrOptionRecords(mock: any) {
       originalUserId === ids[0] &&
       (!originalApplyIds || originalApplyIds === ids[0]) &&
       String(record.apply_count || "1").trim() === "1" &&
+      Number(record.is_active) === 1 &&
       record.requester_name === "" &&
       record.contact === ""
 
@@ -286,6 +288,7 @@ function normalizeSofrOptionRecords(mock: any) {
         contact: "",
         apply_count: "1",
         apply_ids: id,
+        is_active: 1,
       })
     })
   }
@@ -299,15 +302,6 @@ function getSofrRecords(mock: any) {
   return Array.isArray(mock?.optionRecords)
     ? mock.optionRecords.filter((record: any) => record?.category_code === "SOFR")
     : []
-}
-
-function hasLegacySofrShape(mock: any) {
-  return getSofrRecords(mock).some((record: any) => {
-    const applyIds = splitOptionUserIds(record?.apply_ids)
-    const rawCount = String(record?.apply_count || "").replace(/[^0-9]/g, "")
-    const count = rawCount ? Number(rawCount) : 0
-    return applyIds.length > 1 || count > 1
-  })
 }
 
 async function loadBundledSofrRecords(): Promise<any[]> {
@@ -334,8 +328,8 @@ async function loadBundledSofrRecords(): Promise<any[]> {
   }
 }
 
-async function hydrateSofrFromBundledMockIfNewer(mock: any, hadLegacySofr: boolean) {
-  if (!hadLegacySofr || !Array.isArray(mock?.optionRecords)) return false
+async function hydrateSofrFromBundledMockIfNewer(mock: any) {
+  if (!Array.isArray(mock?.optionRecords)) return false
   const currentCount = getSofrRecords(mock).length
   const bundledSofrRecords = await loadBundledSofrRecords()
   if (bundledSofrRecords.length <= currentCount) return false
@@ -452,10 +446,9 @@ export async function GET(req: Request) {
 
   try {
     const mock = await loadMock()
-    const hadLegacySofr = hasLegacySofrShape(mock)
     const privacyScrubbed = scrubOptionPrivacyFields(mock)
     const sofrNormalized = normalizeSofrOptionRecords(mock)
-    const sofrHydrated = await hydrateSofrFromBundledMockIfNewer(mock, hadLegacySofr)
+    const sofrHydrated = await hydrateSofrFromBundledMockIfNewer(mock)
     if (privacyScrubbed || sofrNormalized || sofrHydrated) {
       await writeOptionsMock(mock, {
         menuLabel: "유료 옵션 정보 현황",
@@ -493,6 +486,7 @@ export async function GET(req: Request) {
       if (basis === "date") value = dateMap.get(key) ?? value
       if (key === "BOND") value = computedCounts.BOND || value
       if (key === "INDEX") value = computedCounts.INDEX || 0
+      if (key === "SOFR") value = computedCounts.SOFR || 0
       return { ...cat, count_value: value }
     })
 

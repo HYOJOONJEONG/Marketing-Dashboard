@@ -86,10 +86,12 @@ export function OptionDetailTable({
   const isSignageView = selectedCategoryCode === "SIGNAGE"
   const tableClass = tableBaseClass
   const actionColumnClass = isSignageView
-    ? "w-[12%] px-2 py-1.5 text-[11px] whitespace-normal break-all text-center leading-tight"
+    ? "w-[92px] px-1 py-1.5 text-[11px] whitespace-nowrap text-center leading-tight"
     : isBondView
-      ? "w-[8%] px-2 py-1.5 text-[11px] whitespace-normal break-all text-center leading-tight"
-      : "w-40"
+      ? "w-[92px] px-1 py-1.5 text-[11px] whitespace-nowrap text-center leading-tight"
+      : "w-[104px] px-1 py-1.5 text-[11px] whitespace-nowrap text-center leading-tight"
+  const actionButtonClass =
+    "inline-flex h-7 min-w-[28px] items-center justify-center whitespace-nowrap rounded-md border px-1 text-[11px] font-semibold leading-none transition"
 
   React.useEffect(() => {
     if (!newRecord && categoryOptions.length) {
@@ -685,26 +687,22 @@ export function OptionDetailTable({
                       )
                     })}
                     <td
-                      className={`${tdClass} ${isSignageView || isBondView ? "whitespace-normal px-2 py-1.5 text-center" : "whitespace-nowrap"} align-middle`}
+                      className={`${tdClass} whitespace-nowrap px-1.5 py-1.5 text-center align-middle`}
                     >
                       {isEditing ? (
                         <div
-                          className={`mx-auto flex items-center justify-center gap-2 ${isSignageView || isBondView ? "flex-wrap" : "w-fit flex-nowrap"}`}
+                          className="mx-auto flex w-fit flex-nowrap items-center justify-center gap-1"
                         >
                           <button
                             type="button"
-                            className={`rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 font-semibold text-blue-700 ${
-                              isSignageView ? "text-[11px]" : "text-[12px]"
-                            }`}
+                            className={`${actionButtonClass} border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100`}
                             onClick={handleSave}
                           >
                             저장
                           </button>
                           <button
                             type="button"
-                            className={`rounded-lg border border-slate-200 px-2 py-1 font-semibold text-slate-600 ${
-                              isSignageView ? "text-[11px]" : "text-[12px]"
-                            }`}
+                            className={`${actionButtonClass} border-slate-200 bg-white text-slate-600 hover:bg-slate-50`}
                             onClick={() => {
                               setEditingId(null)
                               setDraft(null)
@@ -714,9 +712,7 @@ export function OptionDetailTable({
                           </button>
                           <button
                             type="button"
-                            className={`rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 font-semibold text-rose-600 ${
-                              isSignageView ? "text-[11px]" : "text-[12px]"
-                            }`}
+                            className={`${actionButtonClass} border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100`}
                             onClick={() => handleDelete(row.record_id)}
                           >
                             삭제
@@ -724,22 +720,18 @@ export function OptionDetailTable({
                         </div>
                       ) : (
                         <div
-                          className={`mx-auto flex items-center justify-center gap-2 ${isSignageView || isBondView ? "flex-wrap" : "w-fit flex-nowrap"}`}
+                          className="mx-auto flex w-fit flex-nowrap items-center justify-center gap-1"
                         >
                           <button
                             type="button"
-                            className={`rounded-lg border border-slate-200 px-2 py-1 font-semibold text-slate-600 ${
-                              isSignageView ? "text-[11px]" : "text-[12px]"
-                            }`}
+                            className={`${actionButtonClass} border-slate-200 bg-white text-slate-600 hover:bg-slate-50`}
                             onClick={() => startEdit(row)}
                           >
                             수정
                           </button>
                           <button
                             type="button"
-                            className={`rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 font-semibold text-rose-600 ${
-                              isSignageView ? "text-[11px]" : "text-[12px]"
-                            }`}
+                            className={`${actionButtonClass} border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100`}
                             onClick={() => handleDelete(row.record_id)}
                           >
                             삭제
