@@ -43,6 +43,65 @@ const getResponseCache = new Map<string, { expiresAt: number; payload: any }>()
 let industryMapCache: { expiresAt: number; value: Map<string, string> } | null = null
 let bundledSofrRecordsCache: any[] | null = null
 
+const REQUIRED_SOFR_RECORDS = [
+  {
+    record_id: "sofr-e070527",
+    category_code: "SOFR",
+    category_name_ko: "SOFR",
+    sub_type: "SOFR",
+    industry: "일반기업",
+    company_name: "CJ제일제당",
+    user_id: "E070527",
+    department: "자금팀",
+    requester_name: "",
+    contact: "",
+    request_date: "",
+    real_apply: "",
+    billing_month: "26년 5월",
+    status: "",
+    agreement: "",
+    customer_type: "",
+    tr_cd: "",
+    dedicated: "",
+    quantity: "",
+    recommender: "",
+    receiver: "이홍민",
+    apply_count: "1",
+    apply_ids: "E070527",
+    amount: "",
+    note: "추가합의서 수령 완료",
+    is_active: 1,
+  },
+  {
+    record_id: "sofr-e260221",
+    category_code: "SOFR",
+    category_name_ko: "SOFR",
+    sub_type: "SOFR",
+    industry: "기타금융",
+    company_name: "우리금융캐피탈",
+    user_id: "E260221",
+    department: "자금부",
+    requester_name: "",
+    contact: "",
+    request_date: "",
+    real_apply: "",
+    billing_month: "27년 1월",
+    status: "",
+    agreement: "",
+    customer_type: "",
+    tr_cd: "",
+    dedicated: "",
+    quantity: "",
+    recommender: "",
+    receiver: "정진영",
+    apply_count: "1",
+    apply_ids: "E260221",
+    amount: "",
+    note: "",
+    is_active: 1,
+  },
+]
+
 function normalizeCategoryCode(value: unknown) {
   return String(value ?? "").trim().toUpperCase()
 }
@@ -323,6 +382,32 @@ function getSingleOptionUserId(record: any) {
   return applyIds[0] || ""
 }
 
+function withRequiredSofrRecords(records: any[]) {
+  const byUserId = new Map<string, any>()
+  for (const record of records) {
+    const userId = getSingleOptionUserId(record)
+    if (!userId || byUserId.has(userId)) continue
+    byUserId.set(userId, {
+      ...record,
+      record_id: `sofr-${userId.toLowerCase()}`,
+      category_code: "SOFR",
+      category_name_ko: "SOFR",
+      user_id: userId,
+      requester_name: "",
+      contact: "",
+      apply_count: "1",
+      apply_ids: userId,
+      is_active: 1,
+    })
+  }
+  for (const record of REQUIRED_SOFR_RECORDS) {
+    const userId = getSingleOptionUserId(record)
+    if (!userId || byUserId.has(userId)) continue
+    byUserId.set(userId, { ...record })
+  }
+  return Array.from(byUserId.values())
+}
+
 async function loadBundledSofrRecords(): Promise<any[]> {
   if (bundledSofrRecordsCache) return bundledSofrRecordsCache
   try {
@@ -341,10 +426,10 @@ async function loadBundledSofrRecords(): Promise<any[]> {
         apply_ids: String(record.user_id || "").trim().toUpperCase(),
         is_active: 1,
       }))
-    bundledSofrRecordsCache = records
-    return records
+    bundledSofrRecordsCache = withRequiredSofrRecords(records)
+    return bundledSofrRecordsCache
   } catch {
-    const records: any[] = []
+    const records = withRequiredSofrRecords([])
     bundledSofrRecordsCache = records
     return records
   }
