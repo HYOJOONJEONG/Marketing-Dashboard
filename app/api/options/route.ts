@@ -1,3 +1,4 @@
+import fs from "fs/promises"
 import path from "path"
 import { NextResponse } from "next/server"
 import { requireApiPermission } from "@/lib/auth/server"
@@ -40,6 +41,7 @@ const APP_STATE_PATH = path.join(process.cwd(), "data", "app-state.json")
 const GET_CACHE_TTL_MS = 12 * 1000
 const getResponseCache = new Map<string, { expiresAt: number; payload: any }>()
 let industryMapCache: { expiresAt: number; value: Map<string, string> } | null = null
+let bundledSofrRecordsCache: any[] | null = null
 
 function normalizeCategoryCode(value: unknown) {
   return String(value ?? "").trim()
@@ -228,6 +230,122 @@ function scrubOptionPrivacyFields(mock: any) {
   return changed
 }
 
+function splitOptionUserIds(value: unknown) {
+  const matches = String(value || "").match(/E\d{6}/gi) || []
+  const seen = new Set<string>()
+  const ids: string[] = []
+  for (const match of matches) {
+    const id = match.toUpperCase()
+    if (seen.has(id)) continue
+    seen.add(id)
+    ids.push(id)
+  }
+  return ids
+}
+
+function normalizeSofrOptionRecords(mock: any) {
+  if (!mock || typeof mock !== "object") return false
+  if (!Array.isArray(mock.optionRecords)) return false
+
+  let changed = false
+  const normalized: any[] = []
+  for (const record of mock.optionRecords) {
+    if (!record || typeof record !== "object" || record.category_code !== "SOFR") {
+      normalized.push(record)
+      continue
+    }
+
+    const applyIds = splitOptionUserIds(record.apply_ids)
+    const ids = applyIds.length ? applyIds : splitOptionUserIds(record.user_id)
+
+    if (!ids.length) {
+      normalized.push({ ...record, requester_name: "", contact: "" })
+      continue
+    }
+
+    const originalUserId = String(record.user_id || "").trim().toUpperCase()
+    const originalApplyIds = String(record.apply_ids || "").trim().toUpperCase()
+    const alreadySingle =
+      ids.length === 1 &&
+      originalUserId === ids[0] &&
+      (!originalApplyIds || originalApplyIds === ids[0]) &&
+      String(record.apply_count || "1").trim() === "1" &&
+      record.requester_name === "" &&
+      record.contact === ""
+
+    if (!alreadySingle) changed = true
+
+    ids.forEach((id) => {
+      normalized.push({
+        ...record,
+        record_id: ids.length === 1 && originalUserId === id
+          ? record.record_id
+          : `sofr-${id.toLowerCase()}`,
+        user_id: id,
+        requester_name: "",
+        contact: "",
+        apply_count: "1",
+        apply_ids: id,
+      })
+    })
+  }
+
+  if (normalized.length !== mock.optionRecords.length) changed = true
+  mock.optionRecords = normalized
+  return changed
+}
+
+function getSofrRecords(mock: any) {
+  return Array.isArray(mock?.optionRecords)
+    ? mock.optionRecords.filter((record: any) => record?.category_code === "SOFR")
+    : []
+}
+
+function hasLegacySofrShape(mock: any) {
+  return getSofrRecords(mock).some((record: any) => {
+    const applyIds = splitOptionUserIds(record?.apply_ids)
+    const rawCount = String(record?.apply_count || "").replace(/[^0-9]/g, "")
+    const count = rawCount ? Number(rawCount) : 0
+    return applyIds.length > 1 || count > 1
+  })
+}
+
+async function loadBundledSofrRecords(): Promise<any[]> {
+  if (bundledSofrRecordsCache) return bundledSofrRecordsCache
+  try {
+    const raw = await fs.readFile(MOCK_PATH, "utf8")
+    const parsed = JSON.parse(raw)
+    normalizeSofrOptionRecords(parsed)
+    const records = getSofrRecords(parsed)
+      .filter((record: any) => splitOptionUserIds(record?.user_id).length === 1)
+      .map((record: any) => ({
+        ...record,
+        requester_name: "",
+        contact: "",
+        apply_count: "1",
+        apply_ids: String(record.user_id || "").trim().toUpperCase(),
+      }))
+    bundledSofrRecordsCache = records
+    return records
+  } catch {
+    const records: any[] = []
+    bundledSofrRecordsCache = records
+    return records
+  }
+}
+
+async function hydrateSofrFromBundledMockIfNewer(mock: any, hadLegacySofr: boolean) {
+  if (!hadLegacySofr || !Array.isArray(mock?.optionRecords)) return false
+  const currentCount = getSofrRecords(mock).length
+  const bundledSofrRecords = await loadBundledSofrRecords()
+  if (bundledSofrRecords.length <= currentCount) return false
+  mock.optionRecords = [
+    ...mock.optionRecords.filter((record: any) => record?.category_code !== "SOFR"),
+    ...bundledSofrRecords.map((record: any) => ({ ...record })),
+  ]
+  return true
+}
+
 async function loadAppStateIndustryMap() {
   if (industryMapCache && industryMapCache.expiresAt > Date.now()) {
     return new Map(industryMapCache.value)
@@ -334,11 +452,14 @@ export async function GET(req: Request) {
 
   try {
     const mock = await loadMock()
+    const hadLegacySofr = hasLegacySofrShape(mock)
     const privacyScrubbed = scrubOptionPrivacyFields(mock)
-    if (privacyScrubbed) {
+    const sofrNormalized = normalizeSofrOptionRecords(mock)
+    const sofrHydrated = await hydrateSofrFromBundledMockIfNewer(mock, hadLegacySofr)
+    if (privacyScrubbed || sofrNormalized || sofrHydrated) {
       await writeOptionsMock(mock, {
         menuLabel: "유료 옵션 정보 현황",
-        changeLabel: "옵션 개인정보 필드 정리",
+        changeLabel: (sofrNormalized || sofrHydrated) ? "SOFR 적용 아이디 분리" : "옵션 개인정보 필드 정리",
       })
       getResponseCache.clear()
     }
@@ -477,7 +598,10 @@ export async function POST(req: Request) {
       if (idx >= 0) optionRecords.splice(idx, 1)
     }
 
-    const counts = buildCounts(optionRecords, categories)
+    mock.optionRecords = optionRecords
+    normalizeSofrOptionRecords(mock)
+    const finalOptionRecords = mock.optionRecords || []
+    const counts = buildCounts(finalOptionRecords, categories)
     const seedCounts = categories.map((cat: any) => ({
       category_code: cat.category_code,
       count_value: counts[cat.category_code] || 0,
@@ -495,7 +619,7 @@ export async function POST(req: Request) {
 
     const nextMock = {
       ...mock,
-      optionRecords,
+      optionRecords: finalOptionRecords,
       seedCounts,
       historyCounts,
     }

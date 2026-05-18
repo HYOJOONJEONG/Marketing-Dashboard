@@ -53,6 +53,22 @@ function Is-UserId {
   return ($Text.Trim() -match '^E\d+')
 }
 
+function Split-UserIds {
+  param(
+    [string]$Text
+  )
+  if ([string]::IsNullOrWhiteSpace($Text)) { return @() }
+  $matches = [regex]::Matches($Text, "E\d{6}", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+  $ids = New-Object System.Collections.Generic.List[string]
+  foreach ($match in $matches) {
+    $id = $match.Value.ToUpperInvariant()
+    if (-not $ids.Contains($id)) {
+      [void]$ids.Add($id)
+    }
+  }
+  return @($ids)
+}
+
 function Get-LastRow {
   param(
     [__ComObject]$Sheet,
@@ -443,32 +459,39 @@ if ($null -eq $wsIndex) { throw "INDEX sheet not found." }
     for ($r = 4; $r -le $sofrRows; $r++) {
       $userId = Get-CellText -Sheet $wsSofr -Row $r -Col 2
       if ([string]::IsNullOrWhiteSpace($userId)) { continue }
-      Add-Record @{
-        record_id = [guid]::NewGuid().ToString()
-        category_code = "SOFR"
-        sub_type = "SOFR"
-        industry = (Get-CellText -Sheet $wsSofr -Row $r -Col 3)
-        company_name = (Get-CellText -Sheet $wsSofr -Row $r -Col 4)
-        user_id = $userId
-        department = (Get-CellText -Sheet $wsSofr -Row $r -Col 5)
-        requester_name = (Get-CellText -Sheet $wsSofr -Row $r -Col 6)
-        contact = (Get-CellText -Sheet $wsSofr -Row $r -Col 7)
-        billing_month = (Get-CellText -Sheet $wsSofr -Row $r -Col 8)
-        receiver = (Get-CellText -Sheet $wsSofr -Row $r -Col 9)
-        note = (Get-CellText -Sheet $wsSofr -Row $r -Col 10)
-        apply_count = (Get-CellText -Sheet $wsSofr -Row $r -Col 11)
-        apply_ids = (Get-CellText -Sheet $wsSofr -Row $r -Col 12)
-        status = ""
-        request_date = ""
-        real_apply = ""
-        agreement = ""
-        customer_type = ""
-        tr_cd = ""
-        dedicated = ""
-        quantity = ""
-        recommender = ""
-        amount = ""
-        is_active = 1
+      $applyIdsRaw = Get-CellText -Sheet $wsSofr -Row $r -Col 12
+      $expandedIds = @(Split-UserIds $applyIdsRaw)
+      if ($expandedIds.Count -eq 0) {
+        $expandedIds = @(Split-UserIds $userId)
+      }
+      foreach ($expandedId in $expandedIds) {
+        Add-Record @{
+          record_id = "sofr-$($expandedId.ToLowerInvariant())"
+          category_code = "SOFR"
+          sub_type = "SOFR"
+          industry = (Get-CellText -Sheet $wsSofr -Row $r -Col 3)
+          company_name = (Get-CellText -Sheet $wsSofr -Row $r -Col 4)
+          user_id = $expandedId
+          department = (Get-CellText -Sheet $wsSofr -Row $r -Col 5)
+          requester_name = ""
+          contact = ""
+          billing_month = (Get-CellText -Sheet $wsSofr -Row $r -Col 8)
+          receiver = (Get-CellText -Sheet $wsSofr -Row $r -Col 9)
+          note = (Get-CellText -Sheet $wsSofr -Row $r -Col 10)
+          apply_count = "1"
+          apply_ids = $expandedId
+          status = ""
+          request_date = ""
+          real_apply = ""
+          agreement = ""
+          customer_type = ""
+          tr_cd = ""
+          dedicated = ""
+          quantity = ""
+          recommender = ""
+          amount = ""
+          is_active = 1
+        }
       }
     }
     $wbSofr.Close($false)
