@@ -3,7 +3,7 @@ import { OptionDetailTable } from "./OptionDetailTable"
 import { SummaryCards } from "./SummaryCards"
 import { useOptionDashboardData } from "../../hooks/use-option-dashboard-data"
 
-const cardClass = "rounded-[24px] border border-slate-200 bg-white shadow-sm"
+const cardClass = "rounded-[20px] border border-slate-200 bg-white shadow-sm"
 
 export function OptionDashboardPage() {
   const [refreshKey, setRefreshKey] = useState(0)
@@ -95,8 +95,8 @@ export function OptionDashboardPage() {
 
   return (
     <div className="space-y-4" id="option-dashboard-section">
-      <div className={`${cardClass} p-5`}>
-        {loading && !data && <div className="mb-2 text-[12px] text-slate-500">데이터 동기화 중...</div>}
+      <div className={`${cardClass} p-4`}>
+        {loading && !data && <div className="mb-2 text-[12px] text-slate-500">옵션 현황 불러오는 중...</div>}
         {error && <div className="text-[12px] text-rose-500">{error}</div>}
         {!error && (
           <SummaryCards
@@ -109,9 +109,9 @@ export function OptionDashboardPage() {
         )}
       </div>
 
-      <div className={`${cardClass} p-5`}>
+      <div className={`${cardClass} p-4`}>
         {detailLoading && !error ? (
-          <div className="mb-3 text-[12px] text-slate-500">상세 목록 불러오는 중...</div>
+          <div className="mb-2 text-[11.5px] font-semibold text-blue-600">목록 갱신 중...</div>
         ) : null}
         <OptionDetailTable
           records={records}

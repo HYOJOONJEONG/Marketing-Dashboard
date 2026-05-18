@@ -54,16 +54,8 @@ type Params = {
   refreshKey?: number
 }
 
-const CACHE_TTL_MS = 30 * 1000
+const CACHE_TTL_MS = 2 * 60 * 1000
 const responseCache = new Map<string, { timestamp: number; data: OptionDashboardResponse }>()
-
-function buildSummaryQuery(params: Params) {
-  const searchParams = new URLSearchParams()
-  searchParams.set("basis", params.basis)
-  if (params.date) searchParams.set("date", params.date)
-  searchParams.set("includeRecords", "0")
-  return searchParams.toString()
-}
 
 function buildDetailQuery(params: Params) {
   const searchParams = new URLSearchParams()
@@ -76,31 +68,25 @@ function buildDetailQuery(params: Params) {
 }
 
 export function useOptionDashboardData(params: Params) {
-  const [summaryData, setSummaryData] = useState<OptionDashboardResponse | null>(null)
-  const [records, setRecords] = useState<OptionRecord[]>([])
+  const [data, setData] = useState<OptionDashboardResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const summaryQuery = useMemo(
-    () => buildSummaryQuery(params),
-    [params.basis, params.date],
-  )
 
   const detailQuery = useMemo(
     () => buildDetailQuery(params),
     [params.basis, params.date, params.category, params.search],
   )
-  const summaryCacheKey = `${summaryQuery}|refresh=${params.refreshKey || 0}`
   const detailCacheKey = `${detailQuery}|refresh=${params.refreshKey || 0}`
 
   useEffect(() => {
     let mounted = true
-    const cached = responseCache.get(summaryCacheKey)
+    const cached = responseCache.get(detailCacheKey)
     const isFreshCache = cached && Date.now() - cached.timestamp < CACHE_TTL_MS
     if (isFreshCache) {
-      setSummaryData(cached.data)
+      setData(cached.data)
       setLoading(false)
+      setDetailLoading(false)
       setError(null)
       return () => {
         mounted = false
@@ -108,13 +94,14 @@ export function useOptionDashboardData(params: Params) {
     }
 
     if (cached) {
-      setSummaryData(cached.data)
+      setData(cached.data)
     }
 
-    setLoading(!cached)
+    setLoading(!cached && !data)
+    setDetailLoading(Boolean(cached || data))
     setError(null)
     const controller = new AbortController()
-    fetch(`/api/options?${summaryQuery}`, { signal: controller.signal, cache: "no-store" })
+    fetch(`/api/options?${detailQuery}`, { signal: controller.signal, cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) {
           const text = await res.text()
@@ -124,8 +111,8 @@ export function useOptionDashboardData(params: Params) {
       })
       .then((json) => {
         if (!mounted) return
-        responseCache.set(summaryCacheKey, { timestamp: Date.now(), data: json })
-        setSummaryData(json)
+        responseCache.set(detailCacheKey, { timestamp: Date.now(), data: json })
+        setData(json)
       })
       .catch((err) => {
         if (!mounted) return
@@ -135,67 +122,13 @@ export function useOptionDashboardData(params: Params) {
       .finally(() => {
         if (!mounted) return
         setLoading(false)
-      })
-    return () => {
-      mounted = false
-      controller.abort()
-    }
-  }, [summaryCacheKey, summaryQuery, params.refreshKey])
-
-  useEffect(() => {
-    let mounted = true
-    const cached = responseCache.get(detailCacheKey)
-    const isFreshCache = cached && Date.now() - cached.timestamp < CACHE_TTL_MS
-    if (isFreshCache) {
-      setRecords(cached.data.records || [])
-      setDetailLoading(false)
-      return () => {
-        mounted = false
-      }
-    }
-
-    if (cached?.data?.records) {
-      setRecords(cached.data.records)
-    }
-
-    setDetailLoading(!cached?.data?.records)
-    const controller = new AbortController()
-    fetch(`/api/options?${detailQuery}`, { signal: controller.signal, cache: "no-store" })
-      .then(async (res) => {
-        if (!res.ok) {
-          const text = await res.text()
-          throw new Error(text || `상세 옵션 데이터를 불러오지 못했습니다. (${res.status})`)
-        }
-        return res.json()
-      })
-      .then((json) => {
-        if (!mounted) return
-        responseCache.set(detailCacheKey, { timestamp: Date.now(), data: json })
-        setRecords(json.records || [])
-      })
-      .catch((err) => {
-        if (!mounted) return
-        if (err?.name === "AbortError") return
-        setError(err?.message || "상세 데이터를 불러오지 못했습니다.")
-      })
-      .finally(() => {
-        if (!mounted) return
         setDetailLoading(false)
       })
-
     return () => {
       mounted = false
       controller.abort()
     }
   }, [detailCacheKey, detailQuery, params.refreshKey])
-
-  const data = useMemo(() => {
-    if (!summaryData) return null
-    return {
-      ...summaryData,
-      records,
-    }
-  }, [summaryData, records])
 
   return { data, loading, detailLoading, error }
 }

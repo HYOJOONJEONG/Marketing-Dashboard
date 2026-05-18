@@ -11,11 +11,11 @@ type Props = {
   onDeleteRecord: (recordId: string) => Promise<void>
 }
 
-const tableBaseClass = "w-full table-fixed text-[12.5px]"
+const tableBaseClass = "w-full table-fixed text-[12px]"
 const thClass =
-  "border-b border-slate-200 bg-slate-50 px-3 py-2 text-center text-[12px] font-semibold text-slate-600 whitespace-nowrap"
-const tdClass = "border-t border-slate-200 px-3 py-2 text-center text-[12.5px] text-slate-800"
-const inputClass = "h-9 w-full rounded-lg border border-slate-200/80 bg-white/90 px-2 text-[12px]"
+  "border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-[11.5px] font-semibold text-slate-600 whitespace-nowrap"
+const tdClass = "border-t border-slate-200 px-2 py-1.5 text-center text-[12px] text-slate-800"
+const inputClass = "h-8 w-full rounded-md border border-slate-200/80 bg-white/90 px-2 text-[12px]"
 const labelClass = "mb-1 text-[11px] font-semibold text-slate-600"
 
 export function OptionDetailTable({
@@ -611,7 +611,7 @@ export function OptionDetailTable({
                             ? normalizeIndustry((row as any)[column.key])
                             : (row as any)[column.key]
                       const cellClass = `${tdClass} ${column.cellClass || "whitespace-nowrap"} ${
-                        isSignageView ? "px-2 py-1.5 text-[11.5px]" : isBondView ? "px-2 py-2 text-[11.5px]" : ""
+                        isSignageView ? "px-2 py-1.5 text-[11.5px]" : isBondView ? "px-2 py-1.5 text-[11.5px]" : ""
                       } ${
                         isDuplicateBondUserId && column.key === "user_id"
                           ? "bg-rose-100 font-bold text-rose-700 ring-1 ring-inset ring-rose-200"
@@ -648,7 +648,9 @@ export function OptionDetailTable({
                               const isExpanded = isExpandableNote && expandedNoteIds.has(rowKey)
                               return (
                                 <div
-                                  className={`flex min-h-[64px] flex-col justify-center gap-1 text-center ${
+                                  className={`flex flex-col justify-center gap-1 text-center ${
+                                    isSignageView ? "min-h-[44px]" : "min-h-0"
+                                  } ${
                                     isExpanded ? "items-stretch" : "items-center"
                                   }`}
                                 >
