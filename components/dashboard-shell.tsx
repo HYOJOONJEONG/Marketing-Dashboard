@@ -882,6 +882,57 @@ function applySeedTotalsToPaidOptionColumns(columns: any[], cards: any[]) {
   })
 }
 
+function getPaidOptionRecordCountByCode(records: any[]) {
+  const byCode = new Map<string, any[]>()
+  ;(Array.isArray(records) ? records : []).forEach((record: any) => {
+    const code = String(record?.category_code || "").trim().toUpperCase()
+    if (!code || code === "API") return
+    byCode.set(code, [...(byCode.get(code) || []), record])
+  })
+
+  const countByCode = new Map<string, number>()
+  paidOptionOrderedTitles.forEach((title) => {
+    const code = Object.entries(paidOptionTitleByCode).find(([, mappedTitle]) => mappedTitle === title)?.[0] || ""
+    const rows = byCode.get(code) || []
+    if (!rows.length) return
+    if (code === "INDEX" || code === "LME") {
+      countByCode.set(code, new Set(rows.map((row) => String(row?.user_id || "").trim()).filter(Boolean)).size)
+      return
+    }
+    if (code === "SOFR") {
+      const total = rows.reduce((sum, row) => {
+        const applyCount = parseLooseNumber(row?.apply_count)
+        return sum + (applyCount > 0 ? applyCount : 1)
+      }, 0)
+      countByCode.set(code, total)
+      return
+    }
+    countByCode.set(code, rows.length)
+  })
+  return countByCode
+}
+
+function applyOptionDashboardPayloadToPaidOptionColumns(columns: any[], payload: any) {
+  const cards = Array.isArray(payload?.cards) ? payload.cards : []
+  const records = Array.isArray(payload?.records) ? payload.records : []
+  const recordCounts = getPaidOptionRecordCountByCode(records)
+  const cardsWithRecordCounts = cards.map((card: any) => {
+    const code = String(card?.category_code || "").trim().toUpperCase()
+    const recordCount = recordCounts.get(code)
+    return recordCount == null ? card : { ...card, count_value: recordCount }
+  })
+  const existingCodes = new Set(cardsWithRecordCounts.map((card: any) => String(card?.category_code || "").trim().toUpperCase()))
+  recordCounts.forEach((count, code) => {
+    if (existingCodes.has(code)) return
+    cardsWithRecordCounts.push({
+      category_code: code,
+      category_name_ko: paidOptionTitleByCode[code] || code,
+      count_value: count,
+    })
+  })
+  return applySeedTotalsToPaidOptionColumns(columns, cardsWithRecordCounts)
+}
+
 function buildTerminationOverviewRows(rows: any[]) {
   return (Array.isArray(rows) && rows.length ? rows : weeklyTerminationOverviewRows).map((row: any, index: number) => ({
     label: sanitizeSummaryText(row?.label, weeklyTerminationOverviewRows[index]?.label || `행 ${index + 1}`),
@@ -3514,7 +3565,7 @@ export function DashboardShell({
 
   async function reloadPaidOptionInfo() {
     try {
-      const response = await fetch("/api/options?basis=seed&category=all&activeOnly=1&includeRecords=0", {
+      const response = await fetch(`/api/options?basis=seed&category=all&activeOnly=1&includeRecords=1&refresh=1&t=${Date.now()}`, {
         cache: "no-store",
       })
       if (!response.ok) {
@@ -3525,13 +3576,7 @@ export function DashboardShell({
       const sourceColumns = Array.isArray(sourceDraft?.paidOptionInfoColumns) && sourceDraft.paidOptionInfoColumns.length
         ? sourceDraft.paidOptionInfoColumns
         : paidOptionSourceColumns
-      const nextColumns = applySeedTotalsToPaidOptionColumns(sourceColumns, Array.isArray(payload?.cards) ? payload.cards : [])
-      const prevColumnsKey = JSON.stringify(buildPaidOptionInfoColumns(sourceColumns))
-      const nextColumnsKey = JSON.stringify(nextColumns)
-      if (prevColumnsKey === nextColumnsKey) {
-        window.alert("옵션정보가 이미 최신입니다.")
-        return
-      }
+      const nextColumns = applyOptionDashboardPayloadToPaidOptionColumns(sourceColumns, payload)
       markManualInputDirty()
       const nextDraft = {
         ...sourceDraft,
@@ -3541,7 +3586,8 @@ export function DashboardShell({
       setManualDraft(nextDraft)
       manualPreviewDraftRef.current = nextDraft
       setManualPreviewDraft(nextDraft)
-      window.alert("옵션정보를 불러왔습니다.")
+      const importedSummary = nextColumns.map((column: any) => `${column.title} ${column.total}`).join(", ")
+      window.alert(`옵션정보를 불러왔습니다.\n${importedSummary}`)
     } catch (error: any) {
       const message = String(error?.message || "옵션정보를 불러오지 못했습니다.")
       window.alert(message)
@@ -6026,7 +6072,7 @@ export function DashboardShell({
         </table>
       </div>
     ),
-    [manualPaidOptionColumns],
+    [manualPaidOptionColumns, reloadPaidOptionInfo],
   )
 
   const manualTerminationOverviewSection = useMemo(

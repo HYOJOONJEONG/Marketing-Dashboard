@@ -650,10 +650,11 @@ export async function GET(req: Request) {
   const search = (searchParams.get("search") || "").toLowerCase()
   const activeOnly = searchParams.get("activeOnly") !== "0"
   const includeRecords = searchParams.get("includeRecords") !== "0"
+  const refresh = searchParams.get("refresh") === "1"
   const cacheKey = `${basis}|${date}|${categoryFilter}|${statusFilter}|${search}|${activeOnly ? "1" : "0"}|${includeRecords ? "records" : "summary"}`
 
   const cachedResponse = getResponseCache.get(cacheKey)
-  if (cachedResponse && cachedResponse.expiresAt > Date.now()) {
+  if (!refresh && cachedResponse && cachedResponse.expiresAt > Date.now()) {
     return NextResponse.json(cachedResponse.payload)
   }
 
