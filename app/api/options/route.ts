@@ -44,11 +44,11 @@ let industryMapCache: { expiresAt: number; value: Map<string, string> } | null =
 let bundledSofrRecordsCache: any[] | null = null
 
 function normalizeCategoryCode(value: unknown) {
-  return String(value ?? "").trim()
+  return String(value ?? "").trim().toUpperCase()
 }
 
 function isCountableIndexRecord(row: any) {
-  if (String(row?.category_code || "").trim() !== "INDEX") return true
+  if (normalizeCategoryCode(row?.category_code) !== "INDEX") return true
   const subType = String(row?.sub_type || "").trim()
   const userId = String(row?.user_id || "").trim()
   return INDEX_COUNTABLE_SUB_TYPES.has(subType) && !INDEX_EXCLUDED_USER_IDS.has(userId)
@@ -250,7 +250,7 @@ function normalizeSofrOptionRecords(mock: any) {
   let changed = false
   const normalized: any[] = []
   for (const record of mock.optionRecords) {
-    if (!record || typeof record !== "object" || record.category_code !== "SOFR") {
+    if (!record || typeof record !== "object" || normalizeCategoryCode(record.category_code) !== "SOFR") {
       normalized.push(record)
       continue
     }
@@ -259,8 +259,16 @@ function normalizeSofrOptionRecords(mock: any) {
     const ids = applyIds.length ? applyIds : splitOptionUserIds(record.user_id)
 
     if (!ids.length) {
-      if (record.requester_name !== "" || record.contact !== "" || Number(record.is_active) !== 1) changed = true
-      normalized.push({ ...record, requester_name: "", contact: "", is_active: 1 })
+      if (
+        record.category_code !== "SOFR" ||
+        record.category_name_ko !== "SOFR" ||
+        record.requester_name !== "" ||
+        record.contact !== "" ||
+        Number(record.is_active) !== 1
+      ) {
+        changed = true
+      }
+      normalized.push({ ...record, category_code: "SOFR", category_name_ko: "SOFR", requester_name: "", contact: "", is_active: 1 })
       continue
     }
 
@@ -270,6 +278,8 @@ function normalizeSofrOptionRecords(mock: any) {
       ids.length === 1 &&
       originalUserId === ids[0] &&
       (!originalApplyIds || originalApplyIds === ids[0]) &&
+      record.category_code === "SOFR" &&
+      record.category_name_ko === "SOFR" &&
       String(record.apply_count || "1").trim() === "1" &&
       Number(record.is_active) === 1 &&
       record.requester_name === "" &&
@@ -283,6 +293,8 @@ function normalizeSofrOptionRecords(mock: any) {
         record_id: ids.length === 1 && originalUserId === id
           ? record.record_id
           : `sofr-${id.toLowerCase()}`,
+        category_code: "SOFR",
+        category_name_ko: "SOFR",
         user_id: id,
         requester_name: "",
         contact: "",
@@ -300,8 +312,15 @@ function normalizeSofrOptionRecords(mock: any) {
 
 function getSofrRecords(mock: any) {
   return Array.isArray(mock?.optionRecords)
-    ? mock.optionRecords.filter((record: any) => record?.category_code === "SOFR")
+    ? mock.optionRecords.filter((record: any) => normalizeCategoryCode(record?.category_code) === "SOFR")
     : []
+}
+
+function getSingleOptionUserId(record: any) {
+  const userIds = splitOptionUserIds(record?.user_id)
+  if (userIds.length) return userIds[0]
+  const applyIds = splitOptionUserIds(record?.apply_ids)
+  return applyIds[0] || ""
 }
 
 async function loadBundledSofrRecords(): Promise<any[]> {
@@ -314,10 +333,13 @@ async function loadBundledSofrRecords(): Promise<any[]> {
       .filter((record: any) => splitOptionUserIds(record?.user_id).length === 1)
       .map((record: any) => ({
         ...record,
+        category_code: "SOFR",
+        category_name_ko: "SOFR",
         requester_name: "",
         contact: "",
         apply_count: "1",
         apply_ids: String(record.user_id || "").trim().toUpperCase(),
+        is_active: 1,
       }))
     bundledSofrRecordsCache = records
     return records
@@ -330,12 +352,53 @@ async function loadBundledSofrRecords(): Promise<any[]> {
 
 async function hydrateSofrFromBundledMockIfNewer(mock: any) {
   if (!Array.isArray(mock?.optionRecords)) return false
-  const currentCount = getSofrRecords(mock).length
   const bundledSofrRecords = await loadBundledSofrRecords()
-  if (bundledSofrRecords.length <= currentCount) return false
+  if (!bundledSofrRecords.length) return false
+  const currentSofrRecords = getSofrRecords(mock)
+  const currentByUserId = new Map<string, any>()
+  for (const record of currentSofrRecords) {
+    const userId = getSingleOptionUserId(record)
+    if (userId && !currentByUserId.has(userId)) currentByUserId.set(userId, record)
+  }
+  const bundledIds = bundledSofrRecords.map((record: any) => getSingleOptionUserId(record)).filter(Boolean)
+  const bundledIdSet = new Set(bundledIds)
+  const visibleCurrentIds = new Set(
+    currentSofrRecords
+      .filter((record: any) => Number(record?.is_active) === 1)
+      .map((record: any) => getSingleOptionUserId(record))
+      .filter((id: string) => id && bundledIdSet.has(id)),
+  )
+  const hasAllBundledVisibleIds =
+    visibleCurrentIds.size === bundledIds.length && bundledIds.every((id) => visibleCurrentIds.has(id))
+  const hasOnlyBundledSofrRows =
+    currentSofrRecords.length === bundledIds.length &&
+    currentSofrRecords.every((record: any) => {
+      const userId = getSingleOptionUserId(record)
+      return userId && bundledIdSet.has(userId)
+    })
+  if (hasAllBundledVisibleIds && hasOnlyBundledSofrRows) return false
+
+  const reconciledSofrRecords = bundledSofrRecords.map((bundledRecord) => {
+    const userId = getSingleOptionUserId(bundledRecord)
+    const currentRecord = currentByUserId.get(userId) || {}
+    return {
+      ...bundledRecord,
+      ...currentRecord,
+      record_id: `sofr-${userId.toLowerCase()}`,
+      category_code: "SOFR",
+      category_name_ko: "SOFR",
+      sub_type: bundledRecord.sub_type || currentRecord.sub_type || "SOFR",
+      user_id: userId,
+      requester_name: "",
+      contact: "",
+      apply_count: "1",
+      apply_ids: userId,
+      is_active: 1,
+    }
+  })
   mock.optionRecords = [
-    ...mock.optionRecords.filter((record: any) => record?.category_code !== "SOFR"),
-    ...bundledSofrRecords.map((record: any) => ({ ...record })),
+    ...mock.optionRecords.filter((record: any) => normalizeCategoryCode(record?.category_code) !== "SOFR"),
+    ...reconciledSofrRecords,
   ]
   return true
 }
@@ -381,7 +444,7 @@ function buildCounts(records: any[], categories: any[]) {
   const active = records.filter((row) => Number(row.is_active) === 1)
   const getUniqueCount = (code: string) => {
     const ids = active
-      .filter((row) => row.category_code === code)
+      .filter((row) => normalizeCategoryCode(row.category_code) === code)
       .map((row) => row.user_id)
       .filter(Boolean)
     return new Set(ids).size
@@ -390,12 +453,12 @@ function buildCounts(records: any[], categories: any[]) {
     const code = cat.category_code
     if (code === "BOND") {
       // 해외채권은 동일 사용자ID가 여러 행에 있을 수 있으므로 엑셀/상세목록의 행 건수 기준으로 집계합니다.
-      counts[code] = records.filter((row) => row.category_code === code).length
+      counts[code] = records.filter((row) => normalizeCategoryCode(row.category_code) === code).length
       continue
     }
     if (code === "SOFR") {
       let sum = 0
-      for (const row of active.filter((r) => r.category_code === code)) {
+      for (const row of active.filter((r) => normalizeCategoryCode(r.category_code) === code)) {
         const raw = String(row.apply_count || "")
         const digits = raw.replace(/[^0-9]/g, "")
         const value = digits ? Number(digits) : 0
@@ -406,7 +469,7 @@ function buildCounts(records: any[], categories: any[]) {
     }
     if (code === "INDEX") {
       const ids = active
-        .filter((row) => row.category_code === code)
+        .filter((row) => normalizeCategoryCode(row.category_code) === code)
         .filter(isCountableIndexRecord)
         .map((row) => row.user_id)
         .filter(Boolean)
@@ -418,10 +481,10 @@ function buildCounts(records: any[], categories: any[]) {
       continue
     }
     if (code === "STOCK") {
-      counts[code] = active.filter((row) => row.category_code === code).length
+      counts[code] = active.filter((row) => normalizeCategoryCode(row.category_code) === code).length
       continue
     }
-    counts[code] = active.filter((row) => row.category_code === code).length
+    counts[code] = active.filter((row) => normalizeCategoryCode(row.category_code) === code).length
   }
   return counts
 }
@@ -432,7 +495,8 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const basis = searchParams.get("basis") || "seed"
   const date = searchParams.get("date") || ""
-  const categoryFilter = searchParams.get("category") || "all"
+  const rawCategoryFilter = searchParams.get("category") || "all"
+  const categoryFilter = rawCategoryFilter.trim().toLowerCase() === "all" ? "all" : normalizeCategoryCode(rawCategoryFilter)
   const statusFilter = searchParams.get("status") || "all"
   const search = (searchParams.get("search") || "").toLowerCase()
   const activeOnly = searchParams.get("activeOnly") !== "0"
@@ -498,8 +562,8 @@ export async function GET(req: Request) {
         .filter((row: any) => {
           const rowCategory = normalizeCategoryCode(row.category_code)
           if (activeOnly && rowCategory !== "BOND" && Number(row.is_active) !== 1) return false
-          if (activeOnly && row.category_code === "INDEX" && !isCountableIndexRecord(row)) return false
-          if (categoryFilter !== "all" && row.category_code !== categoryFilter) return false
+          if (activeOnly && rowCategory === "INDEX" && !isCountableIndexRecord(row)) return false
+          if (categoryFilter !== "all" && rowCategory !== categoryFilter) return false
           const normalizedStatus = normalizeStatus(row.status)
           if (statusFilter !== "all" && normalizedStatus !== statusFilter) return false
           if (!search) return true
@@ -517,7 +581,8 @@ export async function GET(req: Request) {
             ...row,
             requester_name: "",
             contact: "",
-            category_name_ko: row.category_name_ko || CATEGORY_LABELS[row.category_code] || row.category_code,
+            category_code: normalizeCategoryCode(row.category_code),
+            category_name_ko: row.category_name_ko || CATEGORY_LABELS[normalizeCategoryCode(row.category_code)] || row.category_code,
             sub_type: resolvedIndustry,
             industry: resolvedIndustry,
             status: normalizeStatus(row.status),
