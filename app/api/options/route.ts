@@ -383,6 +383,25 @@ function getSingleOptionUserId(record: any) {
   return applyIds[0] || ""
 }
 
+function normalizeOptionUserId(value: unknown) {
+  const ids = splitOptionUserIds(value)
+  return ids[0] || String(value ?? "").trim().toUpperCase()
+}
+
+function getDeletedSofrUserIds(mock: any): Set<string> {
+  return new Set<string>(
+    (Array.isArray(mock?.sofrDeletedUserIds) ? mock.sofrDeletedUserIds : [])
+      .map((value: unknown) => normalizeOptionUserId(value))
+      .filter((value: string) => Boolean(value)),
+  )
+}
+
+function setDeletedSofrUserIds(mock: any, deletedIds: Set<string>) {
+  const ids = Array.from(deletedIds).filter(Boolean).sort()
+  if (ids.length) mock.sofrDeletedUserIds = ids
+  else delete mock.sofrDeletedUserIds
+}
+
 function withRequiredSofrRecords(records: any[]) {
   const byUserId = new Map<string, any>()
   for (const record of records) {
@@ -450,13 +469,19 @@ async function hydrateSofrFromBundledMockIfNewer(mock: any) {
   if (!Array.isArray(mock?.optionRecords)) return false
   const bundledSofrRecords = await loadBundledSofrRecords()
   if (!bundledSofrRecords.length) return false
+  const deletedSofrIds = getDeletedSofrUserIds(mock)
+  const availableBundledRecords = bundledSofrRecords.filter((record: any) => {
+    const userId = getSingleOptionUserId(record)
+    return userId && !deletedSofrIds.has(userId)
+  })
+  if (!availableBundledRecords.length) return false
   const currentSofrRecords = getSofrRecords(mock)
   const currentByUserId = new Map<string, any>()
   for (const record of currentSofrRecords) {
     const userId = getSingleOptionUserId(record)
     if (userId && !currentByUserId.has(userId)) currentByUserId.set(userId, record)
   }
-  const bundledIds = bundledSofrRecords.map((record: any) => getSingleOptionUserId(record)).filter(Boolean)
+  const bundledIds = availableBundledRecords.map((record: any) => getSingleOptionUserId(record)).filter(Boolean)
   const bundledIdSet = new Set(bundledIds)
   const visibleCurrentIds = new Set(
     currentSofrRecords
@@ -466,15 +491,9 @@ async function hydrateSofrFromBundledMockIfNewer(mock: any) {
   )
   const hasAllBundledVisibleIds =
     visibleCurrentIds.size === bundledIds.length && bundledIds.every((id) => visibleCurrentIds.has(id))
-  const hasOnlyBundledSofrRows =
-    currentSofrRecords.length === bundledIds.length &&
-    currentSofrRecords.every((record: any) => {
-      const userId = getSingleOptionUserId(record)
-      return userId && bundledIdSet.has(userId)
-    })
-  if (hasAllBundledVisibleIds && hasOnlyBundledSofrRows) return false
+  if (hasAllBundledVisibleIds) return false
 
-  const reconciledSofrRecords = bundledSofrRecords.map((bundledRecord) => {
+  const reconciledSofrRecords = availableBundledRecords.map((bundledRecord) => {
     const userId = getSingleOptionUserId(bundledRecord)
     const currentRecord = currentByUserId.get(userId) || {}
     return {
@@ -492,9 +511,28 @@ async function hydrateSofrFromBundledMockIfNewer(mock: any) {
       is_active: 1,
     }
   })
+  const extraSofrRecords = currentSofrRecords
+    .map((record: any) => {
+      const userId = getSingleOptionUserId(record)
+      if (!userId || bundledIdSet.has(userId)) return null
+      return {
+        ...record,
+        record_id: record.record_id || `sofr-${userId.toLowerCase()}`,
+        category_code: "SOFR",
+        category_name_ko: "SOFR",
+        user_id: userId,
+        requester_name: "",
+        contact: "",
+        apply_count: "1",
+        apply_ids: userId,
+        is_active: Number(record.is_active ?? 1),
+      }
+    })
+    .filter(Boolean)
   mock.optionRecords = [
     ...mock.optionRecords.filter((record: any) => normalizeCategoryCode(record?.category_code) !== "SOFR"),
     ...reconciledSofrRecords,
+    ...extraSofrRecords,
   ]
   return true
 }
@@ -726,9 +764,31 @@ export async function POST(req: Request) {
     const record = payload?.record
 
     if (action === "upsert" && record) {
-      const recordId = record.record_id || `record-${Date.now()}`
-      const existingIndex = optionRecords.findIndex((row: any) => row.record_id === recordId)
       const categoryCode = normalizeCategoryCode(record.category_code)
+      const normalizedUserId = normalizeOptionUserId(record.user_id || record.apply_ids)
+      const recordId =
+        categoryCode === "SOFR" && normalizedUserId
+          ? `sofr-${normalizedUserId.toLowerCase()}`
+          : record.record_id || `record-${Date.now()}`
+      const existingIndex = optionRecords.findIndex(
+        (row: any) => row.record_id === recordId || (record.record_id && row.record_id === record.record_id),
+      )
+      if (categoryCode === "SOFR") {
+        if (!normalizedUserId) {
+          return NextResponse.json({ ok: false, error: "SOFR 사용자ID를 입력해 주세요." }, { status: 400 })
+        }
+        const duplicate = optionRecords.find((row: any) => {
+          if (normalizeCategoryCode(row?.category_code) !== "SOFR") return false
+          if (record.record_id && String(row?.record_id || "") === String(record.record_id)) return false
+          return getSingleOptionUserId(row) === normalizedUserId
+        })
+        if (duplicate) {
+          return NextResponse.json(
+            { ok: false, error: `중복된 SOFR 사용자ID가 존재합니다. (${normalizedUserId})` },
+            { status: 409 },
+          )
+        }
+      }
       const categoryLabel = CATEGORY_LABELS[categoryCode] || record.category_name_ko || categoryCode
       const resolvedIndustry = resolveIndustry(record, companyIndustryMap, categoryCode)
       const nextRecord = {
@@ -740,17 +800,36 @@ export async function POST(req: Request) {
         category_name_ko: categoryLabel,
         sub_type: resolvedIndustry,
         industry: resolvedIndustry,
+        user_id: categoryCode === "SOFR" ? normalizedUserId : record.user_id,
+        apply_count: categoryCode === "SOFR" ? "1" : record.apply_count,
+        apply_ids: categoryCode === "SOFR" ? normalizedUserId : record.apply_ids,
         status: normalizeStatus(record.status),
         is_active: Number(record.is_active ?? 1),
       }
       if (existingIndex >= 0) optionRecords[existingIndex] = nextRecord
       else optionRecords.unshift(nextRecord)
+      if (categoryCode === "SOFR") {
+        const deletedSofrIds = getDeletedSofrUserIds(mock)
+        deletedSofrIds.delete(normalizedUserId)
+        setDeletedSofrUserIds(mock, deletedSofrIds)
+      }
     }
 
     if (action === "delete" && payload?.record_id) {
       const target = payload.record_id
       const idx = optionRecords.findIndex((row: any) => row.record_id === target)
-      if (idx >= 0) optionRecords.splice(idx, 1)
+      if (idx >= 0) {
+        const targetRecord = optionRecords[idx]
+        if (normalizeCategoryCode(targetRecord?.category_code) === "SOFR") {
+          const userId = getSingleOptionUserId(targetRecord)
+          if (userId) {
+            const deletedSofrIds = getDeletedSofrUserIds(mock)
+            deletedSofrIds.add(userId)
+            setDeletedSofrUserIds(mock, deletedSofrIds)
+          }
+        }
+        optionRecords.splice(idx, 1)
+      }
     }
 
     mock.optionRecords = optionRecords

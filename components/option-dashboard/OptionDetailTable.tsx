@@ -84,6 +84,7 @@ export function OptionDetailTable({
 
   const isBondView = selectedCategoryCode === "BOND"
   const isSignageView = selectedCategoryCode === "SIGNAGE"
+  const isSofrView = selectedCategoryCode === "SOFR"
   const tableClass = tableBaseClass
   const actionColumnClass = isSignageView
     ? "w-[92px] px-1 py-1.5 text-[11px] whitespace-nowrap text-center leading-tight"
@@ -206,17 +207,34 @@ export function OptionDetailTable({
     return list
   }, [records, sortKey, sortDir])
 
-  const duplicateBondUserIds = React.useMemo(() => {
-    if (!isBondView) return new Set<string>()
+  const normalizeUserId = React.useCallback((value: unknown) => {
+    const match = String(value ?? "").match(/E\d{6}/i)
+    return (match ? match[0] : String(value ?? "").trim()).toUpperCase()
+  }, [])
+
+  const duplicateTrackedUserIds = React.useMemo(() => {
+    if (!isBondView && !isSofrView) return new Set<string>()
     const counts = new Map<string, number>()
     records.forEach((record) => {
-      if (record.category_code !== "BOND") return
-      const userId = String(record.user_id ?? "").trim()
+      const userId = normalizeUserId(record.user_id)
       if (!userId) return
       counts.set(userId, (counts.get(userId) ?? 0) + 1)
     })
     return new Set(Array.from(counts.entries()).filter(([, count]) => count > 1).map(([userId]) => userId))
-  }, [isBondView, records])
+  }, [isBondView, isSofrView, normalizeUserId, records])
+
+  const hasDuplicateUserId = React.useCallback(
+    (userId: unknown, exceptRecordId?: string) => {
+      if (!isSofrView) return false
+      const normalized = normalizeUserId(userId)
+      if (!normalized) return false
+      return records.some((record) => {
+        if (exceptRecordId && record.record_id === exceptRecordId) return false
+        return normalizeUserId(record.user_id) === normalized
+      })
+    },
+    [isSofrView, normalizeUserId, records],
+  )
 
   const getRecordRowKey = React.useCallback((record: OptionRecord, index: number) => {
     return record.record_id || `${record.category_code}-${record.user_id}-${record.company_name}-${index}`
@@ -318,6 +336,10 @@ export function OptionDetailTable({
   const handleCreate = async () => {
     if (!newRecord) return
     if (!newRecord.category_code) return
+    if (hasDuplicateUserId(newRecord.user_id)) {
+      window.alert(`중복된 SOFR 사용자ID가 존재합니다. (${normalizeUserId(newRecord.user_id)})`)
+      return
+    }
     try {
       await onSaveRecord(newRecord)
       setNewRecord({
@@ -339,6 +361,10 @@ export function OptionDetailTable({
 
   const handleSave = async () => {
     if (!draft) return
+    if (hasDuplicateUserId(draft.user_id, draft.record_id)) {
+      window.alert(`중복된 SOFR 사용자ID가 존재합니다. (${normalizeUserId(draft.user_id)})`)
+      return
+    }
     try {
       await onSaveRecord(draft)
       setEditingId(null)
@@ -416,9 +442,9 @@ export function OptionDetailTable({
         <div className="flex items-center gap-2">
           <div className="text-[15px] font-bold text-slate-900">상세 목록</div>
           <span className="text-[12px] text-slate-500">{records.length}건</span>
-          {isBondView && duplicateBondUserIds.size > 0 && (
+          {(isBondView || isSofrView) && duplicateTrackedUserIds.size > 0 && (
             <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
-              중복 ID {duplicateBondUserIds.size}개
+              중복 ID {duplicateTrackedUserIds.size}개
             </span>
           )}
         </div>
@@ -599,10 +625,10 @@ export function OptionDetailTable({
               sortedRecords.map((row, index) => {
                 const isEditing = editingId && row.record_id === editingId
                 const rowKey = getRecordRowKey(row, index)
-                const rowUserId = String(row.user_id ?? "").trim()
-                const isDuplicateBondUserId = isBondView && duplicateBondUserIds.has(rowUserId)
+                const rowUserId = normalizeUserId(row.user_id)
+                const isDuplicateTrackedUserId = (isBondView || isSofrView) && duplicateTrackedUserIds.has(rowUserId)
                 return (
-                  <tr key={row.record_id || `${row.user_id}-${index}`} className={isDuplicateBondUserId ? "bg-rose-50/70" : undefined}>
+                  <tr key={row.record_id || `${row.user_id}-${index}`} className={isDuplicateTrackedUserId ? "bg-rose-50/70" : undefined}>
                     {columns.map((column) => {
                       const value =
                         column.key === "row_no"
@@ -613,7 +639,7 @@ export function OptionDetailTable({
                       const cellClass = `${tdClass} ${column.cellClass || "whitespace-nowrap"} ${
                         isSignageView ? "px-2 py-1.5 text-[11.5px]" : isBondView ? "px-2 py-1.5 text-[11.5px]" : ""
                       } ${
-                        isDuplicateBondUserId && column.key === "user_id"
+                        isDuplicateTrackedUserId && column.key === "user_id"
                           ? "bg-rose-100 font-bold text-rose-700 ring-1 ring-inset ring-rose-200"
                           : ""
                       }`
