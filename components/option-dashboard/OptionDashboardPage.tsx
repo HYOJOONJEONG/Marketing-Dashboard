@@ -13,18 +13,16 @@ export function OptionDashboardPage() {
   const [searchInput, setSearchInput] = useState("")
   const [search, setSearch] = useState("")
 
-  const { data, loading, detailLoading, error } = useOptionDashboardData({
+  const { data, loading, detailLoading, error, isStale } = useOptionDashboardData({
     basis,
     date,
-    category: categoryFilter,
-    search,
     refreshKey,
   })
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearch(searchInput.trim())
-    }, 220)
+    }, 120)
     return () => clearTimeout(timer)
   }, [searchInput])
 
@@ -40,9 +38,16 @@ export function OptionDashboardPage() {
     return data.categories.filter((cat) => cat.category_code !== "API")
   }, [data?.categories])
   const records = useMemo(() => {
-    if (!data?.records) return []
-    return data.records.filter((row) => row.category_code !== "API")
-  }, [data?.records])
+    if (!data?.records || isStale) return []
+    const searchTerm = search.trim().toLowerCase()
+    return data.records
+      .filter((row) => row.category_code !== "API")
+      .filter((row) => categoryFilter === "all" || row.category_code === categoryFilter)
+      .filter((row) => {
+        if (!searchTerm) return true
+        return `${row.company_name || ""} ${row.user_id || ""} ${row.department || ""}`.toLowerCase().includes(searchTerm)
+      })
+  }, [categoryFilter, data?.records, isStale, search])
 
   useEffect(() => {
     if (basis === "date" && !date && historyDates.length) {

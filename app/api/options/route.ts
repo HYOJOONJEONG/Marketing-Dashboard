@@ -236,6 +236,21 @@ function resolveIndustry(
   )
 }
 
+function resolveDisplayIndustry(row: any, categoryCode?: string) {
+  const company = String(row?.company_name || "").trim()
+  const rawSubType = String(row?.sub_type || "").trim()
+  const rawIndustry = String(row?.industry || "").trim()
+  const normalizedSubType = normalizeIndustry(rawSubType)
+  const normalizedIndustry = normalizeIndustry(rawIndustry)
+  const code = String(categoryCode || row?.category_code || "").trim()
+  const isGeneric =
+    !rawSubType || rawSubType === code || rawSubType === (CATEGORY_LABELS[code] || "")
+  if (normalizedSubType) return normalizedSubType
+  if (normalizedIndustry) return normalizedIndustry
+  if (!isGeneric && rawSubType) return rawSubType
+  return inferIndustryFromCompany(company)
+}
+
 function buildCompanyIndustryMap(records: any[]) {
   const byCompany = new Map<string, Map<string, number>>()
   for (const row of records || []) {
@@ -690,7 +705,6 @@ export async function GET(req: Request) {
 
     let records: any[] = []
     if (includeRecords) {
-      const companyIndustryMap = buildCompanyIndustryMap(optionRecordsRaw)
       const resolvedIndustryCache = new Map<string, string>()
       records = optionRecordsRaw
         .filter((row: any) => {
@@ -708,7 +722,7 @@ export async function GET(req: Request) {
           const industryCacheKey = `${row.category_code || ""}|${row.company_name || ""}|${row.sub_type || ""}|${row.industry || ""}`
           let resolvedIndustry = resolvedIndustryCache.get(industryCacheKey)
           if (resolvedIndustry === undefined) {
-            resolvedIndustry = resolveIndustry(row, companyIndustryMap, row.category_code)
+            resolvedIndustry = resolveDisplayIndustry(row, row.category_code)
             resolvedIndustryCache.set(industryCacheKey, resolvedIndustry)
           }
           return {

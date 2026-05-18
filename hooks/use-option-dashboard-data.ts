@@ -69,6 +69,7 @@ function buildDetailQuery(params: Params) {
 
 export function useOptionDashboardData(params: Params) {
   const [data, setData] = useState<OptionDashboardResponse | null>(null)
+  const [dataKey, setDataKey] = useState("")
   const [loading, setLoading] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -85,6 +86,7 @@ export function useOptionDashboardData(params: Params) {
     const isFreshCache = cached && Date.now() - cached.timestamp < CACHE_TTL_MS
     if (isFreshCache) {
       setData(cached.data)
+      setDataKey(detailCacheKey)
       setLoading(false)
       setDetailLoading(false)
       setError(null)
@@ -95,6 +97,7 @@ export function useOptionDashboardData(params: Params) {
 
     if (cached) {
       setData(cached.data)
+      setDataKey(detailCacheKey)
     }
 
     setLoading(!cached && !data)
@@ -113,6 +116,7 @@ export function useOptionDashboardData(params: Params) {
         if (!mounted) return
         responseCache.set(detailCacheKey, { timestamp: Date.now(), data: json })
         setData(json)
+        setDataKey(detailCacheKey)
       })
       .catch((err) => {
         if (!mounted) return
@@ -130,5 +134,5 @@ export function useOptionDashboardData(params: Params) {
     }
   }, [detailCacheKey, detailQuery, params.refreshKey])
 
-  return { data, loading, detailLoading, error }
+  return { data, loading, detailLoading, error, isStale: Boolean(data && dataKey !== detailCacheKey) }
 }

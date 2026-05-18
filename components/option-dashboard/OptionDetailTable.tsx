@@ -11,12 +11,12 @@ type Props = {
   onDeleteRecord: (recordId: string) => Promise<void>
 }
 
-const tableBaseClass = "w-full table-fixed text-[12px]"
+const tableBaseClass = "w-full table-fixed text-[14px]"
 const thClass =
-  "border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-[11.5px] font-semibold text-slate-600 whitespace-nowrap"
-const tdClass = "border-t border-slate-200 px-2 py-1.5 text-center text-[12px] text-slate-800"
-const inputClass = "h-8 w-full rounded-md border border-slate-200/80 bg-white/90 px-2 text-[12px]"
-const labelClass = "mb-1 text-[11px] font-semibold text-slate-600"
+  "border-b border-slate-200 bg-slate-50 px-2 py-2 text-center text-[13px] font-semibold text-slate-600 whitespace-nowrap"
+const tdClass = "border-t border-slate-200 px-2 py-2 text-center text-[14px] text-slate-800"
+const inputClass = "h-9 w-full rounded-md border border-slate-200/80 bg-white/90 px-2 text-[13px]"
+const labelClass = "mb-1 text-[12px] font-semibold text-slate-600"
 
 export function OptionDetailTable({
   records,
@@ -87,12 +87,12 @@ export function OptionDetailTable({
   const isSofrView = selectedCategoryCode === "SOFR"
   const tableClass = tableBaseClass
   const actionColumnClass = isSignageView
-    ? "w-[92px] px-1 py-1.5 text-[11px] whitespace-nowrap text-center leading-tight"
+    ? "w-[104px] px-1.5 py-2 text-[12px] whitespace-nowrap text-center leading-tight"
     : isBondView
-      ? "w-[92px] px-1 py-1.5 text-[11px] whitespace-nowrap text-center leading-tight"
-      : "w-[104px] px-1 py-1.5 text-[11px] whitespace-nowrap text-center leading-tight"
+      ? "w-[104px] px-1.5 py-2 text-[12px] whitespace-nowrap text-center leading-tight"
+      : "w-[108px] px-1.5 py-2 text-[12px] whitespace-nowrap text-center leading-tight"
   const actionButtonClass =
-    "inline-flex h-7 min-w-[28px] items-center justify-center whitespace-nowrap rounded-md border px-1 text-[11px] font-semibold leading-none transition"
+    "inline-flex h-8 min-w-[32px] items-center justify-center whitespace-nowrap rounded-md border px-1.5 text-[12px] font-semibold leading-none transition"
 
   React.useEffect(() => {
     if (!newRecord && categoryOptions.length) {
@@ -392,7 +392,7 @@ export function OptionDetailTable({
         <select
           value={normalized || draft.sub_type || ""}
           onChange={(event) => handleDraftChange("sub_type", event.target.value)}
-          className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px]"
+          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-[13px]"
         >
           <option value="">업종 선택</option>
           {industryOptions.map((option) => (
@@ -408,7 +408,7 @@ export function OptionDetailTable({
         <select
           value={draft.category_code}
           onChange={(event) => handleDraftChange("category_code", event.target.value)}
-          className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px]"
+          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-[13px]"
         >
           {categoryOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -423,7 +423,7 @@ export function OptionDetailTable({
         <textarea
           value={value}
           onChange={(event) => handleDraftChange(key, event.target.value)}
-          className="min-h-[72px] w-full resize-y rounded-lg border border-slate-200 bg-white px-2 py-2 text-[12px] leading-4"
+          className="min-h-[72px] w-full resize-y rounded-lg border border-slate-200 bg-white px-2 py-2 text-[13px] leading-5"
         />
       )
     }
@@ -431,7 +431,7 @@ export function OptionDetailTable({
       <input
         value={value}
         onChange={(event) => handleDraftChange(key, event.target.value)}
-        className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px]"
+        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-[13px]"
       />
     )
   }
@@ -586,9 +586,9 @@ export function OptionDetailTable({
                   key={column.key}
                   className={`${thClass} ${column.headerClass || ""} ${
                     isSignageView
-                      ? "px-2 py-1.5 text-[11px] whitespace-normal break-all text-center leading-tight"
+                      ? "px-2 py-2 text-[13px] whitespace-normal break-all text-center leading-tight"
                       : isBondView
-                        ? "px-2 py-1.5 text-[11px] whitespace-normal break-all text-center leading-tight"
+                        ? "px-2 py-2 text-[13px] whitespace-normal break-all text-center leading-tight"
                         : ""
                   }`}
                 >
@@ -617,7 +617,7 @@ export function OptionDetailTable({
           <tbody>
             {records.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 1} className="px-4 py-6 text-center text-[13px] text-slate-500">
+                <td colSpan={columns.length + 1} className="px-4 py-6 text-center text-[14px] text-slate-500">
                   표시할 데이터가 없습니다.
                 </td>
               </tr>
@@ -637,7 +637,7 @@ export function OptionDetailTable({
                             ? normalizeIndustry((row as any)[column.key])
                             : (row as any)[column.key]
                       const cellClass = `${tdClass} ${column.cellClass || "whitespace-nowrap"} ${
-                        isSignageView ? "px-2 py-1.5 text-[11.5px]" : isBondView ? "px-2 py-1.5 text-[11.5px]" : ""
+                        isSignageView ? "px-2 py-2 text-[14px]" : isBondView ? "px-2 py-2 text-[14px]" : ""
                       } ${
                         isDuplicateTrackedUserId && column.key === "user_id"
                           ? "bg-rose-100 font-bold text-rose-700 ring-1 ring-inset ring-rose-200"
@@ -715,7 +715,7 @@ export function OptionDetailTable({
                       )
                     })}
                     <td
-                      className={`${tdClass} whitespace-nowrap px-1.5 py-1.5 text-center align-middle`}
+                      className={`${tdClass} whitespace-nowrap px-1.5 py-2 text-center align-middle`}
                     >
                       {isEditing ? (
                         <div
