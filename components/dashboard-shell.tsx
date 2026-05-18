@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronDown, KeyRound, LogOut, Menu, MessageSquare, UserRound, X } from "lucide-react"
+import { ChevronDown, Clock3, KeyRound, LogOut, Menu, MessageSquare, UserRound, X } from "lucide-react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
 import { DailyReportPage } from "./daily-report/daily-report-page"
 import { PersonalDashboard } from "./me/personal-dashboard"
@@ -354,9 +354,9 @@ function formatMoney(value: unknown) {
 }
 
 function formatLastUpdated(value: unknown) {
-  if (!value) return "No updates yet"
+  if (!value) return ""
   const date = new Date(String(value))
-  if (Number.isNaN(date.getTime())) return "No updates yet"
+  if (Number.isNaN(date.getTime())) return ""
   const seoulDate = new Date(date.getTime() + 9 * 60 * 60 * 1000)
   const year = seoulDate.getUTCFullYear()
   const month = String(seoulDate.getUTCMonth() + 1).padStart(2, "0")
@@ -366,6 +366,27 @@ function formatLastUpdated(value: unknown) {
   const hour12 = hour24 % 12 || 12
   const minute = String(seoulDate.getUTCMinutes()).padStart(2, "0")
   return `${year}. ${month}. ${day}. ${period} ${String(hour12).padStart(2, "0")}:${minute}`
+}
+
+function UpdateTimestampBadge({ value }: { value: unknown }) {
+  const label = formatLastUpdated(value)
+
+  return (
+    <div
+      className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 text-[12px] font-semibold text-slate-500 ${label ? "px-3" : "w-9 px-0"}`}
+      title={label ? `최근 업데이트: ${label}` : "업데이트 기록 없음"}
+      aria-label={label ? `최근 업데이트 ${label}` : "업데이트 기록 없음"}
+      suppressHydrationWarning
+    >
+      <Clock3 className="h-3.5 w-3.5 text-slate-400" />
+      {label ? (
+        <>
+          <span className="hidden text-slate-400 sm:inline">업데이트</span>
+          <span className="whitespace-nowrap">{label}</span>
+        </>
+      ) : null}
+    </div>
+  )
 }
 
 function getSeoulTodayKey() {
@@ -6789,8 +6810,8 @@ export function DashboardShell({
         </aside>
 
         <main className="min-w-0 flex-1 px-3 py-3 sm:px-4 sm:py-4 lg:px-5 lg:py-5">
-            <div className={`${cardClass} dashboard-header ${view === "daily-report" ? "mb-3 px-5 py-3" : "mb-5 px-5 py-4"} flex items-start justify-between`}>
-            <div className="flex items-start gap-3">
+          <div className={`${cardClass} dashboard-header ${view === "daily-report" ? "mb-3 px-5 py-3" : "mb-5 px-5 py-4"} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}>
+            <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setIsSidebarOpen(true)}
@@ -6799,16 +6820,10 @@ export function DashboardShell({
               >
                 <Menu className="h-5 w-5" />
               </button>
-              <div>
-              <h1 className={`${view === "daily-report" ? "mt-1 text-[18px]" : "mt-2 text-[20px]"} font-black tracking-[-0.04em] text-slate-950`}>{viewTitles[view]}</h1>
-              {view !== "daily-report" ? (
-                <div className="mt-1 text-[12px] font-semibold text-slate-500" suppressHydrationWarning>
-                  Last update: {formatLastUpdated(currentMenuUpdatedAt)}
-                </div>
-              ) : null}
+              <h1 className={`${view === "daily-report" ? "text-[18px]" : "text-[20px]"} font-black tracking-[-0.04em] text-slate-950`}>{viewTitles[view]}</h1>
             </div>
-            </div>
-            <div className="dashboard-header-actions flex items-center gap-3">
+            <div className="dashboard-header-actions flex flex-wrap items-center justify-start gap-2 sm:justify-end sm:gap-3">
+              <UpdateTimestampBadge value={currentMenuUpdatedAt} />
               {showHeaderSave && (
                 <button
                   type="button"
