@@ -3,6 +3,7 @@ import path from "path"
 import { NextResponse } from "next/server"
 import { requireApiPermission } from "@/lib/auth/server"
 import { readDashboardState, readOptionsMock, writeOptionsMock } from "@/lib/shared-db-store"
+import seedOptionsMock from "@/data/options-dashboard.mock.json"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -408,28 +409,38 @@ function withRequiredSofrRecords(records: any[]) {
   return Array.from(byUserId.values())
 }
 
+function buildBundledSofrRecords(source: any) {
+  const parsed = JSON.parse(JSON.stringify(source || {}))
+  normalizeSofrOptionRecords(parsed)
+  return getSofrRecords(parsed)
+    .filter((record: any) => splitOptionUserIds(record?.user_id).length === 1)
+    .map((record: any) => ({
+      ...record,
+      category_code: "SOFR",
+      category_name_ko: "SOFR",
+      requester_name: "",
+      contact: "",
+      apply_count: "1",
+      apply_ids: String(record.user_id || "").trim().toUpperCase(),
+      is_active: 1,
+    }))
+}
+
 async function loadBundledSofrRecords(): Promise<any[]> {
   if (bundledSofrRecordsCache) return bundledSofrRecordsCache
+  const importedRecords = buildBundledSofrRecords(seedOptionsMock)
+  if (importedRecords.length) {
+    bundledSofrRecordsCache = withRequiredSofrRecords(importedRecords)
+    return bundledSofrRecordsCache
+  }
   try {
     const raw = await fs.readFile(MOCK_PATH, "utf8")
     const parsed = JSON.parse(raw)
-    normalizeSofrOptionRecords(parsed)
-    const records = getSofrRecords(parsed)
-      .filter((record: any) => splitOptionUserIds(record?.user_id).length === 1)
-      .map((record: any) => ({
-        ...record,
-        category_code: "SOFR",
-        category_name_ko: "SOFR",
-        requester_name: "",
-        contact: "",
-        apply_count: "1",
-        apply_ids: String(record.user_id || "").trim().toUpperCase(),
-        is_active: 1,
-      }))
+    const records = buildBundledSofrRecords(parsed)
     bundledSofrRecordsCache = withRequiredSofrRecords(records)
     return bundledSofrRecordsCache
   } catch {
-    const records = withRequiredSofrRecords([])
+    const records: any[] = []
     bundledSofrRecordsCache = records
     return records
   }
