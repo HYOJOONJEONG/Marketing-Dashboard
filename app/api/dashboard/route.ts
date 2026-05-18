@@ -63,6 +63,14 @@ function normalizeContractIdCode(value: unknown) {
   return String(value ?? "").trim().replace(/\s+/g, "").toUpperCase()
 }
 
+function normalizeDashboardDate(value: unknown) {
+  const digits = String(value ?? "").replace(/[^\d]/g, "")
+  if (digits.length > 8) return `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6, 8)}`
+  if (digits.length === 8) return `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6, 8)}`
+  if (digits.length === 6) return `20${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4, 6)}`
+  return String(value ?? "").trim()
+}
+
 function safeText(value: unknown) {
   return String(value ?? "").trim()
 }
@@ -312,10 +320,12 @@ export async function POST(request: Request) {
     const incoming = body.contract
     const incomingId = String(incoming.id || `c${Date.now()}`)
     const nextNo = contracts.reduce((max: number, row: any) => Math.max(max, Number(row?.no || 0)), 0) + 1
+    const now = new Date().toISOString()
     const nextContract = {
       ...incoming,
       id: incomingId,
       no: Number(incoming.no || 0) > 0 ? Number(incoming.no) : nextNo,
+      registrationDate: normalizeDashboardDate(incoming.registrationDate || now),
       companyName: String(incoming.companyName || "").trim(),
       departmentName: String(incoming.departmentName || "").trim(),
       idCode: String(incoming.idCode || "").trim(),
@@ -329,8 +339,8 @@ export async function POST(request: Request) {
       createdBy: auth.context.user.id,
       teamId: auth.context.user.teamId,
       note: String(incoming.note || "").trim(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     }
 
     if (!nextContract.companyName || !nextContract.idCode) {

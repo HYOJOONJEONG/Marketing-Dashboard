@@ -215,6 +215,7 @@ type PresenceStatus = "online" | "away" | "offline"
 type CreateStatus = "idle" | "saving" | "success"
 type ContractSortKey =
   | "createdAt"
+  | "registrationDate"
   | "companyName"
   | "departmentName"
   | "idCode"
@@ -299,6 +300,8 @@ function matchesSearchQuery(value: unknown, query: string, identifierQuery: stri
 
 function getContractSearchText(row: Record<string, unknown>) {
   return [
+    row.registrationDate,
+    row.createdAt,
     row.companyName,
     row.departmentName,
     row.idCode,
@@ -326,8 +329,8 @@ function getTerminationSearchText(row: Record<string, unknown>) {
 }
 
 function compareContractValue(rowA: Record<string, unknown>, rowB: Record<string, unknown>, key: string) {
-  if (key === "createdAt") {
-    return parseDateKey(rowA.createdAt) - parseDateKey(rowB.createdAt)
+  if (key === "createdAt" || key === "registrationDate") {
+    return parseDateKey(rowA.registrationDate || rowA.createdAt) - parseDateKey(rowB.registrationDate || rowB.createdAt)
   }
   if (key === "contractMonth") {
     return parseContractMonthKey(rowA.contractMonth) - parseContractMonthKey(rowB.contractMonth)
@@ -481,6 +484,7 @@ function formatNumericInputDisplay(value: unknown) {
 
 function normalizeDate(value: unknown) {
   const digits = String(value ?? "").replace(/[^\d]/g, "")
+  if (digits.length > 8) return `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6, 8)}`
   if (digits.length === 8) return `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6, 8)}`
   if (digits.length === 6) return `20${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4, 6)}`
   return String(value ?? "")
@@ -510,6 +514,7 @@ function formatMonthLabel(value: unknown) {
 
 function toInputDate(value: unknown) {
   const digits = String(value ?? "").replace(/[^\d]/g, "")
+  if (digits.length > 8) return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
   if (digits.length === 8) return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
   return ""
 }
@@ -1882,6 +1887,7 @@ export function DashboardShell({
   const [paidOptionImportStatus, setPaidOptionImportStatus] = useState("")
   const [manualRevenueHeaderEdited, setManualRevenueHeaderEdited] = useState(false)
   const [contractDraft, setContractDraft] = useState<any>({
+    registrationDate: getSeoulTodayKey(),
     companyName: "",
     departmentName: "",
     idCode: "",
@@ -3461,6 +3467,7 @@ export function DashboardShell({
   function startContractEdit(row: any) {
     setEditingContractId(row.id)
     setEditingContractDraft({
+      registrationDate: toInputDate(row.registrationDate || row.createdAt),
       companyName: row.companyName || "",
       departmentName: row.departmentName || "",
       idCode: row.idCode || "",
@@ -3812,6 +3819,7 @@ export function DashboardShell({
       try {
         const nextContract = {
           id: `c${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          registrationDate: normalizeDate(contractDraft.registrationDate || getSeoulTodayKey()),
           companyName: contractDraft.companyName.trim(),
           departmentName: contractDraft.departmentName.trim(),
           idCode: contractDraft.idCode.trim(),
@@ -3857,6 +3865,7 @@ export function DashboardShell({
           window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mergedData))
         } catch {}
         setContractDraft({
+          registrationDate: getSeoulTodayKey(),
           companyName: "",
           departmentName: "",
           idCode: "",
@@ -3871,7 +3880,7 @@ export function DashboardShell({
         setContractStatusFilter("all")
         setContractReplacementFilter("all")
         setContractMonthFilter("all")
-        setContractSort({ key: "createdAt", dir: "desc" })
+        setContractSort({ key: "registrationDate", dir: "desc" })
         flashRecentRow(setRecentContractId, createdId)
         setContractCreateStatus("success")
       } catch (error: any) {
@@ -3895,6 +3904,7 @@ export function DashboardShell({
         row.id === contractId
           ? {
               ...row,
+              registrationDate: normalizeDate(editingContractDraft.registrationDate || row.registrationDate || row.createdAt),
               companyName: editingContractDraft.companyName.trim(),
               departmentName: editingContractDraft.departmentName.trim(),
               idCode: editingContractDraft.idCode.trim(),
@@ -7474,7 +7484,18 @@ export function DashboardShell({
                   </div>
                 ) : (
                 <div className="space-y-3">
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[12px] font-semibold text-slate-500">
+                        등록일
+                      </span>
+                      <input
+                        className="h-10 w-full rounded-2xl border border-slate-200 bg-white pl-[62px] pr-3 text-[14px]"
+                        type="date"
+                        value={contractDraft.registrationDate}
+                        onChange={(e)=>updateContractDraft("registrationDate", e.target.value)}
+                      />
+                    </div>
                     <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" placeholder="회사명" value={contractDraft.companyName} onChange={(e)=>updateContractDraft("companyName", e.target.value)} />
                     <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" placeholder="부서" value={contractDraft.departmentName} onChange={(e)=>updateContractDraft("departmentName", e.target.value)} />
                     <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" placeholder="아이디" value={contractDraft.idCode} onChange={(e)=>updateContractDraft("idCode", e.target.value)} />
@@ -7484,7 +7505,7 @@ export function DashboardShell({
                       ))}
                     </select>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                     <input
                       type="month"
                       className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]"
@@ -7593,6 +7614,9 @@ export function DashboardShell({
                   <thead>
                     <tr>
                       <th className={`${thClass} w-[52px] px-2 py-2 text-center text-[12px]`}>No.</th>
+                      <th className={`${thClass} w-[96px] px-2 py-2 text-[12px]`}>
+                        {renderSortLabel("등록일", contractSort.key === "registrationDate", contractSort.dir, () => toggleContractSort("registrationDate"))}
+                      </th>
                       <th className={`${thClass} px-2 py-2 text-[12px]`}>
                         {renderSortLabel("회사명", contractSort.key === "companyName", contractSort.dir, () => toggleContractSort("companyName"))}
                       </th>
@@ -7629,6 +7653,18 @@ export function DashboardShell({
                       return (
                         <tr key={row.id} className={recentContractId === row.id ? "recent-row-flash" : undefined}>
                           <td className={`${tdClass} w-[52px] px-2 py-2 text-center text-[12px]`}>{index + 1}</td>
+                          <td className={`${tdClass} w-[96px] px-2 py-2 text-[12px] tabular-nums`}>
+                            {editing ? (
+                              <input
+                                type="date"
+                                className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]"
+                                value={editingContractDraft.registrationDate || ""}
+                                onChange={(e)=>updateEditingContractDraft("registrationDate", e.target.value)}
+                              />
+                            ) : (
+                              <span className="block truncate">{formatDateOnlyDotted(row.registrationDate || row.createdAt)}</span>
+                            )}
+                          </td>
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
                             {editing ? <input className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]" value={editingContractDraft.companyName || ""} onChange={(e)=>updateEditingContractDraft("companyName", e.target.value)} /> : <span className="block truncate">{row.companyName}</span>}
                           </td>
