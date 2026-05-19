@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { StorageMemoryPanel } from "@/components/admin/storage-memory-panel"
 import { WorkspaceHeader } from "@/components/auth/workspace-header"
+import { ACTION_LABELS, MENU_LABELS } from "@/lib/auth/model"
 
 type Props = {
   currentUser: {
@@ -44,6 +45,45 @@ const tabPermissionMap: Record<AdminTabKey, string> = {
 const TITLE_OPTIONS = ["본부장", "팀장", "부장", "과장", "대리", "사원"] as const
 const EDITABLE_ACTIONS = ["create", "edit", "delete", "approve", "admin"] as const
 type PermissionUpdate = { menuKey: string; action: string; allowed: boolean }
+
+const PAGE_LABELS: Record<string, string> = {
+  ...MENU_LABELS,
+  login: "로그인",
+  logout: "로그아웃",
+  me: "내 페이지",
+}
+
+const ACTIVITY_ACTION_LABELS: Record<string, string> = {
+  login: "로그인",
+  logout: "로그아웃",
+  dashboard_put: "대시보드 저장",
+  contract_create: "신규계약 등록",
+  contract_update: "계약 정보 수정",
+  profile_update: "내 정보 저장",
+  password_change: "비밀번호 변경",
+  daily_report_ai_summary: "업무일지 AI 요약",
+  backup_restore: "백업 복구",
+  user_create: "사용자 추가",
+  user_restore: "사용자 복구",
+  user_update: "사용자 정보 수정",
+  user_delete: "사용자 삭제",
+  team_create: "팀 추가",
+  team_update: "팀 정보 수정",
+  permission_update: "권한 변경",
+  permission_override_reset: "개별 권한 초기화",
+}
+
+const TARGET_TYPE_LABELS: Record<string, string> = {
+  backup_json: "백업 파일",
+  contract: "계약",
+  dashboard_state: "대시보드 데이터",
+  daily_report_summary: "업무일지 요약",
+  role_permission: "역할 권한",
+  session: "접속 세션",
+  team: "팀",
+  user: "사용자",
+  user_permission_override: "사용자 개별 권한",
+}
 
 function inferRoleFromTitle(title: string) {
   if (title === "본부장") return "director"
@@ -800,7 +840,7 @@ export function AdminConsole({ currentUser, permissions, embedded = false }: Pro
           )}
 
           {currentTab === "activityLogs" && (
-            <LogTable title="활동로그" rows={bootstrap?.activityLogs || []} columns={["actorName", "actionType", "pageKey", "targetType", "success", "createdAt"]} />
+            <ActivityLogTable rows={bootstrap?.activityLogs || []} users={users} teams={teams} />
           )}
         </main>
       </div>
@@ -833,6 +873,185 @@ function LogTable({ title, rows, columns }: { title: string; rows: any[]; column
                 ))}
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+function parseLogJson(value: unknown) {
+  const text = String(value ?? "").trim()
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+function formatLogDateTime(value: unknown) {
+  const date = new Date(String(value || ""))
+  if (Number.isNaN(date.getTime())) return String(value ?? "")
+  return date.toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+function formatActivityTarget(row: any, userNameById: Record<string, string>, teamNameById: Record<string, string>) {
+  const targetType = String(row?.targetType || "")
+  const targetId = String(row?.targetId || "")
+  const typeLabel = TARGET_TYPE_LABELS[targetType] || targetType || "대상"
+  if (targetType === "user" || targetType === "user_permission_override") {
+    return `${typeLabel}: ${userNameById[targetId] || targetId || "-"}`
+  }
+  if (targetType === "team") {
+    return `${typeLabel}: ${teamNameById[targetId] || targetId || "-"}`
+  }
+  return targetId ? `${typeLabel}: ${targetId}` : typeLabel
+}
+
+function describePermissionUpdates(updates: any[]) {
+  const summary = updates.slice(0, 3).map((item) => {
+    const menuLabel = (MENU_LABELS as Record<string, string>)[String(item?.menuKey || "")] || item?.menuKey || "메뉴"
+    const actionLabel = (ACTION_LABELS as Record<string, string>)[String(item?.action || "")] || item?.action || "권한"
+    return `${menuLabel} ${actionLabel} ${item?.allowed ? "허용" : "해제"}`
+  })
+  const suffix = updates.length > 3 ? ` 외 ${updates.length - 3}건` : ""
+  return `${summary.join(", ")}${suffix}`
+}
+
+function describeActivity(row: any, userNameById: Record<string, string>, teamNameById: Record<string, string>) {
+  const actionType = String(row?.actionType || "")
+  const actionLabel = ACTIVITY_ACTION_LABELS[actionType] || actionType || "활동"
+  const pageLabel = PAGE_LABELS[String(row?.pageKey || "")] || String(row?.pageKey || "-")
+  const after = parseLogJson(row?.afterValue)
+  const before = parseLogJson(row?.beforeValue)
+
+  if (actionType === "permission_update") {
+    return {
+      title: `${actionLabel}`,
+      detail: Array.isArray(after?.updates) ? describePermissionUpdates(after.updates) : "권한 설정을 변경했습니다.",
+      pageLabel,
+    }
+  }
+  if (actionType === "permission_override_reset") {
+    return { title: actionLabel, detail: "사용자에게 따로 부여한 권한을 기본 권한으로 되돌렸습니다.", pageLabel }
+  }
+  if (actionType === "profile_update") {
+    const details = []
+    if (typeof after?.testIdEntryCount === "number") details.push(`시험아이디 ${after.testIdEntryCount}건 저장`)
+    if (Array.isArray(after?.assignedIndustries)) details.push(`담당업종 ${after.assignedIndustries.length}건 저장`)
+    if (Object.prototype.hasOwnProperty.call(after || {}, "avatarEmoji")) details.push("아바타 변경")
+    if (!details.length && typeof before?.testIdEntryCount === "number") details.push("시험아이디 목록 저장")
+    return { title: actionLabel, detail: details.join(" · ") || "프로필 정보를 저장했습니다.", pageLabel }
+  }
+  if (actionType === "dashboard_put") {
+    return { title: actionLabel, detail: `${pageLabel} 화면의 입력값을 저장했습니다.`, pageLabel }
+  }
+  if (actionType === "contract_create") {
+    return { title: actionLabel, detail: "신규계약 리스트에 계약을 등록했습니다.", pageLabel }
+  }
+  if (actionType === "contract_update") {
+    return {
+      title: actionLabel,
+      detail: row?.beforeValue || row?.afterValue ? `${String(row?.beforeValue || "-")} → ${String(row?.afterValue || "-")}` : "계약 상태 또는 정보를 변경했습니다.",
+      pageLabel,
+    }
+  }
+  if (actionType === "user_create" || actionType === "user_restore") {
+    const teamName = after?.teamId ? teamNameById[String(after.teamId)] || after.teamId : ""
+    return { title: actionLabel, detail: [after?.name, teamName, after?.role].filter(Boolean).join(" / ") || "사용자 계정을 등록했습니다.", pageLabel }
+  }
+  if (actionType === "user_update") {
+    if (after?.twoFactorReset) return { title: "OTP 초기화", detail: "사용자의 2FA/OTP 인증 정보를 초기화했습니다.", pageLabel }
+    return { title: actionLabel, detail: row?.afterValue ? `변경값: ${String(row.afterValue)}` : "사용자 정보를 변경했습니다.", pageLabel }
+  }
+  if (actionType === "user_delete") {
+    return { title: actionLabel, detail: "사용자 계정을 비활성화하고 세션을 정리했습니다.", pageLabel }
+  }
+  if (actionType === "team_create") {
+    return { title: actionLabel, detail: row?.afterValue ? `팀명: ${String(row.afterValue)}` : "팀을 추가했습니다.", pageLabel }
+  }
+  if (actionType === "team_update") {
+    return { title: actionLabel, detail: after?.fieldName ? `${after.fieldName}: ${after.value || "-"}` : "팀 정보를 변경했습니다.", pageLabel }
+  }
+  if (actionType === "backup_restore") {
+    const restored = Array.isArray(after?.restored) ? after.restored.join(", ") : ""
+    return { title: actionLabel, detail: restored ? `복구 범위: ${restored}` : "백업 JSON으로 데이터를 복구했습니다.", pageLabel }
+  }
+  if (actionType === "daily_report_ai_summary") {
+    return { title: actionLabel, detail: `업무일지 ${after?.reportCount ?? "-"}건으로 요약을 생성했습니다.`, pageLabel }
+  }
+  if (actionType === "password_change") {
+    return { title: actionLabel, detail: "내 계정의 비밀번호를 변경했습니다.", pageLabel }
+  }
+  if (actionType === "login") {
+    return { title: actionLabel, detail: "시스템에 로그인했습니다.", pageLabel }
+  }
+  if (actionType === "logout") {
+    return { title: actionLabel, detail: "시스템에서 로그아웃했습니다.", pageLabel }
+  }
+
+  return {
+    title: actionLabel,
+    detail: row?.afterValue ? String(row.afterValue) : "활동이 기록되었습니다.",
+    pageLabel,
+  }
+}
+
+function ActivityLogTable({ rows, users, teams }: { rows: any[]; users: any[]; teams: any[] }) {
+  const userNameById = Object.fromEntries((users || []).map((user: any) => [user.id, user.name]))
+  const teamNameById = Object.fromEntries((teams || []).map((team: any) => [team.id, team.name]))
+
+  return (
+    <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-black tracking-[-0.03em] text-slate-950">활동로그</h2>
+          <p className="mt-1 text-sm text-slate-500">내부 액션 코드 대신 실제 작업 내용 기준으로 보여줍니다.</p>
+        </div>
+        <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">{rows.length.toLocaleString("ko-KR")}건</div>
+      </div>
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+        <table className="w-full min-w-[980px] text-sm">
+          <thead>
+            <tr className="bg-slate-50 text-slate-500">
+              {["작업 내용", "처리자", "메뉴", "대상", "결과", "시간"].map((head) => (
+                <th key={head} className="px-4 py-3 text-left font-semibold">
+                  {head}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const description = describeActivity(row, userNameById, teamNameById)
+              return (
+                <tr key={row.id} className="border-t border-slate-200 align-top hover:bg-slate-50/70">
+                  <td className="min-w-[280px] px-4 py-3">
+                    <div className="font-extrabold text-slate-950">{description.title}</div>
+                    <div className="mt-1 max-w-[520px] text-xs font-medium leading-5 text-slate-500">{description.detail}</div>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-800">{row.actorName || "-"}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-700">{description.pageLabel}</td>
+                  <td className="min-w-[180px] px-4 py-3 text-xs font-semibold leading-5 text-slate-600">
+                    {formatActivityTarget(row, userNameById, teamNameById)}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${row.success ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+                      {row.success ? "성공" : "실패"}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-slate-500">{formatLogDateTime(row.createdAt)}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
