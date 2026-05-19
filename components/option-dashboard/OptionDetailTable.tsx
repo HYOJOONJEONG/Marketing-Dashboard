@@ -41,6 +41,9 @@ export function OptionDetailTable({
   const [draft, setDraft] = React.useState<OptionRecord | null>(null)
   const [newRecord, setNewRecord] = React.useState<OptionRecord | null>(null)
   const [expandedNoteIds, setExpandedNoteIds] = React.useState<Set<string>>(new Set())
+  const [createStatus, setCreateStatus] = React.useState<"idle" | "saving" | "success">("idle")
+  const [savingEditId, setSavingEditId] = React.useState<string | null>(null)
+  const [deletingId, setDeletingId] = React.useState<string | null>(null)
 
   const industryOptions = React.useMemo(
     () => [
@@ -91,12 +94,12 @@ export function OptionDetailTable({
   const isSofrView = selectedCategoryCode === "SOFR"
   const tableClass = tableBaseClass
   const actionColumnClass = isSignageView
-    ? "w-[104px] px-1.5 py-2 text-[12px] whitespace-nowrap text-center leading-tight"
+    ? "w-[176px] px-1.5 py-2 text-[12px] whitespace-nowrap text-center leading-tight"
     : isBondView
-      ? "w-[104px] px-1.5 py-2 text-[12px] whitespace-nowrap text-center leading-tight"
-      : "w-[108px] px-1.5 py-2 text-[12px] whitespace-nowrap text-center leading-tight"
+      ? "w-[176px] px-1.5 py-2 text-[12px] whitespace-nowrap text-center leading-tight"
+      : "w-[176px] px-1.5 py-2 text-[12px] whitespace-nowrap text-center leading-tight"
   const actionButtonClass =
-    "inline-flex h-8 min-w-[32px] items-center justify-center whitespace-nowrap rounded-md border px-1.5 text-[12px] font-semibold leading-none transition"
+    "inline-flex h-8 min-w-[32px] items-center justify-center whitespace-nowrap rounded-md border px-1.5 text-[12px] font-semibold leading-none transition disabled:cursor-not-allowed disabled:opacity-50"
 
   React.useEffect(() => {
     if (!newRecord && categoryOptions.length) {
@@ -342,6 +345,7 @@ export function OptionDetailTable({
 
   const handleNewChange = (key: keyof OptionRecord, value: string) => {
     if (!newRecord) return
+    if (createStatus !== "idle") setCreateStatus("idle")
     const next = { ...newRecord, [key]: value }
     if (key === "category_code") {
       const found = categoryOptions.find((option) => option.value === value)
@@ -352,11 +356,13 @@ export function OptionDetailTable({
 
   const handleCreate = async () => {
     if (!newRecord) return
+    if (createStatus === "saving") return
     if (!newRecord.category_code) return
     if (hasDuplicateUserId(newRecord.user_id)) {
       window.alert(`중복된 사용자ID가 존재합니다. (${normalizeUserId(newRecord.user_id)})`)
       return
     }
+    setCreateStatus("saving")
     try {
       await onSaveRecord(newRecord)
       setNewRecord({
@@ -371,32 +377,48 @@ export function OptionDetailTable({
         status: "",
         note: "",
       })
+      setCreateStatus("success")
+      window.setTimeout(() => setCreateStatus("idle"), 1200)
     } catch (error) {
+      setCreateStatus("idle")
       window.alert(error instanceof Error ? error.message : "옵션 저장에 실패했습니다.")
     }
   }
 
   const handleSave = async () => {
     if (!draft) return
+    if (savingEditId) return
     if (hasDuplicateUserId(draft.user_id, draft.record_id)) {
       window.alert(`중복된 사용자ID가 존재합니다. (${normalizeUserId(draft.user_id)})`)
       return
     }
+    const targetId = draft.record_id || ""
+    setSavingEditId(targetId || "editing")
     try {
       await onSaveRecord(draft)
       setEditingId(null)
       setDraft(null)
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "옵션 저장에 실패했습니다.")
+    } finally {
+      setSavingEditId(null)
     }
   }
 
   const handleDelete = async (recordId?: string) => {
     if (!recordId) return
+    if (deletingId) return
+    setDeletingId(recordId)
     try {
       await onDeleteRecord(recordId)
+      if (editingId === recordId) {
+        setEditingId(null)
+        setDraft(null)
+      }
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "옵션 삭제에 실패했습니다.")
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -558,10 +580,10 @@ export function OptionDetailTable({
               <button
                 type="button"
                 onClick={handleCreate}
-                disabled={selectedCategoryCode.length === 0}
+                disabled={selectedCategoryCode.length === 0 || createStatus === "saving"}
                 className="h-9 rounded-lg border border-blue-200 bg-blue-50 px-4 text-[12px] font-semibold text-blue-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
               >
-                등록
+                {createStatus === "saving" ? "등록&저장 중..." : createStatus === "success" ? "등록&저장 완료" : "등록&저장"}
               </button>
             </div>
           </div>
@@ -614,10 +636,10 @@ export function OptionDetailTable({
               <button
                 type="button"
                 onClick={handleCreate}
-                disabled={!selectedCategoryCode || selectedCategoryCode === "all"}
+                disabled={!selectedCategoryCode || selectedCategoryCode === "all" || createStatus === "saving"}
                 className="h-9 rounded-lg border border-blue-200 bg-blue-50 px-4 text-[12px] font-semibold text-blue-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
               >
-                등록
+                {createStatus === "saving" ? "등록&저장 중..." : createStatus === "success" ? "등록&저장 완료" : "등록&저장"}
               </button>
             </div>
           </div>
@@ -774,12 +796,14 @@ export function OptionDetailTable({
                             type="button"
                             className={`${actionButtonClass} border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100`}
                             onClick={handleSave}
+                            disabled={Boolean(savingEditId || deletingId)}
                           >
-                            저장
+                            {savingEditId ? "저장 중..." : "수정완료 및 저장"}
                           </button>
                           <button
                             type="button"
                             className={`${actionButtonClass} border-slate-200 bg-white text-slate-600 hover:bg-slate-50`}
+                            disabled={Boolean(savingEditId || deletingId)}
                             onClick={() => {
                               setEditingId(null)
                               setDraft(null)
@@ -791,8 +815,9 @@ export function OptionDetailTable({
                             type="button"
                             className={`${actionButtonClass} border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100`}
                             onClick={() => handleDelete(row.record_id)}
+                            disabled={Boolean(deletingId || savingEditId)}
                           >
-                            삭제
+                            {deletingId === row.record_id ? "삭제 중..." : "삭제"}
                           </button>
                         </div>
                       ) : (
@@ -803,6 +828,7 @@ export function OptionDetailTable({
                             type="button"
                             className={`${actionButtonClass} border-slate-200 bg-white text-slate-600 hover:bg-slate-50`}
                             onClick={() => startEdit(row)}
+                            disabled={Boolean(deletingId || savingEditId)}
                           >
                             수정
                           </button>
@@ -810,8 +836,9 @@ export function OptionDetailTable({
                             type="button"
                             className={`${actionButtonClass} border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100`}
                             onClick={() => handleDelete(row.record_id)}
+                            disabled={Boolean(deletingId || savingEditId)}
                           >
-                            삭제
+                            {deletingId === row.record_id ? "삭제 중..." : "삭제"}
                           </button>
                         </div>
                       )}
