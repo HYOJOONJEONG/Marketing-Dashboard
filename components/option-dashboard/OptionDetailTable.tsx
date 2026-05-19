@@ -92,6 +92,7 @@ export function OptionDetailTable({
   const isBondView = selectedCategoryCode === "BOND"
   const isSignageView = selectedCategoryCode === "SIGNAGE"
   const isSofrView = selectedCategoryCode === "SOFR"
+  const isStockView = selectedCategoryCode === "STOCK"
   const tableClass = tableBaseClass
   const actionColumnClass = isSignageView
     ? "w-[176px] px-1.5 py-2 text-[12px] whitespace-nowrap text-center leading-tight"
@@ -181,6 +182,45 @@ export function OptionDetailTable({
             valueClass: "leading-4",
           },
         ]
+      : isSofrView
+        ? [
+            { key: "row_no", label: "NO", headerClass: "w-14", cellClass: "whitespace-nowrap text-center" },
+            { key: "sub_type", label: "업종", headerClass: "w-28", cellClass: "whitespace-nowrap" },
+            {
+              key: "company_name",
+              label: "회사명",
+              headerClass: "w-[22%]",
+              cellClass: "whitespace-normal break-words text-left leading-5",
+              valueClass: "leading-5",
+            },
+            { key: "user_id", label: "사용자ID", headerClass: "w-36", cellClass: "whitespace-nowrap" },
+            { key: "department", label: "부서", headerClass: "w-36", cellClass: "whitespace-normal break-words leading-5" },
+            { key: "billing_month", label: "청구월", headerClass: "w-28", cellClass: "whitespace-nowrap" },
+            {
+              key: "note",
+              label: "비고",
+              headerClass: "min-w-[280px]",
+              cellClass: "whitespace-normal break-words align-middle",
+              valueClass: "leading-5",
+            },
+          ]
+        : isStockView
+          ? [
+              { key: "row_no", label: "NO", headerClass: "w-14", cellClass: "whitespace-nowrap text-center" },
+              { key: "sub_type", label: "업종", headerClass: "w-28", cellClass: "whitespace-nowrap" },
+              { key: "company_name", label: "회사명", headerClass: "w-36", cellClass: "whitespace-nowrap" },
+              { key: "user_id", label: "사용자ID", headerClass: "w-36", cellClass: "whitespace-nowrap" },
+              { key: "department", label: "부서", headerClass: "w-36", cellClass: "whitespace-nowrap" },
+              { key: "billing_month", label: "청구월", headerClass: "w-28", cellClass: "whitespace-nowrap" },
+              { key: "status", label: "상태", headerClass: "w-24", cellClass: "whitespace-nowrap text-center" },
+              {
+                key: "note",
+                label: "상품명",
+                headerClass: "min-w-[280px]",
+                cellClass: "whitespace-normal break-words align-middle",
+                valueClass: "leading-5",
+              },
+            ]
       : [
           { key: "row_no", label: "NO", headerClass: "w-14", cellClass: "whitespace-nowrap text-center" },
           { key: "sub_type", label: "업종", headerClass: "w-28", cellClass: "whitespace-nowrap" },
@@ -220,6 +260,7 @@ export function OptionDetailTable({
   }, [])
 
   const duplicateTrackedUserIds = React.useMemo(() => {
+    if (isStockView) return new Set<string>()
     const counts = new Map<string, number>()
     records.forEach((record) => {
       const userId = normalizeUserId(record.user_id)
@@ -227,7 +268,7 @@ export function OptionDetailTable({
       counts.set(userId, (counts.get(userId) ?? 0) + 1)
     })
     return new Set(Array.from(counts.entries()).filter(([, count]) => count > 1).map(([userId]) => userId))
-  }, [normalizeUserId, records])
+  }, [isStockView, normalizeUserId, records])
 
   const hasExistingUserId = React.useCallback(
     (userId: unknown, exceptRecordId?: string) => {
@@ -250,9 +291,9 @@ export function OptionDetailTable({
   )
 
   const newRecordDuplicateUserId =
-    newRecord && hasExistingUserId(newRecord.user_id) ? normalizeUserId(newRecord.user_id) : ""
+    newRecord && !isStockView && hasExistingUserId(newRecord.user_id) ? normalizeUserId(newRecord.user_id) : ""
   const draftDuplicateUserId =
-    draft && hasExistingUserId(draft.user_id, draft.record_id) ? normalizeUserId(draft.user_id) : ""
+    draft && !isStockView && hasExistingUserId(draft.user_id, draft.record_id) ? normalizeUserId(draft.user_id) : ""
   const duplicateInputClass =
     "border-rose-300 bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200 placeholder:text-rose-300"
 
@@ -600,7 +641,7 @@ export function OptionDetailTable({
                 ))}
               </select>
             </div>
-            <div className="col-span-2">
+            <div className={isSofrView ? "col-span-3" : "col-span-2"}>
               <div className={labelClass}>회사명</div>
               <input value={newRecord?.company_name || ""} onChange={(event) => handleNewChange("company_name", event.target.value)} placeholder="회사명" className={inputClass} />
             </div>
@@ -624,13 +665,15 @@ export function OptionDetailTable({
               <div className={labelClass}>청구월</div>
               <input value={newRecord?.billing_month || ""} onChange={(event) => handleNewChange("billing_month", event.target.value)} placeholder="청구월" className={inputClass} />
             </div>
-            <div className="col-span-2">
-              <div className={labelClass}>상태</div>
-              <input value={newRecord?.status || ""} onChange={(event) => handleNewChange("status", event.target.value)} placeholder="상태" className={inputClass} />
-            </div>
+            {!isSofrView && (
+              <div className="col-span-2">
+                <div className={labelClass}>상태</div>
+                <input value={newRecord?.status || ""} onChange={(event) => handleNewChange("status", event.target.value)} placeholder="상태" className={inputClass} />
+              </div>
+            )}
             <div className="col-span-8">
-              <div className={labelClass}>비고</div>
-              <input value={newRecord?.note || ""} onChange={(event) => handleNewChange("note", event.target.value)} placeholder="비고" className={inputClass} />
+              <div className={labelClass}>{isStockView ? "상품명" : "비고"}</div>
+              <input value={newRecord?.note || ""} onChange={(event) => handleNewChange("note", event.target.value)} placeholder={isStockView ? "상품명" : "비고"} className={inputClass} />
             </div>
             <div className="col-span-2 flex items-end justify-end">
               <button
