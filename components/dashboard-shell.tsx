@@ -3041,6 +3041,7 @@ export function DashboardShell({
       data: pickTopLevelState(nextDataWithMeta, changedKeys),
     })
     await queueDashboardUpdate(payload)
+    if (pendingDataRef.current !== sourceData) return
     setData(nextDataWithMeta)
     pendingDataRef.current = nextDataWithMeta
     scheduleLocalDashboardCache(nextDataWithMeta)
@@ -3066,11 +3067,14 @@ export function DashboardShell({
       pendingPayloadRef.current = null
       pendingSaveRef.current = null
       savePromise = commitDashboardData(nextData, updatedViews).catch((error) => {
-        setData(previousData)
-        pendingDataRef.current = previousData
-        scheduleLocalDashboardCache(previousData)
-        clearDirtyViews(updatedViews)
-        if (!options.suppressFailureAlert) {
+        const isLatestPending = pendingDataRef.current === nextData
+        if (isLatestPending) {
+          setData(previousData)
+          pendingDataRef.current = previousData
+          scheduleLocalDashboardCache(previousData)
+          clearDirtyViews(updatedViews)
+        }
+        if (isLatestPending && !options.suppressFailureAlert) {
           window.alert("저장에 실패해서 이전 상태로 되돌렸습니다. 잠시 후 다시 시도해주세요.")
         }
         throw error
@@ -3719,11 +3723,13 @@ export function DashboardShell({
   }
 
   function toggleWeeklySelection(contractId: string) {
-    const nextContracts = contracts.map((row: any) =>
+    const latestData = pendingDataRef.current || data
+    const latestContracts = Array.isArray(latestData?.contracts) ? latestData.contracts : contracts
+    const nextContracts = latestContracts.map((row: any) =>
       row.id === contractId ? { ...row, includedInWeekly: !row.includedInWeekly } : row,
     )
     persist(
-      { ...data, contracts: nextContracts },
+      { ...latestData, contracts: nextContracts },
       { immediate: true, updatedViews: ["weekly-selection", "weekly-report"] },
     )
   }
