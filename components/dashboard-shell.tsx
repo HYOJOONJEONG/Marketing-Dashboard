@@ -569,6 +569,18 @@ function parseContractMonthKey(value: unknown) {
   return 0
 }
 
+const monthSortKeys = new Set(["startDate", "endDate", "contractMonth", "claimMonth", "billingMonth", "billing_month"])
+
+function getTemporalSortKey(key: unknown, value: unknown) {
+  const keyName = String(key)
+  if (monthSortKeys.has(keyName)) {
+    const monthKey = parseContractMonthKey(value)
+    return monthKey ? monthKey * 100 + 1 : 0
+  }
+  if (keyName.endsWith("Date")) return parseDateKey(value)
+  return 0
+}
+
 function toContractMonthInputValue(value: unknown) {
   const parts = parseContractMonthParts(value)
   if (!parts) return ""
@@ -593,10 +605,12 @@ function sortByKey<T extends Record<string, unknown>>(items: T[], key: keyof T, 
   return [...items].sort((a, b) => {
     const left = a[key]
     const right = b[key]
-    const leftDate = parseDateKey(left)
-    const rightDate = parseDateKey(right)
-    if (leftDate || rightDate) {
-      return (leftDate - rightDate) * factor
+    const leftTemporal = getTemporalSortKey(key, left)
+    const rightTemporal = getTemporalSortKey(key, right)
+    if (leftTemporal || rightTemporal) {
+      if (!leftTemporal) return 1
+      if (!rightTemporal) return -1
+      return (leftTemporal - rightTemporal) * factor
     }
     return String(left ?? "").localeCompare(String(right ?? ""), "ko", {
       numeric: true,
@@ -2890,7 +2904,7 @@ export function DashboardShell({
       const identifierQuery = normalizeSearchIdentifier(rawQuery)
       return holdItems.filter((row: any) => {
         if (holdReceivedDateFilter !== "all" && normalizeDate(row.receivedDate) !== holdReceivedDateFilter) return false
-        if (holdEndDateFilter !== "all" && normalizeDate(row.endDate) !== holdEndDateFilter) return false
+        if (holdEndDateFilter !== "all" && normalizeMonth(row.endDate) !== holdEndDateFilter) return false
         if (!query && !identifierQuery) return true
         return [row.companyName, row.departmentName, row.customerId, row.idCode, row.id, row.manager, row.reason, row.note]
           .filter(Boolean)
@@ -2910,10 +2924,10 @@ export function DashboardShell({
       if (!isTerminationView) return ["all"]
       const dates = new Set<string>()
       holdItems.forEach((row: any) => {
-        const value = normalizeDate(row.endDate)
+        const value = normalizeMonth(row.endDate)
         if (value) dates.add(value)
       })
-      return ["all", ...Array.from(dates).sort().reverse()]
+      return ["all", ...Array.from(dates).sort((a, b) => parseContractMonthKey(b) - parseContractMonthKey(a))]
     }, [holdItems, isTerminationView])
     const confirmedTerminationItems = useMemo(
       () => (isTerminationView ? sortByKey(selectedSheet?.confirmedItems || [], terminationSort.key, terminationSort.dir) : []),
@@ -8752,7 +8766,7 @@ export function DashboardShell({
                       >
                         {holdEndDateOptions.map((option) => (
                           <option key={`hold-end-${option}`} value={option}>
-                            {option === "all" ? "종료일 전체" : option}
+                            {option === "all" ? "종료일 전체" : formatMonthLabel(option)}
                           </option>
                         ))}
                       </select>
