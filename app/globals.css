@@ -247,6 +247,9 @@ tr.recent-row-flash > td {
   html,
   body {
     background: #ffffff !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -266,12 +269,15 @@ tr.recent-row-flash > td {
 
   .dashboard-sidebar,
   .dashboard-header-actions,
-  .workspace-header-shell {
+  .workspace-header-shell,
+  .dashboard-shell > .fixed {
     display: none !important;
   }
 
   .dashboard-shell {
     background: #ffffff !important;
+    height: auto !important;
+    min-height: 0 !important;
   }
 
   .weekly-report-print {
@@ -280,6 +286,7 @@ tr.recent-row-flash > td {
 
   .dashboard-shell > div {
     display: block !important;
+    height: auto !important;
     max-width: none !important;
     min-height: auto !important;
   }
@@ -297,6 +304,9 @@ tr.recent-row-flash > td {
     color: #0f172a !important;
     font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI", sans-serif !important;
     font-size: 9.6px !important;
+    margin: 0 !important;
+    padding-bottom: 0 !important;
+    overflow: visible !important;
   }
 
   .print-report-cover {
@@ -361,8 +371,10 @@ tr.recent-row-flash > td {
     box-shadow: none !important;
     padding: 0 !important;
     margin-bottom: 0 !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-before: auto !important;
+    break-after: auto !important;
+    page-break-before: auto !important;
+    page-break-after: auto !important;
   }
 
   .weekly-report-print table {
@@ -370,8 +382,10 @@ tr.recent-row-flash > td {
     table-layout: fixed !important;
     border-collapse: collapse !important;
     font-size: 9.6px !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-before: auto !important;
+    break-after: auto !important;
+    page-break-before: auto !important;
+    page-break-after: auto !important;
   }
 
   .weekly-report-print th,

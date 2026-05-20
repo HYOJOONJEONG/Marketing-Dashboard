@@ -212,6 +212,7 @@ const manualSummaryMatrixRows = [
 
 type PresenceStatus = "online" | "away" | "offline"
 type CreateStatus = "idle" | "saving" | "success"
+type ManualSavePhase = "idle" | "dirty" | "saving" | "success" | "error"
 type ContractSortKey =
   | "createdAt"
   | "registrationDate"
@@ -1900,6 +1901,10 @@ export function DashboardShell({
   const [paidOptionImportStatus, setPaidOptionImportStatus] = useState("")
   const [paidOptionImportedColumns, setPaidOptionImportedColumns] = useState<any[] | null>(null)
   const [manualRevenueHeaderEdited, setManualRevenueHeaderEdited] = useState(false)
+  const [manualSaveStatus, setManualSaveStatus] = useState<{
+    phase: ManualSavePhase
+    message: string
+  }>({ phase: "idle", message: "" })
   const [contractDraft, setContractDraft] = useState<any>({
     registrationDate: getSeoulTodayKey(),
     companyName: "",
@@ -1975,6 +1980,7 @@ export function DashboardShell({
   const manualPreviewDraftRef = useRef<any | null>(manualPreviewDraft)
   const manualDraftReadyRef = useRef(false)
   const isSyncingManualDraftRef = useRef(false)
+  const manualSaveRequestIdRef = useRef(0)
   const flushPendingSave = useRef<() => void>(() => {})
   const heartbeatIdRef = useRef(`conn-${Math.random().toString(36).slice(2, 10)}`)
   const lastActivityAtRef = useRef(Date.now())
@@ -3255,6 +3261,11 @@ export function DashboardShell({
   }, [dirtyViews])
 
   function markManualInputDirty() {
+    manualSaveRequestIdRef.current += 1
+    setManualSaveStatus({
+      phase: "dirty",
+      message: "변경사항이 있습니다. 저장을 눌러 반영해주세요.",
+    })
     if (dirtyViewsRef.current["manual-input"]) return
     dirtyViewsRef.current = {
       ...dirtyViewsRef.current,
@@ -5631,6 +5642,15 @@ export function DashboardShell({
     },
   }
 
+  function formatManualSaveTime(date = new Date()) {
+    return date.toLocaleTimeString("ko-KR", {
+      timeZone: "Asia/Seoul",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+  }
+
   function handleManualInputKeyDownCapture(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "Enter") return
     if ((event.nativeEvent as KeyboardEvent).isComposing) return
@@ -5656,6 +5676,12 @@ export function DashboardShell({
   }
 
   function runManualUpdate() {
+    const saveRequestId = manualSaveRequestIdRef.current + 1
+    manualSaveRequestIdRef.current = saveRequestId
+    setManualSaveStatus({
+      phase: "saving",
+      message: "수동입력 값을 저장하고 있습니다...",
+    })
     startTransition(async () => {
       const draft = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
       const latestData = pendingDataRef.current || data
@@ -5710,8 +5736,19 @@ export function DashboardShell({
         isSyncingManualDraftRef.current = true
         manualPreviewDraftRef.current = null
         setManualPreviewDraft(null)
+        if (manualSaveRequestIdRef.current === saveRequestId) {
+          setManualSaveStatus({
+            phase: "success",
+            message: `${formatManualSaveTime()} 저장 완료`,
+          })
+        }
       } catch {
-        window.alert("Save failed. Please do not refresh; try Update again in a moment.")
+        if (manualSaveRequestIdRef.current === saveRequestId) {
+          setManualSaveStatus({
+            phase: "error",
+            message: "저장에 실패했습니다. 잠시 후 다시 저장해주세요.",
+          })
+        }
       }
     })
   }
@@ -5848,6 +5885,28 @@ export function DashboardShell({
   const currentViewDirty = Boolean(dirtyViews[view])
   const hasUnsavedChanges = Object.values(dirtyViews).some(Boolean)
   const showHeaderSave = !["daily-report", "weekly-report", "contracts", "weekly-selection", "manual-input", "termination", "option-dashboard", "admin-page", "my-page"].includes(view)
+  const manualSaveButtonLabel =
+    manualSaveStatus.phase === "saving"
+      ? "저장 중..."
+      : manualSaveStatus.phase === "success"
+        ? "저장 완료"
+        : manualSaveStatus.phase === "error"
+          ? "다시 저장"
+          : "저장"
+  const manualSaveToneClass =
+    manualSaveStatus.phase === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : manualSaveStatus.phase === "error"
+        ? "border-rose-200 bg-rose-50 text-rose-700"
+        : manualSaveStatus.phase === "saving"
+          ? "border-blue-200 bg-blue-50 text-blue-700"
+          : "border-amber-200 bg-amber-50 text-amber-700"
+  const manualSaveButtonClass =
+    manualSaveStatus.phase === "success"
+      ? "bg-emerald-600 text-white shadow-[0_8px_18px_rgba(5,150,105,0.2)] hover:bg-emerald-700"
+      : manualSaveStatus.phase === "error"
+        ? "bg-rose-600 text-white shadow-[0_8px_18px_rgba(225,29,72,0.18)] hover:bg-rose-700"
+        : "bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] hover:bg-blue-700"
 
   const manualRevenueSection = useMemo(
     () => (
@@ -7820,17 +7879,27 @@ export function DashboardShell({
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-[18px] font-bold text-slate-900">수동 입력 리스트</div>
-                  <div className="mt-1 text-[12px] font-semibold text-amber-600">(음영처리된 부분은 자동계산 반영)</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="text-[12px] font-semibold text-amber-600">(음영처리된 부분은 자동계산 반영)</span>
+                    {manualSaveStatus.message ? (
+                      <span className={`inline-flex h-7 items-center rounded-full border px-3 text-[12px] font-bold ${manualSaveToneClass}`}>
+                        {manualSaveStatus.phase === "saving" ? (
+                          <span className="mr-1.5 h-2 w-2 animate-pulse rounded-full bg-current" />
+                        ) : null}
+                        {manualSaveStatus.message}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={handleManualUpdate}
                   title="저장"
                   aria-label="저장"
-                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-2xl bg-blue-600 px-4 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] hover:bg-blue-700"
+                  className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-2xl px-4 text-[13px] font-bold transition ${manualSaveButtonClass}`}
                 >
-                  <SaveIcon className={isPending ? "h-[18px] w-[18px] animate-pulse" : "h-[18px] w-[18px]"} />
-                  <span>저장</span>
+                  <SaveIcon className={manualSaveStatus.phase === "saving" ? "h-[18px] w-[18px] animate-pulse" : "h-[18px] w-[18px]"} />
+                  <span>{manualSaveButtonLabel}</span>
                 </button>
               </div>
 
