@@ -102,8 +102,8 @@ export async function createUserSessionWithStateUpdate(
       success: true,
     })
   }, {
-    preserveConcurrentSessions: false,
-    preserveUserSecurity: Boolean(mutateState),
+    preserveConcurrentSessions: true,
+    preserveUserSecurity: true,
     baseState,
   })
 

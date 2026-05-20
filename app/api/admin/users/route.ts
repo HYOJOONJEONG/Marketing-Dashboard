@@ -82,13 +82,12 @@ export async function POST(request: Request) {
       nextUser.twoFactorEnabled = preservedTwoFactor.enabled
       nextUser.twoFactorSecret = preservedTwoFactor.secret
       nextUser.twoFactorConfirmedAt = preservedTwoFactor.confirmedAt
-      nextUser.testIdEntries = preservedTestIdEntries
     } else {
       nextUser.twoFactorEnabled = false
       nextUser.twoFactorSecret = null
       nextUser.twoFactorConfirmedAt = null
-      nextUser.testIdEntries = []
     }
+    nextUser.testIdEntries = preservedTestIdEntries
     nextUser.updatedAt = now
     if (!deletedUser) state.users.unshift(nextUser)
     appendActivityLog(state, {

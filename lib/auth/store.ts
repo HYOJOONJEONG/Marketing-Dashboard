@@ -609,6 +609,11 @@ function userSecurityFingerprint(user?: UserRecord | null) {
   )
 }
 
+function userTestIdFingerprint(user?: UserRecord | null) {
+  if (!user) return ""
+  return JSON.stringify(normalizeTestIdEntries(user.testIdEntries))
+}
+
 function preserveConcurrentUserSecurityState(draft: AuthState, current: AuthState, latest: AuthState) {
   const currentById = new Map((current.users || []).map((user) => [user.id, user]))
   const latestById = new Map((latest.users || []).map((user) => [user.id, user]))
@@ -618,16 +623,21 @@ function preserveConcurrentUserSecurityState(draft: AuthState, current: AuthStat
     if (!currentUser || !latestUser) return user
     const draftChangedSecurity = userSecurityFingerprint(user) !== userSecurityFingerprint(currentUser)
     const latestChangedSecurity = userSecurityFingerprint(latestUser) !== userSecurityFingerprint(currentUser)
-    if (draftChangedSecurity || !latestChangedSecurity) return user
-    return {
-      ...user,
-      authStrategy: latestUser.authStrategy,
-      passwordHash: latestUser.passwordHash ?? null,
-      passwordSalt: latestUser.passwordSalt ?? null,
-      twoFactorEnabled: latestUser.twoFactorEnabled,
-      twoFactorSecret: latestUser.twoFactorSecret ?? null,
-      twoFactorConfirmedAt: latestUser.twoFactorConfirmedAt ?? null,
+    const draftChangedTestIds = userTestIdFingerprint(user) !== userTestIdFingerprint(currentUser)
+    const latestChangedTestIds = userTestIdFingerprint(latestUser) !== userTestIdFingerprint(currentUser)
+    const nextUser = { ...user }
+    if (!draftChangedSecurity && latestChangedSecurity) {
+      nextUser.authStrategy = latestUser.authStrategy
+      nextUser.passwordHash = latestUser.passwordHash ?? null
+      nextUser.passwordSalt = latestUser.passwordSalt ?? null
+      nextUser.twoFactorEnabled = latestUser.twoFactorEnabled
+      nextUser.twoFactorSecret = latestUser.twoFactorSecret ?? null
+      nextUser.twoFactorConfirmedAt = latestUser.twoFactorConfirmedAt ?? null
     }
+    if (!draftChangedTestIds && latestChangedTestIds) {
+      nextUser.testIdEntries = normalizeTestIdEntries(latestUser.testIdEntries)
+    }
+    return nextUser
   })
 }
 
