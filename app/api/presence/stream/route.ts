@@ -6,6 +6,8 @@ export const dynamic = "force-dynamic"
 
 const PRESENCE_STREAM_RUSH_INTERVAL_MS = 5 * 1000
 const PRESENCE_STREAM_DEFAULT_INTERVAL_MS = 20 * 1000
+const AUTH_STATE_CACHE_TTL_MS = 1500
+let authStateCache: { expiresAt: number; value: Awaited<ReturnType<typeof readAuthState>> } | null = null
 
 function getKstHour() {
   const formattedHour = new Intl.DateTimeFormat("en-US", {
@@ -29,6 +31,14 @@ function encode(payload: unknown) {
   return new TextEncoder().encode(`data: ${JSON.stringify(payload)}\n\n`)
 }
 
+async function readCachedAuthState() {
+  const now = Date.now()
+  if (authStateCache && authStateCache.expiresAt > now) return authStateCache.value
+  const value = await readAuthState()
+  authStateCache = { expiresAt: now + AUTH_STATE_CACHE_TTL_MS, value }
+  return value
+}
+
 export async function GET() {
   const session = await resolveRequestSession()
   if (!session) {
@@ -43,7 +53,7 @@ export async function GET() {
       const send = async () => {
         if (closed || abortController.signal.aborted) return
         try {
-          const state = await readAuthState()
+          const state = await readCachedAuthState()
           const onlineUsers = listOnlinePresence(state)
           const presenceUsers = listPresenceUsers(state)
           const currentUserPresence = presenceUsers.find((row) => row.userId === session.user.id)

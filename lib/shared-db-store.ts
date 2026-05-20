@@ -161,6 +161,24 @@ async function kvCommand<T = unknown>(command: unknown[]) {
   return first?.result as T
 }
 
+async function kvPipeline(commands: unknown[][]) {
+  const resp = await fetch(`${KV_REST_API_URL.replace(/\/$/, "")}/pipeline`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${KV_REST_API_TOKEN}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(commands),
+    cache: "no-store",
+  })
+  if (!resp.ok) throw new Error(`KV pipeline failed (${resp.status})`)
+  const json = await resp.json()
+  if (!Array.isArray(json)) throw new Error("Invalid KV pipeline response")
+  const failed = json.find((item) => item?.error)
+  if (failed?.error) throw new Error(String(failed.error))
+  return json
+}
+
 function kvValueKey(key: SharedKey) {
   return `shared-kv:value:${key}`
 }
@@ -331,6 +349,45 @@ async function readRawValue(key: SharedKey) {
   return store.kv_store[key]?.value ?? null
 }
 
+async function readRawValues(keys: SharedKey[]) {
+  const uniqueKeys = keys.filter((key, index, array) => array.indexOf(key) === index)
+  const result = new Map<SharedKey, string | null>()
+  if (!uniqueKeys.length) return result
+
+  if (kvConfigured() && !CENTRAL_DB_API_URL) {
+    const rows = await kvPipeline(uniqueKeys.map((key) => ["GET", kvValueKey(key)]))
+    uniqueKeys.forEach((key, index) => {
+      const value = rows[index]?.result
+      result.set(key, value == null ? null : String(value))
+    })
+    return result
+  }
+
+  if (redisConfigured() && !CENTRAL_DB_API_URL) {
+    const values = await redisCommand<Array<string | null>>(REDIS_URL, ["MGET", ...uniqueKeys.map(kvValueKey)])
+    uniqueKeys.forEach((key, index) => {
+      const value = values?.[index]
+      result.set(key, value == null ? null : String(value))
+    })
+    return result
+  }
+
+  if (!CENTRAL_DB_API_URL) {
+    const store = await loadStore()
+    uniqueKeys.forEach((key) => {
+      result.set(key, store.kv_store[key]?.value ?? null)
+    })
+    return result
+  }
+
+  await Promise.all(
+    uniqueKeys.map(async (key) => {
+      result.set(key, await readRawValue(key))
+    }),
+  )
+  return result
+}
+
 async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta) {
   ensureWritableStoreConfigured()
   const menuLabel = String(meta?.menuLabel || defaultMenuLabelByKey(key))
@@ -408,6 +465,66 @@ async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta)
   await writeQueue
 }
 
+async function writeRawValues(entries: Array<readonly [SharedKey, string]>, meta?: WriteAuditMeta) {
+  const uniqueEntries = Array.from(
+    entries.reduce((map, [key, raw]) => map.set(key, raw), new Map<SharedKey, string>()).entries(),
+  )
+  if (!uniqueEntries.length) return
+
+  ensureWritableStoreConfigured()
+  if (SHARED_DB_READ_ONLY) {
+    throw new Error("Shared DB is mounted read-only in this environment.")
+  }
+  if (shouldBlockRemoteWriteFromLocal()) {
+    throw new Error(
+      "Remote shared DB writes are blocked in local development. Set SHARED_DB_ALLOW_REMOTE_WRITE_FROM_LOCAL=1 only if you intentionally want local changes to affect the shared production data.",
+    )
+  }
+
+  if (kvConfigured() && !CENTRAL_DB_API_URL) {
+    await kvPipeline(uniqueEntries.map(([key, raw]) => ["SET", kvValueKey(key), raw]))
+    return
+  }
+
+  if (redisConfigured() && !CENTRAL_DB_API_URL) {
+    await redisCommand(REDIS_URL, ["MSET", ...uniqueEntries.flatMap(([key, raw]) => [kvValueKey(key), raw])])
+    return
+  }
+
+  if (CENTRAL_DB_API_URL) {
+    await Promise.all(uniqueEntries.map(([key, raw]) => writeRawValue(key, raw, meta)))
+    return
+  }
+
+  writeQueue = writeQueue.then(async () => {
+    const store = await loadStore()
+    for (const [key, raw] of uniqueEntries) {
+      const now = new Date().toISOString()
+      const menuLabel = String(meta?.menuLabel || defaultMenuLabelByKey(key))
+      const changeLabel = String(meta?.changeLabel || defaultChangeLabelByKey(key))
+      const prevHash = lastHash(store)
+      const rowHash = buildHash(prevHash, key, CENTRAL_DB_SOURCE, "upsert", raw.length, now)
+      store.kv_store[key] = { value: raw, updated_at: now }
+      store.kv_audit_log.push({
+        id: nextAuditId(store),
+        key,
+        actor: CENTRAL_DB_SOURCE,
+        action: "upsert",
+        summary: `${menuLabel} > ${changeLabel}`,
+        menu_label: menuLabel,
+        change_label: changeLabel,
+        value_snapshot: makeAuditSnapshot(raw),
+        prev_hash: prevHash,
+        row_hash: rowHash,
+        created_at: now,
+      })
+    }
+    trimAuditLog(store)
+    await saveStore(store)
+  })
+  await writeQueue
+}
+
 async function seedFromFileIfMissing<T>(key: SharedKey, filePath: string): Promise<T | null> {
   const existing = await readRawValue(key)
   const parsedExisting = parseJsonObject<T>(existing)
@@ -426,13 +543,12 @@ async function seedFromFileIfMissing<T>(key: SharedKey, filePath: string): Promi
 }
 
 async function readDashboardSlices<T>(): Promise<T | null> {
-  const entries = await Promise.all(
-    Object.entries(DASHBOARD_SLICE_KEYS).map(async ([sliceKey, storeKey]) => {
-      const raw = await readRawValue(storeKey)
-      const parsed = parseJsonValue<unknown>(raw)
-      return parsed === null ? null : [sliceKey, parsed] as const
-    }),
-  )
+  const sliceEntries = Object.entries(DASHBOARD_SLICE_KEYS)
+  const rawValues = await readRawValues(sliceEntries.map(([, storeKey]) => storeKey))
+  const entries = sliceEntries.map(([sliceKey, storeKey]) => {
+    const parsed = parseJsonValue<unknown>(rawValues.get(storeKey) ?? null)
+    return parsed === null ? null : [sliceKey, parsed] as const
+  })
   const filtered = entries.filter(Boolean) as Array<readonly [string, unknown]>
   if (!filtered.length) return null
   return Object.fromEntries(filtered) as T
@@ -445,13 +561,11 @@ export async function readDashboardStateSlices<T>(
   const uniqueKeys = keys.filter((key, index, array) => DASHBOARD_SLICE_KEYS[key] && array.indexOf(key) === index)
   if (!uniqueKeys.length) return null
 
-  const entries = await Promise.all(
-    uniqueKeys.map(async (key) => {
-      const raw = await readRawValue(DASHBOARD_SLICE_KEYS[key])
-      const parsed = parseJsonValue<unknown>(raw)
-      return parsed === null ? null : [key, parsed] as const
-    }),
-  )
+  const rawValues = await readRawValues(uniqueKeys.map((key) => DASHBOARD_SLICE_KEYS[key]))
+  const entries = uniqueKeys.map((key) => {
+    const parsed = parseJsonValue<unknown>(rawValues.get(DASHBOARD_SLICE_KEYS[key]) ?? null)
+    return parsed === null ? null : [key, parsed] as const
+  })
   const filtered = entries.filter(Boolean) as Array<readonly [string, unknown]>
   if (filtered.length) return Object.fromEntries(filtered) as T
 
@@ -485,11 +599,9 @@ export async function writeDashboardState(value: unknown, meta?: WriteAuditMeta,
     ? changedKeys.filter((key, index, array) => array.indexOf(key) === index)
     : (Object.keys(DASHBOARD_SLICE_KEYS) as DashboardTopLevelKey[])
 
-  await Promise.all(
-    targetKeys.map((key) => {
-      const storeKey = DASHBOARD_SLICE_KEYS[key]
-      return writeRawValue(storeKey, JSON.stringify(source[key] ?? null), meta)
-    }),
+  await writeRawValues(
+    targetKeys.map((key) => [DASHBOARD_SLICE_KEYS[key], JSON.stringify(source[key] ?? null)] as const),
+    meta,
   )
 }
 

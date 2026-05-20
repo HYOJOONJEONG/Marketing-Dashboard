@@ -32,6 +32,7 @@ type Props = {
 }
 
 type MobileMyPageSection = "contracts" | "pending" | "termination" | "hold" | "testIds"
+type SavePhase = "idle" | "dirty" | "saving" | "success" | "error"
 
 const cardClass = "rounded-2xl border border-slate-200/90 bg-white p-4 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
 const avatarOptions = ["😀", "😎", "🧑‍💼", "📈", "💼", "🦊", "🐯", "⭐", "🚀", "🧠", "🫶", "🔥", "🐻", "🐼", "🦁", "🐸", "🌈", "⚡", "🎯", "🎧", "☕", "🍀", "🪐", "🎨"]
@@ -80,6 +81,16 @@ function formatMessageTime(value: unknown) {
     minute: "2-digit",
     hour12: false,
   }).format(date)
+}
+
+function formatSaveTime(value = new Date()) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(value)
 }
 
 async function fetchProfileUpdate(body: Record<string, unknown>) {
@@ -220,6 +231,10 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
   const [isProfileSaving, setIsProfileSaving] = useState(false)
   const [isTestIdSaving, setIsTestIdSaving] = useState(false)
   const [isTestIdDirty, setIsTestIdDirty] = useState(false)
+  const [testIdSaveStatus, setTestIdSaveStatus] = useState<{ phase: SavePhase; message: string }>({
+    phase: "idle",
+    message: "",
+  })
   const [mobileSection, setMobileSection] = useState<MobileMyPageSection>("testIds")
   const [testIdEntries, setTestIdEntries] = useState<UserTestIdEntry[]>(currentUser.testIdEntries || [])
   const [testIdMode, setTestIdMode] = useState<"single" | "bulk">("single")
@@ -313,6 +328,28 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
     [selectedIndustries],
   )
   const unreadMessageCount = useMemo(() => messageHistory.filter((message) => !message.readAt).length, [messageHistory])
+  const testIdSaveToneClass =
+    testIdSaveStatus.phase === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : testIdSaveStatus.phase === "error"
+        ? "border-rose-200 bg-rose-50 text-rose-700"
+        : testIdSaveStatus.phase === "saving"
+          ? "border-blue-200 bg-blue-50 text-blue-700"
+          : "border-amber-200 bg-amber-50 text-amber-700"
+  const testIdSaveButtonClass =
+    testIdSaveStatus.phase === "success"
+      ? "bg-emerald-600 text-white shadow-[0_8px_18px_rgba(5,150,105,0.2)] hover:bg-emerald-700"
+      : testIdSaveStatus.phase === "error"
+        ? "bg-rose-600 text-white shadow-[0_8px_18px_rgba(225,29,72,0.18)] hover:bg-rose-700"
+        : "bg-blue-600 text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] hover:bg-blue-700"
+  const testIdSaveButtonLabel =
+    testIdSaveStatus.phase === "saving"
+      ? "저장 중..."
+      : testIdSaveStatus.phase === "success"
+        ? "저장 완료"
+        : testIdSaveStatus.phase === "error"
+          ? "다시 저장"
+          : "목록 저장"
 
   const toggleIndustry = (industry: string) => {
     setSelectedIndustries((prev) =>
@@ -360,9 +397,11 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
     const companyName = defaultCompanyName.trim()
     if (!normalizedIds.length) {
       setTestIdMessage("시험아이디 형식을 확인해주세요. 예: E260403")
+      setTestIdSaveStatus({ phase: "error", message: "입력 형식을 확인해주세요" })
       return
     }
     setIsTestIdDirty(true)
+    setTestIdSaveStatus({ phase: "dirty", message: "변경됨 - 목록 저장 필요" })
     setTestIdEntries((prev) => {
       const existingMap = new Map(prev.map((entry) => [entry.testId, entry]))
       const now = new Date().toISOString()
@@ -401,6 +440,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
 
   const updateTestIdEntry = (entryId: string, field: keyof UserTestIdEntry, value: string) => {
     setIsTestIdDirty(true)
+    setTestIdSaveStatus({ phase: "dirty", message: "변경됨 - 목록 저장 필요" })
     setTestIdEntries((prev) =>
       prev.map((entry) =>
         entry.id === entryId
@@ -416,6 +456,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
 
   const removeTestIdEntry = (entryId: string) => {
     setIsTestIdDirty(true)
+    setTestIdSaveStatus({ phase: "dirty", message: "변경됨 - 목록 저장 필요" })
     setTestIdEntries((prev) => prev.filter((entry) => entry.id !== entryId))
   }
 
@@ -429,19 +470,26 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
     }
     setTestIdMessage("")
     setIsTestIdSaving(true)
+    setTestIdSaveStatus({ phase: "saving", message: "시험아이디 저장 중..." })
     try {
       const { response, payload } = await fetchTestIdUpdate({ testIdEntries, confirmClearTestIds })
       if (!response.ok || !payload?.ok) {
-        setTestIdMessage(payload?.error || "시험아이디 저장에 실패했습니다.")
+        const errorMessage = payload?.error || "시험아이디 저장에 실패했습니다."
+        setTestIdMessage(errorMessage)
+        setTestIdSaveStatus({ phase: "error", message: errorMessage })
         return
       }
       setTestIdEntries(Array.isArray(payload?.testIdEntries) ? payload.testIdEntries : testIdEntries)
       setIsTestIdDirty(false)
+      const savedCount = Number(payload?.savedCount ?? testIdEntries.length)
+      const successMessage = `${formatSaveTime()} 저장 완료 · ${Number.isFinite(savedCount) ? savedCount : testIdEntries.length}건`
       setTestIdMessage("시험아이디 관리 항목이 저장되었습니다.")
-      startTransition(() => router.refresh())
+      setTestIdSaveStatus({ phase: "success", message: successMessage })
     } catch (error) {
       const aborted = error instanceof DOMException && error.name === "AbortError"
-      setTestIdMessage(aborted ? "저장 요청이 지연되어 중단했습니다. 잠시 후 다시 눌러주세요." : "시험아이디 저장 중 오류가 발생했습니다.")
+      const errorMessage = aborted ? "저장 요청이 지연되어 중단했습니다. 잠시 후 다시 눌러주세요." : "시험아이디 저장 중 오류가 발생했습니다."
+      setTestIdMessage(errorMessage)
+      setTestIdSaveStatus({ phase: "error", message: errorMessage })
     } finally {
       setIsTestIdSaving(false)
     }
@@ -732,7 +780,17 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[17px] font-black tracking-[-0.03em] text-slate-950">시험아이디 관리</h3>
-                  <p className="mt-0.5 text-[12px] text-slate-500">등록 후 표에서 바로 수정합니다.</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <p className="text-[12px] text-slate-500">등록 후 표에서 바로 수정합니다.</p>
+                    {testIdSaveStatus.message ? (
+                      <span className={`inline-flex min-h-7 items-center rounded-full border px-3 py-1 text-[12px] font-bold ${testIdSaveToneClass}`}>
+                        {testIdSaveStatus.phase === "saving" ? (
+                          <span className="mr-1.5 h-2 w-2 animate-pulse rounded-full bg-current" />
+                        ) : null}
+                        {testIdSaveStatus.message}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="rounded-lg bg-sky-50 px-3 py-1.5 text-[12px] font-bold text-sky-700">
                   {testIdEntries.length}건
@@ -823,10 +881,10 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                     type="button"
                     onClick={saveTestIdEntries}
                     disabled={isTestIdSaving}
-                    className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-slate-950 px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
+                    className={`inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl px-4 text-[13px] font-bold transition disabled:opacity-60 ${testIdSaveButtonClass}`}
                   >
-                    <Save className="h-4 w-4" />
-                    {isTestIdSaving ? "저장 중" : "목록 저장"}
+                    <Save className={testIdSaveStatus.phase === "saving" ? "h-4 w-4 animate-pulse" : "h-4 w-4"} />
+                    {testIdSaveButtonLabel}
                   </button>
                 </div>
               </div>
