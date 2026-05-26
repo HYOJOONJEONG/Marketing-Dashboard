@@ -1,0 +1,510 @@
+"use client"
+
+import { useMemo, useState } from "react"
+import { BarChart3, Database, RefreshCw, Save, Search, Table2, UsersRound } from "lucide-react"
+
+type TabKey = "summary" | "new" | "termination" | "area" | "personal"
+
+type Props = {
+  data: any
+  currentYear: number | string
+  isDirty: boolean
+  isSaving: boolean
+  saveMessage: string
+  weeklyImportSummary: {
+    newCount: number
+    terminationCount: number
+    netCount: number
+  }
+  onImportWeekly: () => void
+  onSave: () => void
+}
+
+const tabItems: Array<{ key: TabKey; label: string }> = [
+  { key: "summary", label: "요약" },
+  { key: "new", label: "신규/대체" },
+  { key: "termination", label: "해지" },
+  { key: "area", label: "영역별 순증" },
+  { key: "personal", label: "개인별 실적" },
+]
+
+function toNumber(value: unknown) {
+  const number = Number(String(value ?? "").replace(/,/g, ""))
+  return Number.isFinite(number) ? number : 0
+}
+
+function formatNumber(value: unknown) {
+  return toNumber(value).toLocaleString("ko-KR")
+}
+
+function compactDate(value: unknown) {
+  return String(value || "").replace(/-/g, ".").trim()
+}
+
+function findSummaryValue(rows: any[], matcher: (label: string) => boolean) {
+  const row = (Array.isArray(rows) ? rows : []).find((item) => matcher(String(item?.label || "")))
+  return toNumber(row?.value)
+}
+
+function normalizeSearch(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, "").toLowerCase()
+}
+
+function recordMatches(row: any, query: string) {
+  if (!query) return true
+  const haystack = normalizeSearch([
+    row?.date,
+    row?.idCode,
+    row?.companyName,
+    row?.departmentName,
+    row?.recommender,
+    row?.businessType,
+    row?.replacementType,
+    row?.reason,
+    row?.competitorType,
+    row?.group,
+    row?.note,
+  ].join(" "))
+  return haystack.includes(query)
+}
+
+function sourceTitle(data: any) {
+  return String(data?.newReplacement?.asOf || data?.terminationType?.asOf || "").replace(" 기준", "")
+}
+
+function sourceUpdatedLabel(value: unknown) {
+  const time = Date.parse(String(value || ""))
+  if (!Number.isFinite(time)) return ""
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(time))
+}
+
+function StatusPill({ children, tone = "slate" }: { children: string; tone?: "slate" | "blue" | "green" | "amber" }) {
+  const color =
+    tone === "blue"
+      ? "border-blue-100 bg-blue-50 text-blue-700"
+      : tone === "green"
+        ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+        : tone === "amber"
+          ? "border-amber-100 bg-amber-50 text-amber-700"
+          : "border-slate-200 bg-slate-50 text-slate-600"
+  return <span className={`inline-flex h-7 items-center rounded-full border px-3 text-[12px] font-bold ${color}`}>{children}</span>
+}
+
+function MetricTile({
+  label,
+  value,
+  sub,
+  tone = "slate",
+}: {
+  label: string
+  value: string
+  sub?: string
+  tone?: "slate" | "blue" | "green" | "rose"
+}) {
+  const accent =
+    tone === "blue"
+      ? "border-blue-200 bg-blue-50/70 text-blue-700"
+      : tone === "green"
+        ? "border-emerald-200 bg-emerald-50/70 text-emerald-700"
+        : tone === "rose"
+          ? "border-rose-200 bg-rose-50/70 text-rose-700"
+          : "border-slate-200 bg-slate-50 text-slate-700"
+  return (
+    <div className={`rounded-2xl border px-4 py-3 ${accent}`}>
+      <div className="text-[12px] font-bold text-slate-500">{label}</div>
+      <div className="mt-1 text-[24px] font-black tracking-[-0.04em] text-slate-950">{value}</div>
+      {sub ? <div className="mt-1 truncate text-[12px] font-semibold text-slate-500">{sub}</div> : null}
+    </div>
+  )
+}
+
+function MiniSummaryTable({
+  title,
+  rows,
+}: {
+  title: string
+  rows: Array<{ label: string; value: unknown }>
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-[14px] font-black text-slate-900">{title}</div>
+      <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 sm:grid-cols-3 lg:grid-cols-5">
+        {rows.map((row) => (
+          <div key={row.label} className="min-w-0 px-3 py-3">
+            <div className="truncate text-[12px] font-semibold text-slate-500">{row.label}</div>
+            <div className="mt-1 text-[18px] font-black tabular-nums text-slate-950">{formatNumber(row.value)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DenseTable({
+  columns,
+  rows,
+  emptyText,
+}: {
+  columns: Array<{ key: string; label: string; className?: string; render?: (row: any, index: number) => any }>
+  rows: any[]
+  emptyText: string
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[980px] border-collapse text-[13px]">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+              {columns.map((column) => (
+                <th key={column.key} className={`px-3 py-2.5 text-left font-black ${column.className || ""}`}>
+                  {column.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length ? (
+              rows.map((row, index) => (
+                <tr key={`${row?.id || row?.idCode || row?.companyName || "row"}-${index}`} className="border-b border-slate-100 last:border-0 hover:bg-blue-50/30">
+                  {columns.map((column) => (
+                    <td key={column.key} className={`px-3 py-2.5 align-middle text-slate-700 ${column.className || ""}`}>
+                      {column.render ? column.render(row, index) : row?.[column.key]}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={columns.length} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
+                  {emptyText}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+export function TypeAnalysisDashboard({
+  data,
+  currentYear,
+  isDirty,
+  isSaving,
+  saveMessage,
+  weeklyImportSummary,
+  onImportWeekly,
+  onSave,
+}: Props) {
+  const [tab, setTab] = useState<TabKey>("summary")
+  const [query, setQuery] = useState("")
+  const normalizedQuery = normalizeSearch(query)
+
+  const newRecords = Array.isArray(data?.newReplacement?.records) ? data.newReplacement.records : []
+  const terminationRecords = Array.isArray(data?.terminationType?.records) ? data.terminationType.records : []
+  const areaRecords = Array.isArray(data?.areaNetGrowth?.records) ? data.areaNetGrowth.records : []
+  const personalRows = Array.isArray(data?.personalPerformance?.rows) ? data.personalPerformance.rows : []
+  const snapshots = Array.isArray(data?.weeklySnapshots) ? data.weeklySnapshots : []
+  const latestSnapshot = snapshots[0]
+
+  const newTotal = findSummaryValue(data?.newReplacement?.replacementSummary || [], (label) => label.includes("합"))
+  const pureNewTotal = findSummaryValue(data?.newReplacement?.replacementSummary || [], (label) => label.includes("신규"))
+  const replacementTotal = Math.max(0, newTotal - pureNewTotal)
+  const terminationTotal = findSummaryValue(data?.terminationType?.reasonSummary || [], (label) => label.includes("합"))
+  const netTotal = newTotal - terminationTotal
+
+  const filteredNewRecords = useMemo(
+    () => newRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
+    [newRecords, normalizedQuery],
+  )
+  const filteredTerminationRecords = useMemo(
+    () => terminationRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
+    [terminationRecords, normalizedQuery],
+  )
+  const filteredAreaRecords = useMemo(
+    () => areaRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
+    [areaRecords, normalizedQuery],
+  )
+
+  const visibleAreaRecords = filteredAreaRecords.slice(0, 300)
+
+  const saveTone: "slate" | "blue" | "green" | "amber" = isSaving ? "blue" : isDirty ? "amber" : saveMessage ? "green" : "slate"
+  const saveText = isSaving ? "저장 중" : isDirty ? "저장 필요" : saveMessage || "저장 완료"
+
+  return (
+    <div className="space-y-4">
+      <section className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill tone="blue">{`${currentYear}년도`}</StatusPill>
+                <StatusPill>{sourceTitle(data) || "엑셀 기준"}</StatusPill>
+                <StatusPill tone={saveTone}>{saveText}</StatusPill>
+              </div>
+              <div className="mt-2 text-[18px] font-black tracking-[-0.03em] text-slate-950">
+                신규·대체·해지 유형 분석
+              </div>
+              <div className="mt-1 text-[13px] font-semibold text-slate-500">
+                원본 엑셀에서 최근 5개년도 업종별 순증추이는 제외하고 개인별 실적까지 추출했습니다.
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={onImportWeekly}
+                className="inline-flex h-10 items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 text-[13px] font-black text-blue-700 transition hover:bg-blue-100"
+              >
+                <RefreshCw className="h-4 w-4" />
+                주간 신규/해지 불러오기
+              </button>
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={isSaving}
+                className="inline-flex h-10 items-center gap-2 rounded-2xl bg-blue-600 px-4 text-[13px] font-black text-white shadow-[0_10px_22px_rgba(37,99,235,0.18)] transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Save className={`h-4 w-4 ${isSaving ? "animate-pulse" : ""}`} />
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-5">
+          <MetricTile label="신규 합계" value={`${formatNumber(newTotal)}건`} sub={`순수 신규 ${formatNumber(pureNewTotal)}건`} tone="blue" />
+          <MetricTile label="타사 대체" value={`${formatNumber(replacementTotal)}건`} sub="체크/마켓/블룸버그/로이터" />
+          <MetricTile label="해지 합계" value={`${formatNumber(terminationTotal)}건`} sub="해지 유형 분석 기준" tone="rose" />
+          <MetricTile label="순증" value={`${formatNumber(netTotal)}건`} sub="신규 합계 - 해지 합계" tone="green" />
+          <MetricTile label="주간 불러오기" value={`${formatNumber(weeklyImportSummary.netCount)}건`} sub={`신규 ${formatNumber(weeklyImportSummary.newCount)} / 해지 ${formatNumber(weeklyImportSummary.terminationCount)}`} />
+        </div>
+
+        <div className="border-t border-slate-100 px-5 pb-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 flex-wrap gap-2">
+              {tabItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setTab(item.key)}
+                  className={`h-9 rounded-full px-4 text-[13px] font-black transition ${
+                    tab === item.key
+                      ? "bg-slate-950 text-white shadow-sm"
+                      : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <label className="relative block w-full lg:w-[320px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="회사명, ID, 담당자, 사유 검색"
+                className="h-10 w-full rounded-2xl border border-slate-200 bg-white pl-9 pr-3 text-[13px] font-semibold outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      {tab === "summary" ? (
+        <div className="grid gap-4">
+          <div className="grid gap-4 xl:grid-cols-2">
+            <MiniSummaryTable title="업무성격 요약" rows={data?.newReplacement?.workSummary || []} />
+            <MiniSummaryTable title="타사단말기 대체 요약" rows={data?.newReplacement?.replacementSummary || []} />
+            <MiniSummaryTable title="해지 유형 요약" rows={data?.terminationType?.reasonSummary || []} />
+            <MiniSummaryTable title="경쟁사 변경 요약" rows={data?.terminationType?.competitorSummary || []} />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center gap-2 text-[15px] font-black text-slate-900">
+                <Database className="h-4 w-4 text-blue-600" />
+                추출 현황
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <MetricTile label="신규 상세" value={`${formatNumber(newRecords.length)}건`} />
+                <MetricTile label="해지 상세" value={`${formatNumber(terminationRecords.length)}건`} />
+                <MetricTile label="영역별 상세" value={`${formatNumber(areaRecords.length)}건`} />
+                <MetricTile label="개인별 실적" value={`${formatNumber(personalRows.length)}명`} />
+              </div>
+              <div className="mt-3 text-[12px] font-semibold text-slate-500">
+                원본 파일 수정 시각: {sourceUpdatedLabel(data?.sourceUpdatedAt) || "확인 필요"}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center gap-2 text-[15px] font-black text-slate-900">
+                <BarChart3 className="h-4 w-4 text-blue-600" />
+                주간 불러오기 저장본
+              </div>
+              {latestSnapshot ? (
+                <div className="space-y-2 text-[13px] font-semibold text-slate-600">
+                  <div className="rounded-xl bg-slate-50 px-3 py-2">
+                    {latestSnapshot.label || "최근 불러오기"} · {compactDate(latestSnapshot.createdAt)}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl border border-slate-200 px-3 py-2 text-center">
+                      <div className="text-[11px] text-slate-400">신규</div>
+                      <div className="text-[17px] font-black text-slate-950">{formatNumber(latestSnapshot.newCount)}</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 px-3 py-2 text-center">
+                      <div className="text-[11px] text-slate-400">해지</div>
+                      <div className="text-[17px] font-black text-slate-950">{formatNumber(latestSnapshot.terminationCount)}</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 px-3 py-2 text-center">
+                      <div className="text-[11px] text-slate-400">순증</div>
+                      <div className="text-[17px] font-black text-slate-950">{formatNumber(latestSnapshot.netCount)}</div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-[13px] font-semibold text-slate-400">
+                  아직 저장된 주간 불러오기 내역이 없습니다.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "new" ? (
+        <div className="space-y-4">
+          <DenseTable
+            columns={[
+              { key: "label", label: "업종" },
+              { key: "check", label: "체크", className: "text-center tabular-nums" },
+              { key: "marketPoint", label: "마켓", className: "text-center tabular-nums" },
+              { key: "bloomberg", label: "블룸버그", className: "text-center tabular-nums" },
+              { key: "reuters", label: "로이터", className: "text-center tabular-nums" },
+              { key: "new", label: "신규", className: "text-center tabular-nums" },
+              { key: "total", label: "합계", className: "text-center font-black tabular-nums text-slate-950" },
+            ]}
+            rows={data?.newReplacement?.industrySummary || []}
+            emptyText="신규/대체 업종 요약이 없습니다."
+          />
+          <DenseTable
+            columns={[
+              { key: "no", label: "NO", className: "w-[58px] text-center tabular-nums" },
+              { key: "date", label: "날짜", className: "w-[96px] tabular-nums" },
+              { key: "idCode", label: "ID", className: "w-[94px] font-bold text-slate-900" },
+              { key: "companyName", label: "회사명", className: "min-w-[160px] font-semibold text-slate-900" },
+              { key: "departmentName", label: "부서", className: "min-w-[150px]" },
+              { key: "recommender", label: "권유자", className: "w-[82px]" },
+              { key: "businessType", label: "업무성격", className: "w-[84px]" },
+              { key: "replacementType", label: "대체", className: "w-[88px]" },
+              { key: "note", label: "비고", className: "min-w-[180px]" },
+            ]}
+            rows={filteredNewRecords}
+            emptyText="검색 조건에 맞는 신규/대체 데이터가 없습니다."
+          />
+        </div>
+      ) : null}
+
+      {tab === "termination" ? (
+        <div className="space-y-4">
+          <DenseTable
+            columns={[
+              { key: "label", label: "업종" },
+              { key: "userMove", label: "퇴사/이직", className: "text-center tabular-nums" },
+              { key: "costCut", label: "비용절감", className: "text-center tabular-nums" },
+              { key: "lowUsage", label: "활용저조", className: "text-center tabular-nums" },
+              { key: "contractEnd", label: "계약만료", className: "text-center tabular-nums" },
+              { key: "reorg", label: "조직개편", className: "text-center tabular-nums" },
+              { key: "total", label: "합계", className: "text-center font-black tabular-nums text-slate-950" },
+            ]}
+            rows={data?.terminationType?.industrySummary || []}
+            emptyText="해지 업종 요약이 없습니다."
+          />
+          <DenseTable
+            columns={[
+              { key: "no", label: "NO", className: "w-[58px] text-center tabular-nums" },
+              { key: "date", label: "날짜", className: "w-[96px] tabular-nums" },
+              { key: "idCode", label: "ID", className: "w-[94px] font-bold text-slate-900" },
+              { key: "companyName", label: "회사명", className: "min-w-[160px] font-semibold text-slate-900" },
+              { key: "departmentName", label: "부서", className: "min-w-[150px]" },
+              { key: "recommender", label: "권유자", className: "w-[82px]" },
+              { key: "reason", label: "해지사유", className: "min-w-[130px]" },
+              { key: "competitorType", label: "경쟁사", className: "w-[88px]" },
+              { key: "penalty", label: "위약금", className: "w-[110px] text-right tabular-nums", render: (row) => formatNumber(row?.penalty) },
+              { key: "note", label: "비고", className: "min-w-[180px]" },
+            ]}
+            rows={filteredTerminationRecords}
+            emptyText="검색 조건에 맞는 해지 데이터가 없습니다."
+          />
+        </div>
+      ) : null}
+
+      {tab === "area" ? (
+        <div className="space-y-4">
+          <DenseTable
+            columns={[
+              { key: "no", label: "구분", className: "w-[64px] text-center" },
+              { key: "area", label: "담당영역", className: "min-w-[220px] font-semibold text-slate-900" },
+              { key: "manager", label: "담당자", className: "min-w-[160px]" },
+              { key: "newCount", label: "신규", className: "text-center tabular-nums" },
+              { key: "terminationCount", label: "해지", className: "text-center tabular-nums" },
+              { key: "netCount", label: "순증", className: "text-center font-black tabular-nums text-slate-950" },
+            ]}
+            rows={data?.areaNetGrowth?.summaryRows || []}
+            emptyText="영역별 순증 요약이 없습니다."
+          />
+          <div className="flex items-center gap-2 text-[13px] font-bold text-slate-500">
+            <Table2 className="h-4 w-4" />
+            상세 {formatNumber(filteredAreaRecords.length)}건 중 {formatNumber(visibleAreaRecords.length)}건 표시
+          </div>
+          <DenseTable
+            columns={[
+              { key: "no", label: "NO", className: "w-[58px] text-center tabular-nums" },
+              { key: "date", label: "날짜", className: "w-[96px] tabular-nums" },
+              { key: "idCode", label: "ID", className: "w-[94px] font-bold text-slate-900" },
+              { key: "companyName", label: "기관", className: "min-w-[170px] font-semibold text-slate-900" },
+              { key: "departmentName", label: "부서", className: "min-w-[160px]" },
+              { key: "recommender", label: "권유자", className: "w-[82px]" },
+              { key: "replacementType", label: "구분", className: "w-[88px]" },
+              { key: "group", label: "영역", className: "min-w-[140px]" },
+            ]}
+            rows={visibleAreaRecords}
+            emptyText="검색 조건에 맞는 영역별 상세 데이터가 없습니다."
+          />
+        </div>
+      ) : null}
+
+      {tab === "personal" ? (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="mb-3 flex items-center gap-2 text-[15px] font-black text-slate-900">
+              <UsersRound className="h-4 w-4 text-blue-600" />
+              개인별 신규 실적
+            </div>
+            <DenseTable
+              columns={[
+                { key: "no", label: "구분", className: "w-[72px] text-center" },
+                { key: "manager", label: "담당자", className: "min-w-[160px] font-bold text-slate-950" },
+                { key: "totalNew", label: "총 신규", className: "text-center font-black tabular-nums text-slate-950" },
+                { key: "new", label: "신규", className: "text-center tabular-nums" },
+                { key: "check", label: "체크", className: "text-center tabular-nums" },
+                { key: "marketPoint", label: "마켓", className: "text-center tabular-nums" },
+                { key: "reutersBloomberg", label: "로이터/블룸", className: "text-center tabular-nums" },
+              ]}
+              rows={personalRows}
+              emptyText="개인별 실적 데이터가 없습니다."
+            />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}

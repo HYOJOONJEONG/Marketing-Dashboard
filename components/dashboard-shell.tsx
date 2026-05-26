@@ -7,6 +7,7 @@ import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
 import { DailyReportPage } from "./daily-report/daily-report-page"
 import { PersonalDashboard } from "./me/personal-dashboard"
 import { AdminConsole } from "./admin/admin-console"
+import { TypeAnalysisDashboard } from "./type-analysis/type-analysis-dashboard"
 import { getIndustryGroupLabel } from "@/lib/industry-groups"
 import { buildPersonalDashboardData } from "@/lib/personal-dashboard"
 import {
@@ -15,12 +16,14 @@ import {
   normalizeDailyReportState,
 } from "@/lib/daily-report"
 import type { PopupMessageRecord, UserTestIdEntry } from "@/lib/auth/model"
+import typeAnalysisSource from "@/data/type-analysis-source.json"
 
 type ViewKey =
   | "daily-report"
   | "weekly-report"
   | "contracts"
   | "weekly-selection"
+  | "type-analysis"
   | "manual-input"
   | "collection"
   | "option-dashboard"
@@ -33,6 +36,7 @@ const VIEW_STATE_KEYS: Record<ViewKey, string[]> = {
   "weekly-report": ["weeklyReport", "currentYear", "years", "availableYears", "paidOptionSourceColumns", "ui"],
   "contracts": ["contracts", "currentYear", "years", "availableYears", "ui"],
   "weekly-selection": ["contracts", "weeklyReport", "ui"],
+  "type-analysis": ["typeAnalysis", "ui"],
   "manual-input": ["weeklyReport", "currentYear", "years", "availableYears", "paidOptionSourceColumns", "ui"],
   "collection": ["collection", "currentYear", "years", "availableYears", "ui"],
   "option-dashboard": ["ui"],
@@ -137,6 +141,7 @@ function isViewKey(value: unknown): value is ViewKey {
     value === "weekly-report" ||
     value === "contracts" ||
     value === "weekly-selection" ||
+    value === "type-analysis" ||
     value === "manual-input" ||
     value === "collection" ||
     value === "option-dashboard" ||
@@ -151,6 +156,7 @@ const viewTitles: Record<ViewKey, string> = {
   "weekly-report": "주간실적보고",
   contracts: "신규계약 리스트",
   "weekly-selection": "주간 반영 리스트",
+  "type-analysis": "신규대체해지유형분석",
   "manual-input": "수동 입력 리스트",
   collection: "계약서통합관리",
   "option-dashboard": "유료 옵션 정보 현황",
@@ -1492,6 +1498,96 @@ function cloneData<T>(value: T): T {
   return JSON.parse(JSON.stringify(value))
 }
 
+function normalizeTypeAnalysisState(value: any) {
+  const source = cloneData(typeAnalysisSource as any)
+  if (!value || typeof value !== "object" || Array.isArray(value)) return source
+  return {
+    ...source,
+    ...value,
+    newReplacement: {
+      ...source.newReplacement,
+      ...(value.newReplacement || {}),
+      records: Array.isArray(value?.newReplacement?.records)
+        ? value.newReplacement.records
+        : source.newReplacement.records,
+    },
+    terminationType: {
+      ...source.terminationType,
+      ...(value.terminationType || {}),
+      records: Array.isArray(value?.terminationType?.records)
+        ? value.terminationType.records
+        : source.terminationType.records,
+    },
+    areaNetGrowth: {
+      ...source.areaNetGrowth,
+      ...(value.areaNetGrowth || {}),
+      records: Array.isArray(value?.areaNetGrowth?.records)
+        ? value.areaNetGrowth.records
+        : source.areaNetGrowth.records,
+    },
+    personalPerformance: {
+      ...source.personalPerformance,
+      ...(value.personalPerformance || {}),
+      rows: Array.isArray(value?.personalPerformance?.rows)
+        ? value.personalPerformance.rows
+        : source.personalPerformance.rows,
+    },
+    weeklySnapshots: Array.isArray(value.weeklySnapshots) ? value.weeklySnapshots : [],
+  }
+}
+
+function normalizeTypeAnalysisReplacementType(value: unknown) {
+  const text = String(value || "").trim()
+  if (text.includes("체크")) return "체크"
+  if (text.includes("마켓")) return "마켓포인트"
+  if (text.includes("블룸")) return "블룸버그"
+  if (text.includes("로이터") || text.includes("레피니티브")) return "로이터"
+  if (text.includes("기타")) return "한경머니·기타"
+  return "신규"
+}
+
+function buildTypeAnalysisWeeklySnapshot(newContracts: any[], terminationRows: any[]) {
+  const createdAt = new Date().toISOString()
+  const newRecords = (Array.isArray(newContracts) ? newContracts : []).map((row: any, index: number) => {
+    const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
+    return {
+      no: index + 1,
+      date: normalizeDate(row?.registrationDate || row?.createdAt || createdAt),
+      idCode: String(row?.idCode || "").trim(),
+      companyName: String(row?.companyName || "").trim(),
+      departmentName: String(row?.departmentName || "").trim(),
+      recommender: String(row?.recommender || "").trim(),
+      businessType: String(row?.industry || "").trim(),
+      replacementType,
+      note: String(row?.note || "").trim(),
+      sourceId: String(row?.id || ""),
+    }
+  })
+  const terminationRecords = (Array.isArray(terminationRows) ? terminationRows : []).map((row: any, index: number) => ({
+    no: index + 1,
+    date: normalizeDate(row?.receivedDate || row?.terminationDate || createdAt),
+    idCode: String(row?.customerId || row?.idCode || "").trim(),
+    companyName: String(row?.companyName || "").trim(),
+    departmentName: String(row?.departmentName || "").trim(),
+    recommender: String(row?.manager || row?.recommender || "").trim(),
+    reason: String(row?.reason || "").trim(),
+    terminationDate: normalizeDate(row?.terminationDate || ""),
+    penalty: toNumber(row?.penalty),
+    note: String(row?.note || "").trim(),
+    sourceId: String(row?.id || ""),
+  }))
+  return {
+    id: `type-analysis-weekly-${Date.now()}`,
+    label: `${normalizeDate(getSeoulTodayKey())} 주간 불러오기`,
+    createdAt,
+    newCount: newRecords.length,
+    terminationCount: terminationRecords.length,
+    netCount: newRecords.length - terminationRecords.length,
+    newRecords,
+    terminationRecords,
+  }
+}
+
 function normalizeAdditionalSalesRows(rows: any[]) {
   const list = Array.isArray(rows) ? rows : []
   if (!list.length) return [{ idCode: "", company: "", amount: "", content: "", note: "", kind: "manual" }]
@@ -1905,6 +2001,7 @@ export function DashboardShell({
     phase: ManualSavePhase
     message: string
   }>({ phase: "idle", message: "" })
+  const [typeAnalysisSaveMessage, setTypeAnalysisSaveMessage] = useState("")
   const [contractDraft, setContractDraft] = useState<any>({
     registrationDate: getSeoulTodayKey(),
     companyName: "",
@@ -1999,6 +2096,7 @@ export function DashboardShell({
   const canViewCollections = hasAccess("collectionManagement", "view")
   const canViewTermination = hasAccess("terminationManagement", "view")
   const canViewWeeklySelection = hasAccess("weeklySelection", "view")
+  const canViewTypeAnalysis = hasAccess("typeAnalysis", "view")
   const canViewOptionDashboard = hasAccess("optionDashboard", "view")
   const canViewAdminPage =
     hasAccess("adminPage", "view") ||
@@ -2024,6 +2122,7 @@ export function DashboardShell({
     canViewManualInput ? "manual-input" : null,
     canViewContracts ? "contracts" : null,
     canViewWeeklySelection ? "weekly-selection" : null,
+    canViewTypeAnalysis ? "type-analysis" : null,
     canViewCollections ? "collection" : null,
     canViewOptionDashboard ? "option-dashboard" : null,
     canViewTermination ? "termination" : null,
@@ -2173,6 +2272,13 @@ export function DashboardShell({
     key: "terminationDate",
     dir: "desc",
   })
+  const [confirmedTerminationSort, setConfirmedTerminationSort] = useState<{
+    key: "receivedDate" | "terminationDate" | "reflectedDate"
+    dir: "asc" | "desc"
+  }>({
+    key: "reflectedDate",
+    dir: "desc",
+  })
   const [terminationQuery, setTerminationQuery] = useState("")
   const [terminationReasonFilter, setTerminationReasonFilter] = useState("all")
   const [terminationDateFilter, setTerminationDateFilter] = useState("all")
@@ -2319,6 +2425,19 @@ export function DashboardShell({
     previousViewRef.current = view
   }, [view, collectionTab])
   const includedContracts = useMemo(() => contracts.filter((row: any) => row.includedInWeekly), [contracts])
+  const typeAnalysis = useMemo(() => normalizeTypeAnalysisState(data?.typeAnalysis), [data?.typeAnalysis])
+  const typeAnalysisWeeklyTerminationRows = useMemo(
+    () => (selectedSheet?.items || []).filter((row: any) => Boolean(row?.selected)),
+    [selectedSheet],
+  )
+  const typeAnalysisWeeklyImportSummary = useMemo(
+    () => ({
+      newCount: includedContracts.length,
+      terminationCount: typeAnalysisWeeklyTerminationRows.length,
+      netCount: includedContracts.length - typeAnalysisWeeklyTerminationRows.length,
+    }),
+    [includedContracts.length, typeAnalysisWeeklyTerminationRows.length],
+  )
   useEffect(() => {
     if (!currentUser?.name) return
     setContractDraft((prev: any) => ({ ...prev, recommender: currentUser.name }))
@@ -2936,8 +3055,11 @@ export function DashboardShell({
       return ["all", ...Array.from(dates).sort((a, b) => parseContractMonthKey(b) - parseContractMonthKey(a))]
     }, [holdItems, isTerminationView])
     const confirmedTerminationItems = useMemo(
-      () => (isTerminationView ? sortByKey(selectedSheet?.confirmedItems || [], terminationSort.key, terminationSort.dir) : []),
-      [selectedSheet, terminationSort, isTerminationView],
+      () =>
+        isTerminationView
+          ? sortByKey(selectedSheet?.confirmedItems || [], confirmedTerminationSort.key, confirmedTerminationSort.dir)
+          : [],
+      [selectedSheet, confirmedTerminationSort, isTerminationView],
     )
     const releasedHoldItems = useMemo(
       () => (isTerminationView ? sortByKey(selectedSheet?.releasedHoldItems || [], holdSort.key, holdSort.dir) : []),
@@ -4967,12 +5089,13 @@ export function DashboardShell({
     if (!selectedSheet) return
     const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
     if (!latestSheet) return
+    const selectedUpdatedAt = new Date().toISOString()
     const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
       sheet.id === latestSheet.id
         ? {
             ...sheet,
             items: (sheet.items || []).map((row: any) =>
-              row.id === itemId ? { ...row, selected: !row.selected } : row,
+              row.id === itemId ? { ...row, selected: !row.selected, selectedUpdatedAt } : row,
             ),
           }
         : sheet,
@@ -5196,6 +5319,14 @@ export function DashboardShell({
     )
   }
 
+  function toggleConfirmedTerminationSort(key: "receivedDate" | "terminationDate" | "reflectedDate") {
+    setConfirmedTerminationSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "desc" },
+    )
+  }
+
   function toggleContractSort(key: ContractSortKey) {
     setContractSort((prev) =>
       prev.key === key
@@ -5373,11 +5504,15 @@ export function DashboardShell({
     }
   }
 
-  function handleDeleteTerminationRow(rowId: string) {
+  async function handleDeleteTerminationRow(rowId: string) {
     if (!selectedSheet) return
     if (!window.confirm("이 해지 건을 삭제할까요?")) return
     const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
     if (!latestSheet) return
+    const deletedItemIds = {
+      ...(latestTermination.deletedItemIds || {}),
+      [rowId]: new Date().toISOString(),
+    }
     const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
       sheet.id === latestSheet.id
         ? {
@@ -5387,10 +5522,20 @@ export function DashboardShell({
           }
         : sheet,
     )
-    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
-    if (editingTerminationId === rowId) {
-      setEditingTerminationId(null)
-      setEditingTerminationDraft({})
+    try {
+      await persistTerminationData(
+        {
+          ...latestData,
+          termination: { ...latestTermination, deletedItemIds, currentSheetId: latestSheet.id, sheets: nextSheets },
+        },
+        { throwOnError: true },
+      )
+      if (editingTerminationId === rowId) {
+        setEditingTerminationId(null)
+        setEditingTerminationDraft({})
+      }
+    } catch {
+      // persist() already restores the previous state and alerts the user on immediate save failures.
     }
   }
 
@@ -5483,11 +5628,15 @@ export function DashboardShell({
     }
   }
 
-  function handleDeleteHoldRow(rowId: string) {
+  async function handleDeleteHoldRow(rowId: string) {
     if (!selectedSheet) return
     if (!window.confirm("이 청구보류 건을 삭제할까요?")) return
     const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
     if (!latestSheet) return
+    const deletedHoldIds = {
+      ...(latestTermination.deletedHoldIds || {}),
+      [rowId]: new Date().toISOString(),
+    }
     const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
       sheet.id === latestSheet.id
         ? {
@@ -5497,10 +5646,20 @@ export function DashboardShell({
           }
         : sheet,
     )
-    persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
-    if (editingHoldId === rowId) {
-      setEditingHoldId(null)
-      setEditingHoldDraft({})
+    try {
+      await persistTerminationData(
+        {
+          ...latestData,
+          termination: { ...latestTermination, deletedHoldIds, currentSheetId: latestSheet.id, sheets: nextSheets },
+        },
+        { throwOnError: true },
+      )
+      if (editingHoldId === rowId) {
+        setEditingHoldId(null)
+        setEditingHoldDraft({})
+      }
+    } catch {
+      // persist() already restores the previous state and alerts the user on immediate save failures.
     }
   }
 
@@ -5769,6 +5928,60 @@ export function DashboardShell({
     }
   }
 
+  function handleTypeAnalysisImportWeekly() {
+    const latestData = pendingDataRef.current || data
+    const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis)
+    const snapshot = buildTypeAnalysisWeeklySnapshot(includedContracts, typeAnalysisWeeklyTerminationRows)
+    if (!snapshot.newCount && !snapshot.terminationCount) {
+      window.alert("주간 반영 리스트에 체크된 신규계약이나 해지 진행사항에 체크된 해지 건이 없습니다.")
+      return
+    }
+    const nextTypeAnalysis = {
+      ...baseTypeAnalysis,
+      currentSnapshotId: snapshot.id,
+      updatedAt: snapshot.createdAt,
+      weeklySnapshots: [
+        snapshot,
+        ...(baseTypeAnalysis.weeklySnapshots || []).filter((item: any) => item?.id !== snapshot.id),
+      ].slice(0, 20),
+    }
+    persist(
+      {
+        ...latestData,
+        typeAnalysis: nextTypeAnalysis,
+      },
+      { updatedViews: ["type-analysis"] },
+    )
+    setTypeAnalysisSaveMessage("주간 신규/해지 내역을 불러왔습니다. 저장을 눌러 확정해주세요.")
+  }
+
+  async function handleTypeAnalysisSave() {
+    if (isSavingDashboard) return
+    setIsSavingDashboard(true)
+    setTypeAnalysisSaveMessage("저장 중...")
+    try {
+      const latestData = pendingDataRef.current || data
+      const sourceData = latestData?.typeAnalysis
+        ? latestData
+        : {
+            ...latestData,
+            typeAnalysis: normalizeTypeAnalysisState(latestData?.typeAnalysis),
+          }
+      if (sourceData !== latestData) {
+        setData(sourceData)
+        pendingDataRef.current = sourceData
+        markViewsDirty(["type-analysis"])
+      }
+      await commitDashboardData(sourceData, ["type-analysis"])
+      setTypeAnalysisSaveMessage(`${formatManualSaveTime()} 저장 완료`)
+    } catch {
+      setTypeAnalysisSaveMessage("저장 실패. 잠시 후 다시 저장해주세요.")
+      window.alert("신규대체해지유형분석 저장에 실패했습니다. 잠시 후 다시 시도해주세요.")
+    } finally {
+      setIsSavingDashboard(false)
+    }
+  }
+
   const reportGoalRows = buildGoalRows(weeklyReport.goalRows || [])
   const reportIndustryStats = buildIndustryStats(weeklyReport.industryStats || [])
   const manualDisplayDraft = manualPreviewDraft || manualDraft
@@ -5884,7 +6097,7 @@ export function DashboardShell({
   const currentMenuUpdatedAt = data?.ui?.menuUpdatedAt?.[view]
   const currentViewDirty = Boolean(dirtyViews[view])
   const hasUnsavedChanges = Object.values(dirtyViews).some(Boolean)
-  const showHeaderSave = !["daily-report", "weekly-report", "contracts", "weekly-selection", "manual-input", "termination", "option-dashboard", "admin-page", "my-page"].includes(view)
+  const showHeaderSave = !["daily-report", "weekly-report", "contracts", "weekly-selection", "type-analysis", "manual-input", "termination", "option-dashboard", "admin-page", "my-page"].includes(view)
   const manualSaveButtonLabel =
     manualSaveStatus.phase === "saving"
       ? "저장 중..."
@@ -6739,6 +6952,17 @@ export function DashboardShell({
                         }`}
                       >
                         {viewTitles["weekly-selection"]}
+                      </button>
+                    ) : null}
+                    {canViewTypeAnalysis ? (
+                      <button
+                        type="button"
+                        onClick={() => setView("type-analysis")}
+                        className={`flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${
+                          view === "type-analysis" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {viewTitles["type-analysis"]}
                       </button>
                     ) : null}
                     {canViewCollections ? (
@@ -7874,6 +8098,19 @@ export function DashboardShell({
             </div>
           )}
 
+          {view === "type-analysis" && (
+            <TypeAnalysisDashboard
+              data={typeAnalysis}
+              currentYear={currentYear}
+              isDirty={currentViewDirty}
+              isSaving={isSavingDashboard}
+              saveMessage={typeAnalysisSaveMessage}
+              weeklyImportSummary={typeAnalysisWeeklyImportSummary}
+              onImportWeekly={handleTypeAnalysisImportWeekly}
+              onSave={handleTypeAnalysisSave}
+            />
+          )}
+
           {view === "manual-input" && (
             <div className={`${cardClass} space-y-4 p-5`} onKeyDownCapture={handleManualInputKeyDownCapture}>
               <div className="flex items-start justify-between gap-4">
@@ -8742,7 +8979,12 @@ export function DashboardShell({
                         </th>
                         <th className={`${thClass} text-center`}>No.</th>
                         <th className={thClass}>
-                          {renderSortLabel("접수일", terminationSort.key === "receivedDate", terminationSort.dir, () => toggleTerminationSort("receivedDate"))}
+                          {renderSortLabel(
+                            "접수일",
+                            confirmedTerminationSort.key === "receivedDate",
+                            confirmedTerminationSort.dir,
+                            () => toggleConfirmedTerminationSort("receivedDate"),
+                          )}
                         </th>
                         <th className={thClass}>담당자</th>
                         <th className={thClass}>고객번호</th>
@@ -8750,9 +8992,21 @@ export function DashboardShell({
                         <th className={thClass}>고객 부서</th>
                         <th className={thClass}>해지 사유</th>
                         <th className={thClass}>
-                          {renderSortLabel("해지일", terminationSort.key === "terminationDate", terminationSort.dir, () => toggleTerminationSort("terminationDate"))}
+                          {renderSortLabel(
+                            "해지일",
+                            confirmedTerminationSort.key === "terminationDate",
+                            confirmedTerminationSort.dir,
+                            () => toggleConfirmedTerminationSort("terminationDate"),
+                          )}
                         </th>
-                        <th className={thClass}>반영일</th>
+                        <th className={thClass}>
+                          {renderSortLabel(
+                            "반영일",
+                            confirmedTerminationSort.key === "reflectedDate",
+                            confirmedTerminationSort.dir,
+                            () => toggleConfirmedTerminationSort("reflectedDate"),
+                          )}
+                        </th>
                         <th className={`${thClass} text-right`}>위약금</th>
                         <th className={`${thClass} text-center`}>작업</th>
                       </tr>

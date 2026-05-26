@@ -952,7 +952,7 @@ function describeActivity(row: any, userNameById: Record<string, string>, teamNa
     return { title: actionLabel, detail: details.join(" · ") || "프로필 정보를 저장했습니다.", pageLabel }
   }
   if (actionType === "dashboard_put") {
-    return { title: actionLabel, detail: `${pageLabel} 화면의 입력값을 저장했습니다.`, pageLabel }
+    return { title: actionLabel, detail: after?.detail || `${pageLabel} 화면의 입력값을 저장했습니다.`, pageLabel }
   }
   if (actionType === "contract_create") {
     return { title: actionLabel, detail: "신규계약 리스트에 계약을 등록했습니다.", pageLabel }

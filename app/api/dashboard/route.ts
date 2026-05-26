@@ -19,6 +19,7 @@ const DASHBOARD_VIEW_KEYS = [
   "manualInput",
   "newContractsList",
   "weeklySelection",
+  "typeAnalysis",
   "collectionManagement",
   "terminationManagement",
   "optionDashboard",
@@ -28,6 +29,7 @@ const DASHBOARD_EDIT_KEYS = [
   "manualInput",
   "newContractsList",
   "weeklySelection",
+  "typeAnalysis",
   "collectionManagement",
   "terminationManagement",
 ] as const
@@ -40,6 +42,7 @@ const DASHBOARD_STATE_SLICE_KEYS = [
   "dailyReport",
   "weeklyReport",
   "contracts",
+  "typeAnalysis",
   "collection",
   "termination",
   "paidOptionSourceColumns",
@@ -155,6 +158,185 @@ function mergeDailyReportState(existingDailyReport: any, incomingDailyReport: an
   }
 }
 
+function rowMergeKey(row: any) {
+  const id = safeText(row?.id)
+  if (id) return `id:${id}`
+  const customerId = normalizeContractIdCode(row?.customerId || row?.idCode)
+  return customerId ? `customer:${customerId}` : ""
+}
+
+function mergeTerminationActiveRows(existingRows: any[], incomingRows: any[]) {
+  const existingByKey = new Map<string, any>()
+  existingRows.forEach((row) => {
+    const key = rowMergeKey(row)
+    if (key) existingByKey.set(key, row)
+  })
+
+  return incomingRows.map((incomingRow) => {
+    const key = rowMergeKey(incomingRow)
+    const existingRow = key ? existingByKey.get(key) : null
+    if (!existingRow) return incomingRow
+
+    const existingSelected = Boolean(existingRow?.selected)
+    const incomingSelected = Boolean(incomingRow?.selected)
+    const existingSelectedAt = safeText(existingRow?.selectedUpdatedAt || existingRow?.selectionUpdatedAt)
+    const incomingSelectedAt = safeText(incomingRow?.selectedUpdatedAt || incomingRow?.selectionUpdatedAt)
+    const existingSelectedTime = parseTimestamp(existingSelectedAt)
+    const incomingSelectedTime = parseTimestamp(incomingSelectedAt)
+
+    if (existingSelectedTime || incomingSelectedTime) {
+      if (existingSelectedTime > incomingSelectedTime) {
+        return {
+          ...incomingRow,
+          selected: existingSelected,
+          ...(existingSelectedAt ? { selectedUpdatedAt: existingSelectedAt } : {}),
+        }
+      }
+      return {
+        ...incomingRow,
+        selected: incomingSelected,
+        ...(incomingSelectedAt ? { selectedUpdatedAt: incomingSelectedAt } : {}),
+      }
+    }
+
+    if (existingSelected && !incomingSelected) {
+      return { ...incomingRow, selected: true }
+    }
+    return incomingRow
+  })
+}
+
+function normalizeDeletedRowMap(value: any) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([key, deletedAt]) => [safeText(key), safeText(deletedAt)] as const)
+      .filter(([key]) => Boolean(key)),
+  )
+}
+
+function mergeDeletedRowMaps(existingMap: any, incomingMap: any) {
+  const existing = normalizeDeletedRowMap(existingMap)
+  const incoming = normalizeDeletedRowMap(incomingMap)
+  const merged: Record<string, string> = { ...existing }
+  Object.entries(incoming).forEach(([key, incomingDeletedAt]) => {
+    const existingDeletedAt = merged[key]
+    if (!existingDeletedAt || parseTimestamp(incomingDeletedAt) >= parseTimestamp(existingDeletedAt)) {
+      merged[key] = incomingDeletedAt
+    }
+  })
+  return merged
+}
+
+function filterDeletedRows(rows: any[], deletedMap: Record<string, string>) {
+  const deletedIds = new Set(Object.keys(deletedMap))
+  if (!deletedIds.size) return rows
+  return rows.filter((row) => !deletedIds.has(safeText(row?.id)))
+}
+
+function mergeTerminationState(existingTermination: any, incomingTermination: any) {
+  if (!incomingTermination || typeof incomingTermination !== "object" || Array.isArray(incomingTermination)) {
+    return incomingTermination
+  }
+
+  const existingSheets = Array.isArray(existingTermination?.sheets) ? existingTermination.sheets : []
+  const incomingSheets = Array.isArray(incomingTermination?.sheets) ? incomingTermination.sheets : []
+  const deletedItemIds = mergeDeletedRowMaps(existingTermination?.deletedItemIds, incomingTermination?.deletedItemIds)
+  const deletedHoldIds = mergeDeletedRowMaps(existingTermination?.deletedHoldIds, incomingTermination?.deletedHoldIds)
+  const existingSheetById = new Map<string, any>()
+  existingSheets.forEach((sheet: any) => {
+    const id = safeText(sheet?.id)
+    if (id) existingSheetById.set(id, sheet)
+  })
+
+  return {
+    ...existingTermination,
+    ...incomingTermination,
+    deletedItemIds,
+    deletedHoldIds,
+    sheets: incomingSheets.map((incomingSheet: any, index: number) => {
+      const existingSheet =
+        existingSheetById.get(safeText(incomingSheet?.id)) ||
+        existingSheets[index] ||
+        null
+      if (!existingSheet) {
+        return {
+          ...incomingSheet,
+          ...(Array.isArray(incomingSheet?.items)
+            ? { items: filterDeletedRows(incomingSheet.items, deletedItemIds) }
+            : {}),
+          ...(Array.isArray(incomingSheet?.holdItems)
+            ? { holdItems: filterDeletedRows(incomingSheet.holdItems, deletedHoldIds) }
+            : {}),
+        }
+      }
+      return {
+        ...incomingSheet,
+        ...(Array.isArray(incomingSheet?.items)
+          ? {
+              items: filterDeletedRows(
+                mergeTerminationActiveRows(
+                  Array.isArray(existingSheet?.items) ? existingSheet.items : [],
+                  incomingSheet.items,
+                ),
+                deletedItemIds,
+              ),
+            }
+          : {}),
+        ...(Array.isArray(incomingSheet?.holdItems)
+          ? { holdItems: filterDeletedRows(incomingSheet.holdItems, deletedHoldIds) }
+          : {}),
+      }
+    }),
+  }
+}
+
+function countTerminationRows(termination: any, key: "items" | "holdItems" | "confirmedItems" | "releasedHoldItems") {
+  return (Array.isArray(termination?.sheets) ? termination.sheets : []).reduce(
+    (total: number, sheet: any) => total + (Array.isArray(sheet?.[key]) ? sheet[key].length : 0),
+    0,
+  )
+}
+
+function inferDashboardPageKey(changedKeys: DashboardStateSliceKey[]) {
+  if (changedKeys.includes("termination")) return "terminationManagement"
+  if (changedKeys.includes("collection")) return "collectionManagement"
+  if (changedKeys.includes("contracts")) return "newContractsList"
+  if (changedKeys.includes("typeAnalysis")) return "typeAnalysis"
+  if (changedKeys.includes("dailyReport")) return "dailyReport"
+  if (changedKeys.includes("weeklyReport")) return "weeklyReport"
+  if (changedKeys.includes("paidOptionSourceColumns")) return "optionDashboard"
+  return "weeklyReport"
+}
+
+function describeDashboardPut(changedKeys: DashboardStateSliceKey[], existingData: any, incomingBody: any) {
+  if (changedKeys.includes("termination")) {
+    const beforeHold = countTerminationRows(existingData?.termination, "holdItems")
+    const afterHold = countTerminationRows(incomingBody?.termination, "holdItems")
+    const beforeReleased = countTerminationRows(existingData?.termination, "releasedHoldItems")
+    const afterReleased = countTerminationRows(incomingBody?.termination, "releasedHoldItems")
+    const beforeActive = countTerminationRows(existingData?.termination, "items")
+    const afterActive = countTerminationRows(incomingBody?.termination, "items")
+    const beforeConfirmed = countTerminationRows(existingData?.termination, "confirmedItems")
+    const afterConfirmed = countTerminationRows(incomingBody?.termination, "confirmedItems")
+
+    if (afterHold < beforeHold && afterReleased > beforeReleased) return `청구보류 ${beforeHold - afterHold}건 해제 저장`
+    if (afterHold < beforeHold && afterActive > beforeActive) return `청구보류 ${beforeHold - afterHold}건 해지리스트 이동 저장`
+    if (afterHold < beforeHold) return `청구보류 ${beforeHold - afterHold}건 삭제 저장`
+    if (afterHold > beforeHold) return `청구보류 ${afterHold - beforeHold}건 등록/복구 저장`
+    if (afterConfirmed > beforeConfirmed) return `해지확정 ${afterConfirmed - beforeConfirmed}건 반영 저장`
+    if (afterActive < beforeActive) return `해지리스트 ${beforeActive - afterActive}건 삭제/확정 저장`
+    if (afterActive > beforeActive) return `해지리스트 ${afterActive - beforeActive}건 등록/복구 저장`
+    return "해지 진행사항 수정 저장"
+  }
+  if (changedKeys.includes("collection")) return "계약서통합관리 저장"
+  if (changedKeys.includes("contracts")) return "신규계약/주간반영 리스트 저장"
+  if (changedKeys.includes("typeAnalysis")) return "신규대체해지유형분석 저장"
+  if (changedKeys.includes("dailyReport")) return "데일리 업무일지 저장"
+  if (changedKeys.includes("weeklyReport")) return "주간실적보고/수동입력 저장"
+  return "대시보드 저장"
+}
+
 function mergeContractsForScope(existingContracts: any[], incomingContracts: any[], user: any, scope: ReturnType<typeof getContractAccessScope>) {
   if (scope === "all") return incomingContracts
   if (scope === "team") {
@@ -239,10 +421,12 @@ export async function PUT(request: Request) {
     const canWritePartialDirectly = isPartial && changedKeys.length > 0 && !Array.isArray(incomingBody?.contracts)
     let nextBody = incomingBody
     let existingDataForMerge: any = null
+    let existingDataForActivity: any = null
 
     if (!canWritePartialDirectly) {
       const existingData = (await readDashboardState<any>(DATA_PATH)) || (await readDashboardState<any>(FALLBACK_PATH)) || EMPTY_DASHBOARD
       existingDataForMerge = existingData
+      existingDataForActivity = existingData
       const scope = getContractAccessScope(session.user, permissions)
       const nextContracts = mergeContractsForScope(
         Array.isArray(existingData?.contracts) ? existingData.contracts : [],
@@ -263,31 +447,50 @@ export async function PUT(request: Request) {
         (await readDashboardState<any>(DATA_PATH)) ||
         (await readDashboardState<any>(FALLBACK_PATH)) ||
         EMPTY_DASHBOARD
+      existingDataForActivity = existingData
       nextBody = {
         ...nextBody,
         dailyReport: mergeDailyReportState(existingData?.dailyReport, incomingBody.dailyReport),
       }
     }
 
+    if (changedKeys.includes("termination") && incomingBody?.termination) {
+      const existingData =
+        existingDataForMerge ||
+        (await readDashboardState<any>(DATA_PATH)) ||
+        (await readDashboardState<any>(FALLBACK_PATH)) ||
+        EMPTY_DASHBOARD
+      existingDataForActivity = existingData
+      nextBody = {
+        ...nextBody,
+        termination: mergeTerminationState(existingData?.termination, incomingBody.termination),
+      }
+    }
+
+    const activityPageKey = inferDashboardPageKey(changedKeys)
+    const activityDetail = describeDashboardPut(changedKeys, existingDataForActivity || existingDataForMerge || EMPTY_DASHBOARD, incomingBody)
+
     await writeDashboardState(nextBody, {
       menuLabel: "Dashboard",
       changeLabel: "Save dashboard state",
     }, isPartial && changedKeys.length ? changedKeys : undefined)
-    void updateAuthState((state) => {
+    await updateAuthState((state) => {
       appendActivityLog(state, {
         actorUserId: session.user.id,
         actorName: session.user.name,
         actionType: "dashboard_put",
         targetType: "dashboard_state",
-        targetId: "dashboard",
-        pageKey: "weeklyReport",
+        targetId: activityPageKey,
+        pageKey: activityPageKey,
         beforeValue: "",
-        afterValue: "save",
+        afterValue: JSON.stringify({ detail: activityDetail, changedKeys }),
         ipAddress: getRequestIp(request),
         sessionId: session.sessionId,
         success: true,
       })
-    }).catch(() => undefined)
+    }).catch((error) => {
+      console.error("Failed to append dashboard activity log.", error)
+    })
     return NextResponse.json({ ok: true })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save dashboard state"

@@ -61,6 +61,7 @@ const DATA_LABELS: Record<string, string> = {
   dashboard_daily_report: "업무일지",
   dashboard_weekly_report: "주간실적보고",
   dashboard_contracts: "신규계약/계약",
+  dashboard_type_analysis: "신규대체해지유형분석",
   dashboard_collection: "계약서 통합관리",
   dashboard_termination: "해지 진행사항",
   dashboard_paid_option_source_columns: "옵션 컬럼 설정",
@@ -76,6 +77,7 @@ const DASHBOARD_SLICE_KEYS: Record<string, string> = {
   dailyReport: "dashboard_daily_report",
   weeklyReport: "dashboard_weekly_report",
   contracts: "dashboard_contracts",
+  typeAnalysis: "dashboard_type_analysis",
   collection: "dashboard_collection",
   termination: "dashboard_termination",
   paidOptionSourceColumns: "dashboard_paid_option_source_columns",
@@ -87,6 +89,7 @@ const PROTECTED_LEGACY_DASHBOARD_KEYS = new Set([
   "years",
   "availableYears",
   "weeklyReport",
+  "typeAnalysis",
   "paidOptionSourceColumns",
 ])
 

@@ -20,6 +20,7 @@ const DASHBOARD_RESTORE_KEYS = [
   "dailyReport",
   "weeklyReport",
   "contracts",
+  "typeAnalysis",
   "collection",
   "termination",
   "paidOptionSourceColumns",

@@ -17,6 +17,7 @@ const allowedDashboardViews = new Set([
   "weekly-report",
   "contracts",
   "weekly-selection",
+  "type-analysis",
   "manual-input",
   "collection",
   "option-dashboard",
@@ -55,6 +56,7 @@ export default async function DailyReportPageRoute({
   const defaultData = {
     ui: {},
     contracts: [],
+    typeAnalysis: {},
     weeklyReport: {},
     collection: { integrated: [], longTerm: [] },
     termination: { sheets: [] },
@@ -72,6 +74,7 @@ export default async function DailyReportPageRoute({
       permissionIndex,
     ),
     collection: baseData.collection || { integrated: [], longTerm: [] },
+    typeAnalysis: baseData.typeAnalysis || {},
     termination: baseData.termination || { sheets: [] },
     paidOptions: baseData.paidOptions || {},
     dailyReport: baseData.dailyReport || createEmptyDailyReportState(),

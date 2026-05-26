@@ -6,6 +6,7 @@ export type MenuKey =
   | "manualInput"
   | "newContractsList"
   | "weeklySelection"
+  | "typeAnalysis"
   | "newContractCreate"
   | "collectionManagement"
   | "optionDashboard"
@@ -195,6 +196,7 @@ export const MENU_LABELS: Record<MenuKey, string> = {
   manualInput: "수동입력리스트",
   newContractsList: "신규계약리스트",
   weeklySelection: "주간 반영 리스트",
+  typeAnalysis: "신규대체해지유형분석",
   newContractCreate: "신규계약등록",
   collectionManagement: "계약서통합관리",
   optionDashboard: "유료 옵션 정보 현황",
@@ -227,6 +229,7 @@ export const ADMIN_PERMISSION_ROW_KEYS: MenuKey[] = [
   "manualInput",
   "newContractsList",
   "weeklySelection",
+  "typeAnalysis",
   "collectionManagement",
   "optionDashboard",
   "terminationManagement",
