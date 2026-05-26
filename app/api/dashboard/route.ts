@@ -468,8 +468,12 @@ export async function PUT(request: Request) {
     const requestedChangedKeys = (
       Array.isArray(body?.changedKeys) ? body.changedKeys : []
     ).filter((key: unknown): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))
+    const sourceViews = Array.isArray(body?.sourceViews)
+      ? body.sourceViews.map((key: unknown) => String(key || "")).filter(Boolean)
+      : []
+    const isManualWeeklySave = sourceViews.includes("manual-input") || sourceViews.includes("weekly-report")
     const changedKeys =
-      requestedChangedKeys.includes("contracts") && requestedChangedKeys.includes("weeklyReport")
+      requestedChangedKeys.includes("contracts") && requestedChangedKeys.includes("weeklyReport") && !isManualWeeklySave
         ? requestedChangedKeys.filter((key: DashboardStateSliceKey) => key !== "weeklyReport")
         : requestedChangedKeys
     const canWritePartialDirectly = isPartial && changedKeys.length > 0 && !Array.isArray(incomingBody?.contracts)

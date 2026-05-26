@@ -1964,6 +1964,33 @@ function buildManualSaveSnapshot(weeklyReport: any, user: any) {
   }
 }
 
+function buildManualPersistFingerprint(weeklyReport: any) {
+  return {
+    revenueHeaderText: weeklyReport?.revenueHeaderText,
+    revenueUnitPrice: weeklyReport?.revenueUnitPrice,
+    additionalContractCount: weeklyReport?.additionalContractCount,
+    subtitleOne: weeklyReport?.subtitleOne,
+    subtitleTwo: weeklyReport?.subtitleTwo,
+    manualLastSavedAt: weeklyReport?.manualLastSavedAt,
+    manualLastSavedBy: weeklyReport?.manualLastSavedBy,
+    manualSaveVersion: weeklyReport?.manualSaveVersion,
+    revenueNoteText: weeklyReport?.revenueNoteText,
+    manualSummary: weeklyReport?.manualSummary || {},
+    revenueRows: weeklyReport?.revenueRows || [],
+    goalRows: weeklyReport?.goalRows || [],
+    industryStats: weeklyReport?.industryStats || [],
+    paidOptionInfoColumns: weeklyReport?.paidOptionInfoColumns || [],
+    terminationOverviewRows: weeklyReport?.terminationOverviewRows || [],
+    weeklyIndustryOverviewRows: weeklyReport?.weeklyIndustryOverviewRows || [],
+    additionalSales: weeklyReport?.additionalSales || [],
+  }
+}
+
+function manualPersistMatches(expectedWeeklyReport: any, actualWeeklyReport: any) {
+  return stableManualValue(buildManualPersistFingerprint(expectedWeeklyReport)) ===
+    stableManualValue(buildManualPersistFingerprint(actualWeeklyReport))
+}
+
 function normalizeRevenueSubtitleOne(value: unknown) {
   const text = sanitizeText(value, "26년 순증 매출")
   return text
@@ -3230,14 +3257,22 @@ export function DashboardShell({
   }, [selectedSheet])
 
   async function sendDashboardUpdate(body: string, keepalive = false) {
-    const response = await fetch("/api/dashboard", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body,
-      ...(keepalive ? { keepalive: true } : {}),
-    })
-    if (!response.ok) {
-      throw new Error(`Dashboard save failed (${response.status})`)
+    const controller = keepalive ? null : new AbortController()
+    const timeout = controller ? window.setTimeout(() => controller.abort(), 15000) : null
+    try {
+      const response = await fetch("/api/dashboard", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body,
+        signal: controller?.signal,
+        ...(keepalive ? { keepalive: true } : {}),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || payload?.ok === false) {
+        throw new Error(payload?.error || `Dashboard save failed (${response.status})`)
+      }
+    } finally {
+      if (timeout) window.clearTimeout(timeout)
     }
   }
 
@@ -3286,7 +3321,10 @@ export function DashboardShell({
   }
 
   async function commitDashboardData(sourceData: any = pendingDataRef.current || data, updatedViews: ViewKey[] = [view]) {
-    const viewsToCommit = getDirtyViewKeys(updatedViews)
+    // Saving one menu must not flush unrelated dirty views. A stale dirty
+    // marker from another menu can otherwise expand changedKeys and make a
+    // manual-input save look successful without actually persisting weeklyReport.
+    const viewsToCommit = Array.from(new Set(updatedViews.length ? updatedViews : [view]))
     const updatedAt = new Date().toISOString()
     const menuUpdatedAt = {
       ...(sourceData?.ui?.menuUpdatedAt || {}),
@@ -3302,6 +3340,7 @@ export function DashboardShell({
     const changedKeys = collectStateKeysForViews(viewsToCommit)
     const payload = JSON.stringify({
       partial: true,
+      sourceViews: viewsToCommit,
       changedKeys,
       data: pickTopLevelState(nextDataWithMeta, changedKeys),
     })
@@ -6010,6 +6049,7 @@ export function DashboardShell({
         revenueRows: cloneData(normalizedRevenueRows),
         terminationOverviewRows: cloneData(buildTerminationOverviewRowsWithComputedTotals(draft.terminationOverviewRows || [])),
       }
+      const manualSavedAt = new Date().toISOString()
       const nextWeekly = {
         ...latestWeeklyReport,
         // Persist the exact values currently shown in the manual input view so
@@ -6019,6 +6059,9 @@ export function DashboardShell({
         revenueHeaderText: draftRevenueDisplay.header,
         revenueUnitPrice: toNumber(draft.revenueUnitPrice),
         additionalContractCount: toNumber(draft.additionalContractCount),
+        manualLastSavedAt: manualSavedAt,
+        manualLastSavedBy: currentUser?.name || "",
+        manualSaveVersion: `${manualSavedAt}-${saveRequestId}`,
         subtitleOne: draftRevenueDisplay.subtitleOne,
         subtitleTwo: draftRevenueDisplay.subtitleTwo,
         revenueNoteText: draft.revenueNoteText,
@@ -6048,6 +6091,11 @@ export function DashboardShell({
           { ...latestData, paidOptionSourceColumns: nextPaidOptionSourceColumns, weeklyReport: nextWeekly },
           { immediate: true, updatedViews: ["manual-input", "weekly-report"] },
         )
+        const verifyResponse = await fetch(`/api/dashboard?slice=weeklyReport&verify=${Date.now()}`, { cache: "no-store" }).catch(() => null)
+        const verifyPayload = verifyResponse?.ok ? await verifyResponse.json().catch(() => null) : null
+        if (!manualPersistMatches(nextWeekly, verifyPayload?.weeklyReport)) {
+          throw new Error("Manual input save verification failed")
+        }
         isSyncingManualDraftRef.current = true
         manualBaseDraftRef.current = cloneData(nextManualDraft)
         manualPreviewDraftRef.current = null
@@ -6060,9 +6108,10 @@ export function DashboardShell({
         }
       } catch {
         if (manualSaveRequestIdRef.current === saveRequestId) {
+          markViewsDirty(["manual-input"])
           setManualSaveStatus({
             phase: "error",
-            message: "저장에 실패했습니다. 잠시 후 다시 저장해주세요.",
+            message: "저장 확인에 실패했습니다. 다시 저장해주세요.",
           })
         }
       }
