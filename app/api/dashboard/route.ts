@@ -4,6 +4,7 @@ import { buildPermissionIndex, filterContractsForUser, getContractAccessScope, h
 import { getRequestIp, requireApiPermission } from "@/lib/auth/server"
 import { appendActivityLog, updateAuthState } from "@/lib/auth/store"
 import { resolveRequestSession } from "@/lib/auth/session"
+import { ensureManualWeeklyRestore } from "@/lib/manual-weekly-restore"
 import { readDashboardState, readDashboardStateSlices, writeDashboardState } from "@/lib/shared-db-store"
 
 export const runtime = "nodejs"
@@ -155,6 +156,39 @@ function mergeDailyReportState(existingDailyReport: any, incomingDailyReport: an
     ...incomingDailyReport,
     reports: Array.from(mergedReports.values()),
     aiSummaries: Array.from(summaryMap.values()),
+  }
+}
+
+function mergeManualSaveHistory(existingHistory: any, incomingHistory: any) {
+  const map = new Map<string, any>()
+  const addRows = (rows: any) => {
+    if (!Array.isArray(rows)) return
+    rows.forEach((row: any) => {
+      const id = safeText(row?.id || row?.savedAt || row?.createdAt)
+      if (!id) return
+      const existing = map.get(id)
+      if (!existing || parseTimestamp(row?.savedAt || row?.createdAt) >= parseTimestamp(existing?.savedAt || existing?.createdAt)) {
+        map.set(id, row)
+      }
+    })
+  }
+  addRows(existingHistory)
+  addRows(incomingHistory)
+  return Array.from(map.values())
+    .sort((a, b) => parseTimestamp(b?.savedAt || b?.createdAt) - parseTimestamp(a?.savedAt || a?.createdAt))
+    .slice(0, 10)
+}
+
+function mergeWeeklyReportState(existingWeeklyReport: any, incomingWeeklyReport: any) {
+  if (!incomingWeeklyReport || typeof incomingWeeklyReport !== "object" || Array.isArray(incomingWeeklyReport)) {
+    return incomingWeeklyReport
+  }
+  return {
+    ...incomingWeeklyReport,
+    manualSaveHistory: mergeManualSaveHistory(
+      existingWeeklyReport?.manualSaveHistory,
+      incomingWeeklyReport?.manualSaveHistory,
+    ),
   }
 }
 
@@ -366,7 +400,8 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url)
     const slice = url.searchParams.get("slice") || ""
-    const data = await readDashboardState<any>(DATA_PATH)
+    let data = await readDashboardState<any>(DATA_PATH)
+    data = await ensureManualWeeklyRestore(data)
     if (data) {
       if (slice === "dailyReport") {
         return NextResponse.json({
@@ -374,13 +409,28 @@ export async function GET(request: Request) {
           ui: data?.ui || {},
         })
       }
+      if (slice === "weeklyReport") {
+        return NextResponse.json({
+          weeklyReport: data?.weeklyReport || {},
+          paidOptionSourceColumns: data?.paidOptionSourceColumns || [],
+          ui: data?.ui || {},
+        })
+      }
       return NextResponse.json(buildDashboardResponse(data, session, permissions))
     }
 
-    const fallbackData = await readDashboardState<any>(FALLBACK_PATH)
+    let fallbackData = await readDashboardState<any>(FALLBACK_PATH)
+    fallbackData = await ensureManualWeeklyRestore(fallbackData)
     if (slice === "dailyReport") {
       return NextResponse.json({
         dailyReport: fallbackData?.dailyReport || {},
+        ui: fallbackData?.ui || {},
+      })
+    }
+    if (slice === "weeklyReport") {
+      return NextResponse.json({
+        weeklyReport: fallbackData?.weeklyReport || {},
+        paidOptionSourceColumns: fallbackData?.paidOptionSourceColumns || [],
         ui: fallbackData?.ui || {},
       })
     }
@@ -415,9 +465,13 @@ export async function PUT(request: Request) {
   try {
     const isPartial = Boolean(body?.partial && body?.data && typeof body.data === "object" && !Array.isArray(body.data))
     const incomingBody = isPartial ? body.data : body
-    const changedKeys = (
+    const requestedChangedKeys = (
       Array.isArray(body?.changedKeys) ? body.changedKeys : []
     ).filter((key: unknown): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))
+    const changedKeys =
+      requestedChangedKeys.includes("contracts") && requestedChangedKeys.includes("weeklyReport")
+        ? requestedChangedKeys.filter((key: DashboardStateSliceKey) => key !== "weeklyReport")
+        : requestedChangedKeys
     const canWritePartialDirectly = isPartial && changedKeys.length > 0 && !Array.isArray(incomingBody?.contracts)
     let nextBody = incomingBody
     let existingDataForMerge: any = null
@@ -451,6 +505,20 @@ export async function PUT(request: Request) {
       nextBody = {
         ...nextBody,
         dailyReport: mergeDailyReportState(existingData?.dailyReport, incomingBody.dailyReport),
+      }
+    }
+
+    if (changedKeys.includes("weeklyReport") && incomingBody?.weeklyReport) {
+      const existingData =
+        existingDataForMerge ||
+        existingDataForActivity ||
+        (await readDashboardState<any>(DATA_PATH)) ||
+        (await readDashboardState<any>(FALLBACK_PATH)) ||
+        EMPTY_DASHBOARD
+      existingDataForActivity = existingData
+      nextBody = {
+        ...nextBody,
+        weeklyReport: mergeWeeklyReportState(existingData?.weeklyReport, incomingBody.weeklyReport),
       }
     }
 

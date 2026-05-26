@@ -8,6 +8,7 @@ import { requirePageAuth } from "@/lib/auth/server"
 import { getUserColorToken } from "@/lib/auth/model"
 import type { PopupMessageRecord } from "@/lib/auth/model"
 import { ensureDailyDirectoryUsers, isDailyReportTeam, sortDailyDirectoryUsers } from "@/lib/daily-report"
+import { ensureManualWeeklyRestore } from "@/lib/manual-weekly-restore"
 import { readDashboardState } from "@/lib/shared-db-store"
 
 const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
@@ -32,6 +33,8 @@ export default async function Page({
   }
 
   if (!auth) return <LoginPage />
+
+  data = await ensureManualWeeklyRestore(data)
 
   const permissionIndex = buildPermissionIndex(auth.state, auth.user)
   const safeData = {

@@ -35,7 +35,7 @@ const VIEW_STATE_KEYS: Record<ViewKey, string[]> = {
   "daily-report": ["dailyReport", "ui"],
   "weekly-report": ["weeklyReport", "currentYear", "years", "availableYears", "paidOptionSourceColumns", "ui"],
   "contracts": ["contracts", "currentYear", "years", "availableYears", "ui"],
-  "weekly-selection": ["contracts", "weeklyReport", "ui"],
+  "weekly-selection": ["contracts", "ui"],
   "type-analysis": ["typeAnalysis", "ui"],
   "manual-input": ["weeklyReport", "currentYear", "years", "availableYears", "paidOptionSourceColumns", "ui"],
   "collection": ["collection", "currentYear", "years", "availableYears", "ui"],
@@ -574,6 +574,15 @@ function parseContractMonthKey(value: unknown) {
   const parts = parseContractMonthParts(value)
   if (parts) return parts.year * 100 + parts.month
   return 0
+}
+
+function getCurrentSeoulMonthKey() {
+  return parseContractMonthKey(getSeoulTodayKey())
+}
+
+function isFutureBillingHold(row: any, currentMonthKey = getCurrentSeoulMonthKey()) {
+  const startMonthKey = parseContractMonthKey(row?.startDate)
+  return Boolean(startMonthKey && currentMonthKey && startMonthKey > currentMonthKey)
 }
 
 const monthSortKeys = new Set(["startDate", "endDate", "contractMonth", "claimMonth", "billingMonth", "billing_month"])
@@ -1839,6 +1848,122 @@ function buildManualDraftFromWeekly(weekly: any, contracts: any[], paidOptionSou
   }
 }
 
+function stableManualValue(value: unknown) {
+  return JSON.stringify(value ?? null)
+}
+
+function manualValueChanged(baseValue: unknown, draftValue: unknown) {
+  return stableManualValue(baseValue) !== stableManualValue(draftValue)
+}
+
+function pickChangedManualValue(serverValue: unknown, baseValue: unknown, draftValue: unknown) {
+  return manualValueChanged(baseValue, draftValue) ? draftValue : serverValue
+}
+
+function findManualRow(rows: any[] = [], row: any, index: number) {
+  const key = String(row?.key || row?.month || row?.label || row?.category || "").trim()
+  if (key) {
+    const found = rows.find((item: any) => String(item?.key || item?.month || item?.label || item?.category || "").trim() === key)
+    if (found) return found
+  }
+  return rows[index]
+}
+
+function mergeManualCellArray(serverValues: any[] = [], baseValues: any[] = [], draftValues: any[] = []) {
+  const length = Math.max(serverValues.length, baseValues.length, draftValues.length)
+  return Array.from({ length }, (_, index) =>
+    manualValueChanged(baseValues[index], draftValues[index])
+      ? draftValues[index]
+      : serverValues[index],
+  )
+}
+
+function mergeManualRows(serverRows: any[] = [], baseRows: any[] = [], draftRows: any[] = [], cellKey: "months" | "values" | null = null) {
+  const usedServerRows = new Set<any>()
+  const mergedRows = draftRows.map((draftRow: any, index: number) => {
+    const serverRow = findManualRow(serverRows, draftRow, index) || {}
+    const baseRow = findManualRow(baseRows, draftRow, index) || {}
+    usedServerRows.add(serverRow)
+    const keys = new Set([...Object.keys(serverRow), ...Object.keys(baseRow), ...Object.keys(draftRow)])
+    const nextRow: any = { ...serverRow }
+    keys.forEach((key) => {
+      if (cellKey && key === cellKey) {
+        nextRow[key] = mergeManualCellArray(serverRow?.[key] || [], baseRow?.[key] || [], draftRow?.[key] || [])
+        return
+      }
+      nextRow[key] = pickChangedManualValue(serverRow?.[key], baseRow?.[key], draftRow?.[key])
+    })
+    return nextRow
+  })
+
+  serverRows.forEach((serverRow: any) => {
+    if (!usedServerRows.has(serverRow)) mergedRows.push(serverRow)
+  })
+  return mergedRows
+}
+
+function mergeManualObjectFields(serverObject: any = {}, baseObject: any = {}, draftObject: any = {}) {
+  const keys = new Set([...Object.keys(serverObject || {}), ...Object.keys(baseObject || {}), ...Object.keys(draftObject || {})])
+  const next: any = { ...(serverObject || {}) }
+  keys.forEach((key) => {
+    next[key] = pickChangedManualValue(serverObject?.[key], baseObject?.[key], draftObject?.[key])
+  })
+  return next
+}
+
+function mergeManualDraftForSave(serverDraft: any, baseDraft: any, draft: any) {
+  return {
+    ...serverDraft,
+    revenueHeaderText: pickChangedManualValue(serverDraft?.revenueHeaderText, baseDraft?.revenueHeaderText, draft?.revenueHeaderText),
+    revenueUnitPrice: pickChangedManualValue(serverDraft?.revenueUnitPrice, baseDraft?.revenueUnitPrice, draft?.revenueUnitPrice),
+    additionalContractCount: pickChangedManualValue(
+      serverDraft?.additionalContractCount,
+      baseDraft?.additionalContractCount,
+      draft?.additionalContractCount,
+    ),
+    subtitleOne: pickChangedManualValue(serverDraft?.subtitleOne, baseDraft?.subtitleOne, draft?.subtitleOne),
+    subtitleTwo: pickChangedManualValue(serverDraft?.subtitleTwo, baseDraft?.subtitleTwo, draft?.subtitleTwo),
+    revenueNoteText: pickChangedManualValue(serverDraft?.revenueNoteText, baseDraft?.revenueNoteText, draft?.revenueNoteText),
+    manualSummary: mergeManualObjectFields(serverDraft?.manualSummary || {}, baseDraft?.manualSummary || {}, draft?.manualSummary || {}),
+    revenueRows: mergeManualRows(serverDraft?.revenueRows || [], baseDraft?.revenueRows || [], draft?.revenueRows || [], "months"),
+    goalRows: mergeManualRows(serverDraft?.goalRows || [], baseDraft?.goalRows || [], draft?.goalRows || [], null),
+    industryStats: mergeManualRows(serverDraft?.industryStats || [], baseDraft?.industryStats || [], draft?.industryStats || [], null),
+    terminationOverviewRows: mergeManualRows(
+      serverDraft?.terminationOverviewRows || [],
+      baseDraft?.terminationOverviewRows || [],
+      draft?.terminationOverviewRows || [],
+      "values",
+    ),
+    weeklyIndustryOverviewRows: mergeManualRows(
+      serverDraft?.weeklyIndustryOverviewRows || [],
+      baseDraft?.weeklyIndustryOverviewRows || [],
+      draft?.weeklyIndustryOverviewRows || [],
+      "values",
+    ),
+    paidOptionInfoColumns: manualValueChanged(baseDraft?.paidOptionInfoColumns, draft?.paidOptionInfoColumns)
+      ? cloneData(draft?.paidOptionInfoColumns || [])
+      : cloneData(serverDraft?.paidOptionInfoColumns || []),
+    additionalSales: manualValueChanged(baseDraft?.additionalSales, draft?.additionalSales)
+      ? normalizeAdditionalSalesRows(cloneData(draft?.additionalSales || []))
+      : normalizeAdditionalSalesRows(cloneData(serverDraft?.additionalSales || [])),
+  }
+}
+
+function buildManualSaveSnapshot(weeklyReport: any, user: any) {
+  const savedAt = new Date().toISOString()
+  return {
+    id: `manual-${Date.now()}`,
+    savedAt,
+    savedBy: user?.name || "",
+    revenueRows: cloneData(weeklyReport?.revenueRows || []),
+    goalRows: cloneData(weeklyReport?.goalRows || []),
+    manualSummary: cloneData(weeklyReport?.manualSummary || {}),
+    terminationOverviewRows: cloneData(weeklyReport?.terminationOverviewRows || []),
+    weeklyIndustryOverviewRows: cloneData(weeklyReport?.weeklyIndustryOverviewRows || []),
+    additionalSales: cloneData(weeklyReport?.additionalSales || []),
+  }
+}
+
 function normalizeRevenueSubtitleOne(value: unknown) {
   const text = sanitizeText(value, "26년 순증 매출")
   return text
@@ -2075,6 +2200,7 @@ export function DashboardShell({
   const dirtyViewsRef = useRef<Partial<Record<ViewKey, boolean>>>({})
   const manualDraftRef = useRef<any>(manualDraft)
   const manualPreviewDraftRef = useRef<any | null>(manualPreviewDraft)
+  const manualBaseDraftRef = useRef<any>(cloneData(manualDraft))
   const manualDraftReadyRef = useRef(false)
   const isSyncingManualDraftRef = useRef(false)
   const manualSaveRequestIdRef = useRef(0)
@@ -2695,7 +2821,9 @@ export function DashboardShell({
   useEffect(() => {
     if (dirtyViewsRef.current["manual-input"]) return
     isSyncingManualDraftRef.current = true
-    updateManualDraft(buildManualDraftFromWeekly(weeklyReport, contracts, paidOptionSourceColumns))
+    const nextDraft = buildManualDraftFromWeekly(weeklyReport, contracts, paidOptionSourceColumns)
+    manualBaseDraftRef.current = cloneData(nextDraft)
+    updateManualDraft(nextDraft)
     setManualRevenueHeaderEdited(false)
   }, [weeklyReport, contracts, paidOptionSourceColumns])
 
@@ -3022,6 +3150,15 @@ export function DashboardShell({
       () => (isTerminationView ? sortByKey(selectedSheet?.holdItems || [], holdSort.key, holdSort.dir) : []),
       [selectedSheet, holdSort, isTerminationView],
     )
+    const currentBillingHoldMonthKey = getCurrentSeoulMonthKey()
+    const activeBillingHoldItems = useMemo(
+      () => (isTerminationView ? holdItems.filter((row: any) => !isFutureBillingHold(row, currentBillingHoldMonthKey)) : []),
+      [holdItems, currentBillingHoldMonthKey, isTerminationView],
+    )
+    const futureBillingHoldItems = useMemo(
+      () => (isTerminationView ? holdItems.filter((row: any) => isFutureBillingHold(row, currentBillingHoldMonthKey)) : []),
+      [holdItems, currentBillingHoldMonthKey, isTerminationView],
+    )
     const filteredHoldItems = useMemo(() => {
       if (!isTerminationView) return []
       const rawQuery = holdQuery.trim()
@@ -3081,8 +3218,8 @@ export function DashboardShell({
     [selectedSheet],
   )
   const visibleWeeklyBillingHoldCount = useMemo(
-    () => (selectedSheet?.holdItems || []).length,
-    [selectedSheet],
+    () => activeBillingHoldItems.length,
+    [activeBillingHoldItems],
   )
   const reasonSummary = useMemo(() => {
     const map = new Map<string, number>()
@@ -5842,9 +5979,19 @@ export function DashboardShell({
       message: "수동입력 값을 저장하고 있습니다...",
     })
     startTransition(async () => {
-      const draft = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
       const latestData = pendingDataRef.current || data
-      const latestWeeklyReport = latestData?.weeklyReport || weeklyReport
+      const draftRaw = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
+      const latestSliceResponse = await fetch("/api/dashboard?slice=weeklyReport", { cache: "no-store" }).catch(() => null)
+      const latestSlice = latestSliceResponse?.ok ? await latestSliceResponse.json().catch(() => null) : null
+      const latestWeeklyReport = latestSlice?.weeklyReport || latestData?.weeklyReport || weeklyReport
+      const latestPaidOptionSourceColumns =
+        latestSlice?.paidOptionSourceColumns ||
+        latestData?.paidOptionSourceColumns ||
+        paidOptionSourceColumns ||
+        []
+      const serverDraft = buildManualDraftFromWeekly(latestWeeklyReport, contracts, latestPaidOptionSourceColumns)
+      const baseDraft = manualBaseDraftRef.current || serverDraft
+      const draft = mergeManualDraftForSave(serverDraft, baseDraft, draftRaw)
       const normalizedRevenueRows = buildRevenueRowsWithComputedTotal(draft.revenueRows || [])
       const draftSummary = applyWeeklyAutoSummary(draft.manualSummary || {})
       const draftRevenueDisplay = buildRevenueDisplaySet({
@@ -5866,7 +6013,9 @@ export function DashboardShell({
       const nextWeekly = {
         ...latestWeeklyReport,
         // Persist the exact values currently shown in the manual input view so
-        // weekly report behaves like an Excel cell reference.
+        // weekly report behaves like an Excel cell reference. The save first
+        // merges against the latest server copy so stale tabs cannot roll back
+        // unrelated manual-input cells.
         revenueHeaderText: draftRevenueDisplay.header,
         revenueUnitPrice: toNumber(draft.revenueUnitPrice),
         additionalContractCount: toNumber(draft.additionalContractCount),
@@ -5881,7 +6030,14 @@ export function DashboardShell({
         terminationOverviewRows: cloneData(nextManualDraft.terminationOverviewRows || []),
         weeklyIndustryOverviewRows: cloneData(draft.weeklyIndustryOverviewRows || []),
         additionalSales: normalizeAdditionalSalesRows(cloneData(draft.additionalSales || [])),
+        manualSaveHistory: [
+          buildManualSaveSnapshot(latestWeeklyReport, currentUser),
+          ...(Array.isArray(latestWeeklyReport?.manualSaveHistory) ? latestWeeklyReport.manualSaveHistory : []),
+        ].slice(0, 10),
       }
+      const nextPaidOptionSourceColumns = manualValueChanged(baseDraft?.paidOptionInfoColumns, draftRaw?.paidOptionInfoColumns)
+        ? cloneData(nextWeekly.paidOptionInfoColumns || [])
+        : cloneData(latestPaidOptionSourceColumns || latestData?.paidOptionSourceColumns || [])
       try {
         isSyncingManualDraftRef.current = true
         manualDraftRef.current = nextManualDraft
@@ -5889,10 +6045,11 @@ export function DashboardShell({
         manualPreviewDraftRef.current = nextManualDraft
         setManualPreviewDraft(nextManualDraft)
         await persist(
-          { ...latestData, weeklyReport: nextWeekly },
+          { ...latestData, paidOptionSourceColumns: nextPaidOptionSourceColumns, weeklyReport: nextWeekly },
           { immediate: true, updatedViews: ["manual-input", "weekly-report"] },
         )
         isSyncingManualDraftRef.current = true
+        manualBaseDraftRef.current = cloneData(nextManualDraft)
         manualPreviewDraftRef.current = null
         setManualPreviewDraft(null)
         if (manualSaveRequestIdRef.current === saveRequestId) {
@@ -8570,7 +8727,15 @@ export function DashboardShell({
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"><div className="text-[12px] text-slate-500">금주 해지 건수</div><div className="mt-1 text-[20px] font-extrabold">{formatNumber(visibleWeeklyTerminationCount)}건</div></div>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"><div className="text-[12px] text-slate-500">금주 청구보류 건수</div><div className="mt-1 text-[20px] font-extrabold">{formatNumber(visibleWeeklyBillingHoldCount)}건</div></div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="text-[12px] text-slate-500">금주 청구보류 건수</div>
+                      <div className="mt-1 text-[20px] font-extrabold">{formatNumber(visibleWeeklyBillingHoldCount)}건</div>
+                      {futureBillingHoldItems.length > 0 ? (
+                        <div className="mt-1 text-[11px] font-semibold text-amber-600">
+                          다음달 이후 시작 {formatNumber(futureBillingHoldItems.length)}건 제외
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -9159,9 +9324,10 @@ export function DashboardShell({
                     <tbody>
                       {filteredHoldItems.map((row: any, index: number) => {
                         const editing = editingHoldId === row.id
+                        const startsLater = isFutureBillingHold(row, currentBillingHoldMonthKey)
                         return (
                           <React.Fragment key={row.id}>
-                          <tr className={`${editing ? "bg-blue-50/40" : ""} ${recentHoldId === row.id ? "recent-row-flash" : ""}`}>
+                          <tr className={`${editing ? "bg-blue-50/40" : startsLater ? "bg-amber-50/80 text-slate-500" : ""} ${recentHoldId === row.id ? "recent-row-flash" : ""}`}>
                           <td className={`${tdClass} text-center`}>
                             <input
                               type="checkbox"
@@ -9181,7 +9347,16 @@ export function DashboardShell({
                           <td className={`${tdClass} whitespace-nowrap`}>{row.companyName}</td>
                           <td className={`${tdClass} whitespace-nowrap`}>{row.departmentName}</td>
                           <td className={tdClass}>{row.reason}</td>
-                          <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{formatMonthLabel(row.startDate)}</td>
+                          <td className={`${tdClass} whitespace-nowrap tabular-nums`}>
+                            <div className="inline-flex items-center gap-2">
+                              <span>{formatMonthLabel(row.startDate)}</span>
+                              {startsLater ? (
+                                <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                  카운트 제외
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
                           <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{formatMonthLabel(row.endDate)}</td>
                           <td className={`${tdClass} max-w-[240px] text-left`}>
                             <div className="truncate" title={row.note || ""}>{row.note}</div>

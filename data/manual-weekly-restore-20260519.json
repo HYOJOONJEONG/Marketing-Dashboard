@@ -1,0 +1,588 @@
+{
+  "restoreId": "manual-weekly-20260519-163623",
+  "sourceBackup": "infobiz-dashboard-backup-20260519-163623.json",
+  "sourceGeneratedAt": "2026-05-19T07:36:23.000Z",
+  "sourceManualUpdatedAt": "2026-05-19T07:33:20.081Z",
+  "weeklyReport": {
+    "baseDate": "2026-04-23",
+    "revenueHeaderText": "주간 순증 매출 (약 30,800,000원)",
+    "subtitleOne": "26년 순증 매출 (약 984,530,000원)",
+    "subtitleTwo": "연간 누적 매출 (약 38,555,440,000원)",
+    "manualSummary": {
+      "weeklyNetUnits": 5,
+      "weeklyNewContracts": 6,
+      "weeklyTerminationContracts": 1,
+      "cumulativeNetUnits": "155",
+      "cumulativeNewContracts": "274",
+      "cumulativeTerminationContracts": "119",
+      "totalContracts": "6259",
+      "newContractTotal": 274,
+      "competitorReplacement": "30",
+      "newReplacement": "244",
+      "competitorStatus": "체크25대, 마켓포인트2대, 블룸버그1대, 로이터2대, 기타0대, 신규244대",
+      "holdTotal": 40,
+      "holdPending": "13",
+      "billingHold": "27",
+      "holdStatus": "방어불가 13대 , 방어 진행 0대",
+      "terminationTypeTotal": 119,
+      "contractTermination": "119",
+      "competitorTermination": "0",
+      "competitorTerminationStatus": "체크0대, 마켓포인트0대, 블룸버그0대, 로이터0대, 기타0대"
+    },
+    "revenueRows": [
+      {
+        "key": "sales",
+        "label": "매출순증",
+        "months": [
+          "289.5",
+          "147.8",
+          "215.6",
+          "234",
+          "67.7",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      },
+      {
+        "key": "penalty",
+        "label": "위약금",
+        "months": [
+          "4.5",
+          "9.69",
+          "2.5",
+          "2.68",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      },
+      {
+        "key": "move",
+        "label": "이전비",
+        "months": [
+          "0",
+          "0.76",
+          "9.48",
+          "0.12",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      },
+      {
+        "key": "total",
+        "label": "합계",
+        "months": [
+          294,
+          158.25,
+          227.57999999999998,
+          236.8,
+          67.7,
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      }
+    ],
+    "goalRows": [
+      {
+        "month": "1월",
+        "netTarget": 45,
+        "targetContracts": 6149,
+        "quarterNetTarget": 105,
+        "monthlyActual": "47",
+        "quarterActual": 106,
+        "gap": 1
+      },
+      {
+        "month": "2월",
+        "netTarget": 30,
+        "targetContracts": 6179,
+        "quarterNetTarget": 0,
+        "monthlyActual": 24,
+        "quarterActual": "",
+        "gap": ""
+      },
+      {
+        "month": "3월",
+        "netTarget": 30,
+        "targetContracts": 6209,
+        "quarterNetTarget": 0,
+        "monthlyActual": 35,
+        "quarterActual": "",
+        "gap": ""
+      },
+      {
+        "month": "4월",
+        "netTarget": 30,
+        "targetContracts": 6239,
+        "quarterNetTarget": 70,
+        "monthlyActual": "38",
+        "quarterActual": 49,
+        "gap": -21
+      },
+      {
+        "month": "5월",
+        "netTarget": 20,
+        "targetContracts": 6259,
+        "quarterNetTarget": 0,
+        "monthlyActual": "11",
+        "quarterActual": "",
+        "gap": ""
+      },
+      {
+        "month": "6월",
+        "netTarget": 20,
+        "targetContracts": 6279,
+        "quarterNetTarget": 0,
+        "monthlyActual": "",
+        "quarterActual": "",
+        "gap": ""
+      },
+      {
+        "month": "7월",
+        "netTarget": 20,
+        "targetContracts": 6299,
+        "quarterNetTarget": 55,
+        "monthlyActual": 0,
+        "quarterActual": 0,
+        "gap": -55
+      },
+      {
+        "month": "8월",
+        "netTarget": 20,
+        "targetContracts": 6319,
+        "quarterNetTarget": 0,
+        "monthlyActual": 0,
+        "quarterActual": "",
+        "gap": ""
+      },
+      {
+        "month": "9월",
+        "netTarget": 15,
+        "targetContracts": 6334,
+        "quarterNetTarget": 0,
+        "monthlyActual": "0",
+        "quarterActual": "",
+        "gap": ""
+      },
+      {
+        "month": "10월",
+        "netTarget": 15,
+        "targetContracts": 6349,
+        "quarterNetTarget": 30,
+        "monthlyActual": 0,
+        "quarterActual": 0,
+        "gap": -30
+      },
+      {
+        "month": "11월",
+        "netTarget": 15,
+        "targetContracts": 6364,
+        "quarterNetTarget": 0,
+        "monthlyActual": 0,
+        "quarterActual": "",
+        "gap": ""
+      },
+      {
+        "month": "12월",
+        "netTarget": 0,
+        "targetContracts": 6364,
+        "quarterNetTarget": 0,
+        "monthlyActual": 0,
+        "quarterActual": "",
+        "gap": ""
+      },
+      {
+        "month": "합계",
+        "netTarget": 260,
+        "targetContracts": 6364,
+        "quarterNetTarget": 260,
+        "monthlyActual": 155,
+        "quarterActual": 155,
+        "gap": -105
+      }
+    ],
+    "industryStats": [
+      {
+        "category": "98",
+        "newCount": 47,
+        "netCount": 0
+      },
+      {
+        "category": "9",
+        "newCount": 6,
+        "netCount": 0
+      },
+      {
+        "category": "7",
+        "newCount": 2,
+        "netCount": 0
+      },
+      {
+        "category": "32",
+        "newCount": 24,
+        "netCount": 0
+      },
+      {
+        "category": "14",
+        "newCount": 5,
+        "netCount": 0
+      },
+      {
+        "category": "25",
+        "newCount": 8,
+        "netCount": 0
+      },
+      {
+        "category": "7",
+        "newCount": 6,
+        "netCount": 0
+      },
+      {
+        "category": "6",
+        "newCount": 5,
+        "netCount": 0
+      }
+    ],
+    "additionalSales": [
+      {
+        "idCode": "E250616",
+        "company": "인베니",
+        "amount": "24640000",
+        "content": "5년치 선납",
+        "note": "4년 구독료 추가",
+        "kind": "additional-contract"
+      },
+      {
+        "idCode": "E250617",
+        "company": "인베니",
+        "amount": "24640000",
+        "content": "5년치 선납",
+        "note": "4년 구독료 추가",
+        "kind": "additional-contract"
+      },
+      {
+        "idCode": "E260075",
+        "company": "신한은행",
+        "amount": "23840000",
+        "content": "로비전광판",
+        "note": "월 250만원/VAT별도",
+        "kind": "additional-contract"
+      }
+    ],
+    "revenueUnitPrice": 6160000,
+    "additionalContractCount": 0,
+    "revenueNoteText": "※대당 연 6,160,000원으로 매출을 산정 (05/14 기준) / 주간 순증 매출은 추가계약금액을 포함하며, 연간 순증 매출은 (누적순증 합계 × 단가) + ((합계 - 매출순증) × 1,000,000) 기준입니다. 연간 누적 매출은 총 계약대수 × 단가 기준이며 위약금 및 이전비는 월 단위로 계산하되 모든 금액 단위는 백만 원으로 표기.",
+    "paidOptionInfoColumns": [
+      {
+        "id": "paid-option-0",
+        "title": "해외채권",
+        "total": "122건",
+        "rows": [
+          [
+            "국내은행",
+            "14건"
+          ],
+          [
+            "국내증권",
+            "43건"
+          ],
+          [
+            "보험사",
+            "33건"
+          ],
+          [
+            "자산운용",
+            "8건"
+          ],
+          [
+            "중개사",
+            "3건"
+          ],
+          [
+            "공제회",
+            "3건"
+          ],
+          [
+            "연기금/공사",
+            "11건"
+          ],
+          [
+            "평가사",
+            "2건"
+          ],
+          [
+            "외국계은행",
+            "1건"
+          ],
+          [
+            "일반기업",
+            "1건"
+          ],
+          [
+            "기타금융",
+            "3건"
+          ]
+        ]
+      },
+      {
+        "id": "paid-option-1",
+        "title": "해외지수",
+        "total": "152건",
+        "rows": [
+          [
+            "국내은행",
+            "19건"
+          ],
+          [
+            "국내증권",
+            "70건"
+          ],
+          [
+            "보험사",
+            "15건"
+          ],
+          [
+            "자산운용",
+            "0건"
+          ],
+          [
+            "연기금/공사",
+            "2건"
+          ],
+          [
+            "외국계은행",
+            "30건"
+          ],
+          [
+            "선물중개사",
+            "6건"
+          ],
+          [
+            "일반기업",
+            "6건"
+          ],
+          [
+            "공제회",
+            "4건"
+          ]
+        ]
+      },
+      {
+        "id": "paid-option-2",
+        "title": "해외종목",
+        "total": "10건",
+        "rows": [
+          [
+            "국내은행",
+            "2건"
+          ],
+          [
+            "자산운용",
+            "3건"
+          ],
+          [
+            "일반기업",
+            "2건"
+          ],
+          [
+            "보험사",
+            "3건"
+          ]
+        ]
+      },
+      {
+        "id": "paid-option-3",
+        "title": "LME",
+        "total": "26건",
+        "rows": [
+          [
+            "국내은행",
+            "1건"
+          ],
+          [
+            "외국계은행",
+            "6건"
+          ],
+          [
+            "일반기업",
+            "19건"
+          ]
+        ]
+      },
+      {
+        "id": "paid-option-4",
+        "title": "전광판",
+        "total": "16건",
+        "rows": [
+          [
+            "국내은행",
+            "8건"
+          ],
+          [
+            "국내증권",
+            "1건"
+          ],
+          [
+            "일반기업",
+            "3건"
+          ],
+          [
+            "기타금융",
+            "1건"
+          ],
+          [
+            "연기금/공사",
+            "1건"
+          ],
+          [
+            "정부기관",
+            "1건"
+          ]
+        ]
+      },
+      {
+        "id": "paid-option-5",
+        "title": "SOFR",
+        "total": "171건",
+        "rows": [
+          [
+            "국내은행",
+            "37건"
+          ],
+          [
+            "국내증권",
+            "4건"
+          ],
+          [
+            "기타금융",
+            "2건"
+          ],
+          [
+            "외국계은행",
+            "22건"
+          ],
+          [
+            "일반기업",
+            "91건"
+          ],
+          [
+            "공사",
+            "7건"
+          ],
+          [
+            "보험",
+            "6건"
+          ],
+          [
+            "연기금",
+            "1건"
+          ],
+          [
+            "자산운용",
+            "1건"
+          ]
+        ]
+      }
+    ],
+    "terminationOverviewRows": [
+      {
+        "label": "주간",
+        "values": [
+          "0",
+          "0",
+          "1",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "1"
+        ]
+      },
+      {
+        "label": "누적",
+        "values": [
+          "55",
+          "8",
+          "40",
+          "4",
+          "1",
+          "3",
+          "6",
+          "0",
+          "1",
+          "119"
+        ]
+      },
+      {
+        "label": "비율",
+        "values": [
+          "46%",
+          "7%",
+          "34%",
+          "3%",
+          "1%",
+          "3%",
+          "5%",
+          "0%",
+          "1%",
+          "100%"
+        ]
+      }
+    ],
+    "weeklyIndustryOverviewRows": [
+      {
+        "label": "신규",
+        "values": [
+          "122",
+          "18",
+          "9",
+          "35",
+          "17",
+          "27",
+          "8",
+          "6",
+          "32",
+          "274"
+        ]
+      },
+      {
+        "label": "순증",
+        "values": [
+          "61",
+          "15",
+          "4",
+          "25",
+          "8",
+          "6",
+          "6",
+          "5",
+          "25",
+          "155"
+        ]
+      }
+    ]
+  }
+}
