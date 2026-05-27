@@ -801,7 +801,7 @@ const paidOptionInfoColumns = [
   },
   {
     title: "SOFR",
-    total: "170건",
+    total: "171건",
     rows: [
       ["국내은행", "37건"],
       ["국내증권", "4건"],
@@ -913,6 +913,25 @@ function applySeedTotalsToPaidOptionColumns(columns: any[], cards: any[]) {
           ? `${rowTotal}건`
           : formatCountToKoreanUnit(column.total, "0건")),
     }
+  })
+}
+
+function mergePaidOptionImportedTotals(columns: any[], importedColumns: any[] | null) {
+  const source = buildPaidOptionInfoColumns(columns)
+  if (!Array.isArray(importedColumns) || !importedColumns.length) return source
+  const importedByTitle = new Map<string, string>()
+  importedColumns.forEach((column: any, index: number) => {
+    const code = String(column?.category_code || "").trim()
+    const fallbackByCode = paidOptionTitleByCode[code] || ""
+    const fallbackByIndex = sanitizeSummaryText(paidOptionInfoColumns[index]?.title, "")
+    const title = sanitizeSummaryText(column?.title, fallbackByCode || fallbackByIndex)
+    if (!paidOptionOrderedTitles.includes(title as any)) return
+    const total = formatCountToKoreanUnit(column?.total ?? column?.count_value, "")
+    if (total) importedByTitle.set(title, total)
+  })
+  return source.map((column: any) => {
+    const importedTotal = importedByTitle.get(sanitizeSummaryText(column?.title, ""))
+    return importedTotal ? { ...column, total: importedTotal } : column
   })
 }
 
@@ -6286,7 +6305,11 @@ export function DashboardShell({
   const monthLabels = useMemo(() => Array.from({ length: 12 }, (_, index) => `${index + 1}월`), [])
   const paidOptionColumns = buildPaidOptionInfoColumns(weeklyReport.paidOptionInfoColumns || [])
   const manualPaidOptionColumns = useMemo(
-    () => buildPaidOptionInfoColumns(paidOptionImportedColumns || manualDisplayDraft.paidOptionInfoColumns || []),
+    () =>
+      mergePaidOptionImportedTotals(
+        paidOptionImportedColumns || manualDisplayDraft.paidOptionInfoColumns || [],
+        paidOptionImportedColumns,
+      ),
     [manualDisplayDraft.paidOptionInfoColumns, paidOptionImportedColumns],
   )
   const reportTerminationColumns = [...reportTerminationColumnsStatic]
