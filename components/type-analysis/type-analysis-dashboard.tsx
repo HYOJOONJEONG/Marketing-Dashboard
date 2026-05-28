@@ -23,6 +23,8 @@ type Props = {
 type ReportColumn = {
   label: string
   align?: "left" | "center" | "right"
+  width?: string
+  noWrap?: boolean
   get: (row: any, index: number) => unknown
 }
 
@@ -117,15 +119,32 @@ function reportTimestamp() {
   }).format(new Date())
 }
 
+function reportCellClass(column: ReportColumn) {
+  const align = column.align === "right" ? "right" : column.align === "center" ? "center" : "left"
+  return [align, column.align === "right" ? "numeric" : "", column.noWrap ? "nowrap" : ""].filter(Boolean).join(" ")
+}
+
+function reportColGroup(columns: ReportColumn[]) {
+  return `<colgroup>${columns
+    .map((column) => `<col${column.width ? ` style="width:${escapeReportHtml(column.width)}"` : ""} />`)
+    .join("")}</colgroup>`
+}
+
+function isReportTotalRow(row: any) {
+  const markers = [row?.label, row?.no, row?.area, row?.manager]
+    .map((value) => String(value ?? "").replace(/\s+/g, ""))
+    .filter(Boolean)
+  return markers.some((marker) => marker === "계" || marker.includes("합계"))
+}
+
 function reportTable(columns: ReportColumn[], rows: any[], emptyText: string) {
-  const alignClass = (align?: ReportColumn["align"]) => (align === "right" ? "right" : align === "center" ? "center" : "left")
   const body = rows.length
     ? rows
         .map(
           (row, index) => `
-            <tr>
+            <tr class="${isReportTotalRow(row) ? "total-row" : ""}">
               ${columns
-                .map((column) => `<td class="${alignClass(column.align)}">${escapeReportHtml(column.get(row, index))}</td>`)
+                .map((column) => `<td class="${reportCellClass(column)}">${escapeReportHtml(column.get(row, index))}</td>`)
                 .join("")}
             </tr>`,
         )
@@ -133,8 +152,9 @@ function reportTable(columns: ReportColumn[], rows: any[], emptyText: string) {
     : `<tr><td class="empty" colspan="${columns.length}">${escapeReportHtml(emptyText)}</td></tr>`
   return `
     <table class="report-table">
+      ${reportColGroup(columns)}
       <thead>
-        <tr>${columns.map((column) => `<th class="${alignClass(column.align)}">${escapeReportHtml(column.label)}</th>`).join("")}</tr>
+        <tr>${columns.map((column) => `<th class="${reportCellClass(column)}">${escapeReportHtml(column.label)}</th>`).join("")}</tr>
       </thead>
       <tbody>${body}</tbody>
     </table>
@@ -147,22 +167,22 @@ function groupedReportTable(groups: Array<{ label: string; rows: any[] }>, colum
     ...group.rows,
   ])
   if (!rows.length) return reportTable(columns, [], emptyText)
-  const alignClass = (align?: ReportColumn["align"]) => (align === "right" ? "right" : align === "center" ? "center" : "left")
   return `
     <table class="report-table">
+      ${reportColGroup(columns)}
       <thead>
-        <tr>${columns.map((column) => `<th class="${alignClass(column.align)}">${escapeReportHtml(column.label)}</th>`).join("")}</tr>
+        <tr>${columns.map((column) => `<th class="${reportCellClass(column)}">${escapeReportHtml(column.label)}</th>`).join("")}</tr>
       </thead>
       <tbody>
         ${rows
           .map((row: any, index) => {
             if (row.__group) {
-              return `<tr class="group-row"><td colspan="${columns.length}">(${escapeReportHtml(row.label)}) <span>${formatNumber(row.count)}건</span></td></tr>`
+              return `<tr class="group-row"><td colspan="${columns.length}"><div class="group-title"><span>(${escapeReportHtml(row.label)})</span><strong>${formatNumber(row.count)}건</strong></div></td></tr>`
             }
             return `
-              <tr>
+              <tr class="${isReportTotalRow(row) ? "total-row" : ""}">
                 ${columns
-                  .map((column) => `<td class="${alignClass(column.align)}">${escapeReportHtml(column.get(row, index))}</td>`)
+                  .map((column) => `<td class="${reportCellClass(column)}">${escapeReportHtml(column.get(row, index))}</td>`)
                   .join("")}
               </tr>
             `
@@ -790,79 +810,79 @@ export function TypeAnalysisDashboard({
     )
 
     const simpleColumns: ReportColumn[] = [
-      { label: "구분", get: (row) => row.label || row.area || row.manager || row.no },
-      { label: "값", align: "right", get: (row) => `${formatNumber(row.value ?? row.totalNew ?? row.netCount ?? 0)}` },
+      { label: "구분", width: "68%", get: (row) => row.label || row.area || row.manager || row.no },
+      { label: "값", width: "32%", align: "right", noWrap: true, get: (row) => `${formatNumber(row.value ?? row.totalNew ?? row.netCount ?? 0)}` },
     ]
     const newIndustryColumns: ReportColumn[] = [
-      { label: "업종", get: (row) => row.label },
-      { label: "체크", align: "right", get: (row) => formatNumber(row.check) },
-      { label: "마켓", align: "right", get: (row) => formatNumber(row.marketPoint) },
-      { label: "블룸", align: "right", get: (row) => formatNumber(row.bloomberg) },
-      { label: "로이터", align: "right", get: (row) => formatNumber(row.reuters) },
-      { label: "기타", align: "right", get: (row) => formatNumber(row.hankyungEtc) },
-      { label: "신규", align: "right", get: (row) => formatNumber(row.new) },
-      { label: "합계", align: "right", get: (row) => formatNumber(row.total) },
+      { label: "업종", width: "34%", get: (row) => row.label },
+      { label: "체크", width: "9%", align: "right", noWrap: true, get: (row) => formatNumber(row.check) },
+      { label: "마켓", width: "9%", align: "right", noWrap: true, get: (row) => formatNumber(row.marketPoint) },
+      { label: "블룸", width: "9%", align: "right", noWrap: true, get: (row) => formatNumber(row.bloomberg) },
+      { label: "로이터", width: "9%", align: "right", noWrap: true, get: (row) => formatNumber(row.reuters) },
+      { label: "기타", width: "9%", align: "right", noWrap: true, get: (row) => formatNumber(row.hankyungEtc) },
+      { label: "신규", width: "10%", align: "right", noWrap: true, get: (row) => formatNumber(row.new) },
+      { label: "합계", width: "11%", align: "right", noWrap: true, get: (row) => formatNumber(row.total) },
     ]
     const newDetailColumns: ReportColumn[] = [
-      { label: "NO", align: "center", get: (row) => row.no },
-      { label: "날짜", get: (row) => row.date },
-      { label: "ID", get: (row) => row.idCode },
-      { label: "회사명", get: (row) => row.companyName },
-      { label: "부서", get: (row) => row.departmentName },
-      { label: "권유자", get: (row) => row.recommender },
-      { label: "구분", get: (row) => row.replacementType || "신규" },
-      { label: "비고", get: (row) => row.note },
+      { label: "NO", width: "5%", align: "center", noWrap: true, get: (row) => row.no },
+      { label: "날짜", width: "9%", noWrap: true, get: (row) => row.date },
+      { label: "ID", width: "9%", noWrap: true, get: (row) => row.idCode },
+      { label: "회사명", width: "18%", get: (row) => row.companyName },
+      { label: "부서", width: "17%", get: (row) => row.departmentName },
+      { label: "권유자", width: "8%", noWrap: true, get: (row) => row.recommender },
+      { label: "구분", width: "9%", noWrap: true, get: (row) => row.replacementType || "신규" },
+      { label: "비고", width: "25%", get: (row) => row.note },
     ]
     const terminationIndustryColumnsForReport: ReportColumn[] = [
-      { label: "업종", get: (row) => row.label },
-      { label: "퇴사/이직", align: "right", get: (row) => formatNumber(row.userMove) },
-      { label: "비용절감", align: "right", get: (row) => formatNumber(row.costCut) },
-      { label: "활용저조", align: "right", get: (row) => formatNumber(row.lowUsage) },
-      { label: "타사대체", align: "right", get: (row) => formatNumber(row.contentOrCompetitor) },
-      { label: "계약만료", align: "right", get: (row) => formatNumber(row.contractEnd) },
-      { label: "조직개편", align: "right", get: (row) => formatNumber(row.reorg) },
-      { label: "휴직/출장", align: "right", get: (row) => formatNumber(row.leave) },
-      { label: "합병매각", align: "right", get: (row) => formatNumber(row.merger) },
-      { label: "미수", align: "right", get: (row) => formatNumber(row.unpaid) },
-      { label: "합계", align: "right", get: (row) => formatNumber(row.total) },
+      { label: "업종", width: "27%", get: (row) => row.label },
+      { label: "퇴사/이직", width: "7.3%", align: "right", noWrap: true, get: (row) => formatNumber(row.userMove) },
+      { label: "비용절감", width: "7.3%", align: "right", noWrap: true, get: (row) => formatNumber(row.costCut) },
+      { label: "활용저조", width: "7.3%", align: "right", noWrap: true, get: (row) => formatNumber(row.lowUsage) },
+      { label: "타사대체", width: "7.3%", align: "right", noWrap: true, get: (row) => formatNumber(row.contentOrCompetitor) },
+      { label: "계약만료", width: "7.3%", align: "right", noWrap: true, get: (row) => formatNumber(row.contractEnd) },
+      { label: "조직개편", width: "7.3%", align: "right", noWrap: true, get: (row) => formatNumber(row.reorg) },
+      { label: "휴직/출장", width: "7.3%", align: "right", noWrap: true, get: (row) => formatNumber(row.leave) },
+      { label: "합병매각", width: "7.3%", align: "right", noWrap: true, get: (row) => formatNumber(row.merger) },
+      { label: "미수", width: "7.3%", align: "right", noWrap: true, get: (row) => formatNumber(row.unpaid) },
+      { label: "합계", width: "7%", align: "right", noWrap: true, get: (row) => formatNumber(row.total) },
     ]
     const terminationDetailColumns: ReportColumn[] = [
-      { label: "NO", align: "center", get: (row) => row.no },
-      { label: "날짜", get: (row) => row.date },
-      { label: "ID", get: (row) => row.idCode },
-      { label: "회사명", get: (row) => row.companyName },
-      { label: "부서", get: (row) => row.departmentName },
-      { label: "담당자", get: (row) => row.recommender },
-      { label: "해지사유", get: (row) => row.reason },
-      { label: "위약금", align: "right", get: (row) => formatNumber(row.penalty) },
-      { label: "비고", get: (row) => row.note },
+      { label: "NO", width: "5%", align: "center", noWrap: true, get: (row) => row.no },
+      { label: "날짜", width: "9%", noWrap: true, get: (row) => row.date },
+      { label: "ID", width: "9%", noWrap: true, get: (row) => row.idCode },
+      { label: "회사명", width: "18%", get: (row) => row.companyName },
+      { label: "부서", width: "17%", get: (row) => row.departmentName },
+      { label: "담당자", width: "8%", noWrap: true, get: (row) => row.recommender },
+      { label: "해지사유", width: "13%", get: (row) => row.reason },
+      { label: "위약금", width: "9%", align: "right", noWrap: true, get: (row) => formatNumber(row.penalty) },
+      { label: "비고", width: "12%", get: (row) => row.note },
     ]
     const areaColumns: ReportColumn[] = [
-      { label: "구분", align: "center", get: (row) => row.no },
-      { label: "담당영역", get: (row) => row.area },
-      { label: "담당자", get: (row) => row.manager },
-      { label: "신규", align: "right", get: (row) => formatNumber(row.newCount) },
-      { label: "해지", align: "right", get: (row) => formatNumber(row.terminationCount) },
-      { label: "순증", align: "right", get: (row) => formatNumber(row.netCount) },
+      { label: "구분", width: "6%", align: "center", noWrap: true, get: (row) => row.no },
+      { label: "담당영역", width: "30%", get: (row) => row.area },
+      { label: "담당자", width: "34%", get: (row) => row.manager },
+      { label: "신규", width: "10%", align: "right", noWrap: true, get: (row) => formatNumber(row.newCount) },
+      { label: "해지", width: "10%", align: "right", noWrap: true, get: (row) => formatNumber(row.terminationCount) },
+      { label: "순증", width: "10%", align: "right", noWrap: true, get: (row) => formatNumber(row.netCount) },
     ]
     const areaDetailColumns: ReportColumn[] = [
-      { label: "NO", align: "center", get: (row) => row.no },
-      { label: "구분", get: (row) => (row.kind === "termination" || row.transactionType === "해지" ? "해지" : "신규/대체") },
-      { label: "날짜", get: (row) => row.date },
-      { label: "ID", get: (row) => row.idCode },
-      { label: "기관", get: (row) => row.companyName },
-      { label: "부서", get: (row) => row.departmentName },
-      { label: "세부구분", get: (row) => row.reason || row.replacementType || "신규" },
-      { label: "비고", get: (row) => row.note },
+      { label: "NO", width: "5%", align: "center", noWrap: true, get: (row) => row.no },
+      { label: "구분", width: "8%", noWrap: true, get: (row) => (row.kind === "termination" || row.transactionType === "해지" ? "해지" : "신규/대체") },
+      { label: "날짜", width: "9%", noWrap: true, get: (row) => row.date },
+      { label: "ID", width: "9%", noWrap: true, get: (row) => row.idCode },
+      { label: "기관", width: "20%", get: (row) => row.companyName },
+      { label: "부서", width: "18%", get: (row) => row.departmentName },
+      { label: "세부구분", width: "12%", get: (row) => row.reason || row.replacementType || "신규" },
+      { label: "비고", width: "19%", get: (row) => row.note },
     ]
     const personalColumns: ReportColumn[] = [
-      { label: "구분", align: "center", get: (row) => row.no },
-      { label: "담당자", get: (row) => row.manager },
-      { label: "총 신규", align: "right", get: (row) => formatNumber(row.totalNew) },
-      { label: "신규", align: "right", get: (row) => formatNumber(row.new) },
-      { label: "체크", align: "right", get: (row) => formatNumber(row.check) },
-      { label: "마켓", align: "right", get: (row) => formatNumber(row.marketPoint) },
-      { label: "로이터/블룸", align: "right", get: (row) => formatNumber(row.reutersBloomberg) },
+      { label: "구분", width: "8%", align: "center", noWrap: true, get: (row) => row.no },
+      { label: "담당자", width: "28%", get: (row) => row.manager },
+      { label: "총 신규", width: "13%", align: "right", noWrap: true, get: (row) => formatNumber(row.totalNew) },
+      { label: "신규", width: "13%", align: "right", noWrap: true, get: (row) => formatNumber(row.new) },
+      { label: "체크", width: "12%", align: "right", noWrap: true, get: (row) => formatNumber(row.check) },
+      { label: "마켓", width: "12%", align: "right", noWrap: true, get: (row) => formatNumber(row.marketPoint) },
+      { label: "로이터/블룸", width: "14%", align: "right", noWrap: true, get: (row) => formatNumber(row.reutersBloomberg) },
     ]
 
     const html = `<!doctype html>
@@ -871,42 +891,54 @@ export function TypeAnalysisDashboard({
           <meta charset="utf-8" />
           <title>신규 대체 해지 유형 분석 리포트</title>
           <style>
-            @page { size: A4 portrait; margin: 12mm; }
+            @page { size: A4 landscape; margin: 10mm 9mm 11mm; }
             * { box-sizing: border-box; }
-            body { margin: 0; color: #0f172a; font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; background: #f8fafc; }
+            html { background: #eef2f7; }
+            body { margin: 0; color: #0f172a; font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; background: #eef2f7; }
             .toolbar { position: sticky; top: 0; z-index: 2; display: flex; justify-content: flex-end; gap: 8px; padding: 12px; background: rgba(248, 250, 252, 0.94); border-bottom: 1px solid #e2e8f0; }
             .toolbar button { height: 34px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; padding: 0 12px; color: #0f172a; font-size: 12px; font-weight: 600; cursor: pointer; }
-            .report { width: 100%; max-width: 980px; margin: 0 auto; padding: 18px 18px 36px; background: #fff; }
-            .cover { border-bottom: 2px solid #0f172a; padding: 8px 0 14px; }
-            .eyebrow { color: #2563eb; font-size: 10px; font-weight: 700; letter-spacing: .12em; }
-            h1 { margin: 8px 0 8px; font-size: 24px; line-height: 1.25; font-weight: 700; letter-spacing: 0; }
-            .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: #475569; font-size: 11px; }
-            .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 14px 0 8px; }
-            .kpi { border: 1px solid #dbe3ef; border-radius: 8px; padding: 8px 10px; background: #fbfdff; }
-            .kpi .label { color: #64748b; font-size: 10px; font-weight: 600; }
-            .kpi .value { margin-top: 3px; font-size: 18px; font-weight: 700; color: #0f172a; }
-            .section { margin-top: 16px; break-inside: avoid; }
+            .report { width: 100%; max-width: 1120px; margin: 0 auto; padding: 20px 22px 42px; background: #fff; box-shadow: 0 18px 50px rgba(15, 23, 42, .08); }
+            .cover { border-top: 4px solid #0b1f3a; border-bottom: 1px solid #94a3b8; padding: 14px 0 12px; }
+            .cover-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
+            .eyebrow { color: #0b1f3a; font-size: 9px; font-weight: 700; letter-spacing: .14em; }
+            h1 { margin: 6px 0 0; font-size: 21px; line-height: 1.22; font-weight: 700; letter-spacing: 0; color: #07111f; }
+            .report-code { flex: 0 0 auto; border: 1px solid #cbd5e1; border-radius: 999px; padding: 5px 9px; color: #334155; font-size: 9px; font-weight: 700; letter-spacing: .04em; background: #f8fafc; }
+            .meta { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; padding-top: 8px; border-top: 1px solid #e2e8f0; color: #475569; font-size: 10px; }
+            .meta span::before { content: ""; display: inline-block; width: 3px; height: 3px; margin: 0 6px 2px 0; border-radius: 999px; background: #64748b; }
+            .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin: 12px 0 8px; border: 1px solid #cbd5e1; border-radius: 2px; overflow: hidden; }
+            .kpi { min-height: 50px; border-right: 1px solid #e2e8f0; padding: 8px 10px; background: #fff; }
+            .kpi:last-child { border-right: 0; }
+            .kpi .label { color: #475569; font-size: 9px; font-weight: 700; letter-spacing: .04em; }
+            .kpi .value { margin-top: 2px; font-size: 17px; font-weight: 700; color: #0b1f3a; text-align: right; font-variant-numeric: tabular-nums; }
+            .section { margin-top: 14px; break-inside: avoid; }
             .section.page { break-before: page; }
-            h2 { margin: 0 0 7px; font-size: 15px; font-weight: 700; color: #0f172a; }
-            h3 { margin: 12px 0 6px; font-size: 12px; font-weight: 700; color: #334155; }
-            .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-            .report-table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; border: 1px solid #dbe3ef; }
-            .report-table th { border: 1px solid #dbe3ef; background: #f1f5f9; color: #334155; padding: 5px 6px; font-size: 9px; line-height: 1.35; font-weight: 600; word-break: keep-all; }
-            .report-table td { border: 1px solid #e2e8f0; padding: 4px 6px; font-size: 8.5px; line-height: 1.35; font-weight: 400; vertical-align: top; word-break: keep-all; overflow-wrap: anywhere; }
+            h2 { margin: 0 0 8px; padding-bottom: 5px; border-bottom: 1px solid #0b1f3a; font-size: 14px; font-weight: 700; color: #0b1f3a; }
+            h3 { margin: 11px 0 5px; font-size: 10.5px; font-weight: 700; color: #334155; }
+            .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; align-items: start; }
+            .report-table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; border: 1px solid #cbd5e1; }
+            .report-table th { border: 1px solid #cbd5e1; background: #eaf0f7; color: #0f2742; padding: 4px 5px; font-size: 8.4px; line-height: 1.25; font-weight: 700; text-align: center; word-break: keep-all; white-space: nowrap; }
+            .report-table td { border: 1px solid #e2e8f0; padding: 3.5px 5px; font-size: 8.2px; line-height: 1.28; font-weight: 400; vertical-align: middle; word-break: keep-all; overflow-wrap: anywhere; }
+            .report-table tbody tr:nth-child(even):not(.group-row):not(.total-row) td { background: #fbfdff; }
             .report-table .center { text-align: center; }
-            .report-table .right { text-align: right; font-variant-numeric: tabular-nums; }
+            .report-table .right { text-align: right; }
             .report-table .left { text-align: left; }
+            .report-table .numeric { font-variant-numeric: tabular-nums; }
+            .report-table .nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .report-table .empty { text-align: center; color: #94a3b8; padding: 16px; }
-            .group-row td { background: #f8fafc; color: #0f172a; font-weight: 700; }
-            .group-row span { color: #64748b; font-weight: 600; }
-            .note { margin-top: 8px; color: #64748b; font-size: 10px; }
+            .total-row td { background: #fff7ed !important; color: #0f172a; font-weight: 700; }
+            .group-row td { background: #f1f5f9 !important; color: #0f172a; font-weight: 700; border-top: 1.5px solid #94a3b8; border-bottom: 1px solid #cbd5e1; }
+            .group-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+            .group-title span { color: #0f172a; }
+            .group-title strong { color: #475569; font-size: 8.5px; font-weight: 700; white-space: nowrap; }
+            .note { margin-top: 7px; color: #64748b; font-size: 9px; }
+            .print-footer { position: fixed; left: 9mm; right: 9mm; bottom: 4mm; display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 3px; color: #94a3b8; font-size: 8px; }
             @media print {
-              body { background: #fff; }
+              html, body { background: #fff; }
               .toolbar { display: none; }
-              .report { max-width: none; padding: 0; }
+              .report { max-width: none; padding: 0 0 8mm; box-shadow: none; }
               .section { break-inside: auto; }
               .summary-grid { gap: 6px; }
-              .report-table th, .report-table td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .report-table th, .report-table td, .kpi, .total-row td, .group-row td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             }
           </style>
         </head>
@@ -917,8 +949,13 @@ export function TypeAnalysisDashboard({
           </div>
           <main class="report">
             <header class="cover">
-              <div class="eyebrow">INFOBIZ PERFORMANCE RESEARCH</div>
-              <h1>신규/대체/해지 유형 분석 리포트</h1>
+              <div class="cover-row">
+                <div>
+                  <div class="eyebrow">INFOBIZ PERFORMANCE RESEARCH</div>
+                  <h1>신규/대체/해지 유형 분석 리포트</h1>
+                </div>
+                <div class="report-code">TYPE ANALYSIS / ${escapeReportHtml(currentYear)}</div>
+              </div>
               <div class="meta">
                 <span>기준연도 ${escapeReportHtml(currentYear)}년도</span>
                 <span>기준 ${escapeReportHtml(sourceTitle(data) || "엑셀 기준")}</span>
@@ -970,6 +1007,10 @@ export function TypeAnalysisDashboard({
               <h2>개인별 실적</h2>
               ${reportTable(personalColumns, personalRows, "개인별 실적 데이터가 없습니다.")}
             </section>
+            <div class="print-footer">
+              <span>연합인포맥스 인포Biz본부</span>
+              <span>Confidential Internal Report</span>
+            </div>
           </main>
           <script>
             window.addEventListener("load", () => {
