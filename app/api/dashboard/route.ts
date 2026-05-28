@@ -381,6 +381,17 @@ function mergeContractsForScope(existingContracts: any[], incomingContracts: any
   return [...incomingContracts, ...preserved]
 }
 
+function isBusanUniversityTerminationRow(row: any) {
+  const companyName = safeText(row?.companyName).replace(/\s+/g, "")
+  const customerId = normalizeContractIdCode(row?.customerId)
+  return (
+    customerId === "E151214" ||
+    companyName.includes("부산대학교산학협력단") ||
+    companyName.includes("부산대학교") ||
+    companyName.includes("부산대")
+  )
+}
+
 function applyTerminationIdCorrections(data: any) {
   if (!data || typeof data !== "object" || !Array.isArray(data?.termination?.sheets)) {
     return { data, changed: false }
@@ -392,16 +403,16 @@ function applyTerminationIdCorrections(data: any) {
     ;(["items", "holdItems", "confirmedItems", "releasedHoldItems"] as const).forEach((key) => {
       const rows = Array.isArray(sheet?.[key]) ? sheet[key] : null
       if (!rows) return
+      let keyChanged = false
       const nextRows = rows.map((row: any) => {
-        const companyName = safeText(row?.companyName)
         const customerId = normalizeContractIdCode(row?.customerId)
-        const isBusanUniversity = companyName.includes("부산대학교산학협력단")
-        if (!isBusanUniversity || customerId !== "E151214") return row
+        if (!isBusanUniversityTerminationRow(row) || customerId === "E150214") return row
         changed = true
         sheetChanged = true
+        keyChanged = true
         return { ...row, customerId: "E150214" }
       })
-      if (sheetChanged) nextSheet[key] = nextRows
+      if (keyChanged) nextSheet[key] = nextRows
     })
     return sheetChanged ? nextSheet : sheet
   })

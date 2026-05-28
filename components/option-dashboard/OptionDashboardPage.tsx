@@ -5,9 +5,9 @@ import { useOptionDashboardData } from "../../hooks/use-option-dashboard-data"
 
 const cardClass = "rounded-[20px] border border-slate-200 bg-white shadow-sm"
 const idKindTabs = [
-  { value: "contract", label: "계약 ID", description: "유료 계약 기준" },
-  { value: "trial", label: "시험 ID", description: "테스트 계정 별도 관리" },
-  { value: "free", label: "무료 ID", description: "무상 제공 계정 별도 관리" },
+  { value: "contract", label: "계약 ID" },
+  { value: "trial", label: "시험 ID" },
+  { value: "free", label: "무료 ID" },
 ] as const
 
 type OptionIdKind = (typeof idKindTabs)[number]["value"]
@@ -153,10 +153,7 @@ export function OptionDashboardPage() {
         ) : null}
         <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-2">
           <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-2">
-            <div>
-              <div className="text-[13px] font-bold text-slate-900">{activeCategoryLabel} ID 구분 관리</div>
-              <div className="text-[11px] font-medium text-slate-500">계약, 시험, 무료 ID를 같은 옵션 안에서 따로 조회하고 등록합니다.</div>
-            </div>
+            <div className="text-[13px] font-bold text-slate-900">{activeCategoryLabel} ID 구분</div>
           </div>
           <div className="grid gap-1.5 md:grid-cols-3">
             {idKindTabs.map((tab) => {
@@ -176,7 +173,6 @@ export function OptionDashboardPage() {
                     <span className={`block text-[13px] font-bold ${isActive ? "text-blue-700" : "text-slate-700"}`}>
                       {tab.label}
                     </span>
-                    <span className="block truncate text-[11px] font-medium text-slate-500">{tab.description}</span>
                   </span>
                   <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[12px] font-black tabular-nums text-slate-800">
                     {idKindCounts[tab.value]}건
