@@ -44,6 +44,7 @@ export function OptionDetailTable({
   const [newRecord, setNewRecord] = React.useState<OptionRecord | null>(null)
   const [expandedNoteIds, setExpandedNoteIds] = React.useState<Set<string>>(new Set())
   const [createStatus, setCreateStatus] = React.useState<"idle" | "saving" | "success">("idle")
+  const [createMessage, setCreateMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null)
   const [savingEditId, setSavingEditId] = React.useState<string | null>(null)
   const [deletingId, setDeletingId] = React.useState<string | null>(null)
   const idKindLabel = idKind === "trial" ? "시험 ID" : idKind === "free" ? "무료 ID" : "계약 ID"
@@ -395,6 +396,7 @@ export function OptionDetailTable({
   const handleNewChange = (key: keyof OptionRecord, value: string) => {
     if (!newRecord) return
     if (createStatus !== "idle") setCreateStatus("idle")
+    if (createMessage) setCreateMessage(null)
     const next = { ...newRecord, [key]: value }
     if (key === "category_code") {
       const found = categoryOptions.find((option) => option.value === value)
@@ -407,12 +409,20 @@ export function OptionDetailTable({
   const handleCreate = async () => {
     if (!newRecord) return
     if (createStatus === "saving") return
-    if (!newRecord.category_code) return
+    if (!newRecord.category_code) {
+      setCreateMessage({ type: "error", text: "상단 카드에서 옵션을 먼저 선택해 주세요." })
+      return
+    }
+    if (!String(newRecord.company_name || "").trim() || !String(newRecord.user_id || "").trim()) {
+      setCreateMessage({ type: "error", text: "회사명과 사용자ID를 입력해 주세요." })
+      return
+    }
     if (hasDuplicateUserId(newRecord.user_id)) {
-      window.alert(`중복된 사용자ID가 존재합니다. (${normalizeUserId(newRecord.user_id)})`)
+      setCreateMessage({ type: "error", text: `중복된 사용자ID가 존재합니다. (${normalizeUserId(newRecord.user_id)})` })
       return
     }
     setCreateStatus("saving")
+    setCreateMessage(null)
     try {
       await onSaveRecord({ ...newRecord, id_kind: idKind })
       setNewRecord({
@@ -429,10 +439,11 @@ export function OptionDetailTable({
         note: "",
       })
       setCreateStatus("success")
+      setCreateMessage({ type: "success", text: "등록&저장 완료" })
       window.setTimeout(() => setCreateStatus("idle"), 1200)
     } catch (error) {
       setCreateStatus("idle")
-      window.alert(error instanceof Error ? error.message : "옵션 저장에 실패했습니다.")
+      setCreateMessage({ type: "error", text: error instanceof Error ? error.message : "옵션 저장에 실패했습니다." })
     }
   }
 
@@ -695,6 +706,15 @@ export function OptionDetailTable({
                 {createStatus === "saving" ? "등록&저장 중..." : createStatus === "success" ? "등록&저장 완료" : "등록&저장"}
               </button>
             </div>
+          </div>
+        )}
+        {createMessage && (
+          <div
+            className={`mt-2 rounded-lg px-3 py-2 text-[12px] font-semibold ${
+              createMessage.type === "success" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+            }`}
+          >
+            {createMessage.text}
           </div>
         )}
         {(!selectedCategoryCode || selectedCategoryCode === "all") && (

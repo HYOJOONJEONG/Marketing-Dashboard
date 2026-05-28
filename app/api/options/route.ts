@@ -752,7 +752,6 @@ export async function GET(req: Request) {
         .filter((row: any) => {
           const rowCategory = normalizeCategoryCode(row.category_code)
           if (activeOnly && rowCategory !== "BOND" && Number(row.is_active) !== 1) return false
-          if (activeOnly && rowCategory === "INDEX" && !isCountableIndexRecord(row)) return false
           if (categoryFilter !== "all" && rowCategory !== categoryFilter) return false
           const normalizedStatus = normalizeStatus(row.status)
           if (statusFilter !== "all" && normalizedStatus !== statusFilter) return false
