@@ -44,6 +44,13 @@ const getResponseCache = new Map<string, { expiresAt: number; payload: any }>()
 let industryMapCache: { expiresAt: number; value: Map<string, string> } | null = null
 let bundledSofrRecordsCache: any[] | null = null
 
+const bundledSeedCountMap = new Map(
+  (((seedOptionsMock as any)?.seedCounts || []) as any[]).map((row) => [
+    normalizeCategoryCode(row?.category_code),
+    Number(row?.count_value || 0),
+  ]),
+)
+
 const REQUIRED_SOFR_RECORDS = [
   {
     record_id: "sofr-e070527",
@@ -136,6 +143,13 @@ function getOptionIdKind(record: any): "contract" | "trial" | "free" {
 
 function isContractOptionRecord(record: any) {
   return getOptionIdKind(record) === "contract"
+}
+
+function stabilizeOptionCount(categoryCode: string, value: number) {
+  if (normalizeCategoryCode(categoryCode) !== "INDEX") return value
+  const baseline = bundledSeedCountMap.get("INDEX") || 0
+  if (baseline > 0 && value > baseline + 10) return baseline
+  return value
 }
 
 function normalizeSubType(categoryCode: string, subType: unknown) {
@@ -741,7 +755,8 @@ export async function GET(req: Request) {
       let value = seedMap.get(key) || 0
       if (basis === "latest") value = latestMap.get(key) ?? value
       if (basis === "date") value = dateMap.get(key) ?? value
-      if (key !== "API") value = computedCounts[key] ?? value
+      if (key !== "API" && key !== "INDEX") value = computedCounts[key] ?? value
+      value = stabilizeOptionCount(key, value)
       return { ...cat, count_value: value }
     })
 
@@ -752,6 +767,7 @@ export async function GET(req: Request) {
         .filter((row: any) => {
           const rowCategory = normalizeCategoryCode(row.category_code)
           if (activeOnly && rowCategory !== "BOND" && Number(row.is_active) !== 1) return false
+          if (activeOnly && rowCategory === "INDEX" && getOptionIdKind(row) === "contract" && !isCountableIndexRecord(row)) return false
           if (categoryFilter !== "all" && rowCategory !== categoryFilter) return false
           const normalizedStatus = normalizeStatus(row.status)
           if (statusFilter !== "all" && normalizedStatus !== statusFilter) return false
@@ -818,10 +834,14 @@ export async function POST(req: Request) {
       companyIndustryMap.set(company, industry)
     }
     const record = payload?.record
+    let affectedCategoryCode = ""
+    let affectedIdKind: "contract" | "trial" | "free" = "contract"
 
     if (action === "upsert" && record) {
       const categoryCode = normalizeCategoryCode(record.category_code)
       const idKind = getOptionIdKind(record)
+      affectedCategoryCode = categoryCode
+      affectedIdKind = idKind
       const normalizedUserId = normalizeOptionUserId(record.user_id || record.apply_ids)
       const recordId =
         categoryCode === "SOFR" && normalizedUserId
@@ -881,6 +901,8 @@ export async function POST(req: Request) {
       const idx = optionRecords.findIndex((row: any) => row.record_id === target)
       if (idx >= 0) {
         const targetRecord = optionRecords[idx]
+        affectedCategoryCode = normalizeCategoryCode(targetRecord?.category_code)
+        affectedIdKind = getOptionIdKind(targetRecord)
         if (normalizeCategoryCode(targetRecord?.category_code) === "SOFR" && isContractOptionRecord(targetRecord)) {
           const userId = getSingleOptionUserId(targetRecord)
           if (userId) {
@@ -897,9 +919,20 @@ export async function POST(req: Request) {
     normalizeSofrOptionRecords(mock)
     const finalOptionRecords = mock.optionRecords || []
     const counts = buildCounts(finalOptionRecords, categories)
+    const previousSeedMap = new Map<string, number>(
+      (mock.seedCounts || []).map((row: any) => [normalizeCategoryCode(row?.category_code), Number(row?.count_value || 0)]),
+    )
+    const shouldRefreshCategoryCount = affectedCategoryCode && affectedIdKind === "contract"
+    const getNextCount = (categoryCode: string) => {
+      const code = normalizeCategoryCode(categoryCode)
+      const computed = counts[code] || 0
+      const previous = previousSeedMap.get(code)
+      const value = shouldRefreshCategoryCount && code === affectedCategoryCode ? computed : previous ?? computed
+      return stabilizeOptionCount(code, value)
+    }
     const seedCounts = categories.map((cat: any) => ({
       category_code: cat.category_code,
-      count_value: counts[cat.category_code] || 0,
+      count_value: getNextCount(cat.category_code),
     }))
 
     const today = new Date().toISOString().slice(0, 10)
@@ -908,7 +941,7 @@ export async function POST(req: Request) {
       historyCounts.push({
         snapshot_date: today,
         category_code: cat.category_code,
-        count_value: counts[cat.category_code] || 0,
+        count_value: getNextCount(cat.category_code),
       })
     }
 
