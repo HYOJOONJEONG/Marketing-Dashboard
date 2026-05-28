@@ -931,7 +931,6 @@ export function TypeAnalysisDashboard({
             .group-title span { color: #0f172a; }
             .group-title strong { color: #475569; font-size: 8.5px; font-weight: 700; white-space: nowrap; }
             .note { margin-top: 7px; color: #64748b; font-size: 9px; }
-            .print-footer { position: fixed; left: 9mm; right: 9mm; bottom: 4mm; display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 3px; color: #94a3b8; font-size: 8px; }
             @media print {
               html, body { background: #fff; }
               .toolbar { display: none; }
@@ -1007,10 +1006,6 @@ export function TypeAnalysisDashboard({
               <h2>개인별 실적</h2>
               ${reportTable(personalColumns, personalRows, "개인별 실적 데이터가 없습니다.")}
             </section>
-            <div class="print-footer">
-              <span>연합인포맥스 인포Biz본부</span>
-              <span>Confidential Internal Report</span>
-            </div>
           </main>
           <script>
             window.addEventListener("load", () => {
