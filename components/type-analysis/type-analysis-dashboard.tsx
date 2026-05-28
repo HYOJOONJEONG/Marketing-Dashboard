@@ -351,6 +351,120 @@ function GroupedNewRecordsTable({ groups }: { groups: Array<{ label: string; row
   )
 }
 
+const terminationIndustryColumns = [
+  { key: "label", label: "업종", className: "min-w-[300px] text-left font-bold text-slate-900" },
+  { key: "userMove", label: "퇴사/이직", className: "text-center tabular-nums" },
+  { key: "costCut", label: "비용절감", className: "text-center tabular-nums" },
+  { key: "lowUsage", label: "활용저조", className: "text-center tabular-nums" },
+  { key: "contentOrCompetitor", label: "타사대체", className: "text-center tabular-nums" },
+  { key: "contractEnd", label: "계약만료", className: "text-center tabular-nums" },
+  { key: "reorg", label: "조직개편", className: "text-center tabular-nums" },
+  { key: "leave", label: "휴직/출장", className: "text-center tabular-nums" },
+  { key: "merger", label: "합병매각", className: "text-center tabular-nums" },
+  { key: "unpaid", label: "미수", className: "text-center tabular-nums" },
+  { key: "total", label: "합계", className: "text-center font-black tabular-nums text-rose-700" },
+]
+
+function TerminationMatrixTable({ rows }: { rows: any[] }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1040px] border-collapse text-[12px]">
+          <thead>
+            <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
+              {terminationIndustryColumns.map((column) => (
+                <th key={column.key} className={`border-r border-slate-200 px-2 py-2 font-black last:border-r-0 ${column.className}`}>
+                  {column.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length ? (
+              rows.map((row, index) => {
+                const isTotal = isTotalIndustryRow(row)
+                return (
+                  <tr key={`${row.label}-${index}`} className={`border-b border-slate-100 last:border-0 ${isTotal ? "bg-amber-50" : ""}`}>
+                    {terminationIndustryColumns.map((column) => (
+                      <td key={column.key} className={`border-r border-slate-100 px-2 py-1.5 last:border-r-0 ${column.className} ${isTotal ? "font-black" : ""}`}>
+                        {column.key === "label" ? row?.[column.key] : formatNumber(row?.[column.key])}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })
+            ) : (
+              <tr>
+                <td colSpan={terminationIndustryColumns.length} className="px-4 py-8 text-center text-[13px] font-semibold text-slate-400">
+                  업종별 해지 요약이 없습니다.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function GroupedTerminationRecordsTable({ groups }: { groups: Array<{ label: string; rows: any[] }> }) {
+  const totalCount = groups.reduce((sum, group) => sum + group.rows.length, 0)
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="border-b border-slate-200 bg-white px-3 py-2 text-[13px] font-black text-slate-900">
+        상세 목록 {formatNumber(totalCount)}건
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1040px] border-collapse text-[12px]">
+          <thead>
+            <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
+              <th className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-black">NO</th>
+              <th className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-black">날짜</th>
+              <th className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-black">ID</th>
+              <th className="min-w-[170px] border-r border-slate-200 px-2 py-2 text-left font-black">회사명</th>
+              <th className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-black">부서</th>
+              <th className="w-[86px] border-r border-slate-200 px-2 py-2 text-left font-black">담당자</th>
+              <th className="min-w-[140px] border-r border-slate-200 px-2 py-2 text-left font-black">해지사유</th>
+              <th className="w-[98px] border-r border-slate-200 px-2 py-2 text-right font-black">위약금</th>
+              <th className="min-w-[180px] px-2 py-2 text-left font-black">비고</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.length ? (
+              groups.flatMap((group) => [
+                <tr key={`${group.label}-header`} className="border-y border-slate-300 bg-slate-50">
+                  <td colSpan={9} className="px-3 py-1.5 text-[12px] font-black text-slate-900">
+                    ({group.label}) <span className="ml-1 text-slate-500">{formatNumber(group.rows.length)}건</span>
+                  </td>
+                </tr>,
+                ...group.rows.map((row, index) => (
+                  <tr key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`} className="border-b border-slate-100 hover:bg-rose-50/30">
+                    <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{row.no || index + 1}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 tabular-nums text-slate-600">{row.date}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 font-bold text-slate-900">{row.idCode}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 font-semibold text-slate-900">{row.companyName}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.departmentName}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.recommender}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 font-semibold text-slate-700">{row.reason}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 text-right tabular-nums text-slate-600">{formatNumber(row.penalty)}</td>
+                    <td className="px-2 py-1.5 text-slate-600">{row.note}</td>
+                  </tr>
+                )),
+              ])
+            ) : (
+              <tr>
+                <td colSpan={9} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
+                  검색 조건에 맞는 해지 데이터가 없습니다.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export function TypeAnalysisDashboard({
   data,
   currentYear,
@@ -368,6 +482,7 @@ export function TypeAnalysisDashboard({
   const newRecords = Array.isArray(data?.newReplacement?.records) ? data.newReplacement.records : []
   const newIndustrySummary = Array.isArray(data?.newReplacement?.industrySummary) ? data.newReplacement.industrySummary : []
   const terminationRecords = Array.isArray(data?.terminationType?.records) ? data.terminationType.records : []
+  const terminationIndustrySummary = Array.isArray(data?.terminationType?.industrySummary) ? data.terminationType.industrySummary : []
   const areaRecords = Array.isArray(data?.areaNetGrowth?.records) ? data.areaNetGrowth.records : []
   const personalRows = Array.isArray(data?.personalPerformance?.rows) ? data.personalPerformance.rows : []
   const snapshots = Array.isArray(data?.weeklySnapshots) ? data.weeklySnapshots : []
@@ -380,6 +495,8 @@ export function TypeAnalysisDashboard({
   const netTotal = newTotal - terminationTotal
   const industryRows = useMemo(() => newIndustrySummary.filter((row: any) => !isTotalIndustryRow(row)), [newIndustrySummary])
   const industryMatrixRows = useMemo(() => newIndustrySummary.filter((row: any) => row?.label), [newIndustrySummary])
+  const terminationIndustryRows = useMemo(() => terminationIndustrySummary.filter((row: any) => !isTotalIndustryRow(row)), [terminationIndustrySummary])
+  const terminationMatrixRows = useMemo(() => terminationIndustrySummary.filter((row: any) => row?.label), [terminationIndustrySummary])
 
   const filteredNewRecords = useMemo(
     () => newRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
@@ -403,6 +520,20 @@ export function TypeAnalysisDashboard({
     () => terminationRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
     [terminationRecords, normalizedQuery],
   )
+  const groupedTerminationRecords = useMemo(() => {
+    const buckets = new Map<string, any[]>()
+    filteredTerminationRecords.forEach((row: any) => {
+      const label = String(row?.group || "기타").trim() || "기타"
+      buckets.set(label, [...(buckets.get(label) || []), row])
+    })
+    const orderedLabels = [
+      ...terminationIndustryRows.map((row: any) => String(row?.label || "").trim()).filter(Boolean),
+      ...Array.from(buckets.keys()).filter((label) => !terminationIndustryRows.some((row: any) => String(row?.label || "").trim() === label)),
+    ]
+    return orderedLabels
+      .map((label) => ({ label, rows: buckets.get(label) || [] }))
+      .filter((group) => group.rows.length > 0)
+  }, [filteredTerminationRecords, terminationIndustryRows])
   const filteredAreaRecords = useMemo(
     () => areaRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
     [areaRecords, normalizedQuery],
@@ -561,35 +692,8 @@ export function TypeAnalysisDashboard({
 
       {tab === "termination" ? (
         <div className="space-y-4">
-          <DenseTable
-            columns={[
-              { key: "label", label: "업종" },
-              { key: "userMove", label: "퇴사/이직", className: "text-center tabular-nums" },
-              { key: "costCut", label: "비용절감", className: "text-center tabular-nums" },
-              { key: "lowUsage", label: "활용저조", className: "text-center tabular-nums" },
-              { key: "contractEnd", label: "계약만료", className: "text-center tabular-nums" },
-              { key: "reorg", label: "조직개편", className: "text-center tabular-nums" },
-              { key: "total", label: "합계", className: "text-center font-black tabular-nums text-slate-950" },
-            ]}
-            rows={data?.terminationType?.industrySummary || []}
-            emptyText="해지 업종 요약이 없습니다."
-          />
-          <DenseTable
-            columns={[
-              { key: "no", label: "NO", className: "w-[58px] text-center tabular-nums" },
-              { key: "date", label: "날짜", className: "w-[96px] tabular-nums" },
-              { key: "idCode", label: "ID", className: "w-[94px] font-bold text-slate-900" },
-              { key: "companyName", label: "회사명", className: "min-w-[160px] font-semibold text-slate-900" },
-              { key: "departmentName", label: "부서", className: "min-w-[150px]" },
-              { key: "recommender", label: "권유자", className: "w-[82px]" },
-              { key: "reason", label: "해지사유", className: "min-w-[130px]" },
-              { key: "competitorType", label: "경쟁사", className: "w-[88px]" },
-              { key: "penalty", label: "위약금", className: "w-[110px] text-right tabular-nums", render: (row) => formatNumber(row?.penalty) },
-              { key: "note", label: "비고", className: "min-w-[180px]" },
-            ]}
-            rows={filteredTerminationRecords}
-            emptyText="검색 조건에 맞는 해지 데이터가 없습니다."
-          />
+          <TerminationMatrixTable rows={terminationMatrixRows} />
+          <GroupedTerminationRecordsTable groups={groupedTerminationRecords} />
         </div>
       ) : null}
 

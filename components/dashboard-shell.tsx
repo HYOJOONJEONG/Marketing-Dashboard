@@ -1730,6 +1730,167 @@ function buildTypeAnalysisNewReplacementState(baseNewReplacement: any, records: 
   }
 }
 
+function normalizeTypeAnalysisTerminationReason(value: unknown) {
+  const compact = String(value || "").replace(/\s+/g, "")
+  if (compact.includes("퇴사") || compact.includes("이직") || compact.includes("사용자이동")) return "사용자퇴사·이직"
+  if (compact.includes("비용") || compact.includes("예산")) return "비용절감·예산삭감"
+  if (compact.includes("활용") || compact.includes("불필요") || compact.includes("저조")) return "활용도저조·불필요"
+  if (compact.includes("타사") || compact.includes("콘텐츠") || compact.includes("불만")) return "콘텐츠불만·타사대체"
+  if (compact.includes("조직") || compact.includes("업무변경")) return "조직개편·업무변경"
+  if (compact.includes("휴직") || compact.includes("출장")) return "휴직·장기출장"
+  if (compact.includes("합병") || compact.includes("매각") || compact.includes("폐업")) return "회사합병매각"
+  if (compact.includes("미수") || compact.includes("미납")) return "구독료 미수"
+  return "계약만료"
+}
+
+function createTypeAnalysisTerminationReasonFlags(reason: string) {
+  return {
+    "사용자퇴사·이직": reason === "사용자퇴사·이직" ? 1 : 0,
+    "비용절감·예산삭감": reason === "비용절감·예산삭감" ? 1 : 0,
+    "활용도저조·불필요": reason === "활용도저조·불필요" ? 1 : 0,
+    "콘텐츠불만·타사대체": reason === "콘텐츠불만·타사대체" ? 1 : 0,
+    "조직개편·업무변경": reason === "조직개편·업무변경" ? 1 : 0,
+    "휴직·장기출장": reason === "휴직·장기출장" ? 1 : 0,
+    "회사합병매각": reason === "회사합병매각" ? 1 : 0,
+    "계약만료": reason === "계약만료" ? 1 : 0,
+    "구독료 미수": reason === "구독료 미수" ? 1 : 0,
+  }
+}
+
+function createTypeAnalysisCompetitorFlags() {
+  return { "체크": 0, "마켓포인트": 0, "블룸버그": 0, "로이터": 0, "한경·기타": 0, "아웃": 1 }
+}
+
+function buildTypeAnalysisTerminationReasonSummary(records: any[]) {
+  const counts = {
+    userMove: 0,
+    costCut: 0,
+    lowUsage: 0,
+    contentOrCompetitor: 0,
+    contractEnd: 0,
+    reorg: 0,
+    leave: 0,
+    merger: 0,
+    unpaid: 0,
+  }
+  ;(Array.isArray(records) ? records : []).forEach((record: any) => {
+    const reason = normalizeTypeAnalysisTerminationReason(record?.reason)
+    if (reason === "사용자퇴사·이직") counts.userMove += 1
+    else if (reason === "비용절감·예산삭감") counts.costCut += 1
+    else if (reason === "활용도저조·불필요") counts.lowUsage += 1
+    else if (reason === "콘텐츠불만·타사대체") counts.contentOrCompetitor += 1
+    else if (reason === "조직개편·업무변경") counts.reorg += 1
+    else if (reason === "휴직·장기출장") counts.leave += 1
+    else if (reason === "회사합병매각") counts.merger += 1
+    else if (reason === "구독료 미수") counts.unpaid += 1
+    else counts.contractEnd += 1
+  })
+  const total = Object.values(counts).reduce((sum, value) => sum + value, 0)
+  return [
+    { label: "사용자퇴사·이직", value: counts.userMove },
+    { label: "비용절감·예산삭감", value: counts.costCut },
+    { label: "활용도저조·불필요", value: counts.lowUsage },
+    { label: "콘텐츠불만·타사대체", value: counts.contentOrCompetitor },
+    { label: "계약만료", value: counts.contractEnd },
+    { label: "조직개편·업무변경", value: counts.reorg },
+    { label: "휴직·장기출장", value: counts.leave },
+    { label: "회사합병매각", value: counts.merger },
+    { label: "구독료 미수", value: counts.unpaid },
+    { label: "합 계", value: total },
+  ]
+}
+
+function buildTypeAnalysisCompetitorSummary(records: any[]) {
+  const total = Array.isArray(records) ? records.length : 0
+  return [
+    { label: "체크", value: 0 },
+    { label: "마켓포인트", value: 0 },
+    { label: "블룸버그", value: 0 },
+    { label: "로이터", value: 0 },
+    { label: "한경·기타", value: 0 },
+    { label: "아웃", value: total },
+    { label: "합 계", value: total },
+  ]
+}
+
+function buildTypeAnalysisTerminationIndustrySummary(records: any[]) {
+  const buckets = new Map(
+    TYPE_ANALYSIS_INDUSTRY_LABELS.map((label) => [
+      label,
+      {
+        label,
+        userMove: 0,
+        costCut: 0,
+        lowUsage: 0,
+        contentOrCompetitor: 0,
+        contractEnd: 0,
+        reorg: 0,
+        leave: 0,
+        merger: 0,
+        unpaid: 0,
+        total: 0,
+      },
+    ]),
+  )
+  ;(Array.isArray(records) ? records : []).forEach((record: any) => {
+    const group = normalizeTypeAnalysisIndustryGroup(record?.group || record?.industry, record?.companyName)
+    const bucket = buckets.get(group as any) || buckets.get(TYPE_ANALYSIS_OTHER_FINANCE_LABEL)
+    if (!bucket) return
+    const reason = normalizeTypeAnalysisTerminationReason(record?.reason)
+    if (reason === "사용자퇴사·이직") bucket.userMove += 1
+    else if (reason === "비용절감·예산삭감") bucket.costCut += 1
+    else if (reason === "활용도저조·불필요") bucket.lowUsage += 1
+    else if (reason === "콘텐츠불만·타사대체") bucket.contentOrCompetitor += 1
+    else if (reason === "조직개편·업무변경") bucket.reorg += 1
+    else if (reason === "휴직·장기출장") bucket.leave += 1
+    else if (reason === "회사합병매각") bucket.merger += 1
+    else if (reason === "구독료 미수") bucket.unpaid += 1
+    else bucket.contractEnd += 1
+    bucket.total += 1
+  })
+  const rows = TYPE_ANALYSIS_INDUSTRY_LABELS.map((label) => buckets.get(label)!).filter((row) => row.total > 0)
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.userMove += row.userMove
+      acc.costCut += row.costCut
+      acc.lowUsage += row.lowUsage
+      acc.contentOrCompetitor += row.contentOrCompetitor
+      acc.contractEnd += row.contractEnd
+      acc.reorg += row.reorg
+      acc.leave += row.leave
+      acc.merger += row.merger
+      acc.unpaid += row.unpaid
+      acc.total += row.total
+      return acc
+    },
+    {
+      label: "계",
+      userMove: 0,
+      costCut: 0,
+      lowUsage: 0,
+      contentOrCompetitor: 0,
+      contractEnd: 0,
+      reorg: 0,
+      leave: 0,
+      merger: 0,
+      unpaid: 0,
+      total: 0,
+    },
+  )
+  return [...rows, totals]
+}
+
+function buildTypeAnalysisTerminationState(baseTerminationType: any, records: any[], asOf: string) {
+  return {
+    ...baseTerminationType,
+    asOf,
+    reasonSummary: buildTypeAnalysisTerminationReasonSummary(records),
+    competitorSummary: buildTypeAnalysisCompetitorSummary(records),
+    industrySummary: buildTypeAnalysisTerminationIndustrySummary(records),
+    records,
+  }
+}
+
 function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any[]) {
   const createdAt = new Date().toISOString()
   const newRows = (Array.isArray(newContracts) ? newContracts : []).map((row: any, index: number) => {
@@ -1753,21 +1914,29 @@ function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any
       sourceId: String(row?.id || ""),
     }
   })
-  const terminationRowsForReview = (Array.isArray(terminationRows) ? terminationRows : []).map((row: any, index: number) => ({
-    tempId: `termination-${row?.id || row?.customerId || index}`,
-    include: true,
-    no: index + 1,
-    date: normalizeDate(row?.receivedDate || row?.terminationDate || createdAt),
-    idCode: String(row?.customerId || row?.idCode || "").trim(),
-    companyName: String(row?.companyName || "").trim(),
-    departmentName: String(row?.departmentName || "").trim(),
-    recommender: String(row?.manager || row?.recommender || "").trim(),
-    reason: String(row?.reason || "").trim(),
-    terminationDate: normalizeDate(row?.terminationDate || ""),
-    penalty: toNumber(row?.penalty),
-    note: String(row?.note || "").trim(),
-    sourceId: String(row?.id || ""),
-  }))
+  const terminationRowsForReview = (Array.isArray(terminationRows) ? terminationRows : []).map((row: any, index: number) => {
+    const reason = normalizeTypeAnalysisTerminationReason(row?.reason)
+    const group = normalizeTypeAnalysisIndustryGroup(row?.industry || row?.group, row?.companyName)
+    return {
+      tempId: `termination-${row?.id || row?.customerId || index}`,
+      include: true,
+      no: index + 1,
+      date: normalizeDate(row?.receivedDate || row?.terminationDate || createdAt),
+      idCode: String(row?.customerId || row?.idCode || "").trim(),
+      companyName: String(row?.companyName || "").trim(),
+      departmentName: String(row?.departmentName || "").trim(),
+      recommender: String(row?.manager || row?.recommender || "").trim(),
+      reason,
+      reasonFlags: createTypeAnalysisTerminationReasonFlags(reason),
+      competitorType: "아웃",
+      competitorFlags: createTypeAnalysisCompetitorFlags(),
+      terminationDate: normalizeDate(row?.terminationDate || ""),
+      penalty: toNumber(row?.penalty),
+      note: String(row?.note || "").trim(),
+      group,
+      sourceId: String(row?.id || ""),
+    }
+  })
   return {
     id: `type-analysis-review-${Date.now()}`,
     createdAt,
@@ -1801,19 +1970,27 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
     })
   const terminationRecords = (Array.isArray(review?.terminationRows) ? review.terminationRows : [])
     .filter((row: any) => row?.include !== false)
-    .map((row: any, index: number) => ({
-      no: index + 1,
-      date: normalizeDate(row?.date || createdAt),
-      idCode: String(row?.idCode || "").trim(),
-      companyName: String(row?.companyName || "").trim(),
-      departmentName: String(row?.departmentName || "").trim(),
-      recommender: String(row?.recommender || "").trim(),
-      reason: String(row?.reason || "").trim(),
-      terminationDate: normalizeDate(row?.terminationDate || ""),
-      penalty: toNumber(row?.penalty),
-      note: String(row?.note || "").trim(),
-      sourceId: String(row?.sourceId || ""),
-    }))
+    .map((row: any, index: number) => {
+      const reason = normalizeTypeAnalysisTerminationReason(row?.reason)
+      const group = normalizeTypeAnalysisIndustryGroup(row?.group || row?.industry, row?.companyName)
+      return {
+        no: index + 1,
+        date: normalizeDate(row?.date || createdAt),
+        idCode: String(row?.idCode || "").trim(),
+        companyName: String(row?.companyName || "").trim(),
+        departmentName: String(row?.departmentName || "").trim(),
+        recommender: String(row?.recommender || "").trim(),
+        reason,
+        reasonFlags: createTypeAnalysisTerminationReasonFlags(reason),
+        competitorType: "아웃",
+        competitorFlags: createTypeAnalysisCompetitorFlags(),
+        terminationDate: normalizeDate(row?.terminationDate || ""),
+        penalty: toNumber(row?.penalty),
+        note: String(row?.note || "").trim(),
+        group,
+        sourceId: String(row?.sourceId || ""),
+      }
+    })
   return {
     id: `type-analysis-weekly-${Date.now()}`,
     label: `${normalizeDate(getSeoulTodayKey())} 주간 불러오기`,
@@ -6422,6 +6599,11 @@ export function DashboardShell({
         snapshot.newRecords,
         `${normalizeDate(getSeoulTodayKey())} 기준`,
       ),
+      terminationType: buildTypeAnalysisTerminationState(
+        baseTypeAnalysis.terminationType,
+        snapshot.terminationRecords,
+        `${normalizeDate(getSeoulTodayKey())} 기준`,
+      ),
       weeklySnapshots: [
         snapshot,
         ...(baseTypeAnalysis.weeklySnapshots || []).filter((item: any) => item?.id !== snapshot.id),
@@ -8709,14 +8891,17 @@ export function DashboardShell({
 
                     <section className="overflow-hidden rounded-xl border border-slate-200">
                       <div className="border-b border-slate-200 bg-white px-4 py-3 text-[14px] font-black text-slate-900">해지 반영 항목</div>
-                      <div className="max-h-[420px] overflow-y-auto">
-                        <table className="w-full border-collapse text-[12px]">
+                      <div className="max-h-[420px] overflow-auto">
+                        <table className="w-full min-w-[860px] border-collapse text-[12px]">
                           <thead>
                             <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
                               <th className="w-[44px] px-2 py-2 text-center font-black">선택</th>
-                              <th className="px-2 py-2 text-left font-black">고객사</th>
+                              <th className="w-[86px] px-2 py-2 text-left font-black">날짜</th>
                               <th className="w-[92px] px-2 py-2 text-left font-black">ID</th>
-                              <th className="w-[96px] px-2 py-2 text-left font-black">사유</th>
+                              <th className="px-2 py-2 text-left font-black">고객사</th>
+                              <th className="px-2 py-2 text-left font-black">부서</th>
+                              <th className="w-[170px] px-2 py-2 text-left font-black">해지 사유</th>
+                              <th className="w-[260px] px-2 py-2 text-left font-black">업종별 위치</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -8730,14 +8915,47 @@ export function DashboardShell({
                                       onChange={(event) => updateTypeAnalysisReviewTerminationRow(row.tempId, { include: event.target.checked })}
                                     />
                                   </td>
-                                  <td className="px-2 py-2 font-semibold text-slate-900">{row.companyName}</td>
+                                  <td className="px-2 py-2 tabular-nums text-slate-600">{row.date}</td>
                                   <td className="px-2 py-2 font-bold text-slate-900">{row.idCode}</td>
-                                  <td className="px-2 py-2 text-slate-600">{row.reason}</td>
+                                  <td className="px-2 py-2 font-semibold text-slate-900">{row.companyName}</td>
+                                  <td className="px-2 py-2 text-slate-600">{row.departmentName}</td>
+                                  <td className="px-2 py-2">
+                                    <select
+                                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
+                                      value={row.reason || "계약만료"}
+                                      onChange={(event) => updateTypeAnalysisReviewTerminationRow(row.tempId, { reason: event.target.value })}
+                                    >
+                                      {[
+                                        "계약만료",
+                                        "사용자퇴사·이직",
+                                        "비용절감·예산삭감",
+                                        "활용도저조·불필요",
+                                        "콘텐츠불만·타사대체",
+                                        "조직개편·업무변경",
+                                        "휴직·장기출장",
+                                        "회사합병매각",
+                                        "구독료 미수",
+                                      ].map((item) => (
+                                        <option key={item} value={item}>{item}</option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="px-2 py-2">
+                                    <select
+                                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
+                                      value={row.group || TYPE_ANALYSIS_OTHER_FINANCE_LABEL}
+                                      onChange={(event) => updateTypeAnalysisReviewTerminationRow(row.tempId, { group: event.target.value })}
+                                    >
+                                      {TYPE_ANALYSIS_INDUSTRY_LABELS.map((item) => (
+                                        <option key={item} value={item}>{item}</option>
+                                      ))}
+                                    </select>
+                                  </td>
                                 </tr>
                               ))
                             ) : (
                               <tr>
-                                <td colSpan={4} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
+                                <td colSpan={7} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
                                   선택된 해지 항목이 없습니다.
                                 </td>
                               </tr>
