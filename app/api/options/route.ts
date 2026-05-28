@@ -80,6 +80,7 @@ const GET_CACHE_TTL_MS = 12 * 1000
 const getResponseCache = new Map<string, { expiresAt: number; payload: any }>()
 let industryMapCache: { expiresAt: number; value: Map<string, string> } | null = null
 let bundledSofrRecordsCache: any[] | null = null
+let bundledIndexRecordsCache: any[] | null = null
 
 const REQUIRED_SOFR_RECORDS = [
   {
@@ -464,6 +465,12 @@ function getSofrRecords(mock: any) {
     : []
 }
 
+function getIndexRecords(mock: any) {
+  return Array.isArray(mock?.optionRecords)
+    ? mock.optionRecords.filter((record: any) => normalizeCategoryCode(record?.category_code) === "INDEX")
+    : []
+}
+
 function getSingleOptionUserId(record: any) {
   const userIds = splitOptionUserIds(record?.user_id)
   if (userIds.length) return userIds[0]
@@ -488,6 +495,20 @@ function setDeletedSofrUserIds(mock: any, deletedIds: Set<string>) {
   const ids = Array.from(deletedIds).filter(Boolean).sort()
   if (ids.length) mock.sofrDeletedUserIds = ids
   else delete mock.sofrDeletedUserIds
+}
+
+function getDeletedIndexUserIds(mock: any): Set<string> {
+  return new Set<string>(
+    (Array.isArray(mock?.indexDeletedUserIds) ? mock.indexDeletedUserIds : [])
+      .map((value: unknown) => normalizeOptionUserId(value))
+      .filter((value: string) => Boolean(value)),
+  )
+}
+
+function setDeletedIndexUserIds(mock: any, deletedIds: Set<string>) {
+  const ids = Array.from(deletedIds).filter(Boolean).sort()
+  if (ids.length) mock.indexDeletedUserIds = ids
+  else delete mock.indexDeletedUserIds
 }
 
 function withRequiredSofrRecords(records: any[]) {
@@ -631,6 +652,114 @@ async function hydrateSofrFromBundledMockIfNewer(mock: any) {
   return true
 }
 
+function buildBundledIndexRecords(source: any) {
+  const records = Array.isArray(source?.optionRecords) ? source.optionRecords : []
+  return records
+    .filter((record: any) => normalizeCategoryCode(record?.category_code) === "INDEX")
+    .filter(isContractOptionRecord)
+    .filter((record: any) => Number(record?.is_active) === 1)
+    .filter(isCountableIndexRecord)
+    .map((record: any) => ({
+      ...record,
+      id_kind: "contract",
+      category_code: "INDEX",
+      category_name_ko: "해외지수",
+      requester_name: "",
+      contact: "",
+      is_active: 1,
+    }))
+}
+
+async function loadBundledIndexRecords(): Promise<any[]> {
+  if (bundledIndexRecordsCache) return bundledIndexRecordsCache
+  const importedRecords = buildBundledIndexRecords(seedOptionsMock)
+  if (importedRecords.length) {
+    bundledIndexRecordsCache = importedRecords
+    return importedRecords
+  }
+  try {
+    const raw = await fs.readFile(MOCK_PATH, "utf8")
+    const parsed = JSON.parse(raw)
+    const records = buildBundledIndexRecords(parsed)
+    bundledIndexRecordsCache = records
+    return records
+  } catch {
+    bundledIndexRecordsCache = []
+    return []
+  }
+}
+
+async function hydrateIndexFromBundledMockIfMissing(mock: any) {
+  if (!Array.isArray(mock?.optionRecords)) return false
+  const bundledIndexRecords = await loadBundledIndexRecords()
+  if (!bundledIndexRecords.length) return false
+  const deletedIndexIds = getDeletedIndexUserIds(mock)
+  const availableBundledRecords = bundledIndexRecords.filter((record: any) => {
+    const userId = getSingleOptionUserId(record)
+    return userId && !deletedIndexIds.has(userId)
+  })
+  if (!availableBundledRecords.length) return false
+
+  const currentIndexRecords = getIndexRecords(mock).filter(isContractOptionRecord)
+  const bundledIds = availableBundledRecords.map((record: any) => getSingleOptionUserId(record)).filter(Boolean)
+  const visibleCurrentIds = new Set(
+    currentIndexRecords
+      .filter((record: any) => Number(record?.is_active) === 1)
+      .filter(isCountableIndexRecord)
+      .map((record: any) => getSingleOptionUserId(record))
+      .filter((id: string) => id && bundledIds.includes(id)),
+  )
+  const missingBundledRecords = availableBundledRecords.filter((record: any) => {
+    const userId = getSingleOptionUserId(record)
+    return userId && !visibleCurrentIds.has(userId)
+  })
+  if (!missingBundledRecords.length) return false
+
+  const missingIds = new Set(missingBundledRecords.map((record: any) => getSingleOptionUserId(record)).filter(Boolean))
+  const bundledByUserId = new Map<string, any>(
+    missingBundledRecords.map((record: any) => [getSingleOptionUserId(record), record]),
+  )
+  const appendedRecords: any[] = []
+  mock.optionRecords = mock.optionRecords.map((record: any) => {
+    if (normalizeCategoryCode(record?.category_code) !== "INDEX" || !isContractOptionRecord(record)) return record
+    const userId = getSingleOptionUserId(record)
+    if (!userId || !missingIds.has(userId)) return record
+    const bundledRecord = bundledByUserId.get(userId)
+    missingIds.delete(userId)
+    return {
+      ...bundledRecord,
+      ...record,
+      record_id: record.record_id || bundledRecord.record_id || `index-${userId.toLowerCase()}`,
+      id_kind: "contract",
+      category_code: "INDEX",
+      category_name_ko: "해외지수",
+      sub_type: bundledRecord.sub_type || record.sub_type,
+      industry: bundledRecord.industry || record.industry,
+      user_id: userId,
+      requester_name: "",
+      contact: "",
+      is_active: 1,
+    }
+  })
+  for (const userId of missingIds) {
+    const bundledRecord = bundledByUserId.get(userId)
+    if (!bundledRecord) continue
+    appendedRecords.push({
+      ...bundledRecord,
+      record_id: bundledRecord.record_id || `index-${userId.toLowerCase()}`,
+      id_kind: "contract",
+      category_code: "INDEX",
+      category_name_ko: "해외지수",
+      user_id: userId,
+      requester_name: "",
+      contact: "",
+      is_active: 1,
+    })
+  }
+  if (appendedRecords.length) mock.optionRecords = [...mock.optionRecords, ...appendedRecords]
+  return true
+}
+
 async function loadAppStateIndustryMap() {
   if (industryMapCache && industryMapCache.expiresAt > Date.now()) {
     return new Map(industryMapCache.value)
@@ -743,10 +872,15 @@ export async function GET(req: Request) {
     const privacyScrubbed = scrubOptionPrivacyFields(mock)
     const sofrNormalized = normalizeSofrOptionRecords(mock)
     const sofrHydrated = await hydrateSofrFromBundledMockIfNewer(mock)
-    if (privacyScrubbed || sofrNormalized || sofrHydrated) {
+    const indexHydrated = await hydrateIndexFromBundledMockIfMissing(mock)
+    if (privacyScrubbed || sofrNormalized || sofrHydrated || indexHydrated) {
       await writeOptionsMock(mock, {
         menuLabel: "유료 옵션 정보 현황",
-        changeLabel: (sofrNormalized || sofrHydrated) ? "SOFR 적용 아이디 분리" : "옵션 개인정보 필드 정리",
+        changeLabel: indexHydrated
+          ? "해외지수 기준 아이디 복원"
+          : (sofrNormalized || sofrHydrated)
+            ? "SOFR 적용 아이디 분리"
+            : "옵션 개인정보 필드 정리",
       })
       getResponseCache.clear()
     }
@@ -916,6 +1050,11 @@ export async function POST(req: Request) {
         deletedSofrIds.delete(normalizedUserId)
         setDeletedSofrUserIds(mock, deletedSofrIds)
       }
+      if (categoryCode === "INDEX" && idKind === "contract" && normalizedUserId) {
+        const deletedIndexIds = getDeletedIndexUserIds(mock)
+        deletedIndexIds.delete(normalizedUserId)
+        setDeletedIndexUserIds(mock, deletedIndexIds)
+      }
     }
 
     if (action === "delete" && payload?.record_id) {
@@ -933,12 +1072,21 @@ export async function POST(req: Request) {
             setDeletedSofrUserIds(mock, deletedSofrIds)
           }
         }
+        if (normalizeCategoryCode(targetRecord?.category_code) === "INDEX" && isContractOptionRecord(targetRecord)) {
+          const userId = getSingleOptionUserId(targetRecord)
+          if (userId) {
+            const deletedIndexIds = getDeletedIndexUserIds(mock)
+            deletedIndexIds.add(userId)
+            setDeletedIndexUserIds(mock, deletedIndexIds)
+          }
+        }
         optionRecords.splice(idx, 1)
       }
     }
 
     mock.optionRecords = optionRecords
     normalizeSofrOptionRecords(mock)
+    await hydrateIndexFromBundledMockIfMissing(mock)
     const finalOptionRecords = mock.optionRecords || []
     const counts = buildCounts(finalOptionRecords, categories)
     const previousSeedMap = new Map<string, number>(
