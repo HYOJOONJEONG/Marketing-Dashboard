@@ -156,7 +156,7 @@ const viewTitles: Record<ViewKey, string> = {
   "weekly-report": "주간실적보고",
   contracts: "신규계약 리스트",
   "weekly-selection": "주간 반영 리스트",
-  "type-analysis": "신규대체해지유형분석",
+  "type-analysis": "신규/대체/해지 유형 분석",
   "manual-input": "수동 입력 리스트",
   collection: "계약서통합관리",
   "option-dashboard": "유료 옵션 정보 현황",
@@ -6201,7 +6201,7 @@ export function DashboardShell({
       setTypeAnalysisSaveMessage(`${formatManualSaveTime()} 저장 완료`)
     } catch {
       setTypeAnalysisSaveMessage("저장 실패. 잠시 후 다시 저장해주세요.")
-      window.alert("신규대체해지유형분석 저장에 실패했습니다. 잠시 후 다시 시도해주세요.")
+      window.alert("신규/대체/해지 유형 분석 저장에 실패했습니다. 잠시 후 다시 시도해주세요.")
     } finally {
       setIsSavingDashboard(false)
     }

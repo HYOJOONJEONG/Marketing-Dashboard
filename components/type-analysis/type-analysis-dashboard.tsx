@@ -111,17 +111,17 @@ function MetricTile({
 }) {
   const accent =
     tone === "blue"
-      ? "border-blue-200 bg-blue-50/70 text-blue-700"
+      ? "border-blue-200"
       : tone === "green"
-        ? "border-emerald-200 bg-emerald-50/70 text-emerald-700"
+        ? "border-emerald-200"
         : tone === "rose"
-          ? "border-rose-200 bg-rose-50/70 text-rose-700"
-          : "border-slate-200 bg-slate-50 text-slate-700"
+          ? "border-rose-200"
+          : "border-slate-200"
   return (
-    <div className={`rounded-2xl border px-4 py-3 ${accent}`}>
+    <div className={`rounded-xl border bg-white px-3 py-2.5 ${accent}`}>
       <div className="text-[12px] font-bold text-slate-500">{label}</div>
-      <div className="mt-1 text-[24px] font-black tracking-[-0.04em] text-slate-950">{value}</div>
-      {sub ? <div className="mt-1 truncate text-[12px] font-semibold text-slate-500">{sub}</div> : null}
+      <div className="mt-0.5 text-[20px] font-black tabular-nums text-slate-950">{value}</div>
+      {sub ? <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">{sub}</div> : null}
     </div>
   )
 }
@@ -148,19 +148,39 @@ function MiniSummaryTable({
   )
 }
 
+function SectionTitle({ title, count }: { title: string; count?: unknown }) {
+  return (
+    <div className="mb-2 flex items-center justify-between gap-2">
+      <div className="text-[15px] font-black text-slate-900">{title}</div>
+      {count !== undefined ? (
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-black tabular-nums text-slate-700">
+          {formatNumber(count)}건
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+function isTotalIndustryRow(row: any) {
+  const label = String(row?.label || "").replace(/\s+/g, "")
+  return label === "계" || label.includes("합계")
+}
+
 function DenseTable({
   columns,
   rows,
   emptyText,
+  minWidth = "980px",
 }: {
   columns: Array<{ key: string; label: string; className?: string; render?: (row: any, index: number) => any }>
   rows: any[]
   emptyText: string
+  minWidth?: string
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[980px] border-collapse text-[13px]">
+        <table className="w-full border-collapse text-[13px]" style={{ minWidth }}>
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
               {columns.map((column) => (
@@ -210,6 +230,7 @@ export function TypeAnalysisDashboard({
   const normalizedQuery = normalizeSearch(query)
 
   const newRecords = Array.isArray(data?.newReplacement?.records) ? data.newReplacement.records : []
+  const newIndustrySummary = Array.isArray(data?.newReplacement?.industrySummary) ? data.newReplacement.industrySummary : []
   const terminationRecords = Array.isArray(data?.terminationType?.records) ? data.terminationType.records : []
   const areaRecords = Array.isArray(data?.areaNetGrowth?.records) ? data.areaNetGrowth.records : []
   const personalRows = Array.isArray(data?.personalPerformance?.rows) ? data.personalPerformance.rows : []
@@ -221,6 +242,39 @@ export function TypeAnalysisDashboard({
   const replacementTotal = Math.max(0, newTotal - pureNewTotal)
   const terminationTotal = findSummaryValue(data?.terminationType?.reasonSummary || [], (label) => label.includes("합"))
   const netTotal = newTotal - terminationTotal
+  const industryRows = useMemo(() => newIndustrySummary.filter((row: any) => !isTotalIndustryRow(row)), [newIndustrySummary])
+  const newIndustryRows = useMemo(
+    () =>
+      industryRows
+        .map((row: any) => ({
+          label: row.label,
+          new: toNumber(row.new),
+        }))
+        .filter((row: any) => row.new > 0),
+    [industryRows],
+  )
+  const replacementIndustryRows = useMemo(
+    () =>
+      industryRows
+        .map((row: any) => {
+          const check = toNumber(row.check)
+          const marketPoint = toNumber(row.marketPoint)
+          const bloomberg = toNumber(row.bloomberg)
+          const reuters = toNumber(row.reuters)
+          const hankyungEtc = toNumber(row.hankyungEtc)
+          return {
+            label: row.label,
+            check,
+            marketPoint,
+            bloomberg,
+            reuters,
+            hankyungEtc,
+            replacementTotal: check + marketPoint + bloomberg + reuters + hankyungEtc,
+          }
+        })
+        .filter((row: any) => row.replacementTotal > 0),
+    [industryRows],
+  )
 
   const filteredNewRecords = useMemo(
     () => newRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
@@ -251,11 +305,8 @@ export function TypeAnalysisDashboard({
                 <StatusPill>{sourceTitle(data) || "엑셀 기준"}</StatusPill>
                 <StatusPill tone={saveTone}>{saveText}</StatusPill>
               </div>
-              <div className="mt-2 text-[18px] font-black tracking-[-0.03em] text-slate-950">
-                신규·대체·해지 유형 분석
-              </div>
-              <div className="mt-1 text-[13px] font-semibold text-slate-500">
-                원본 엑셀에서 최근 5개년도 업종별 순증추이는 제외하고 개인별 실적까지 추출했습니다.
+              <div className="mt-2 text-[18px] font-black text-slate-950">
+                신규/대체/해지 유형 분석
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -280,12 +331,12 @@ export function TypeAnalysisDashboard({
           </div>
         </div>
 
-        <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-5">
-          <MetricTile label="신규 합계" value={`${formatNumber(newTotal)}건`} sub={`순수 신규 ${formatNumber(pureNewTotal)}건`} tone="blue" />
-          <MetricTile label="타사 대체" value={`${formatNumber(replacementTotal)}건`} sub="체크/마켓/블룸버그/로이터" />
-          <MetricTile label="해지 합계" value={`${formatNumber(terminationTotal)}건`} sub="해지 유형 분석 기준" tone="rose" />
-          <MetricTile label="순증" value={`${formatNumber(netTotal)}건`} sub="신규 합계 - 해지 합계" tone="green" />
-          <MetricTile label="주간 불러오기" value={`${formatNumber(weeklyImportSummary.netCount)}건`} sub={`신규 ${formatNumber(weeklyImportSummary.newCount)} / 해지 ${formatNumber(weeklyImportSummary.terminationCount)}`} />
+        <div className="grid gap-2.5 p-5 sm:grid-cols-2 lg:grid-cols-5">
+          <MetricTile label="신규" value={`${formatNumber(pureNewTotal)}건`} tone="blue" />
+          <MetricTile label="대체" value={`${formatNumber(replacementTotal)}건`} />
+          <MetricTile label="신규+대체" value={`${formatNumber(newTotal)}건`} />
+          <MetricTile label="해지" value={`${formatNumber(terminationTotal)}건`} tone="rose" />
+          <MetricTile label="순증" value={`${formatNumber(netTotal)}건`} tone="green" />
         </div>
 
         <div className="border-t border-slate-100 px-5 pb-5">
@@ -382,19 +433,37 @@ export function TypeAnalysisDashboard({
 
       {tab === "new" ? (
         <div className="space-y-4">
-          <DenseTable
-            columns={[
-              { key: "label", label: "업종" },
-              { key: "check", label: "체크", className: "text-center tabular-nums" },
-              { key: "marketPoint", label: "마켓", className: "text-center tabular-nums" },
-              { key: "bloomberg", label: "블룸버그", className: "text-center tabular-nums" },
-              { key: "reuters", label: "로이터", className: "text-center tabular-nums" },
-              { key: "new", label: "신규", className: "text-center tabular-nums" },
-              { key: "total", label: "합계", className: "text-center font-black tabular-nums text-slate-950" },
-            ]}
-            rows={data?.newReplacement?.industrySummary || []}
-            emptyText="신규/대체 업종 요약이 없습니다."
-          />
+          <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <SectionTitle title="업종별 신규" count={pureNewTotal} />
+              <DenseTable
+                columns={[
+                  { key: "label", label: "업종", className: "min-w-[220px] font-semibold text-slate-900" },
+                  { key: "new", label: "신규", className: "w-[110px] text-center font-black tabular-nums text-slate-950" },
+                ]}
+                rows={newIndustryRows}
+                emptyText="신규 업종 요약이 없습니다."
+                minWidth="420px"
+              />
+            </div>
+            <div>
+              <SectionTitle title="업종별 대체" count={replacementTotal} />
+              <DenseTable
+                columns={[
+                  { key: "label", label: "업종", className: "min-w-[220px] font-semibold text-slate-900" },
+                  { key: "check", label: "체크", className: "text-center tabular-nums" },
+                  { key: "marketPoint", label: "마켓", className: "text-center tabular-nums" },
+                  { key: "bloomberg", label: "블룸버그", className: "text-center tabular-nums" },
+                  { key: "reuters", label: "로이터", className: "text-center tabular-nums" },
+                  { key: "hankyungEtc", label: "기타", className: "text-center tabular-nums" },
+                  { key: "replacementTotal", label: "합계", className: "text-center font-black tabular-nums text-slate-950" },
+                ]}
+                rows={replacementIndustryRows}
+                emptyText="대체 업종 요약이 없습니다."
+                minWidth="680px"
+              />
+            </div>
+          </div>
           <DenseTable
             columns={[
               { key: "no", label: "NO", className: "w-[58px] text-center tabular-nums" },

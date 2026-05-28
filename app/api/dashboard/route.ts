@@ -365,7 +365,7 @@ function describeDashboardPut(changedKeys: DashboardStateSliceKey[], existingDat
   }
   if (changedKeys.includes("collection")) return "계약서통합관리 저장"
   if (changedKeys.includes("contracts")) return "신규계약/주간반영 리스트 저장"
-  if (changedKeys.includes("typeAnalysis")) return "신규대체해지유형분석 저장"
+  if (changedKeys.includes("typeAnalysis")) return "신규/대체/해지 유형 분석 저장"
   if (changedKeys.includes("dailyReport")) return "데일리 업무일지 저장"
   if (changedKeys.includes("weeklyReport")) return "주간실적보고/수동입력 저장"
   return "대시보드 저장"

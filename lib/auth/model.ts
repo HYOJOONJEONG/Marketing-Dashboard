@@ -196,7 +196,7 @@ export const MENU_LABELS: Record<MenuKey, string> = {
   manualInput: "수동입력리스트",
   newContractsList: "신규계약리스트",
   weeklySelection: "주간 반영 리스트",
-  typeAnalysis: "신규대체해지유형분석",
+  typeAnalysis: "신규/대체/해지 유형 분석",
   newContractCreate: "신규계약등록",
   collectionManagement: "계약서통합관리",
   optionDashboard: "유료 옵션 정보 현황",
