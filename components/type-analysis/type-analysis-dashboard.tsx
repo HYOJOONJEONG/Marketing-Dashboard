@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { BarChart3, Database, RefreshCw, Save, Search, Table2, UsersRound } from "lucide-react"
+import { BarChart3, Database, RefreshCw, Save, Search, UsersRound } from "lucide-react"
 
 type TabKey = "summary" | "new" | "termination" | "area" | "personal"
 
@@ -63,7 +63,10 @@ function recordMatches(row: any, query: string) {
     row?.replacementType,
     row?.reason,
     row?.competitorType,
+    row?.transactionType,
+    row?.kind,
     row?.group,
+    row?.areaGroup,
     row?.note,
   ].join(" "))
   return haystack.includes(query)
@@ -465,6 +468,121 @@ function GroupedTerminationRecordsTable({ groups }: { groups: Array<{ label: str
   )
 }
 
+const areaSummaryColumns = [
+  { key: "no", label: "구분", className: "w-[64px] text-center font-bold text-slate-700" },
+  { key: "area", label: "담당영역", className: "min-w-[260px] text-left font-bold text-slate-900" },
+  { key: "manager", label: "담당자", className: "min-w-[260px] text-left text-slate-600" },
+  { key: "newCount", label: "신규", className: "w-[96px] text-center font-black tabular-nums text-blue-700" },
+  { key: "terminationCount", label: "해지", className: "w-[96px] text-center font-black tabular-nums text-rose-700" },
+  { key: "netCount", label: "순증", className: "w-[96px] text-center font-black tabular-nums text-slate-950" },
+]
+
+function AreaSummaryTable({ rows }: { rows: any[] }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[960px] border-collapse text-[12px]">
+          <thead>
+            <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
+              {areaSummaryColumns.map((column) => (
+                <th key={column.key} className={`border-r border-slate-200 px-2 py-2 font-black last:border-r-0 ${column.className}`}>
+                  {column.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length ? (
+              rows.map((row, index) => {
+                const isTotal = String(row?.no || "").replace(/\s+/g, "") === "계"
+                return (
+                  <tr key={`${row?.area || row?.no || "area"}-${index}`} className={`border-b border-slate-100 last:border-0 ${isTotal ? "bg-amber-50" : ""}`}>
+                    {areaSummaryColumns.map((column) => (
+                      <td key={column.key} className={`border-r border-slate-100 px-2 py-1.5 last:border-r-0 ${column.className} ${isTotal ? "font-black" : ""}`}>
+                        {["newCount", "terminationCount", "netCount"].includes(column.key) ? formatNumber(row?.[column.key]) : row?.[column.key]}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })
+            ) : (
+              <tr>
+                <td colSpan={areaSummaryColumns.length} className="px-4 py-8 text-center text-[13px] font-semibold text-slate-400">
+                  영역별 순증 요약이 없습니다.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function GroupedAreaRecordsTable({ groups }: { groups: Array<{ label: string; rows: any[] }> }) {
+  const totalCount = groups.reduce((sum, group) => sum + group.rows.length, 0)
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="border-b border-slate-200 bg-white px-3 py-2 text-[13px] font-black text-slate-900">
+        상세 목록 {formatNumber(totalCount)}건
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1040px] border-collapse text-[12px]">
+          <thead>
+            <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
+              <th className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-black">NO</th>
+              <th className="w-[86px] border-r border-slate-200 px-2 py-2 text-center font-black">구분</th>
+              <th className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-black">날짜</th>
+              <th className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-black">ID</th>
+              <th className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-black">기관</th>
+              <th className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-black">부서</th>
+              <th className="w-[130px] border-r border-slate-200 px-2 py-2 text-left font-black">세부구분</th>
+              <th className="min-w-[180px] px-2 py-2 text-left font-black">비고</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.length ? (
+              groups.flatMap((group) => [
+                <tr key={`${group.label}-header`} className="border-y border-slate-300 bg-slate-50">
+                  <td colSpan={8} className="px-3 py-1.5 text-[12px] font-black text-slate-900">
+                    ({group.label}) <span className="ml-1 text-slate-500">{formatNumber(group.rows.length)}건</span>
+                  </td>
+                </tr>,
+                ...group.rows.map((row, index) => {
+                  const isTermination = row?.kind === "termination" || row?.transactionType === "해지"
+                  const tone = isTermination ? "border-rose-100 bg-rose-50 text-rose-700" : "border-blue-100 bg-blue-50 text-blue-700"
+                  return (
+                    <tr key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`} className={`border-b border-slate-100 ${isTermination ? "hover:bg-rose-50/30" : "hover:bg-blue-50/30"}`}>
+                      <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{row.no || index + 1}</td>
+                      <td className="border-r border-slate-100 px-2 py-1.5 text-center">
+                        <span className={`inline-flex h-6 items-center rounded-full border px-2 text-[11px] font-black ${tone}`}>
+                          {isTermination ? "해지" : "신규/대체"}
+                        </span>
+                      </td>
+                      <td className="border-r border-slate-100 px-2 py-1.5 tabular-nums text-slate-600">{row.date}</td>
+                      <td className="border-r border-slate-100 px-2 py-1.5 font-bold text-slate-900">{row.idCode}</td>
+                      <td className="border-r border-slate-100 px-2 py-1.5 font-semibold text-slate-900">{row.companyName}</td>
+                      <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.departmentName}</td>
+                      <td className="border-r border-slate-100 px-2 py-1.5 font-semibold text-slate-700">{isTermination ? row.reason : row.replacementType || "신규"}</td>
+                      <td className="px-2 py-1.5 text-slate-600">{row.note}</td>
+                    </tr>
+                  )
+                }),
+              ])
+            ) : (
+              <tr>
+                <td colSpan={8} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
+                  검색 조건에 맞는 영역별 순증 데이터가 없습니다.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export function TypeAnalysisDashboard({
   data,
   currentYear,
@@ -484,6 +602,7 @@ export function TypeAnalysisDashboard({
   const terminationRecords = Array.isArray(data?.terminationType?.records) ? data.terminationType.records : []
   const terminationIndustrySummary = Array.isArray(data?.terminationType?.industrySummary) ? data.terminationType.industrySummary : []
   const areaRecords = Array.isArray(data?.areaNetGrowth?.records) ? data.areaNetGrowth.records : []
+  const areaSummaryRows = Array.isArray(data?.areaNetGrowth?.summaryRows) ? data.areaNetGrowth.summaryRows : []
   const personalRows = Array.isArray(data?.personalPerformance?.rows) ? data.personalPerformance.rows : []
   const snapshots = Array.isArray(data?.weeklySnapshots) ? data.weeklySnapshots : []
   const latestSnapshot = snapshots[0]
@@ -497,6 +616,7 @@ export function TypeAnalysisDashboard({
   const industryMatrixRows = useMemo(() => newIndustrySummary.filter((row: any) => row?.label), [newIndustrySummary])
   const terminationIndustryRows = useMemo(() => terminationIndustrySummary.filter((row: any) => !isTotalIndustryRow(row)), [terminationIndustrySummary])
   const terminationMatrixRows = useMemo(() => terminationIndustrySummary.filter((row: any) => row?.label), [terminationIndustrySummary])
+  const areaRows = useMemo(() => areaSummaryRows.filter((row: any) => String(row?.no || "").replace(/\s+/g, "") !== "계"), [areaSummaryRows])
 
   const filteredNewRecords = useMemo(
     () => newRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
@@ -538,8 +658,20 @@ export function TypeAnalysisDashboard({
     () => areaRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
     [areaRecords, normalizedQuery],
   )
-
-  const visibleAreaRecords = filteredAreaRecords.slice(0, 300)
+  const groupedAreaRecords = useMemo(() => {
+    const buckets = new Map<string, any[]>()
+    filteredAreaRecords.forEach((row: any) => {
+      const label = String(row?.areaGroup || row?.group || "기타").trim() || "기타"
+      buckets.set(label, [...(buckets.get(label) || []), row])
+    })
+    const orderedLabels = [
+      ...areaRows.map((row: any) => String(row?.area || "").trim()).filter(Boolean),
+      ...Array.from(buckets.keys()).filter((label) => !areaRows.some((row: any) => String(row?.area || "").trim() === label)),
+    ]
+    return orderedLabels
+      .map((label) => ({ label, rows: buckets.get(label) || [] }))
+      .filter((group) => group.rows.length > 0)
+  }, [filteredAreaRecords, areaRows])
 
   const saveTone: "slate" | "blue" | "green" | "amber" = isSaving ? "blue" : isDirty ? "amber" : saveMessage ? "green" : "slate"
   const saveText = isSaving ? "저장 중" : isDirty ? "저장 필요" : saveMessage || "저장 완료"
@@ -699,36 +831,8 @@ export function TypeAnalysisDashboard({
 
       {tab === "area" ? (
         <div className="space-y-4">
-          <DenseTable
-            columns={[
-              { key: "no", label: "구분", className: "w-[64px] text-center" },
-              { key: "area", label: "담당영역", className: "min-w-[220px] font-semibold text-slate-900" },
-              { key: "manager", label: "담당자", className: "min-w-[160px]" },
-              { key: "newCount", label: "신규", className: "text-center tabular-nums" },
-              { key: "terminationCount", label: "해지", className: "text-center tabular-nums" },
-              { key: "netCount", label: "순증", className: "text-center font-black tabular-nums text-slate-950" },
-            ]}
-            rows={data?.areaNetGrowth?.summaryRows || []}
-            emptyText="영역별 순증 요약이 없습니다."
-          />
-          <div className="flex items-center gap-2 text-[13px] font-bold text-slate-500">
-            <Table2 className="h-4 w-4" />
-            상세 {formatNumber(filteredAreaRecords.length)}건 중 {formatNumber(visibleAreaRecords.length)}건 표시
-          </div>
-          <DenseTable
-            columns={[
-              { key: "no", label: "NO", className: "w-[58px] text-center tabular-nums" },
-              { key: "date", label: "날짜", className: "w-[96px] tabular-nums" },
-              { key: "idCode", label: "ID", className: "w-[94px] font-bold text-slate-900" },
-              { key: "companyName", label: "기관", className: "min-w-[170px] font-semibold text-slate-900" },
-              { key: "departmentName", label: "부서", className: "min-w-[160px]" },
-              { key: "recommender", label: "권유자", className: "w-[82px]" },
-              { key: "replacementType", label: "구분", className: "w-[88px]" },
-              { key: "group", label: "영역", className: "min-w-[140px]" },
-            ]}
-            rows={visibleAreaRecords}
-            emptyText="검색 조건에 맞는 영역별 상세 데이터가 없습니다."
-          />
+          <AreaSummaryTable rows={areaSummaryRows} />
+          <GroupedAreaRecordsTable groups={groupedAreaRecords} />
         </div>
       ) : null}
 

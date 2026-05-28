@@ -1589,8 +1589,54 @@ const TYPE_ANALYSIS_OTHER_FINANCE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[5]
 const TYPE_ANALYSIS_PUBLIC_EARLY_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[6]
 const TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[7]
 
+const TYPE_ANALYSIS_AREA_ROWS = [
+  { no: "1", area: "국내은행/지주", manager: "본부장님(K), 정효준 과장" },
+  { no: "2", area: "국내증권", manager: "본부장님(K), 이상철 팀장(ㄱ~ㅅ), 정진영 사원(ㅇ~ㅎ)" },
+  { no: "3", area: "외국계은행, 외국계증권", manager: "신무길 차장" },
+  { no: "4", area: "자산운용", manager: "본부장님(ㅇ~ㅎ), 조홍희 대리(ㄱ~ㅅ)" },
+  { no: "5", area: "보험사", manager: "본부장님(K), 박혜리 사원" },
+  { no: "6", area: "일반기업,대학교", manager: "본부장님(K), 이홍민 부장" },
+  { no: "7", area: "공제회, 중개사, 선물사, 공사, 개인 등 기타금융 전체", manager: "신무길 차장, 박혜리 사원" },
+  { no: "8", area: "연기금, 공기업, 정부", manager: "이홍민 부장, 조홍희 과장 외" },
+] as const
+
+const TYPE_ANALYSIS_AREA_LABELS = TYPE_ANALYSIS_AREA_ROWS.map((row) => row.area)
+const TYPE_ANALYSIS_OTHER_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[6].area
+const TYPE_ANALYSIS_PUBLIC_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[7].area
+const TYPE_ANALYSIS_GENERAL_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[5].area
+
 function firstHangulCharacter(value: unknown) {
   return [...String(value || "").trim()].find((char) => /[가-힣]/.test(char)) || ""
+}
+
+function normalizeTypeAnalysisAreaGroup(value: unknown, companyName?: unknown) {
+  const text = String(value || "").replace(/해지/g, "").trim()
+  const compact = text.replace(/\s+/g, "")
+  if (!compact) return TYPE_ANALYSIS_OTHER_AREA_LABEL
+  if (TYPE_ANALYSIS_AREA_LABELS.includes(text as any)) return text
+  if (compact.includes("국내은행") || compact.includes("지주")) return "국내은행/지주"
+  if (compact.includes("국내증권")) return "국내증권"
+  if (compact.includes("외국계") || compact.includes("외국")) return "외국계은행, 외국계증권"
+  if (compact.includes("자산운용") || compact.includes("운용")) return "자산운용"
+  if (compact.includes("보험")) return "보험사"
+  if (
+    compact.includes("연기금") ||
+    compact.includes("정부") ||
+    compact.includes("공기업") ||
+    compact.includes("공공") ||
+    compact.includes("협회") ||
+    compact.includes("금감") ||
+    compact.includes("대통령실")
+  ) {
+    return TYPE_ANALYSIS_PUBLIC_AREA_LABEL
+  }
+  if (compact.includes("대학") || compact.includes("학교") || compact.includes("일반기업")) {
+    return TYPE_ANALYSIS_GENERAL_AREA_LABEL
+  }
+  if (compact.includes("기업체") || compact.includes("기업")) {
+    return TYPE_ANALYSIS_GENERAL_AREA_LABEL
+  }
+  return TYPE_ANALYSIS_OTHER_AREA_LABEL
 }
 
 function normalizeTypeAnalysisIndustryGroup(industry: unknown, companyName: unknown) {
@@ -1891,11 +1937,104 @@ function buildTypeAnalysisTerminationState(baseTerminationType: any, records: an
   }
 }
 
+function buildTypeAnalysisAreaNetGrowthState(baseAreaNetGrowth: any, newRecords: any[], terminationRecords: any[], asOf: string) {
+  const buckets = new Map<string, { no: string; area: string; manager: string; newCount: number; terminationCount: number; netCount: number }>(
+    TYPE_ANALYSIS_AREA_ROWS.map((row) => [
+      row.area,
+      {
+        no: row.no,
+        area: row.area,
+        manager: row.manager,
+        newCount: 0,
+        terminationCount: 0,
+        netCount: 0,
+      },
+    ]),
+  )
+
+  const normalizeArea = (row: any) =>
+    normalizeTypeAnalysisAreaGroup(row?.areaGroup || row?.group || row?.industry || row?.businessType, row?.companyName)
+
+  ;(Array.isArray(newRecords) ? newRecords : []).forEach((record: any) => {
+    const area = normalizeArea(record)
+    const bucket = buckets.get(area) || buckets.get(TYPE_ANALYSIS_OTHER_AREA_LABEL)
+    if (bucket) bucket.newCount += 1
+  })
+  ;(Array.isArray(terminationRecords) ? terminationRecords : []).forEach((record: any) => {
+    const area = normalizeArea(record)
+    const bucket = buckets.get(area) || buckets.get(TYPE_ANALYSIS_OTHER_AREA_LABEL)
+    if (bucket) bucket.terminationCount += 1
+  })
+
+  const summaryRows = TYPE_ANALYSIS_AREA_ROWS.map((row) => {
+    const bucket = buckets.get(row.area)!
+    return {
+      ...bucket,
+      netCount: bucket.newCount - bucket.terminationCount,
+    }
+  })
+  const totals = summaryRows.reduce(
+    (acc, row) => {
+      acc.newCount += row.newCount
+      acc.terminationCount += row.terminationCount
+      acc.netCount += row.netCount
+      return acc
+    },
+    { no: "계", area: "", manager: "", newCount: 0, terminationCount: 0, netCount: 0 },
+  )
+
+  const areaOrder = new Map(TYPE_ANALYSIS_AREA_ROWS.map((row, index) => [row.area, index]))
+  const areaRecords = [
+    ...(Array.isArray(newRecords) ? newRecords : []).map((record: any) => {
+      const area = normalizeArea(record)
+      const replacementType = normalizeTypeAnalysisReplacementType(record?.replacementType)
+      return {
+        ...record,
+        kind: "new",
+        transactionType: "신규/대체",
+        group: area,
+        areaGroup: area,
+        replacementType,
+        replacementFlags: createTypeAnalysisReplacementFlags(replacementType),
+      }
+    }),
+    ...(Array.isArray(terminationRecords) ? terminationRecords : []).map((record: any) => {
+      const area = normalizeArea(record)
+      const reason = normalizeTypeAnalysisTerminationReason(record?.reason)
+      return {
+        ...record,
+        kind: "termination",
+        transactionType: "해지",
+        group: area,
+        areaGroup: area,
+        reason,
+        reasonFlags: createTypeAnalysisTerminationReasonFlags(reason),
+      }
+    }),
+  ]
+    .sort((a: any, b: any) => {
+      const areaCompare = (areaOrder.get(a.areaGroup) ?? 99) - (areaOrder.get(b.areaGroup) ?? 99)
+      if (areaCompare) return areaCompare
+      const kindCompare = String(a.kind || "").localeCompare(String(b.kind || ""))
+      if (kindCompare) return kindCompare
+      return String(a.date || "").localeCompare(String(b.date || ""))
+    })
+    .map((record: any, index: number) => ({ ...record, no: index + 1 }))
+
+  return {
+    ...baseAreaNetGrowth,
+    asOf,
+    summaryRows: [...summaryRows, totals],
+    records: areaRecords,
+  }
+}
+
 function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any[]) {
   const createdAt = new Date().toISOString()
   const newRows = (Array.isArray(newContracts) ? newContracts : []).map((row: any, index: number) => {
     const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
     const group = normalizeTypeAnalysisIndustryGroup(row?.industry, row?.companyName)
+    const areaGroup = normalizeTypeAnalysisAreaGroup(row?.industry || group, row?.companyName)
     return {
       tempId: `new-${row?.id || row?.idCode || index}`,
       include: true,
@@ -1911,12 +2050,14 @@ function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any
       replacementFlags: createTypeAnalysisReplacementFlags(replacementType),
       note: String(row?.note || "").trim(),
       group,
+      areaGroup,
       sourceId: String(row?.id || ""),
     }
   })
   const terminationRowsForReview = (Array.isArray(terminationRows) ? terminationRows : []).map((row: any, index: number) => {
     const reason = normalizeTypeAnalysisTerminationReason(row?.reason)
     const group = normalizeTypeAnalysisIndustryGroup(row?.industry || row?.group, row?.companyName)
+    const areaGroup = normalizeTypeAnalysisAreaGroup(row?.industry || row?.group || group, row?.companyName)
     return {
       tempId: `termination-${row?.id || row?.customerId || index}`,
       include: true,
@@ -1934,6 +2075,7 @@ function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any
       penalty: toNumber(row?.penalty),
       note: String(row?.note || "").trim(),
       group,
+      areaGroup,
       sourceId: String(row?.id || ""),
     }
   })
@@ -1952,6 +2094,7 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
     .map((row: any, index: number) => {
       const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
       const group = normalizeTypeAnalysisIndustryGroup(row?.group || row?.industry, row?.companyName)
+      const areaGroup = normalizeTypeAnalysisAreaGroup(row?.areaGroup || row?.group || row?.industry, row?.companyName)
       return {
         no: index + 1,
         date: normalizeDate(row?.date || createdAt),
@@ -1965,6 +2108,7 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
         replacementFlags: createTypeAnalysisReplacementFlags(replacementType),
         note: String(row?.note || "").trim(),
         group,
+        areaGroup,
         sourceId: String(row?.sourceId || ""),
       }
     })
@@ -1973,6 +2117,7 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
     .map((row: any, index: number) => {
       const reason = normalizeTypeAnalysisTerminationReason(row?.reason)
       const group = normalizeTypeAnalysisIndustryGroup(row?.group || row?.industry, row?.companyName)
+      const areaGroup = normalizeTypeAnalysisAreaGroup(row?.areaGroup || row?.group || row?.industry, row?.companyName)
       return {
         no: index + 1,
         date: normalizeDate(row?.date || createdAt),
@@ -1988,6 +2133,7 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
         penalty: toNumber(row?.penalty),
         note: String(row?.note || "").trim(),
         group,
+        areaGroup,
         sourceId: String(row?.sourceId || ""),
       }
     })
@@ -6604,6 +6750,12 @@ export function DashboardShell({
         snapshot.terminationRecords,
         `${normalizeDate(getSeoulTodayKey())} 기준`,
       ),
+      areaNetGrowth: buildTypeAnalysisAreaNetGrowthState(
+        baseTypeAnalysis.areaNetGrowth,
+        snapshot.newRecords,
+        snapshot.terminationRecords,
+        `${normalizeDate(getSeoulTodayKey())} 기준`,
+      ),
       weeklySnapshots: [
         snapshot,
         ...(baseTypeAnalysis.weeklySnapshots || []).filter((item: any) => item?.id !== snapshot.id),
@@ -6617,7 +6769,7 @@ export function DashboardShell({
       { updatedViews: ["type-analysis"] },
     )
     setTypeAnalysisImportReview(null)
-    setTypeAnalysisSaveMessage("주간 신규/대체/해지 내역을 불러왔습니다. 저장을 눌러 확정해주세요.")
+    setTypeAnalysisSaveMessage("주간 신규/대체/해지/영역별 순증 내역을 불러왔습니다. 저장을 눌러 확정해주세요.")
   }
 
   async function handleTypeAnalysisSave() {
@@ -8787,7 +8939,7 @@ export function DashboardShell({
                   <div>
                     <div className="text-[17px] font-black text-slate-950">주간 신규/대체/해지 반영 검토</div>
                     <div className="mt-1 text-[12px] font-semibold text-slate-500">
-                      체크된 항목을 확인하고 신규/대체는 업종별 위치를 지정한 뒤 반영합니다.
+                      체크된 항목을 확인하고 업종별 위치와 영역별 순증 위치를 지정한 뒤 반영합니다.
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-[12px] font-black">
@@ -8826,7 +8978,7 @@ export function DashboardShell({
                         </button>
                       </div>
                       <div className="overflow-x-auto">
-                        <table className="min-w-[980px] w-full border-collapse text-[12px]">
+                        <table className="min-w-[1220px] w-full border-collapse text-[12px]">
                           <thead>
                             <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
                               <th className="w-[44px] px-2 py-2 text-center font-black">선택</th>
@@ -8836,6 +8988,7 @@ export function DashboardShell({
                               <th className="px-2 py-2 text-left font-black">부서</th>
                               <th className="w-[92px] px-2 py-2 text-left font-black">구분</th>
                               <th className="w-[280px] px-2 py-2 text-left font-black">업종별 위치</th>
+                              <th className="w-[260px] px-2 py-2 text-left font-black">영역별 위치</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -8868,9 +9021,25 @@ export function DashboardShell({
                                     <select
                                       className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
                                       value={row.group || TYPE_ANALYSIS_OTHER_FINANCE_LABEL}
-                                      onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { group: event.target.value })}
+                                      onChange={(event) =>
+                                        updateTypeAnalysisReviewNewRow(row.tempId, {
+                                          group: event.target.value,
+                                          areaGroup: normalizeTypeAnalysisAreaGroup(event.target.value, row.companyName),
+                                        })
+                                      }
                                     >
                                       {TYPE_ANALYSIS_INDUSTRY_LABELS.map((item) => (
+                                        <option key={item} value={item}>{item}</option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="px-2 py-2">
+                                    <select
+                                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
+                                      value={row.areaGroup || normalizeTypeAnalysisAreaGroup(row.group || row.industry, row.companyName)}
+                                      onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { areaGroup: event.target.value })}
+                                    >
+                                      {TYPE_ANALYSIS_AREA_LABELS.map((item) => (
                                         <option key={item} value={item}>{item}</option>
                                       ))}
                                     </select>
@@ -8879,7 +9048,7 @@ export function DashboardShell({
                               ))
                             ) : (
                               <tr>
-                                <td colSpan={7} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
+                                <td colSpan={8} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
                                   선택된 신규/대체 항목이 없습니다.
                                 </td>
                               </tr>
@@ -8892,7 +9061,7 @@ export function DashboardShell({
                     <section className="overflow-hidden rounded-xl border border-slate-200">
                       <div className="border-b border-slate-200 bg-white px-4 py-3 text-[14px] font-black text-slate-900">해지 반영 항목</div>
                       <div className="max-h-[420px] overflow-auto">
-                        <table className="w-full min-w-[860px] border-collapse text-[12px]">
+                        <table className="w-full min-w-[1180px] border-collapse text-[12px]">
                           <thead>
                             <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
                               <th className="w-[44px] px-2 py-2 text-center font-black">선택</th>
@@ -8902,6 +9071,7 @@ export function DashboardShell({
                               <th className="px-2 py-2 text-left font-black">부서</th>
                               <th className="w-[170px] px-2 py-2 text-left font-black">해지 사유</th>
                               <th className="w-[260px] px-2 py-2 text-left font-black">업종별 위치</th>
+                              <th className="w-[240px] px-2 py-2 text-left font-black">영역별 위치</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -8944,9 +9114,25 @@ export function DashboardShell({
                                     <select
                                       className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
                                       value={row.group || TYPE_ANALYSIS_OTHER_FINANCE_LABEL}
-                                      onChange={(event) => updateTypeAnalysisReviewTerminationRow(row.tempId, { group: event.target.value })}
+                                      onChange={(event) =>
+                                        updateTypeAnalysisReviewTerminationRow(row.tempId, {
+                                          group: event.target.value,
+                                          areaGroup: normalizeTypeAnalysisAreaGroup(event.target.value, row.companyName),
+                                        })
+                                      }
                                     >
                                       {TYPE_ANALYSIS_INDUSTRY_LABELS.map((item) => (
+                                        <option key={item} value={item}>{item}</option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="px-2 py-2">
+                                    <select
+                                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
+                                      value={row.areaGroup || normalizeTypeAnalysisAreaGroup(row.group || row.industry, row.companyName)}
+                                      onChange={(event) => updateTypeAnalysisReviewTerminationRow(row.tempId, { areaGroup: event.target.value })}
+                                    >
+                                      {TYPE_ANALYSIS_AREA_LABELS.map((item) => (
                                         <option key={item} value={item}>{item}</option>
                                       ))}
                                     </select>
@@ -8955,7 +9141,7 @@ export function DashboardShell({
                               ))
                             ) : (
                               <tr>
-                                <td colSpan={7} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
+                                <td colSpan={8} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
                                   선택된 해지 항목이 없습니다.
                                 </td>
                               </tr>
@@ -8979,7 +9165,7 @@ export function DashboardShell({
                     onClick={confirmTypeAnalysisImportWeekly}
                     className="h-10 rounded-xl bg-blue-600 px-4 text-[13px] font-black text-white hover:bg-blue-700"
                   >
-                    선택 항목 업종별 반영
+                    선택 항목 업종/영역 반영
                   </button>
                 </div>
               </div>

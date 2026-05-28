@@ -258,8 +258,53 @@ def parse_termination(ws) -> dict[str, Any]:
     }
 
 
+AREA_NET_GROWTH_LABELS = [
+    "국내은행/지주",
+    "국내증권",
+    "외국계은행, 외국계증권",
+    "자산운용",
+    "보험사",
+    "일반기업,대학교",
+    "공제회, 중개사, 선물사, 공사, 개인 등 기타금융 전체",
+    "연기금, 공기업, 정부",
+]
+
+
+def normalize_area_net_growth_group(value: Any) -> str:
+    text = clean_text(value).replace("해지", "").strip()
+    compact = text.replace(" ", "")
+    if not compact:
+        return AREA_NET_GROWTH_LABELS[6]
+    if "국내은행" in compact or "지주" in compact:
+        return AREA_NET_GROWTH_LABELS[0]
+    if "국내증권" in compact:
+        return AREA_NET_GROWTH_LABELS[1]
+    if "외국계" in compact or "외국" in compact:
+        return AREA_NET_GROWTH_LABELS[2]
+    if "자산운용" in compact or "운용" in compact:
+        return AREA_NET_GROWTH_LABELS[3]
+    if "보험" in compact:
+        return AREA_NET_GROWTH_LABELS[4]
+    if "연기금" in compact or "정부" in compact or "공기업" in compact or "협회" in compact or "금감" in compact:
+        return AREA_NET_GROWTH_LABELS[7]
+    if "대학교" in compact or "대학" in compact or "학교" in compact or "일반기업" in compact or "기업체" in compact:
+        return AREA_NET_GROWTH_LABELS[5]
+    return AREA_NET_GROWTH_LABELS[6]
+
+
 def parse_area_net_growth(ws) -> dict[str, Any]:
     replacement_labels = ["체크", "마켓포인트", "블룸버그", "로이터", "한경머니·기타", "신규"]
+    termination_labels = [
+        "사용자퇴사·이직",
+        "비용절감·예산삭감",
+        "활용도저조·불필요",
+        "콘텐츠불만·타사대체",
+        "조직개편·업무변경",
+        "휴직·장기출장",
+        "회사합병매각",
+        "계약만료",
+        "구독료 미수",
+    ]
     summary_rows: list[dict[str, Any]] = []
     for row in range(4, 13):
         label = clean_text(ws.cell(row, 1).value)
@@ -269,42 +314,79 @@ def parse_area_net_growth(ws) -> dict[str, Any]:
             {
                 "no": clean_text(ws.cell(row, 1).value),
                 "area": clean_text(ws.cell(row, 2).value),
-                "manager": clean_text(ws.cell(row, 3).value),
-                "newCount": clean_number(ws.cell(row, 4).value),
-                "terminationCount": clean_number(ws.cell(row, 5).value),
-                "netCount": clean_number(ws.cell(row, 6).value),
+                "manager": clean_text(ws.cell(row, 5).value),
+                "newCount": clean_number(ws.cell(row, 7).value),
+                "terminationCount": clean_number(ws.cell(row, 9).value),
+                "netCount": clean_number(ws.cell(row, 11).value),
             }
         )
 
     records: list[dict[str, Any]] = []
     group = ""
+    record_kind = "new"
     for row in range(14, ws.max_row + 1):
         first = clean_text(ws.cell(row, 1).value)
         if first.startswith("(") and first.endswith(")"):
-            group = first.strip("()")
+            group_text = first.strip("()")
+            record_kind = "termination" if "해지" in group_text else "new"
+            group = normalize_area_net_growth_group(group_text)
             continue
         id_code = clean_text(ws.cell(row, 3).value)
         company = clean_text(ws.cell(row, 4).value)
-        if not id_code or not company or id_code in {"아이디", "ID"}:
+        if (
+            not id_code
+            or not company
+            or id_code in {"아이디", "ID", "0"}
+            or company == "0"
+            or id_code == "00:00:00"
+            or company == "00:00:00"
+            or first in {"구분", "소 계", "총 계"}
+        ):
             continue
-        replacement_flags = {
-            label: clean_number(ws.cell(row, 7 + index).value)
-            for index, label in enumerate(replacement_labels)
+        base_record = {
+            "no": clean_number(ws.cell(row, 1).value),
+            "date": clean_text(ws.cell(row, 2).value),
+            "idCode": id_code,
+            "companyName": company,
+            "departmentName": clean_text(ws.cell(row, 5).value),
+            "note": clean_text(ws.cell(row, 6).value) if record_kind == "termination" else trailing_note(ws, row, 13),
+            "group": group,
+            "areaGroup": group,
         }
-        records.append(
-            {
-                "no": clean_number(ws.cell(row, 1).value),
-                "date": clean_text(ws.cell(row, 2).value),
-                "idCode": id_code,
-                "companyName": company,
-                "departmentName": clean_text(ws.cell(row, 5).value),
-                "recommender": clean_text(ws.cell(row, 6).value),
-                "replacementType": first_flag(replacement_flags, "신규"),
-                "replacementFlags": replacement_flags,
-                "note": trailing_note(ws, row, 13),
-                "group": group,
+        if record_kind == "termination":
+            reason_flags = {
+                label: clean_number(ws.cell(row, 7 + index).value)
+                for index, label in enumerate(termination_labels)
             }
-        )
+            if not any(isinstance(value, (int, float)) and value for value in reason_flags.values()):
+                continue
+            records.append(
+                {
+                    **base_record,
+                    "kind": "termination",
+                    "transactionType": "해지",
+                    "recommender": "",
+                    "reason": first_flag(reason_flags, "계약만료"),
+                    "reasonFlags": reason_flags,
+                }
+            )
+        else:
+            replacement_flags = {
+                label: clean_number(ws.cell(row, 7 + index).value)
+                for index, label in enumerate(replacement_labels)
+            }
+            if not any(isinstance(value, (int, float)) and value for value in replacement_flags.values()):
+                continue
+            records.append(
+                {
+                    **base_record,
+                    "kind": "new",
+                    "transactionType": "신규/대체",
+                    "recommender": clean_text(ws.cell(row, 6).value),
+                    "replacementType": first_flag(replacement_flags, "신규"),
+                    "replacementFlags": replacement_flags,
+                }
+            )
 
     return {
         "title": clean_text(ws.cell(1, 1).value),
