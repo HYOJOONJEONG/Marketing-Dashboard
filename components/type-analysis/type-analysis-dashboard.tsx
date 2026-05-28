@@ -182,7 +182,12 @@ function reportTable(columns: ReportColumn[], rows: any[], emptyText: string) {
   `
 }
 
-function groupedReportTable(groups: Array<{ label: string; rows: any[] }>, columns: ReportColumn[], emptyText: string) {
+function groupedReportTable(
+  groups: Array<{ label: string; rows: any[] }>,
+  columns: ReportColumn[],
+  emptyText: string,
+  groupLabel = "업종",
+) {
   const rows = groups.flatMap((group) => [
     { __group: true, label: group.label, count: group.rows.length },
     ...group.rows,
@@ -198,7 +203,7 @@ function groupedReportTable(groups: Array<{ label: string; rows: any[] }>, colum
         ${rows
           .map((row: any, index) => {
             if (row.__group) {
-              return `<tr class="group-row"><td colspan="${columns.length}"><div class="group-title"><span>(${escapeReportHtml(row.label)})</span><strong>${formatNumber(row.count)}건</strong></div></td></tr>`
+              return `<tr class="group-row"><td colspan="${columns.length}"><div class="group-title"><span><em>${escapeReportHtml(groupLabel)}</em><b>${escapeReportHtml(row.label)}</b></span><strong>${formatNumber(row.count)}건</strong></div></td></tr>`
             }
             return `
               <tr class="${isReportTotalRow(row) ? "total-row" : ""}">
@@ -333,6 +338,28 @@ function isTotalIndustryRow(row: any) {
   return label === "계" || label.includes("합계")
 }
 
+function GroupHeaderLabel({
+  category = "업종",
+  label,
+  count,
+}: {
+  category?: string
+  label: string
+  count: number
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="inline-flex h-5 shrink-0 items-center rounded-full border border-slate-200 bg-white px-2 text-[10px] font-medium text-slate-500">
+          {category}
+        </span>
+        <span className="truncate text-[12px] font-medium text-slate-900">{label}</span>
+      </div>
+      <span className="shrink-0 text-[11px] font-medium tabular-nums text-slate-500">{formatNumber(count)}건</span>
+    </div>
+  )
+}
+
 function DenseTable({
   columns,
   rows,
@@ -459,9 +486,9 @@ function GroupedNewRecordsTable({ groups }: { groups: Array<{ label: string; row
           <tbody>
             {groups.length ? (
               groups.flatMap((group) => [
-                <tr key={`${group.label}-header`} className="border-y border-slate-300 bg-slate-50">
-                  <td colSpan={8} className="px-3 py-1.5 text-[12px] font-semibold text-slate-900">
-                    ({group.label}) <span className="ml-1 text-slate-500">{formatNumber(group.rows.length)}건</span>
+                <tr key={`${group.label}-header`} className="border-y border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+                  <td colSpan={8} className="px-3 py-1.5">
+                    <GroupHeaderLabel label={group.label} count={group.rows.length} />
                   </td>
                 </tr>,
                 ...group.rows.map((row, index) => (
@@ -572,9 +599,9 @@ function GroupedTerminationRecordsTable({ groups }: { groups: Array<{ label: str
           <tbody>
             {groups.length ? (
               groups.flatMap((group) => [
-                <tr key={`${group.label}-header`} className="border-y border-slate-300 bg-slate-50">
-                  <td colSpan={9} className="px-3 py-1.5 text-[12px] font-semibold text-slate-900">
-                    ({group.label}) <span className="ml-1 text-slate-500">{formatNumber(group.rows.length)}건</span>
+                <tr key={`${group.label}-header`} className="border-y border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+                  <td colSpan={9} className="px-3 py-1.5">
+                    <GroupHeaderLabel label={group.label} count={group.rows.length} />
                   </td>
                 </tr>,
                 ...group.rows.map((row, index) => (
@@ -680,9 +707,9 @@ function GroupedAreaRecordsTable({ groups }: { groups: Array<{ label: string; ro
           <tbody>
             {groups.length ? (
               groups.flatMap((group) => [
-                <tr key={`${group.label}-header`} className="border-y border-slate-300 bg-slate-50">
-                  <td colSpan={8} className="px-3 py-1.5 text-[12px] font-semibold text-slate-900">
-                    ({group.label}) <span className="ml-1 text-slate-500">{formatNumber(group.rows.length)}건</span>
+                <tr key={`${group.label}-header`} className="border-y border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+                  <td colSpan={8} className="px-3 py-1.5">
+                    <GroupHeaderLabel category="영역" label={group.label} count={group.rows.length} />
                   </td>
                 </tr>,
                 ...group.rows.map((row, index) => {
@@ -953,7 +980,9 @@ export function TypeAnalysisDashboard({
             .total-row td { background: #fff7ed !important; color: #0f172a; font-weight: 700; }
             .group-row td { background: #f1f5f9 !important; color: #0f172a; font-weight: 700; border-top: 1.5px solid #94a3b8; border-bottom: 1px solid #cbd5e1; }
             .group-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-            .group-title span { color: #0f172a; }
+            .group-title span { display: inline-flex; align-items: center; gap: 5px; color: #0f172a; }
+            .group-title em { display: inline-flex; align-items: center; height: 14px; border: 1px solid #cbd5e1; border-radius: 999px; background: #fff; padding: 0 5px; color: #64748b; font-size: 7px; font-style: normal; font-weight: 700; letter-spacing: .04em; }
+            .group-title b { color: #0f172a; font-size: 8.8px; font-weight: 700; }
             .group-title strong { color: #475569; font-size: 8.5px; font-weight: 700; white-space: nowrap; }
             .note { margin-top: 7px; color: #64748b; font-size: 9px; }
             @media print {
@@ -1010,21 +1039,21 @@ export function TypeAnalysisDashboard({
               <h2>신규/대체</h2>
               ${reportTable(newIndustryColumns, industryMatrixRows, "업종별 신규/대체 요약이 없습니다.")}
               <h3>상세 목록</h3>
-              ${groupedReportTable(reportNewGroups, newDetailColumns, "신규/대체 상세 데이터가 없습니다.")}
+              ${groupedReportTable(reportNewGroups, newDetailColumns, "신규/대체 상세 데이터가 없습니다.", "업종")}
             </section>
 
             <section class="section page">
               <h2>해지</h2>
               ${reportTable(terminationIndustryColumnsForReport, terminationMatrixRows, "업종별 해지 요약이 없습니다.")}
               <h3>상세 목록</h3>
-              ${groupedReportTable(reportTerminationGroups, terminationDetailColumns, "해지 상세 데이터가 없습니다.")}
+              ${groupedReportTable(reportTerminationGroups, terminationDetailColumns, "해지 상세 데이터가 없습니다.", "업종")}
             </section>
 
             <section class="section page">
               <h2>영역별 순증</h2>
               ${reportTable(areaColumns, areaSummaryRows, "영역별 순증 요약이 없습니다.")}
               <h3>상세 목록</h3>
-              ${groupedReportTable(reportAreaGroups, areaDetailColumns, "영역별 상세 데이터가 없습니다.")}
+              ${groupedReportTable(reportAreaGroups, areaDetailColumns, "영역별 상세 데이터가 없습니다.", "영역")}
             </section>
 
             <section class="section page">
