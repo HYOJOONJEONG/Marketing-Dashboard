@@ -34,7 +34,44 @@ const INDEX_COUNTABLE_SUB_TYPES = new Set([
   "연기금",
   "공공기관",
 ])
-const INDEX_EXCLUDED_USER_IDS = new Set(["E110733"])
+const INDEX_EXCLUDED_USER_IDS = new Set([
+  "E040152",
+  "E040480",
+  "E030406",
+  "E070159",
+  "E070487",
+  "E100350",
+  "E220351",
+  "E220374",
+  "E020879",
+  "E040241",
+  "E120049",
+  "E120192",
+  "E120390",
+  "E120850",
+  "E100356",
+  "E170055",
+  "E120017",
+  "E130475",
+  "E140026",
+  "E160845",
+  "E160846",
+  "E020801",
+  "E090550",
+  "E151211",
+  "E160475",
+  "E160476",
+  "E150459",
+  "E170106",
+  "E070325",
+  "E170616",
+  "E170617",
+  "E160297",
+  "E160361",
+  "E190338",
+  "E220466",
+  "E110733",
+])
 
 const MOCK_PATH = path.join(process.cwd(), "data", "options-dashboard.mock.json")
 const APP_STATE_PATH = path.join(process.cwd(), "data", "app-state.json")
@@ -43,13 +80,6 @@ const GET_CACHE_TTL_MS = 12 * 1000
 const getResponseCache = new Map<string, { expiresAt: number; payload: any }>()
 let industryMapCache: { expiresAt: number; value: Map<string, string> } | null = null
 let bundledSofrRecordsCache: any[] | null = null
-
-const bundledSeedCountMap = new Map(
-  (((seedOptionsMock as any)?.seedCounts || []) as any[]).map((row) => [
-    normalizeCategoryCode(row?.category_code),
-    Number(row?.count_value || 0),
-  ]),
-)
 
 const REQUIRED_SOFR_RECORDS = [
   {
@@ -143,13 +173,6 @@ function getOptionIdKind(record: any): "contract" | "trial" | "free" {
 
 function isContractOptionRecord(record: any) {
   return getOptionIdKind(record) === "contract"
-}
-
-function stabilizeOptionCount(categoryCode: string, value: number) {
-  if (normalizeCategoryCode(categoryCode) !== "INDEX") return value
-  const baseline = bundledSeedCountMap.get("INDEX") || 0
-  if (baseline > 0 && value > baseline + 10) return baseline
-  return value
 }
 
 function normalizeSubType(categoryCode: string, subType: unknown) {
@@ -755,8 +778,7 @@ export async function GET(req: Request) {
       let value = seedMap.get(key) || 0
       if (basis === "latest") value = latestMap.get(key) ?? value
       if (basis === "date") value = dateMap.get(key) ?? value
-      if (key !== "API" && key !== "INDEX") value = computedCounts[key] ?? value
-      value = stabilizeOptionCount(key, value)
+      if (key !== "API") value = computedCounts[key] ?? value
       return { ...cat, count_value: value }
     })
 
@@ -928,7 +950,7 @@ export async function POST(req: Request) {
       const computed = counts[code] || 0
       const previous = previousSeedMap.get(code)
       const value = shouldRefreshCategoryCount && code === affectedCategoryCode ? computed : previous ?? computed
-      return stabilizeOptionCount(code, value)
+      return value
     }
     const seedCounts = categories.map((cat: any) => ({
       category_code: cat.category_code,

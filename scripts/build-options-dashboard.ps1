@@ -214,6 +214,7 @@ if ($null -eq $wsIndex) { throw "INDEX sheet not found." }
   $indexGroupAllow = @("기업","은행","증권","보험","자산운용","공제회","외국계","선물","정부기관","공기관","공사","연기금/공공기관","연기금","공공기관")
     $indexAdded = 0
     for ($r = 4; $r -le $indexRows; $r++) {
+      if ($wsIndex.Rows.Item($r).Hidden) { continue }
       $col1 = (Get-CellText -Sheet $wsIndex -Row $r -Col 1).Trim()
       if ($col1 -and ($indexGroupAllow -contains $col1)) { $indexGroup = $col1 }
 
@@ -293,6 +294,7 @@ if ($null -eq $wsIndex) { throw "INDEX sheet not found." }
   }
   if ($indexAdded -eq 0) {
     for ($r = 4; $r -le $indexRows; $r++) {
+      if ($wsIndex.Rows.Item($r).Hidden) { continue }
       $userId = [string]$wsIndex.Cells.Item($r, 4).Text
       if ([string]::IsNullOrWhiteSpace($userId)) { continue }
       $status = [string]$wsIndex.Cells.Item($r, 5).Text
