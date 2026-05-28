@@ -1730,12 +1730,14 @@ function buildTypeAnalysisNewReplacementState(baseNewReplacement: any, records: 
   }
 }
 
-function buildTypeAnalysisWeeklySnapshot(newContracts: any[], terminationRows: any[]) {
+function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any[]) {
   const createdAt = new Date().toISOString()
-  const newRecords = (Array.isArray(newContracts) ? newContracts : []).map((row: any, index: number) => {
+  const newRows = (Array.isArray(newContracts) ? newContracts : []).map((row: any, index: number) => {
     const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
     const group = normalizeTypeAnalysisIndustryGroup(row?.industry, row?.companyName)
     return {
+      tempId: `new-${row?.id || row?.idCode || index}`,
+      include: true,
       no: index + 1,
       date: normalizeDate(row?.registrationDate || row?.createdAt || createdAt),
       idCode: String(row?.idCode || "").trim(),
@@ -1751,7 +1753,9 @@ function buildTypeAnalysisWeeklySnapshot(newContracts: any[], terminationRows: a
       sourceId: String(row?.id || ""),
     }
   })
-  const terminationRecords = (Array.isArray(terminationRows) ? terminationRows : []).map((row: any, index: number) => ({
+  const terminationRowsForReview = (Array.isArray(terminationRows) ? terminationRows : []).map((row: any, index: number) => ({
+    tempId: `termination-${row?.id || row?.customerId || index}`,
+    include: true,
     no: index + 1,
     date: normalizeDate(row?.receivedDate || row?.terminationDate || createdAt),
     idCode: String(row?.customerId || row?.idCode || "").trim(),
@@ -1765,6 +1769,52 @@ function buildTypeAnalysisWeeklySnapshot(newContracts: any[], terminationRows: a
     sourceId: String(row?.id || ""),
   }))
   return {
+    id: `type-analysis-review-${Date.now()}`,
+    createdAt,
+    newRows,
+    terminationRows: terminationRowsForReview,
+  }
+}
+
+function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
+  const createdAt = new Date().toISOString()
+  const newRecords = (Array.isArray(review?.newRows) ? review.newRows : [])
+    .filter((row: any) => row?.include !== false)
+    .map((row: any, index: number) => {
+      const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
+      const group = normalizeTypeAnalysisIndustryGroup(row?.group || row?.industry, row?.companyName)
+      return {
+        no: index + 1,
+        date: normalizeDate(row?.date || createdAt),
+        idCode: String(row?.idCode || "").trim(),
+        companyName: String(row?.companyName || "").trim(),
+        departmentName: String(row?.departmentName || "").trim(),
+        recommender: String(row?.recommender || "").trim(),
+        industry: String(row?.industry || "").trim(),
+        businessType: String(row?.businessType || "기타").trim() || "기타",
+        replacementType,
+        replacementFlags: createTypeAnalysisReplacementFlags(replacementType),
+        note: String(row?.note || "").trim(),
+        group,
+        sourceId: String(row?.sourceId || ""),
+      }
+    })
+  const terminationRecords = (Array.isArray(review?.terminationRows) ? review.terminationRows : [])
+    .filter((row: any) => row?.include !== false)
+    .map((row: any, index: number) => ({
+      no: index + 1,
+      date: normalizeDate(row?.date || createdAt),
+      idCode: String(row?.idCode || "").trim(),
+      companyName: String(row?.companyName || "").trim(),
+      departmentName: String(row?.departmentName || "").trim(),
+      recommender: String(row?.recommender || "").trim(),
+      reason: String(row?.reason || "").trim(),
+      terminationDate: normalizeDate(row?.terminationDate || ""),
+      penalty: toNumber(row?.penalty),
+      note: String(row?.note || "").trim(),
+      sourceId: String(row?.sourceId || ""),
+    }))
+  return {
     id: `type-analysis-weekly-${Date.now()}`,
     label: `${normalizeDate(getSeoulTodayKey())} 주간 불러오기`,
     createdAt,
@@ -1774,6 +1824,10 @@ function buildTypeAnalysisWeeklySnapshot(newContracts: any[], terminationRows: a
     newRecords,
     terminationRecords,
   }
+}
+
+function buildTypeAnalysisWeeklySnapshot(newContracts: any[], terminationRows: any[]) {
+  return buildTypeAnalysisWeeklySnapshotFromReview(buildTypeAnalysisWeeklyReview(newContracts, terminationRows))
 }
 
 function normalizeAdditionalSalesRows(rows: any[]) {
@@ -2333,6 +2387,7 @@ export function DashboardShell({
     message: string
   }>({ phase: "idle", message: "" })
   const [typeAnalysisSaveMessage, setTypeAnalysisSaveMessage] = useState("")
+  const [typeAnalysisImportReview, setTypeAnalysisImportReview] = useState<any | null>(null)
   const [contractDraft, setContractDraft] = useState<any>({
     registrationDate: getSeoulTodayKey(),
     companyName: "",
@@ -2769,6 +2824,13 @@ export function DashboardShell({
       netCount: includedContracts.length - typeAnalysisWeeklyTerminationRows.length,
     }),
     [includedContracts.length, typeAnalysisWeeklyTerminationRows.length],
+  )
+  const typeAnalysisReviewCounts = useMemo(
+    () => ({
+      newCount: (typeAnalysisImportReview?.newRows || []).filter((row: any) => row?.include !== false).length,
+      terminationCount: (typeAnalysisImportReview?.terminationRows || []).filter((row: any) => row?.include !== false).length,
+    }),
+    [typeAnalysisImportReview],
   )
   useEffect(() => {
     if (!currentUser?.name) return
@@ -6314,11 +6376,41 @@ export function DashboardShell({
   }
 
   function handleTypeAnalysisImportWeekly() {
+    const review = buildTypeAnalysisWeeklyReview(includedContracts, typeAnalysisWeeklyTerminationRows)
+    if (!review.newRows.length && !review.terminationRows.length) {
+      window.alert("주간 반영 리스트에 체크된 신규/대체 계약이나 해지 진행사항에 체크된 해지 건이 없습니다.")
+      return
+    }
+    setTypeAnalysisImportReview(review)
+  }
+
+  function updateTypeAnalysisReviewNewRow(tempId: string, patch: Record<string, any>) {
+    setTypeAnalysisImportReview((prev: any) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        newRows: (prev.newRows || []).map((row: any) => (row.tempId === tempId ? { ...row, ...patch } : row)),
+      }
+    })
+  }
+
+  function updateTypeAnalysisReviewTerminationRow(tempId: string, patch: Record<string, any>) {
+    setTypeAnalysisImportReview((prev: any) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        terminationRows: (prev.terminationRows || []).map((row: any) => (row.tempId === tempId ? { ...row, ...patch } : row)),
+      }
+    })
+  }
+
+  function confirmTypeAnalysisImportWeekly() {
+    if (!typeAnalysisImportReview) return
     const latestData = pendingDataRef.current || data
     const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis)
-    const snapshot = buildTypeAnalysisWeeklySnapshot(includedContracts, typeAnalysisWeeklyTerminationRows)
+    const snapshot = buildTypeAnalysisWeeklySnapshotFromReview(typeAnalysisImportReview)
     if (!snapshot.newCount && !snapshot.terminationCount) {
-      window.alert("주간 반영 리스트에 체크된 신규/대체 계약이나 해지 진행사항에 체크된 해지 건이 없습니다.")
+      window.alert("반영할 항목을 1건 이상 선택해주세요.")
       return
     }
     const nextTypeAnalysis = {
@@ -6342,6 +6434,7 @@ export function DashboardShell({
       },
       { updatedViews: ["type-analysis"] },
     )
+    setTypeAnalysisImportReview(null)
     setTypeAnalysisSaveMessage("주간 신규/대체/해지 내역을 불러왔습니다. 저장을 눌러 확정해주세요.")
   }
 
@@ -8504,6 +8597,176 @@ export function DashboardShell({
               onSave={handleTypeAnalysisSave}
             />
           )}
+
+          {typeAnalysisImportReview ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6">
+              <div className="flex max-h-[88vh] w-full max-w-[1180px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
+                  <div>
+                    <div className="text-[17px] font-black text-slate-950">주간 신규/대체/해지 반영 검토</div>
+                    <div className="mt-1 text-[12px] font-semibold text-slate-500">
+                      체크된 항목을 확인하고 신규/대체는 업종별 위치를 지정한 뒤 반영합니다.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-[12px] font-black">
+                    <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700">신규/대체 {formatNumber(typeAnalysisReviewCounts.newCount)}건</span>
+                    <span className="rounded-full bg-rose-50 px-3 py-1.5 text-rose-700">해지 {formatNumber(typeAnalysisReviewCounts.terminationCount)}건</span>
+                    <button
+                      type="button"
+                      onClick={() => setTypeAnalysisImportReview(null)}
+                      className="ml-1 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
+                      aria-label="닫기"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                  <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+                    <section className="overflow-hidden rounded-xl border border-slate-200">
+                      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+                        <div className="text-[14px] font-black text-slate-900">신규/대체 업종 배치</div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setTypeAnalysisImportReview((prev: any) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    newRows: (prev.newRows || []).map((row: any) => ({ ...row, include: true })),
+                                  }
+                                : prev,
+                            )
+                          }
+                          className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600"
+                        >
+                          전체 선택
+                        </button>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-[980px] w-full border-collapse text-[12px]">
+                          <thead>
+                            <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                              <th className="w-[44px] px-2 py-2 text-center font-black">선택</th>
+                              <th className="w-[86px] px-2 py-2 text-left font-black">날짜</th>
+                              <th className="w-[92px] px-2 py-2 text-left font-black">ID</th>
+                              <th className="px-2 py-2 text-left font-black">회사명</th>
+                              <th className="px-2 py-2 text-left font-black">부서</th>
+                              <th className="w-[92px] px-2 py-2 text-left font-black">구분</th>
+                              <th className="w-[280px] px-2 py-2 text-left font-black">업종별 위치</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(typeAnalysisImportReview.newRows || []).length ? (
+                              typeAnalysisImportReview.newRows.map((row: any) => (
+                                <tr key={row.tempId} className="border-b border-slate-100 last:border-0">
+                                  <td className="px-2 py-2 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={row.include !== false}
+                                      onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { include: event.target.checked })}
+                                    />
+                                  </td>
+                                  <td className="px-2 py-2 tabular-nums text-slate-600">{row.date}</td>
+                                  <td className="px-2 py-2 font-bold text-slate-900">{row.idCode}</td>
+                                  <td className="px-2 py-2 font-semibold text-slate-900">{row.companyName}</td>
+                                  <td className="px-2 py-2 text-slate-600">{row.departmentName}</td>
+                                  <td className="px-2 py-2">
+                                    <select
+                                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
+                                      value={row.replacementType || "신규"}
+                                      onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { replacementType: event.target.value })}
+                                    >
+                                      {["신규", "체크", "마켓포인트", "블룸버그", "로이터", "한경머니·기타"].map((item) => (
+                                        <option key={item} value={item}>{item}</option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="px-2 py-2">
+                                    <select
+                                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
+                                      value={row.group || TYPE_ANALYSIS_OTHER_FINANCE_LABEL}
+                                      onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { group: event.target.value })}
+                                    >
+                                      {TYPE_ANALYSIS_INDUSTRY_LABELS.map((item) => (
+                                        <option key={item} value={item}>{item}</option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={7} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
+                                  선택된 신규/대체 항목이 없습니다.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    <section className="overflow-hidden rounded-xl border border-slate-200">
+                      <div className="border-b border-slate-200 bg-white px-4 py-3 text-[14px] font-black text-slate-900">해지 반영 항목</div>
+                      <div className="max-h-[420px] overflow-y-auto">
+                        <table className="w-full border-collapse text-[12px]">
+                          <thead>
+                            <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                              <th className="w-[44px] px-2 py-2 text-center font-black">선택</th>
+                              <th className="px-2 py-2 text-left font-black">고객사</th>
+                              <th className="w-[92px] px-2 py-2 text-left font-black">ID</th>
+                              <th className="w-[96px] px-2 py-2 text-left font-black">사유</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(typeAnalysisImportReview.terminationRows || []).length ? (
+                              typeAnalysisImportReview.terminationRows.map((row: any) => (
+                                <tr key={row.tempId} className="border-b border-slate-100 last:border-0">
+                                  <td className="px-2 py-2 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={row.include !== false}
+                                      onChange={(event) => updateTypeAnalysisReviewTerminationRow(row.tempId, { include: event.target.checked })}
+                                    />
+                                  </td>
+                                  <td className="px-2 py-2 font-semibold text-slate-900">{row.companyName}</td>
+                                  <td className="px-2 py-2 font-bold text-slate-900">{row.idCode}</td>
+                                  <td className="px-2 py-2 text-slate-600">{row.reason}</td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
+                                  선택된 해지 항목이 없습니다.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+                  <button
+                    type="button"
+                    onClick={() => setTypeAnalysisImportReview(null)}
+                    className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 hover:bg-slate-100"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmTypeAnalysisImportWeekly}
+                    className="h-10 rounded-xl bg-blue-600 px-4 text-[13px] font-black text-white hover:bg-blue-700"
+                  >
+                    선택 항목 업종별 반영
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {view === "manual-input" && (
             <div className={`${cardClass} space-y-4 p-5`} onKeyDownCapture={handleManualInputKeyDownCapture}>
