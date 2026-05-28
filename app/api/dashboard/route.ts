@@ -607,8 +607,9 @@ export async function PUT(request: Request) {
 
     const activityPageKey = inferDashboardPageKey(changedKeys)
     const activityDetail = describeDashboardPut(changedKeys, existingDataForActivity || existingDataForMerge || EMPTY_DASHBOARD, incomingBody)
+    const correctedNextBody = applyTerminationIdCorrections(nextBody).data
 
-    await writeDashboardState(nextBody, {
+    await writeDashboardState(correctedNextBody, {
       menuLabel: "Dashboard",
       changeLabel: "Save dashboard state",
     }, isPartial && changedKeys.length ? changedKeys : undefined)
