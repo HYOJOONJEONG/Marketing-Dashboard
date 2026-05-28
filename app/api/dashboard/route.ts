@@ -381,6 +381,57 @@ function mergeContractsForScope(existingContracts: any[], incomingContracts: any
   return [...incomingContracts, ...preserved]
 }
 
+function applyTerminationIdCorrections(data: any) {
+  if (!data || typeof data !== "object" || !Array.isArray(data?.termination?.sheets)) {
+    return { data, changed: false }
+  }
+  let changed = false
+  const sheets = data.termination.sheets.map((sheet: any) => {
+    let sheetChanged = false
+    const nextSheet = { ...sheet }
+    ;(["items", "holdItems", "confirmedItems", "releasedHoldItems"] as const).forEach((key) => {
+      const rows = Array.isArray(sheet?.[key]) ? sheet[key] : null
+      if (!rows) return
+      const nextRows = rows.map((row: any) => {
+        const companyName = safeText(row?.companyName)
+        const customerId = normalizeContractIdCode(row?.customerId)
+        const isBusanUniversity = companyName.includes("부산대학교산학협력단")
+        if (!isBusanUniversity || customerId !== "E151214") return row
+        changed = true
+        sheetChanged = true
+        return { ...row, customerId: "E150214" }
+      })
+      if (sheetChanged) nextSheet[key] = nextRows
+    })
+    return sheetChanged ? nextSheet : sheet
+  })
+  if (!changed) return { data, changed: false }
+  return {
+    data: {
+      ...data,
+      termination: {
+        ...data.termination,
+        sheets,
+      },
+    },
+    changed: true,
+  }
+}
+
+async function ensureDashboardDataCorrections(data: any) {
+  const corrected = applyTerminationIdCorrections(data)
+  if (!corrected.changed) return corrected.data
+  await writeDashboardState(
+    corrected.data,
+    {
+      menuLabel: "해지 진행사항",
+      changeLabel: "해지확정 부산대 고객번호 E150214 수정",
+    },
+    ["termination"],
+  )
+  return corrected.data
+}
+
 function buildDashboardResponse(data: any, session: any, permissions: any) {
   return {
     ...data,
@@ -402,6 +453,10 @@ export async function GET(request: Request) {
     const slice = url.searchParams.get("slice") || ""
     let data = await readDashboardState<any>(DATA_PATH)
     data = await ensureManualWeeklyRestore(data)
+    data = await ensureDashboardDataCorrections(data).catch((error) => {
+      console.error("Failed to apply dashboard data corrections.", error)
+      return applyTerminationIdCorrections(data).data
+    })
     if (data) {
       if (slice === "dailyReport") {
         return NextResponse.json({

@@ -9,6 +9,7 @@ export type OptionCategory = {
 
 export type OptionRecord = {
   record_id?: string
+  id_kind?: "contract" | "trial" | "free" | string
   category_code: string
   category_name_ko: string
   sub_type: string

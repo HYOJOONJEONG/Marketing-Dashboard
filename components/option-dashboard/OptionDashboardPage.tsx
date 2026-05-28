@@ -4,12 +4,27 @@ import { SummaryCards } from "./SummaryCards"
 import { useOptionDashboardData } from "../../hooks/use-option-dashboard-data"
 
 const cardClass = "rounded-[20px] border border-slate-200 bg-white shadow-sm"
+const idKindTabs = [
+  { value: "contract", label: "계약 ID", description: "유료 계약 기준" },
+  { value: "trial", label: "시험 ID", description: "테스트 계정 별도 관리" },
+  { value: "free", label: "무료 ID", description: "무상 제공 계정 별도 관리" },
+] as const
+
+type OptionIdKind = (typeof idKindTabs)[number]["value"]
+
+function normalizeOptionIdKind(value: unknown): OptionIdKind {
+  const text = String(value ?? "").trim().toLowerCase()
+  if (text === "trial" || text === "test" || text === "시험" || text === "테스트") return "trial"
+  if (text === "free" || text === "무료" || text === "무상") return "free"
+  return "contract"
+}
 
 export function OptionDashboardPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [basis, setBasis] = useState<"seed" | "latest" | "date">("seed")
   const [date, setDate] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("BOND")
+  const [idKind, setIdKind] = useState<OptionIdKind>("contract")
   const [searchInput, setSearchInput] = useState("")
   const [search, setSearch] = useState("")
 
@@ -45,11 +60,27 @@ export function OptionDashboardPage() {
     return data.records
       .filter((row) => row.category_code !== "API")
       .filter((row) => categoryFilter === "all" || row.category_code === categoryFilter)
+      .filter((row) => normalizeOptionIdKind(row.id_kind) === idKind)
       .filter((row) => {
         if (!searchTerm) return true
         return `${row.company_name || ""} ${row.user_id || ""} ${row.department || ""}`.toLowerCase().includes(searchTerm)
       })
-  }, [categoryFilter, data?.records, search])
+  }, [categoryFilter, data?.records, idKind, search])
+
+  const idKindCounts = useMemo(() => {
+    const counts: Record<OptionIdKind, number> = { contract: 0, trial: 0, free: 0 }
+    ;(data?.records || [])
+      .filter((row) => row.category_code !== "API")
+      .filter((row) => categoryFilter === "all" || row.category_code === categoryFilter)
+      .forEach((row) => {
+        counts[normalizeOptionIdKind(row.id_kind)] += 1
+      })
+    return counts
+  }, [categoryFilter, data?.records])
+
+  const activeCategoryLabel = useMemo(() => {
+    return cards.find((card) => card.category_code === categoryFilter)?.category_name_ko || "옵션"
+  }, [cards, categoryFilter])
 
   useEffect(() => {
     if (basis === "date" && !date && historyDates.length) {
@@ -120,11 +151,47 @@ export function OptionDashboardPage() {
         {detailLoading && !error ? (
           <div className="mb-2 text-[11.5px] font-semibold text-blue-600">목록 갱신 중...</div>
         ) : null}
+        <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-2">
+            <div>
+              <div className="text-[13px] font-bold text-slate-900">{activeCategoryLabel} ID 구분 관리</div>
+              <div className="text-[11px] font-medium text-slate-500">계약, 시험, 무료 ID를 같은 옵션 안에서 따로 조회하고 등록합니다.</div>
+            </div>
+          </div>
+          <div className="grid gap-1.5 md:grid-cols-3">
+            {idKindTabs.map((tab) => {
+              const isActive = idKind === tab.value
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setIdKind(tab.value)}
+                  className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border px-3 text-left transition ${
+                    isActive
+                      ? "border-blue-300 bg-white text-slate-950 shadow-sm ring-1 ring-blue-100"
+                      : "border-transparent bg-transparent text-slate-700 hover:border-slate-200 hover:bg-white"
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <span className={`block text-[13px] font-bold ${isActive ? "text-blue-700" : "text-slate-700"}`}>
+                      {tab.label}
+                    </span>
+                    <span className="block truncate text-[11px] font-medium text-slate-500">{tab.description}</span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[12px] font-black tabular-nums text-slate-800">
+                    {idKindCounts[tab.value]}건
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
         <OptionDetailTable
           records={records}
           categories={categories}
           search={searchInput}
           selectedCategoryCode={categoryFilter}
+          idKind={idKind}
           onSearchChange={setSearchInput}
           onSaveRecord={handleSaveRecord}
           onDeleteRecord={handleDeleteRecord}

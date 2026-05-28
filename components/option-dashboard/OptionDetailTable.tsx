@@ -6,6 +6,7 @@ type Props = {
   categories: OptionCategory[]
   search: string
   selectedCategoryCode: string
+  idKind: "contract" | "trial" | "free"
   onSearchChange: (value: string) => void
   onSaveRecord: (record: OptionRecord) => Promise<void>
   onDeleteRecord: (recordId: string) => Promise<void>
@@ -23,6 +24,7 @@ export function OptionDetailTable({
   categories,
   search,
   selectedCategoryCode,
+  idKind,
   onSearchChange,
   onSaveRecord,
   onDeleteRecord,
@@ -44,6 +46,7 @@ export function OptionDetailTable({
   const [createStatus, setCreateStatus] = React.useState<"idle" | "saving" | "success">("idle")
   const [savingEditId, setSavingEditId] = React.useState<string | null>(null)
   const [deletingId, setDeletingId] = React.useState<string | null>(null)
+  const idKindLabel = idKind === "trial" ? "시험 ID" : idKind === "free" ? "무료 ID" : "계약 ID"
 
   const industryOptions = React.useMemo(
     () => [
@@ -107,6 +110,7 @@ export function OptionDetailTable({
       const fallback = categoryOptions[0]
       setNewRecord({
         record_id: `record-${Date.now()}`,
+        id_kind: idKind,
         category_code: fallback?.value || "",
         category_name_ko: fallback?.label || "",
         sub_type: "",
@@ -134,17 +138,19 @@ export function OptionDetailTable({
         is_active: 1,
       })
     }
-  }, [categoryOptions, newRecord])
+  }, [categoryOptions, idKind, newRecord])
 
   React.useEffect(() => {
     if (!newRecord) return
     if (selectedCategoryCode && selectedCategoryCode !== "all") {
       const found = categoryOptions.find((option) => option.value === selectedCategoryCode)
-      if (found && newRecord.category_code !== found.value) {
-        setNewRecord({ ...newRecord, category_code: found.value, category_name_ko: found.label })
+      if (found && (newRecord.category_code !== found.value || newRecord.id_kind !== idKind)) {
+        setNewRecord({ ...newRecord, id_kind: idKind, category_code: found.value, category_name_ko: found.label })
+      } else if (newRecord.id_kind !== idKind) {
+        setNewRecord({ ...newRecord, id_kind: idKind })
       }
     }
-  }, [selectedCategoryCode, categoryOptions, newRecord])
+  }, [selectedCategoryCode, categoryOptions, idKind, newRecord])
 
   const columns: Array<ColumnDef> = isBondView
     ? [
@@ -346,6 +352,7 @@ export function OptionDetailTable({
     setEditingId(recordId)
     setDraft({
       record_id: recordId,
+      id_kind: idKind,
       category_code: categoryOptions[0]?.value || "BOND",
       category_name_ko: categoryOptions[0]?.label || "해외채권",
       sub_type: "",
@@ -381,6 +388,7 @@ export function OptionDetailTable({
       const found = categoryOptions.find((option) => option.value === value)
       next.category_name_ko = found?.label || next.category_name_ko
     }
+    next.id_kind = next.id_kind || idKind
     setDraft(next)
   }
 
@@ -392,6 +400,7 @@ export function OptionDetailTable({
       const found = categoryOptions.find((option) => option.value === value)
       next.category_name_ko = found?.label || next.category_name_ko
     }
+    next.id_kind = idKind
     setNewRecord(next)
   }
 
@@ -405,10 +414,11 @@ export function OptionDetailTable({
     }
     setCreateStatus("saving")
     try {
-      await onSaveRecord(newRecord)
+      await onSaveRecord({ ...newRecord, id_kind: idKind })
       setNewRecord({
         ...newRecord,
         record_id: `record-${Date.now()}`,
+        id_kind: idKind,
         sub_type: "",
         company_name: "",
         user_id: "",
@@ -436,7 +446,7 @@ export function OptionDetailTable({
     const targetId = draft.record_id || ""
     setSavingEditId(targetId || "editing")
     try {
-      await onSaveRecord(draft)
+      await onSaveRecord({ ...draft, id_kind: draft.id_kind || idKind })
       setEditingId(null)
       setDraft(null)
     } catch (error) {
@@ -536,7 +546,7 @@ export function OptionDetailTable({
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="text-[15px] font-bold text-slate-900">상세 목록</div>
+          <div className="text-[15px] font-bold text-slate-900">{idKindLabel} 목록</div>
           <span className="text-[12px] text-slate-500">{records.length}건</span>
           {duplicateTrackedUserIds.size > 0 && (
             <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
@@ -563,7 +573,7 @@ export function OptionDetailTable({
         </div>
       </div>
       <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-        <div className="mb-3 text-[13px] font-semibold text-slate-700">옵션 정보 입력</div>
+        <div className="mb-3 text-[13px] font-semibold text-slate-700">{idKindLabel} 입력</div>
         {isBondView ? (
           <div className="grid grid-cols-12 gap-2.5">
             <div className="col-span-2">
@@ -732,7 +742,7 @@ export function OptionDetailTable({
             {records.length === 0 ? (
               <tr>
                 <td colSpan={columns.length + 1} className="px-4 py-6 text-center text-[14px] text-slate-500">
-                  표시할 데이터가 없습니다.
+                  표시할 {idKindLabel} 데이터가 없습니다.
                 </td>
               </tr>
             ) : (
