@@ -1574,10 +1574,167 @@ function normalizeTypeAnalysisReplacementType(value: unknown) {
   return "신규"
 }
 
+const TYPE_ANALYSIS_INDUSTRY_LABELS = [
+  "국내은행",
+  "국내증권",
+  "외국계은행,증권,연기금",
+  "자산운용",
+  "보험사",
+  "선물사,투자자문,카드,공제회,캐피탈,저축은행,금고,연구소(원),거래소,증권금융,예탁결재원,금투협,개인",
+  "정부기관,금감원,금감위,대통령실,기업체(가,나,다,라,마,바)",
+  "대학교,기업체(사,아,자,차,카,타,파,하)",
+] as const
+
+const TYPE_ANALYSIS_OTHER_FINANCE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[5]
+const TYPE_ANALYSIS_PUBLIC_EARLY_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[6]
+const TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[7]
+
+function firstHangulCharacter(value: unknown) {
+  return [...String(value || "").trim()].find((char) => /[가-힣]/.test(char)) || ""
+}
+
+function normalizeTypeAnalysisIndustryGroup(industry: unknown, companyName: unknown) {
+  const text = String(industry || "").trim()
+  if (!text) return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
+  if (TYPE_ANALYSIS_INDUSTRY_LABELS.includes(text as any)) return text
+  if (text.includes("국내은행")) return "국내은행"
+  if (text.includes("국내증권")) return "국내증권"
+  if (text.includes("외국") || text.includes("연기금")) return "외국계은행,증권,연기금"
+  if (text.includes("자산") || text.includes("운용")) return "자산운용"
+  if (text.includes("보험")) return "보험사"
+  if (text.includes("공사") || text.includes("정부") || text.includes("공공")) return TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
+  if (text.includes("대학") || text.includes("학교")) return TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL
+  if (text.includes("일반기업") || text.includes("기업")) {
+    const firstHangul = firstHangulCharacter(companyName)
+    return firstHangul && firstHangul >= "가" && firstHangul <= "바"
+      ? TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
+      : TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL
+  }
+  return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
+}
+
+function createTypeAnalysisReplacementFlags(replacementType: string) {
+  return {
+    "체크": replacementType === "체크" ? 1 : 0,
+    "마켓포인트": replacementType === "마켓포인트" ? 1 : 0,
+    "블룸버그": replacementType === "블룸버그" ? 1 : 0,
+    "로이터": replacementType === "로이터" ? 1 : 0,
+    "한경머니·기타": replacementType === "한경머니·기타" ? 1 : 0,
+    "신규": replacementType === "신규" ? 1 : 0,
+  }
+}
+
+function buildTypeAnalysisReplacementSummary(records: any[]) {
+  const counts = {
+    check: 0,
+    marketPoint: 0,
+    bloomberg: 0,
+    reuters: 0,
+    hankyungEtc: 0,
+    new: 0,
+  }
+  ;(Array.isArray(records) ? records : []).forEach((record: any) => {
+    const type = normalizeTypeAnalysisReplacementType(record?.replacementType)
+    if (type === "체크") counts.check += 1
+    else if (type === "마켓포인트") counts.marketPoint += 1
+    else if (type === "블룸버그") counts.bloomberg += 1
+    else if (type === "로이터") counts.reuters += 1
+    else if (type === "한경머니·기타") counts.hankyungEtc += 1
+    else counts.new += 1
+  })
+  const total = counts.check + counts.marketPoint + counts.bloomberg + counts.reuters + counts.hankyungEtc + counts.new
+  return [
+    { label: "체크( C )", value: counts.check },
+    { label: "마켓포인트( M )", value: counts.marketPoint },
+    { label: "블룸버그( B )", value: counts.bloomberg },
+    { label: "로이터( R )", value: counts.reuters },
+    { label: "기타( H )", value: counts.hankyungEtc },
+    { label: "신규(N)", value: counts.new },
+    { label: "합 계", value: total },
+  ]
+}
+
+function buildTypeAnalysisWorkSummary(records: any[]) {
+  const counts = { forex: 0, stock: 0, bond: 0, other: 0 }
+  ;(Array.isArray(records) ? records : []).forEach((record: any) => {
+    const text = String(record?.businessType || "").trim()
+    if (text.includes("외환")) counts.forex += 1
+    else if (text.includes("주식") || text.includes("선물") || text.includes("옵션")) counts.stock += 1
+    else if (text.includes("채권")) counts.bond += 1
+    else counts.other += 1
+  })
+  const total = counts.forex + counts.stock + counts.bond + counts.other
+  return [
+    { label: "외환", value: counts.forex },
+    { label: "주식,선물,옵션", value: counts.stock },
+    { label: "채권", value: counts.bond },
+    { label: "기타", value: counts.other },
+    { label: "합 계", value: total },
+  ]
+}
+
+function buildTypeAnalysisIndustrySummary(records: any[]) {
+  const buckets = new Map(
+    TYPE_ANALYSIS_INDUSTRY_LABELS.map((label) => [
+      label,
+      {
+        label,
+        check: 0,
+        marketPoint: 0,
+        bloomberg: 0,
+        reuters: 0,
+        hankyungEtc: 0,
+        new: 0,
+        total: 0,
+      },
+    ]),
+  )
+  ;(Array.isArray(records) ? records : []).forEach((record: any) => {
+    const group = normalizeTypeAnalysisIndustryGroup(record?.group || record?.industry || record?.businessType, record?.companyName)
+    const bucket = buckets.get(group as any) || buckets.get(TYPE_ANALYSIS_OTHER_FINANCE_LABEL)
+    if (!bucket) return
+    const type = normalizeTypeAnalysisReplacementType(record?.replacementType)
+    if (type === "체크") bucket.check += 1
+    else if (type === "마켓포인트") bucket.marketPoint += 1
+    else if (type === "블룸버그") bucket.bloomberg += 1
+    else if (type === "로이터") bucket.reuters += 1
+    else if (type === "한경머니·기타") bucket.hankyungEtc += 1
+    else bucket.new += 1
+    bucket.total += 1
+  })
+  const rows = TYPE_ANALYSIS_INDUSTRY_LABELS.map((label) => buckets.get(label)!).filter((row) => row.total > 0)
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.check += row.check
+      acc.marketPoint += row.marketPoint
+      acc.bloomberg += row.bloomberg
+      acc.reuters += row.reuters
+      acc.hankyungEtc += row.hankyungEtc
+      acc.new += row.new
+      acc.total += row.total
+      return acc
+    },
+    { label: "계", check: 0, marketPoint: 0, bloomberg: 0, reuters: 0, hankyungEtc: 0, new: 0, total: 0 },
+  )
+  return [...rows, totals]
+}
+
+function buildTypeAnalysisNewReplacementState(baseNewReplacement: any, records: any[], asOf: string) {
+  return {
+    ...baseNewReplacement,
+    asOf,
+    workSummary: buildTypeAnalysisWorkSummary(records),
+    replacementSummary: buildTypeAnalysisReplacementSummary(records),
+    industrySummary: buildTypeAnalysisIndustrySummary(records),
+    records,
+  }
+}
+
 function buildTypeAnalysisWeeklySnapshot(newContracts: any[], terminationRows: any[]) {
   const createdAt = new Date().toISOString()
   const newRecords = (Array.isArray(newContracts) ? newContracts : []).map((row: any, index: number) => {
     const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
+    const group = normalizeTypeAnalysisIndustryGroup(row?.industry, row?.companyName)
     return {
       no: index + 1,
       date: normalizeDate(row?.registrationDate || row?.createdAt || createdAt),
@@ -1585,9 +1742,12 @@ function buildTypeAnalysisWeeklySnapshot(newContracts: any[], terminationRows: a
       companyName: String(row?.companyName || "").trim(),
       departmentName: String(row?.departmentName || "").trim(),
       recommender: String(row?.recommender || "").trim(),
-      businessType: String(row?.industry || "").trim(),
+      industry: String(row?.industry || "").trim(),
+      businessType: "기타",
       replacementType,
+      replacementFlags: createTypeAnalysisReplacementFlags(replacementType),
       note: String(row?.note || "").trim(),
+      group,
       sourceId: String(row?.id || ""),
     }
   })
@@ -6158,13 +6318,18 @@ export function DashboardShell({
     const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis)
     const snapshot = buildTypeAnalysisWeeklySnapshot(includedContracts, typeAnalysisWeeklyTerminationRows)
     if (!snapshot.newCount && !snapshot.terminationCount) {
-      window.alert("주간 반영 리스트에 체크된 신규계약이나 해지 진행사항에 체크된 해지 건이 없습니다.")
+      window.alert("주간 반영 리스트에 체크된 신규/대체 계약이나 해지 진행사항에 체크된 해지 건이 없습니다.")
       return
     }
     const nextTypeAnalysis = {
       ...baseTypeAnalysis,
       currentSnapshotId: snapshot.id,
       updatedAt: snapshot.createdAt,
+      newReplacement: buildTypeAnalysisNewReplacementState(
+        baseTypeAnalysis.newReplacement,
+        snapshot.newRecords,
+        `${normalizeDate(getSeoulTodayKey())} 기준`,
+      ),
       weeklySnapshots: [
         snapshot,
         ...(baseTypeAnalysis.weeklySnapshots || []).filter((item: any) => item?.id !== snapshot.id),
@@ -6177,7 +6342,7 @@ export function DashboardShell({
       },
       { updatedViews: ["type-analysis"] },
     )
-    setTypeAnalysisSaveMessage("주간 신규/해지 내역을 불러왔습니다. 저장을 눌러 확정해주세요.")
+    setTypeAnalysisSaveMessage("주간 신규/대체/해지 내역을 불러왔습니다. 저장을 눌러 확정해주세요.")
   }
 
   async function handleTypeAnalysisSave() {

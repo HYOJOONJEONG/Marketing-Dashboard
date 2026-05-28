@@ -58,6 +58,7 @@ function recordMatches(row: any, query: string) {
     row?.companyName,
     row?.departmentName,
     row?.recommender,
+    row?.industry,
     row?.businessType,
     row?.replacementType,
     row?.reason,
@@ -316,7 +317,7 @@ export function TypeAnalysisDashboard({
                 className="inline-flex h-10 items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 text-[13px] font-black text-blue-700 transition hover:bg-blue-100"
               >
                 <RefreshCw className="h-4 w-4" />
-                주간 신규/해지 불러오기
+                주간 신규/대체/해지 불러오기
               </button>
               <button
                 type="button"
@@ -408,7 +409,7 @@ export function TypeAnalysisDashboard({
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="rounded-xl border border-slate-200 px-3 py-2 text-center">
-                      <div className="text-[11px] text-slate-400">신규</div>
+                      <div className="text-[11px] text-slate-400">신규/대체</div>
                       <div className="text-[17px] font-black text-slate-950">{formatNumber(latestSnapshot.newCount)}</div>
                     </div>
                     <div className="rounded-xl border border-slate-200 px-3 py-2 text-center">
@@ -472,8 +473,8 @@ export function TypeAnalysisDashboard({
               { key: "companyName", label: "회사명", className: "min-w-[160px] font-semibold text-slate-900" },
               { key: "departmentName", label: "부서", className: "min-w-[150px]" },
               { key: "recommender", label: "권유자", className: "w-[82px]" },
-              { key: "businessType", label: "업무성격", className: "w-[84px]" },
-              { key: "replacementType", label: "대체", className: "w-[88px]" },
+              { key: "group", label: "업종", className: "min-w-[150px]" },
+              { key: "replacementType", label: "구분", className: "w-[88px]" },
               { key: "note", label: "비고", className: "min-w-[180px]" },
             ]}
             rows={filteredNewRecords}
