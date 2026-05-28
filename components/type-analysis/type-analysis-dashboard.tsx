@@ -36,6 +36,20 @@ const tabItems: Array<{ key: TabKey; label: string }> = [
   { key: "personal", label: "개인별 실적" },
 ]
 
+const ADMIN_TITLE_BY_NAME: Record<string, string> = {
+  이상철: "본부장",
+  신무길: "팀장",
+  이홍민: "부장",
+  정효준: "과장",
+  조홍희: "대리",
+  정진영: "사원",
+  박혜리: "사원",
+  윤옥수: "팀장",
+  진효정: "과장",
+  김다빈: "사원",
+  김대일: "사원",
+}
+
 function toNumber(value: unknown) {
   const number = Number(String(value ?? "").replace(/,/g, ""))
   return Number.isFinite(number) ? number : 0
@@ -56,6 +70,13 @@ function findSummaryValue(rows: any[], matcher: (label: string) => boolean) {
 
 function normalizeSearch(value: unknown) {
   return String(value ?? "").replace(/\s+/g, "").toLowerCase()
+}
+
+function normalizeManagerLabel(value: unknown) {
+  const text = String(value ?? "").trim()
+  const matchedName = Object.keys(ADMIN_TITLE_BY_NAME).find((name) => text === name || text.startsWith(`${name} `))
+  if (!matchedName) return text
+  return `${matchedName} ${ADMIN_TITLE_BY_NAME[matchedName]}`
 }
 
 function recordMatches(row: any, query: string) {
@@ -260,7 +281,7 @@ function MiniSummaryTable({
         {rows.map((row) => (
           <div key={row.label} className="min-w-0 px-3 py-3">
             <div className="truncate text-[12px] font-semibold text-slate-500">{row.label}</div>
-            <div className="mt-1 text-[18px] font-semibold tabular-nums text-slate-950">{formatNumber(row.value)}</div>
+            <div className="mt-1 text-right text-[18px] font-semibold tabular-nums text-slate-950">{formatNumber(row.value)}</div>
           </div>
         ))}
       </div>
@@ -362,14 +383,14 @@ function DenseTable({
 }
 
 const newReplacementIndustryColumns = [
-  { key: "label", label: "업종", className: "min-w-[300px] text-left font-bold text-slate-900" },
-  { key: "check", label: "체크", className: "text-center tabular-nums" },
-  { key: "marketPoint", label: "마켓", className: "text-center tabular-nums" },
-  { key: "bloomberg", label: "블룸버그", className: "text-center tabular-nums" },
-  { key: "reuters", label: "로이터", className: "text-center tabular-nums" },
-  { key: "hankyungEtc", label: "기타", className: "text-center tabular-nums" },
-  { key: "new", label: "신규", className: "text-center font-semibold tabular-nums text-blue-700" },
-  { key: "total", label: "합계", className: "text-center font-semibold tabular-nums text-slate-950" },
+  { key: "label", label: "업종", className: "min-w-[300px] text-left text-slate-700" },
+  { key: "check", label: "체크", className: "text-right tabular-nums" },
+  { key: "marketPoint", label: "마켓", className: "text-right tabular-nums" },
+  { key: "bloomberg", label: "블룸버그", className: "text-right tabular-nums" },
+  { key: "reuters", label: "로이터", className: "text-right tabular-nums" },
+  { key: "hankyungEtc", label: "기타", className: "text-right tabular-nums" },
+  { key: "new", label: "신규", className: "text-right font-medium tabular-nums text-blue-700" },
+  { key: "total", label: "합계", className: "text-right font-medium tabular-nums text-slate-950" },
 ]
 
 function IndustryMatrixTable({ rows }: { rows: any[] }) {
@@ -447,11 +468,11 @@ function GroupedNewRecordsTable({ groups }: { groups: Array<{ label: string; row
                   <tr key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`} className="border-b border-slate-100 hover:bg-blue-50/30">
                     <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{row.no || index + 1}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 tabular-nums text-slate-600">{row.date}</td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-bold text-slate-900">{row.idCode}</td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-semibold text-slate-900">{row.companyName}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">{row.idCode}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">{row.companyName}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.departmentName}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.recommender}</td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-semibold text-slate-700">{row.replacementType || "신규"}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-700">{row.replacementType || "신규"}</td>
                     <td className="px-2 py-1.5 text-slate-600">{row.note}</td>
                   </tr>
                 )),
@@ -471,17 +492,17 @@ function GroupedNewRecordsTable({ groups }: { groups: Array<{ label: string; row
 }
 
 const terminationIndustryColumns = [
-  { key: "label", label: "업종", className: "min-w-[300px] text-left font-bold text-slate-900" },
-  { key: "userMove", label: "퇴사/이직", className: "text-center tabular-nums" },
-  { key: "costCut", label: "비용절감", className: "text-center tabular-nums" },
-  { key: "lowUsage", label: "활용저조", className: "text-center tabular-nums" },
-  { key: "contentOrCompetitor", label: "타사대체", className: "text-center tabular-nums" },
-  { key: "contractEnd", label: "계약만료", className: "text-center tabular-nums" },
-  { key: "reorg", label: "조직개편", className: "text-center tabular-nums" },
-  { key: "leave", label: "휴직/출장", className: "text-center tabular-nums" },
-  { key: "merger", label: "합병매각", className: "text-center tabular-nums" },
-  { key: "unpaid", label: "미수", className: "text-center tabular-nums" },
-  { key: "total", label: "합계", className: "text-center font-semibold tabular-nums text-rose-700" },
+  { key: "label", label: "업종", className: "min-w-[300px] text-left text-slate-700" },
+  { key: "userMove", label: "퇴사/이직", className: "text-right tabular-nums" },
+  { key: "costCut", label: "비용절감", className: "text-right tabular-nums" },
+  { key: "lowUsage", label: "활용저조", className: "text-right tabular-nums" },
+  { key: "contentOrCompetitor", label: "타사대체", className: "text-right tabular-nums" },
+  { key: "contractEnd", label: "계약만료", className: "text-right tabular-nums" },
+  { key: "reorg", label: "조직개편", className: "text-right tabular-nums" },
+  { key: "leave", label: "휴직/출장", className: "text-right tabular-nums" },
+  { key: "merger", label: "합병매각", className: "text-right tabular-nums" },
+  { key: "unpaid", label: "미수", className: "text-right tabular-nums" },
+  { key: "total", label: "합계", className: "text-right font-medium tabular-nums text-rose-700" },
 ]
 
 function TerminationMatrixTable({ rows }: { rows: any[] }) {
@@ -560,11 +581,11 @@ function GroupedTerminationRecordsTable({ groups }: { groups: Array<{ label: str
                   <tr key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`} className="border-b border-slate-100 hover:bg-rose-50/30">
                     <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{row.no || index + 1}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 tabular-nums text-slate-600">{row.date}</td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-bold text-slate-900">{row.idCode}</td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-semibold text-slate-900">{row.companyName}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">{row.idCode}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">{row.companyName}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.departmentName}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.recommender}</td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-semibold text-slate-700">{row.reason}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-700">{row.reason}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 text-right tabular-nums text-slate-600">{formatNumber(row.penalty)}</td>
                     <td className="px-2 py-1.5 text-slate-600">{row.note}</td>
                   </tr>
@@ -585,12 +606,12 @@ function GroupedTerminationRecordsTable({ groups }: { groups: Array<{ label: str
 }
 
 const areaSummaryColumns = [
-  { key: "no", label: "구분", className: "w-[64px] text-center font-bold text-slate-700" },
-  { key: "area", label: "담당영역", className: "min-w-[260px] text-left font-bold text-slate-900" },
+  { key: "no", label: "구분", className: "w-[64px] text-center text-slate-700" },
+  { key: "area", label: "담당영역", className: "min-w-[260px] text-left text-slate-700" },
   { key: "manager", label: "담당자", className: "min-w-[260px] text-left text-slate-600" },
-  { key: "newCount", label: "신규", className: "w-[96px] text-center font-semibold tabular-nums text-blue-700" },
-  { key: "terminationCount", label: "해지", className: "w-[96px] text-center font-semibold tabular-nums text-rose-700" },
-  { key: "netCount", label: "순증", className: "w-[96px] text-center font-semibold tabular-nums text-slate-950" },
+  { key: "newCount", label: "신규", className: "w-[96px] text-right font-medium tabular-nums text-blue-700" },
+  { key: "terminationCount", label: "해지", className: "w-[96px] text-right font-medium tabular-nums text-rose-700" },
+  { key: "netCount", label: "순증", className: "w-[96px] text-right font-medium tabular-nums text-slate-950" },
 ]
 
 function AreaSummaryTable({ rows }: { rows: any[] }) {
@@ -676,10 +697,10 @@ function GroupedAreaRecordsTable({ groups }: { groups: Array<{ label: string; ro
                         </span>
                       </td>
                       <td className="border-r border-slate-100 px-2 py-1.5 tabular-nums text-slate-600">{row.date}</td>
-                      <td className="border-r border-slate-100 px-2 py-1.5 font-bold text-slate-900">{row.idCode}</td>
-                      <td className="border-r border-slate-100 px-2 py-1.5 font-semibold text-slate-900">{row.companyName}</td>
+                      <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">{row.idCode}</td>
+                      <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">{row.companyName}</td>
                       <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.departmentName}</td>
-                      <td className="border-r border-slate-100 px-2 py-1.5 font-semibold text-slate-700">{isTermination ? row.reason : row.replacementType || "신규"}</td>
+                      <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-700">{isTermination ? row.reason : row.replacementType || "신규"}</td>
                       <td className="px-2 py-1.5 text-slate-600">{row.note}</td>
                     </tr>
                   )
@@ -733,6 +754,10 @@ export function TypeAnalysisDashboard({
   const terminationIndustryRows = useMemo(() => terminationIndustrySummary.filter((row: any) => !isTotalIndustryRow(row)), [terminationIndustrySummary])
   const terminationMatrixRows = useMemo(() => terminationIndustrySummary.filter((row: any) => row?.label), [terminationIndustrySummary])
   const areaRows = useMemo(() => areaSummaryRows.filter((row: any) => String(row?.no || "").replace(/\s+/g, "") !== "계"), [areaSummaryRows])
+  const personalRowsForDisplay = useMemo(
+    () => personalRows.map((row: any) => ({ ...row, manager: normalizeManagerLabel(row?.manager) })),
+    [personalRows],
+  )
 
   const filteredNewRecords = useMemo(
     () => newRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
@@ -1004,7 +1029,7 @@ export function TypeAnalysisDashboard({
 
             <section class="section page">
               <h2>개인별 실적</h2>
-              ${reportTable(personalColumns, personalRows, "개인별 실적 데이터가 없습니다.")}
+              ${reportTable(personalColumns, personalRowsForDisplay, "개인별 실적 데이터가 없습니다.")}
             </section>
           </main>
           <script>
@@ -1131,7 +1156,7 @@ export function TypeAnalysisDashboard({
                 <MetricTile label="신규 상세" value={`${formatNumber(newRecords.length)}건`} />
                 <MetricTile label="해지 상세" value={`${formatNumber(terminationRecords.length)}건`} />
                 <MetricTile label="영역별 상세" value={`${formatNumber(areaRecords.length)}건`} />
-                <MetricTile label="개인별 실적" value={`${formatNumber(personalRows.length)}명`} />
+                <MetricTile label="개인별 실적" value={`${formatNumber(personalRowsForDisplay.length)}명`} />
               </div>
               <div className="mt-3 text-[12px] font-semibold text-slate-500">
                 원본 파일 수정 시각: {sourceUpdatedLabel(data?.sourceUpdatedAt) || "확인 필요"}
@@ -1204,14 +1229,14 @@ export function TypeAnalysisDashboard({
             <DenseTable
               columns={[
                 { key: "no", label: "구분", className: "w-[72px] text-center" },
-                { key: "manager", label: "담당자", className: "min-w-[160px] font-bold text-slate-950" },
-                { key: "totalNew", label: "총 신규", className: "text-center font-semibold tabular-nums text-slate-950" },
-                { key: "new", label: "신규", className: "text-center tabular-nums" },
-                { key: "check", label: "체크", className: "text-center tabular-nums" },
-                { key: "marketPoint", label: "마켓", className: "text-center tabular-nums" },
-                { key: "reutersBloomberg", label: "로이터/블룸", className: "text-center tabular-nums" },
+                { key: "manager", label: "담당자", className: "min-w-[160px] font-medium text-slate-900" },
+                { key: "totalNew", label: "총 신규", className: "text-right font-medium tabular-nums text-slate-950" },
+                { key: "new", label: "신규", className: "text-right tabular-nums" },
+                { key: "check", label: "체크", className: "text-right tabular-nums" },
+                { key: "marketPoint", label: "마켓", className: "text-right tabular-nums" },
+                { key: "reutersBloomberg", label: "로이터/블룸", className: "text-right tabular-nums" },
               ]}
-              rows={personalRows}
+              rows={personalRowsForDisplay}
               emptyText="개인별 실적 데이터가 없습니다."
             />
           </div>
