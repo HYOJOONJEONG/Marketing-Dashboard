@@ -30,15 +30,46 @@ function getTodayKoreaDate() {
   return `${get("year")}-${get("month")}-${get("day")}`
 }
 
-function normalizeDateInputValue(value: unknown) {
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0")
+}
+
+function parseDateParts(value: unknown) {
   const text = String(value ?? "").trim()
-  const match = text.match(/^(\d{4})[.-](\d{2})[.-](\d{2})$/)
-  if (match) return `${match[1]}-${match[2]}-${match[3]}`
-  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : ""
+  if (!text) return null
+  const fullYear = text.match(/^(\d{4})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})/)
+  if (fullYear) {
+    return {
+      year: Number(fullYear[1]),
+      month: Number(fullYear[2]),
+      day: Number(fullYear[3]),
+    }
+  }
+  const shortYear = text.match(/^(\d{2})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})/)
+  if (shortYear) {
+    return {
+      year: 2000 + Number(shortYear[1]),
+      month: Number(shortYear[2]),
+      day: Number(shortYear[3]),
+    }
+  }
+  return null
+}
+
+function normalizeDateInputValue(value: unknown) {
+  const parts = parseDateParts(value)
+  if (!parts) return ""
+  return `${parts.year}-${padDatePart(parts.month)}-${padDatePart(parts.day)}`
 }
 
 function formatDisplayDate(value: unknown) {
   return normalizeDateInputValue(value).replace(/-/g, ".")
+}
+
+function getDateSortValue(value: unknown) {
+  const parts = parseDateParts(value)
+  if (!parts) return null
+  return parts.year * 10000 + parts.month * 100 + parts.day
 }
 
 export function OptionDetailTable({
@@ -278,9 +309,20 @@ export function OptionDetailTable({
     list.sort((a, b) => {
       const left = (a as any)[sortKey] ?? ""
       const right = (b as any)[sortKey] ?? ""
-      const leftNum = Number(String(left).replace(/[^0-9.-]/g, ""))
-      const rightNum = Number(String(right).replace(/[^0-9.-]/g, ""))
-      if (!Number.isNaN(leftNum) && !Number.isNaN(rightNum)) {
+      if (sortKey === "request_date") {
+        const leftDate = getDateSortValue(left)
+        const rightDate = getDateSortValue(right)
+        if (leftDate !== null && rightDate !== null) {
+          return sortDir === "asc" ? leftDate - rightDate : rightDate - leftDate
+        }
+        if (leftDate === null && rightDate === null) return 0
+        return leftDate === null ? 1 : -1
+      }
+      const leftRaw = String(left).trim()
+      const rightRaw = String(right).trim()
+      const leftNum = Number(leftRaw.replace(/[^0-9.-]/g, ""))
+      const rightNum = Number(rightRaw.replace(/[^0-9.-]/g, ""))
+      if (leftRaw && rightRaw && !Number.isNaN(leftNum) && !Number.isNaN(rightNum)) {
         return sortDir === "asc" ? leftNum - rightNum : rightNum - leftNum
       }
       const text = String(left).localeCompare(String(right))
