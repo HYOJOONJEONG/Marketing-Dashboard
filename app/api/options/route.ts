@@ -34,6 +34,17 @@ const INDEX_COUNTABLE_SUB_TYPES = new Set([
   "연기금",
   "공공기관",
 ])
+const INDEX_COUNTABLE_INDUSTRIES = new Set([
+  "일반기업",
+  "국내은행",
+  "국내증권",
+  "보험사",
+  "자산운용",
+  "연기금",
+  "외국계",
+  "공사/정부",
+  "기타금융",
+])
 const INDEX_EXCLUDED_USER_IDS = new Set([
   "E040152",
   "E040480",
@@ -149,9 +160,13 @@ function normalizeCategoryCode(value: unknown) {
 
 function isCountableIndexRecord(row: any) {
   if (normalizeCategoryCode(row?.category_code) !== "INDEX") return true
-  const subType = String(row?.sub_type || "").trim()
-  const userId = String(row?.user_id || "").trim()
-  return INDEX_COUNTABLE_SUB_TYPES.has(subType) && !INDEX_EXCLUDED_USER_IDS.has(userId)
+  const userId = normalizeOptionUserId(row?.user_id || row?.apply_ids)
+  if (!userId || INDEX_EXCLUDED_USER_IDS.has(userId)) return false
+  const candidates = [row?.sub_type, row?.industry].map((value) => String(value || "").trim()).filter(Boolean)
+  return candidates.some((value) => {
+    const normalizedIndustry = normalizeIndustry(value)
+    return INDEX_COUNTABLE_SUB_TYPES.has(value) || INDEX_COUNTABLE_INDUSTRIES.has(normalizedIndustry)
+  })
 }
 
 function normalizeStatus(value: unknown) {

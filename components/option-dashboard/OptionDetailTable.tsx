@@ -409,7 +409,10 @@ export function OptionDetailTable({
   const handleCreate = async () => {
     if (!newRecord) return
     if (createStatus === "saving") return
-    if (!newRecord.category_code) {
+    const selectedCategory = categoryOptions.find((option) => option.value === selectedCategoryCode)
+    const nextCategoryCode = selectedCategory?.value || newRecord.category_code
+    const nextCategoryLabel = selectedCategory?.label || newRecord.category_name_ko
+    if (!nextCategoryCode || selectedCategoryCode === "all") {
       setCreateMessage({ type: "error", text: "상단 카드에서 옵션을 먼저 선택해 주세요." })
       return
     }
@@ -424,9 +427,16 @@ export function OptionDetailTable({
     setCreateStatus("saving")
     setCreateMessage(null)
     try {
-      await onSaveRecord({ ...newRecord, id_kind: idKind })
-      setNewRecord({
+      const recordToSave = {
         ...newRecord,
+        id_kind: idKind,
+        category_code: nextCategoryCode,
+        category_name_ko: nextCategoryLabel,
+        is_active: Number(newRecord.is_active ?? 1),
+      }
+      await onSaveRecord(recordToSave)
+      setNewRecord({
+        ...recordToSave,
         record_id: `record-${Date.now()}`,
         id_kind: idKind,
         sub_type: "",
