@@ -4,6 +4,7 @@ import { NextResponse } from "next/server"
 import { requireAnyApiPermission, requireApiPermission } from "@/lib/auth/server"
 import { readDashboardState, readOptionsMock, writeOptionsMock } from "@/lib/shared-db-store"
 import seedOptionsMock from "@/data/options-dashboard.mock.json"
+import lmeFreeSeedRecords from "@/data/lme-free-options.seed.json"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -92,6 +93,7 @@ const getResponseCache = new Map<string, { expiresAt: number; payload: any }>()
 let industryMapCache: { expiresAt: number; value: Map<string, string> } | null = null
 let bundledSofrRecordsCache: any[] | null = null
 let bundledIndexRecordsCache: any[] | null = null
+const LME_FREE_SEED_VERSION = "2026-05-29-lme-free-124"
 
 const REQUIRED_SOFR_RECORDS = [
   {
@@ -775,6 +777,54 @@ async function hydrateIndexFromBundledMockIfMissing(mock: any) {
   return true
 }
 
+function buildLmeFreeSeedOptionRecords() {
+  return (lmeFreeSeedRecords as Array<{ user_id: string; company_name?: string; department?: string }>).map((record, index) => {
+    const userId = String(record.user_id || "").trim().toUpperCase()
+    return {
+      record_id: `lme-free-${index + 1}-${userId.toLowerCase()}`,
+      id_kind: "free",
+      category_code: "LME",
+      category_name_ko: "LME",
+      sub_type: "LME",
+      industry: "",
+      company_name: record.company_name || "연합인포맥스",
+      user_id: userId,
+      department: record.department || "",
+      requester_name: "",
+      contact: "",
+      request_date: "",
+      real_apply: "",
+      billing_month: "",
+      status: "",
+      agreement: "",
+      customer_type: "무료",
+      tr_cd: "",
+      dedicated: "",
+      quantity: "",
+      recommender: "",
+      receiver: "",
+      apply_count: "",
+      apply_ids: "",
+      amount: "",
+      note: "",
+      is_active: 1,
+    }
+  })
+}
+
+function hydrateLmeFreeSeedOnce(mock: any) {
+  if (!mock || typeof mock !== "object" || !Array.isArray(mock.optionRecords)) return false
+  if (mock.lmeFreeSeedVersion === LME_FREE_SEED_VERSION) return false
+  const existingRecordIds = new Set(mock.optionRecords.map((record: any) => String(record?.record_id || "")))
+  const seedRecords = buildLmeFreeSeedOptionRecords()
+  const additions = seedRecords.filter((record) => !existingRecordIds.has(record.record_id))
+  if (additions.length) {
+    mock.optionRecords = [...additions, ...mock.optionRecords]
+  }
+  mock.lmeFreeSeedVersion = LME_FREE_SEED_VERSION
+  return true
+}
+
 async function loadAppStateIndustryMap() {
   if (industryMapCache && industryMapCache.expiresAt > Date.now()) {
     return new Map(industryMapCache.value)
@@ -888,13 +938,16 @@ export async function GET(req: Request) {
     const sofrNormalized = normalizeSofrOptionRecords(mock)
     const sofrHydrated = await hydrateSofrFromBundledMockIfNewer(mock)
     const indexHydrated = await hydrateIndexFromBundledMockIfMissing(mock)
-    if (privacyScrubbed || sofrNormalized || sofrHydrated || indexHydrated) {
+    const lmeFreeSeeded = hydrateLmeFreeSeedOnce(mock)
+    if (privacyScrubbed || sofrNormalized || sofrHydrated || indexHydrated || lmeFreeSeeded) {
       await writeOptionsMock(mock, {
         menuLabel: "유료 옵션 정보 현황",
-        changeLabel: indexHydrated
-          ? "해외지수 기준 아이디 복원"
-          : (sofrNormalized || sofrHydrated)
-            ? "SOFR 적용 아이디 분리"
+        changeLabel: lmeFreeSeeded
+          ? "LME 무료 아이디 반영"
+          : indexHydrated
+            ? "해외지수 기준 아이디 복원"
+            : (sofrNormalized || sofrHydrated)
+              ? "SOFR 적용 아이디 분리"
             : "옵션 개인정보 필드 정리",
       })
       getResponseCache.clear()
