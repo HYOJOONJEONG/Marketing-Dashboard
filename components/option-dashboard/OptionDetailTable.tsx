@@ -19,6 +19,28 @@ const tdClass = "border-t border-slate-200 px-2 py-2 text-center text-[14px] tex
 const inputClass = "h-9 w-full rounded-md border border-slate-200/80 bg-white/90 px-2 text-[13px]"
 const labelClass = "mb-1 text-[12px] font-semibold text-slate-600"
 
+function getTodayKoreaDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date())
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || ""
+  return `${get("year")}-${get("month")}-${get("day")}`
+}
+
+function normalizeDateInputValue(value: unknown) {
+  const text = String(value ?? "").trim()
+  const match = text.match(/^(\d{4})[.-](\d{2})[.-](\d{2})$/)
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : ""
+}
+
+function formatDisplayDate(value: unknown) {
+  return normalizeDateInputValue(value).replace(/-/g, ".")
+}
+
 export function OptionDetailTable({
   records,
   categories,
@@ -105,6 +127,7 @@ export function OptionDetailTable({
       : "w-[176px] px-1.5 py-2 text-[12px] whitespace-nowrap text-center leading-tight"
   const actionButtonClass =
     "inline-flex h-8 min-w-[32px] items-center justify-center whitespace-nowrap rounded-md border px-1.5 text-[12px] font-semibold leading-none transition disabled:cursor-not-allowed disabled:opacity-50"
+  const todayKoreaDate = React.useMemo(() => getTodayKoreaDate(), [])
 
   React.useEffect(() => {
     if (!newRecord && categoryOptions.length) {
@@ -121,7 +144,7 @@ export function OptionDetailTable({
         department: "",
         requester_name: "",
         contact: "",
-        request_date: "",
+        request_date: todayKoreaDate,
         real_apply: "",
         billing_month: "",
         status: "",
@@ -139,7 +162,7 @@ export function OptionDetailTable({
         is_active: 1,
       })
     }
-  }, [categoryOptions, idKind, newRecord])
+  }, [categoryOptions, idKind, newRecord, todayKoreaDate])
 
   React.useEffect(() => {
     if (!newRecord) return
@@ -156,6 +179,7 @@ export function OptionDetailTable({
   const columns: Array<ColumnDef> = isBondView
     ? [
         { key: "row_no", label: "NO", headerClass: "w-[4%]", cellClass: "whitespace-nowrap text-center" },
+        { key: "request_date", label: "등록일", headerClass: "w-[8%]", cellClass: "whitespace-nowrap text-center" },
         { key: "sub_type", label: "업종", headerClass: "w-[8%]", cellClass: "whitespace-nowrap text-center" },
         { key: "user_id", label: "아이디", headerClass: "w-[10%]", cellClass: "whitespace-nowrap" },
         { key: "company_name", label: "기관", headerClass: "w-[14%]", cellClass: "whitespace-normal break-all leading-4" },
@@ -175,6 +199,7 @@ export function OptionDetailTable({
     : isSignageView
       ? [
           { key: "row_no", label: "NO", headerClass: "w-[4%]", cellClass: "whitespace-nowrap text-center" },
+          { key: "request_date", label: "등록일", headerClass: "w-[8%]", cellClass: "whitespace-nowrap text-center" },
           { key: "sub_type", label: "업종", headerClass: "w-[7%]", cellClass: "whitespace-normal break-all" },
           { key: "company_name", label: "회사명", headerClass: "w-[12%]", cellClass: "whitespace-normal break-all" },
           { key: "user_id", label: "사용자ID", headerClass: "w-[12%]", cellClass: "whitespace-normal break-all" },
@@ -192,6 +217,7 @@ export function OptionDetailTable({
       : isSofrView
         ? [
             { key: "row_no", label: "NO", headerClass: "w-14", cellClass: "whitespace-nowrap text-center" },
+            { key: "request_date", label: "등록일", headerClass: "w-28", cellClass: "whitespace-nowrap text-center" },
             { key: "sub_type", label: "업종", headerClass: "w-28", cellClass: "whitespace-nowrap" },
             {
               key: "company_name",
@@ -214,6 +240,7 @@ export function OptionDetailTable({
         : isStockView
           ? [
               { key: "row_no", label: "NO", headerClass: "w-14", cellClass: "whitespace-nowrap text-center" },
+              { key: "request_date", label: "등록일", headerClass: "w-28", cellClass: "whitespace-nowrap text-center" },
               { key: "sub_type", label: "업종", headerClass: "w-28", cellClass: "whitespace-nowrap" },
               { key: "company_name", label: "회사명", headerClass: "w-36", cellClass: "whitespace-nowrap" },
               { key: "user_id", label: "사용자ID", headerClass: "w-36", cellClass: "whitespace-nowrap" },
@@ -230,6 +257,7 @@ export function OptionDetailTable({
             ]
       : [
           { key: "row_no", label: "NO", headerClass: "w-14", cellClass: "whitespace-nowrap text-center" },
+          { key: "request_date", label: "등록일", headerClass: "w-28", cellClass: "whitespace-nowrap text-center" },
           { key: "sub_type", label: "업종", headerClass: "w-28", cellClass: "whitespace-nowrap" },
           { key: "company_name", label: "회사명", headerClass: "w-36", cellClass: "whitespace-nowrap" },
           { key: "user_id", label: "사용자ID", headerClass: "w-36", cellClass: "whitespace-nowrap" },
@@ -363,7 +391,7 @@ export function OptionDetailTable({
       department: "",
       requester_name: "",
       contact: "",
-      request_date: "",
+      request_date: todayKoreaDate,
       real_apply: "",
       billing_month: "",
       status: "",
@@ -444,6 +472,7 @@ export function OptionDetailTable({
         user_id: "",
         department: "",
         requester_name: "",
+        request_date: todayKoreaDate,
         billing_month: "",
         status: "",
         note: "",
@@ -545,6 +574,16 @@ export function OptionDetailTable({
         </div>
       )
     }
+    if (key === "request_date") {
+      return (
+        <input
+          type="date"
+          value={normalizeDateInputValue(value)}
+          onChange={(event) => handleDraftChange(key, event.target.value)}
+          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-[13px]"
+        />
+      )
+    }
     if (key === "note") {
       return (
         <textarea
@@ -597,6 +636,15 @@ export function OptionDetailTable({
         <div className="mb-3 text-[13px] font-semibold text-slate-700">{idKindLabel} 입력</div>
         {isBondView ? (
           <div className="grid grid-cols-12 gap-2.5">
+            <div className="col-span-2">
+              <div className={labelClass}>등록일</div>
+              <input
+                type="date"
+                value={normalizeDateInputValue(newRecord?.request_date)}
+                onChange={(event) => handleNewChange("request_date", event.target.value)}
+                className={inputClass}
+              />
+            </div>
             <div className="col-span-2">
               <div className={labelClass}>업종 선택</div>
               <select value={newRecord?.sub_type || ""} onChange={(event) => handleNewChange("sub_type", event.target.value)} className={inputClass}>
@@ -661,6 +709,15 @@ export function OptionDetailTable({
           </div>
         ) : (
           <div className="grid grid-cols-12 gap-2.5">
+            <div className="col-span-2">
+              <div className={labelClass}>등록일</div>
+              <input
+                type="date"
+                value={normalizeDateInputValue(newRecord?.request_date)}
+                onChange={(event) => handleNewChange("request_date", event.target.value)}
+                className={inputClass}
+              />
+            </div>
             <div className="col-span-2">
               <div className={labelClass}>업종</div>
               <select value={newRecord?.sub_type || ""} onChange={(event) => handleNewChange("sub_type", event.target.value)} className={inputClass}>
@@ -787,6 +844,8 @@ export function OptionDetailTable({
                       const value =
                         column.key === "row_no"
                           ? index + 1
+                          : column.key === "request_date"
+                            ? formatDisplayDate((row as any)[column.key])
                           : column.key === "sub_type"
                             ? normalizeIndustry((row as any)[column.key])
                             : (row as any)[column.key]
