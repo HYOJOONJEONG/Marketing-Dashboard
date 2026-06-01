@@ -8933,18 +8933,18 @@ export function DashboardShell({
           )}
 
           {typeAnalysisImportReview ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6">
-              <div className="flex max-h-[88vh] w-full max-w-[1180px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-3 py-4 sm:px-5">
+              <div className="flex h-[92vh] w-full max-w-[1680px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
                   <div>
-                    <div className="text-[17px] font-black text-slate-950">주간 신규/대체/해지 반영 검토</div>
+                    <div className="text-[18px] font-bold text-slate-950">주간 신규/대체/해지 반영 검토</div>
                     <div className="mt-1 text-[12px] font-semibold text-slate-500">
-                      체크된 항목을 확인하고 업종별 위치와 영역별 순증 위치를 지정한 뒤 반영합니다.
+                      체크된 주간 항목을 확인하고 업종별 위치와 영역별 순증 위치를 지정합니다.
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-[12px] font-black">
-                    <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700">신규/대체 {formatNumber(typeAnalysisReviewCounts.newCount)}건</span>
-                    <span className="rounded-full bg-rose-50 px-3 py-1.5 text-rose-700">해지 {formatNumber(typeAnalysisReviewCounts.terminationCount)}건</span>
+                  <div className="flex flex-wrap items-center gap-2 text-[12px] font-bold">
+                    <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-blue-700">신규/대체 {formatNumber(typeAnalysisReviewCounts.newCount)}건</span>
+                    <span className="rounded-full border border-rose-100 bg-rose-50 px-3 py-1.5 text-rose-700">해지 {formatNumber(typeAnalysisReviewCounts.terminationCount)}건</span>
                     <button
                       type="button"
                       onClick={() => setTypeAnalysisImportReview(null)}
@@ -8955,218 +8955,275 @@ export function DashboardShell({
                     </button>
                   </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                  <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-                    <section className="overflow-hidden rounded-xl border border-slate-200">
-                      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-                        <div className="text-[14px] font-black text-slate-900">신규/대체 업종 배치</div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setTypeAnalysisImportReview((prev: any) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    newRows: (prev.newRows || []).map((row: any) => ({ ...row, include: true })),
-                                  }
-                                : prev,
-                            )
-                          }
-                          className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600"
-                        >
-                          전체 선택
-                        </button>
+                <div className="min-h-0 flex-1 overflow-hidden p-4">
+                  <div className="grid h-full min-h-0 auto-rows-fr gap-4 2xl:grid-cols-2">
+                    <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+                      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
+                        <div>
+                          <div className="text-[14px] font-bold text-slate-900">신규/대체 업종 배치</div>
+                          <div className="mt-0.5 text-[11px] font-semibold text-slate-500">회사 정보와 배치 위치를 한 줄에서 확인합니다.</div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setTypeAnalysisImportReview((prev: any) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      newRows: (prev.newRows || []).map((row: any) => ({ ...row, include: true })),
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="h-8 rounded-lg border border-blue-100 bg-blue-50 px-2.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100"
+                          >
+                            전체 선택
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setTypeAnalysisImportReview((prev: any) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      newRows: (prev.newRows || []).map((row: any) => ({ ...row, include: false })),
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+                          >
+                            전체 해제
+                          </button>
+                        </div>
                       </div>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-[1220px] w-full border-collapse text-[12px]">
-                          <thead>
-                            <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                              <th className="w-[44px] px-2 py-2 text-center font-black">선택</th>
-                              <th className="w-[86px] px-2 py-2 text-left font-black">날짜</th>
-                              <th className="w-[92px] px-2 py-2 text-left font-black">ID</th>
-                              <th className="px-2 py-2 text-left font-black">회사명</th>
-                              <th className="px-2 py-2 text-left font-black">부서</th>
-                              <th className="w-[92px] px-2 py-2 text-left font-black">구분</th>
-                              <th className="w-[280px] px-2 py-2 text-left font-black">업종별 위치</th>
-                              <th className="w-[260px] px-2 py-2 text-left font-black">영역별 위치</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(typeAnalysisImportReview.newRows || []).length ? (
-                              typeAnalysisImportReview.newRows.map((row: any) => (
-                                <tr key={row.tempId} className="border-b border-slate-100 last:border-0">
-                                  <td className="px-2 py-2 text-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={row.include !== false}
-                                      onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { include: event.target.checked })}
-                                    />
-                                  </td>
-                                  <td className="px-2 py-2 tabular-nums text-slate-600">{row.date}</td>
-                                  <td className="px-2 py-2 font-bold text-slate-900">{row.idCode}</td>
-                                  <td className="px-2 py-2 font-semibold text-slate-900">{row.companyName}</td>
-                                  <td className="px-2 py-2 text-slate-600">{row.departmentName}</td>
-                                  <td className="px-2 py-2">
-                                    <select
-                                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
-                                      value={row.replacementType || "신규"}
-                                      onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { replacementType: event.target.value })}
-                                    >
-                                      {["신규", "체크", "마켓포인트", "블룸버그", "로이터", "한경머니·기타"].map((item) => (
-                                        <option key={item} value={item}>{item}</option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td className="px-2 py-2">
-                                    <select
-                                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
-                                      value={row.group || TYPE_ANALYSIS_OTHER_FINANCE_LABEL}
-                                      onChange={(event) =>
-                                        updateTypeAnalysisReviewNewRow(row.tempId, {
-                                          group: event.target.value,
-                                          areaGroup: normalizeTypeAnalysisAreaGroup(event.target.value, row.companyName),
-                                        })
-                                      }
-                                    >
-                                      {TYPE_ANALYSIS_INDUSTRY_LABELS.map((item) => (
-                                        <option key={item} value={item}>{item}</option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td className="px-2 py-2">
-                                    <select
-                                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
-                                      value={row.areaGroup || normalizeTypeAnalysisAreaGroup(row.group || row.industry, row.companyName)}
-                                      onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { areaGroup: event.target.value })}
-                                    >
-                                      {TYPE_ANALYSIS_AREA_LABELS.map((item) => (
-                                        <option key={item} value={item}>{item}</option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                </tr>
-                              ))
-                            ) : (
-                              <tr>
-                                <td colSpan={8} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
-                                  선택된 신규/대체 항목이 없습니다.
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
+                      <div className="hidden shrink-0 grid-cols-[34px_minmax(220px,1fr)_112px_170px_160px] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500 lg:grid">
+                        <div className="text-center">선택</div>
+                        <div>대상</div>
+                        <div>구분</div>
+                        <div>업종별 위치</div>
+                        <div>영역별 위치</div>
+                      </div>
+                      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+                        {(typeAnalysisImportReview.newRows || []).length ? (
+                          typeAnalysisImportReview.newRows.map((row: any) => (
+                            <div
+                              key={row.tempId}
+                              className={`grid grid-cols-[34px_minmax(0,1fr)] items-center gap-2 rounded-xl border px-3 py-2.5 transition lg:grid-cols-[34px_minmax(220px,1fr)_112px_170px_160px] ${
+                                row.include === false
+                                  ? "border-slate-200 bg-slate-50 text-slate-400"
+                                  : "border-slate-200 bg-white text-slate-900 hover:border-blue-200 hover:bg-blue-50/30"
+                              }`}
+                            >
+                              <div className="flex justify-center">
+                                <input
+                                  type="checkbox"
+                                  checked={row.include !== false}
+                                  onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { include: event.target.checked })}
+                                />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                  <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-slate-600">{row.date || "-"}</span>
+                                  <span className="text-[12px] font-bold text-slate-900">{row.idCode || "-"}</span>
+                                  <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-slate-900" title={row.companyName || ""}>{row.companyName || "-"}</span>
+                                </div>
+                                <div className="mt-1 truncate text-[11px] font-medium text-slate-500" title={row.departmentName || ""}>{row.departmentName || "-"}</div>
+                              </div>
+                              <select
+                                className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
+                                value={row.replacementType || "신규"}
+                                onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { replacementType: event.target.value })}
+                                aria-label="신규/대체 구분"
+                              >
+                                {["신규", "체크", "마켓포인트", "블룸버그", "로이터", "한경머니·기타"].map((item) => (
+                                  <option key={item} value={item}>{item}</option>
+                                ))}
+                              </select>
+                              <select
+                                className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
+                                value={row.group || TYPE_ANALYSIS_OTHER_FINANCE_LABEL}
+                                onChange={(event) =>
+                                  updateTypeAnalysisReviewNewRow(row.tempId, {
+                                    group: event.target.value,
+                                    areaGroup: normalizeTypeAnalysisAreaGroup(event.target.value, row.companyName),
+                                  })
+                                }
+                                aria-label="업종별 위치"
+                              >
+                                {TYPE_ANALYSIS_INDUSTRY_LABELS.map((item) => (
+                                  <option key={item} value={item}>{item}</option>
+                                ))}
+                              </select>
+                              <select
+                                className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
+                                value={row.areaGroup || normalizeTypeAnalysisAreaGroup(row.group || row.industry, row.companyName)}
+                                onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { areaGroup: event.target.value })}
+                                aria-label="영역별 위치"
+                              >
+                                {TYPE_ANALYSIS_AREA_LABELS.map((item) => (
+                                  <option key={item} value={item}>{item}</option>
+                                ))}
+                              </select>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl border border-dashed border-slate-200 text-[13px] font-semibold text-slate-400">
+                            선택된 신규/대체 항목이 없습니다.
+                          </div>
+                        )}
                       </div>
                     </section>
 
-                    <section className="overflow-hidden rounded-xl border border-slate-200">
-                      <div className="border-b border-slate-200 bg-white px-4 py-3 text-[14px] font-black text-slate-900">해지 반영 항목</div>
-                      <div className="max-h-[420px] overflow-auto">
-                        <table className="w-full min-w-[1180px] border-collapse text-[12px]">
-                          <thead>
-                            <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                              <th className="w-[44px] px-2 py-2 text-center font-black">선택</th>
-                              <th className="w-[86px] px-2 py-2 text-left font-black">날짜</th>
-                              <th className="w-[92px] px-2 py-2 text-left font-black">ID</th>
-                              <th className="px-2 py-2 text-left font-black">고객사</th>
-                              <th className="px-2 py-2 text-left font-black">부서</th>
-                              <th className="w-[170px] px-2 py-2 text-left font-black">해지 사유</th>
-                              <th className="w-[260px] px-2 py-2 text-left font-black">업종별 위치</th>
-                              <th className="w-[240px] px-2 py-2 text-left font-black">영역별 위치</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(typeAnalysisImportReview.terminationRows || []).length ? (
-                              typeAnalysisImportReview.terminationRows.map((row: any) => (
-                                <tr key={row.tempId} className="border-b border-slate-100 last:border-0">
-                                  <td className="px-2 py-2 text-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={row.include !== false}
-                                      onChange={(event) => updateTypeAnalysisReviewTerminationRow(row.tempId, { include: event.target.checked })}
-                                    />
-                                  </td>
-                                  <td className="px-2 py-2 tabular-nums text-slate-600">{row.date}</td>
-                                  <td className="px-2 py-2 font-bold text-slate-900">{row.idCode}</td>
-                                  <td className="px-2 py-2 font-semibold text-slate-900">{row.companyName}</td>
-                                  <td className="px-2 py-2 text-slate-600">{row.departmentName}</td>
-                                  <td className="px-2 py-2">
-                                    <select
-                                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
-                                      value={row.reason || "계약만료"}
-                                      onChange={(event) => updateTypeAnalysisReviewTerminationRow(row.tempId, { reason: event.target.value })}
-                                    >
-                                      {[
-                                        "계약만료",
-                                        "사용자퇴사·이직",
-                                        "비용절감·예산삭감",
-                                        "활용도저조·불필요",
-                                        "콘텐츠불만·타사대체",
-                                        "조직개편·업무변경",
-                                        "휴직·장기출장",
-                                        "회사합병매각",
-                                        "구독료 미수",
-                                      ].map((item) => (
-                                        <option key={item} value={item}>{item}</option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td className="px-2 py-2">
-                                    <select
-                                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
-                                      value={row.group || TYPE_ANALYSIS_OTHER_FINANCE_LABEL}
-                                      onChange={(event) =>
-                                        updateTypeAnalysisReviewTerminationRow(row.tempId, {
-                                          group: event.target.value,
-                                          areaGroup: normalizeTypeAnalysisAreaGroup(event.target.value, row.companyName),
-                                        })
-                                      }
-                                    >
-                                      {TYPE_ANALYSIS_INDUSTRY_LABELS.map((item) => (
-                                        <option key={item} value={item}>{item}</option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td className="px-2 py-2">
-                                    <select
-                                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold"
-                                      value={row.areaGroup || normalizeTypeAnalysisAreaGroup(row.group || row.industry, row.companyName)}
-                                      onChange={(event) => updateTypeAnalysisReviewTerminationRow(row.tempId, { areaGroup: event.target.value })}
-                                    >
-                                      {TYPE_ANALYSIS_AREA_LABELS.map((item) => (
-                                        <option key={item} value={item}>{item}</option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                </tr>
-                              ))
-                            ) : (
-                              <tr>
-                                <td colSpan={8} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
-                                  선택된 해지 항목이 없습니다.
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
+                    <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+                      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
+                        <div>
+                          <div className="text-[14px] font-bold text-slate-900">해지 반영 항목</div>
+                          <div className="mt-0.5 text-[11px] font-semibold text-slate-500">해지 사유와 반영 위치를 같은 흐름에서 정리합니다.</div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setTypeAnalysisImportReview((prev: any) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      terminationRows: (prev.terminationRows || []).map((row: any) => ({ ...row, include: true })),
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="h-8 rounded-lg border border-rose-100 bg-rose-50 px-2.5 text-[11px] font-bold text-rose-700 hover:bg-rose-100"
+                          >
+                            전체 선택
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setTypeAnalysisImportReview((prev: any) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      terminationRows: (prev.terminationRows || []).map((row: any) => ({ ...row, include: false })),
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+                          >
+                            전체 해제
+                          </button>
+                        </div>
+                      </div>
+                      <div className="hidden shrink-0 grid-cols-[34px_minmax(220px,1fr)_150px_170px_160px] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500 lg:grid">
+                        <div className="text-center">선택</div>
+                        <div>대상</div>
+                        <div>해지 사유</div>
+                        <div>업종별 위치</div>
+                        <div>영역별 위치</div>
+                      </div>
+                      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+                        {(typeAnalysisImportReview.terminationRows || []).length ? (
+                          typeAnalysisImportReview.terminationRows.map((row: any) => (
+                            <div
+                              key={row.tempId}
+                              className={`grid grid-cols-[34px_minmax(0,1fr)] items-center gap-2 rounded-xl border px-3 py-2.5 transition lg:grid-cols-[34px_minmax(220px,1fr)_150px_170px_160px] ${
+                                row.include === false
+                                  ? "border-slate-200 bg-slate-50 text-slate-400"
+                                  : "border-slate-200 bg-white text-slate-900 hover:border-rose-200 hover:bg-rose-50/30"
+                              }`}
+                            >
+                              <div className="flex justify-center">
+                                <input
+                                  type="checkbox"
+                                  checked={row.include !== false}
+                                  onChange={(event) => updateTypeAnalysisReviewTerminationRow(row.tempId, { include: event.target.checked })}
+                                />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                  <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-slate-600">{row.date || "-"}</span>
+                                  <span className="text-[12px] font-bold text-slate-900">{row.idCode || "-"}</span>
+                                  <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-slate-900" title={row.companyName || ""}>{row.companyName || "-"}</span>
+                                </div>
+                                <div className="mt-1 truncate text-[11px] font-medium text-slate-500" title={row.departmentName || ""}>{row.departmentName || "-"}</div>
+                              </div>
+                              <select
+                                className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
+                                value={row.reason || "계약만료"}
+                                onChange={(event) => updateTypeAnalysisReviewTerminationRow(row.tempId, { reason: event.target.value })}
+                                aria-label="해지 사유"
+                              >
+                                {[
+                                  "계약만료",
+                                  "사용자퇴사·이직",
+                                  "비용절감·예산삭감",
+                                  "활용도저조·불필요",
+                                  "콘텐츠불만·타사대체",
+                                  "조직개편·업무변경",
+                                  "휴직·장기출장",
+                                  "회사합병매각",
+                                  "구독료 미수",
+                                ].map((item) => (
+                                  <option key={item} value={item}>{item}</option>
+                                ))}
+                              </select>
+                              <select
+                                className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
+                                value={row.group || TYPE_ANALYSIS_OTHER_FINANCE_LABEL}
+                                onChange={(event) =>
+                                  updateTypeAnalysisReviewTerminationRow(row.tempId, {
+                                    group: event.target.value,
+                                    areaGroup: normalizeTypeAnalysisAreaGroup(event.target.value, row.companyName),
+                                  })
+                                }
+                                aria-label="업종별 위치"
+                              >
+                                {TYPE_ANALYSIS_INDUSTRY_LABELS.map((item) => (
+                                  <option key={item} value={item}>{item}</option>
+                                ))}
+                              </select>
+                              <select
+                                className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
+                                value={row.areaGroup || normalizeTypeAnalysisAreaGroup(row.group || row.industry, row.companyName)}
+                                onChange={(event) => updateTypeAnalysisReviewTerminationRow(row.tempId, { areaGroup: event.target.value })}
+                                aria-label="영역별 위치"
+                              >
+                                {TYPE_ANALYSIS_AREA_LABELS.map((item) => (
+                                  <option key={item} value={item}>{item}</option>
+                                ))}
+                              </select>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl border border-dashed border-slate-200 text-[13px] font-semibold text-slate-400">
+                            선택된 해지 항목이 없습니다.
+                          </div>
+                        )}
                       </div>
                     </section>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
-                  <button
-                    type="button"
-                    onClick={() => setTypeAnalysisImportReview(null)}
-                    className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 hover:bg-slate-100"
-                  >
-                    취소
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmTypeAnalysisImportWeekly}
-                    className="h-10 rounded-xl bg-blue-600 px-4 text-[13px] font-black text-white hover:bg-blue-700"
-                  >
-                    선택 항목 업종/영역 반영
-                  </button>
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+                  <div className="text-[12px] font-semibold text-slate-500">선택된 항목만 현재 유형 분석에 반영됩니다.</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTypeAnalysisImportReview(null)}
+                      className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 hover:bg-slate-100"
+                    >
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmTypeAnalysisImportWeekly}
+                      className="h-10 rounded-xl bg-blue-600 px-4 text-[13px] font-bold text-white hover:bg-blue-700"
+                    >
+                      선택 항목 반영
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
