@@ -1659,6 +1659,30 @@ function normalizeTypeAnalysisIndustryGroup(industry: unknown, companyName: unkn
   return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
 }
 
+function deriveTypeAnalysisIndustryGroupFromArea(areaGroup: unknown, fallbackIndustry: unknown, companyName: unknown) {
+  const area = normalizeTypeAnalysisAreaGroup(areaGroup, companyName)
+  if (area === "국내은행/지주") return "국내은행"
+  if (area === "국내증권") return "국내증권"
+  if (area === "외국계은행, 외국계증권") return "외국계은행,증권,연기금"
+  if (area === "자산운용") return "자산운용"
+  if (area === "보험사") return "보험사"
+  if (area === TYPE_ANALYSIS_PUBLIC_AREA_LABEL) return TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
+  if (area === TYPE_ANALYSIS_GENERAL_AREA_LABEL) {
+    const fallbackText = String(fallbackIndustry || "")
+    if (fallbackText.includes("국내은행") || fallbackText.includes("국내증권") || fallbackText.includes("외국") || fallbackText.includes("자산") || fallbackText.includes("보험")) {
+      return normalizeTypeAnalysisIndustryGroup(fallbackText, companyName)
+    }
+    const companyText = String(companyName || "")
+    if (companyText.includes("대학") || companyText.includes("학교")) return TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL
+    const firstHangul = firstHangulCharacter(companyName)
+    return firstHangul && firstHangul >= "가" && firstHangul <= "바"
+      ? TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
+      : TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL
+  }
+  if (area === TYPE_ANALYSIS_OTHER_AREA_LABEL) return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
+  return normalizeTypeAnalysisIndustryGroup(fallbackIndustry, companyName)
+}
+
 function createTypeAnalysisReplacementFlags(replacementType: string) {
   return {
     "체크": replacementType === "체크" ? 1 : 0,
@@ -2093,8 +2117,8 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
     .filter((row: any) => row?.include !== false)
     .map((row: any, index: number) => {
       const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
-      const group = normalizeTypeAnalysisIndustryGroup(row?.group || row?.industry, row?.companyName)
       const areaGroup = normalizeTypeAnalysisAreaGroup(row?.areaGroup || row?.group || row?.industry, row?.companyName)
+      const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, row?.industry || row?.group, row?.companyName)
       return {
         no: index + 1,
         date: normalizeDate(row?.date || createdAt),
@@ -2116,8 +2140,8 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
     .filter((row: any) => row?.include !== false)
     .map((row: any, index: number) => {
       const reason = normalizeTypeAnalysisTerminationReason(row?.reason)
-      const group = normalizeTypeAnalysisIndustryGroup(row?.group || row?.industry, row?.companyName)
       const areaGroup = normalizeTypeAnalysisAreaGroup(row?.areaGroup || row?.group || row?.industry, row?.companyName)
+      const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, row?.industry || row?.group, row?.companyName)
       return {
         no: index + 1,
         date: normalizeDate(row?.date || createdAt),
@@ -2790,6 +2814,7 @@ export function DashboardShell({
   const manualSaveInFlightRef = useRef(false)
   const manualSaveRequestIdRef = useRef(0)
   const manualSaveScrollRef = useRef<{ x: number; y: number } | null>(null)
+  const manualPreviewClearTimerRef = useRef<number | null>(null)
   const flushPendingSave = useRef<() => void>(() => {})
   const heartbeatIdRef = useRef(`conn-${Math.random().toString(36).slice(2, 10)}`)
   const lastActivityAtRef = useRef(Date.now())
@@ -3920,7 +3945,7 @@ export function DashboardShell({
 
   function persist(
     nextData: any,
-    options: { immediate?: boolean; updatedViews?: ViewKey[]; suppressFailureAlert?: boolean } = {},
+    options: { immediate?: boolean; updatedViews?: ViewKey[]; suppressFailureAlert?: boolean; rollbackOnFailure?: boolean } = {},
   ) {
     const now = Date.now()
     const updatedViews = options.updatedViews?.length ? options.updatedViews : [view]
@@ -3938,13 +3963,14 @@ export function DashboardShell({
       pendingSaveRef.current = null
       savePromise = commitDashboardData(nextData, updatedViews).catch((error) => {
         const isLatestPending = pendingDataRef.current === nextData
-        if (isLatestPending) {
+        const shouldRollback = options.rollbackOnFailure !== false
+        if (isLatestPending && shouldRollback) {
           setData(previousData)
           pendingDataRef.current = previousData
           scheduleLocalDashboardCache(previousData)
           clearDirtyViews(updatedViews)
         }
-        if (isLatestPending && !options.suppressFailureAlert) {
+        if (isLatestPending && shouldRollback && !options.suppressFailureAlert) {
           window.alert("저장에 실패해서 이전 상태로 되돌렸습니다. 잠시 후 다시 시도해주세요.")
         }
         throw error
@@ -4117,6 +4143,7 @@ export function DashboardShell({
   useEffect(() => {
     return () => {
       if (manualSaveTimerRef.current) window.clearTimeout(manualSaveTimerRef.current)
+      if (manualPreviewClearTimerRef.current) window.clearTimeout(manualPreviewClearTimerRef.current)
     }
   }, [])
 
@@ -4155,6 +4182,19 @@ export function DashboardShell({
       restore()
       window.requestAnimationFrame(restore)
     })
+  }
+
+  function scheduleManualPreviewClear(saveRequestId: number, savedDraft: any) {
+    if (typeof window === "undefined") return
+    if (manualPreviewClearTimerRef.current) window.clearTimeout(manualPreviewClearTimerRef.current)
+    manualPreviewClearTimerRef.current = window.setTimeout(() => {
+      manualPreviewClearTimerRef.current = null
+      if (manualSaveRequestIdRef.current !== saveRequestId) return
+      if (dirtyViewsRef.current["manual-input"] || manualSaveInFlightRef.current) return
+      if (stableManualValue(manualDraftRef.current) !== stableManualValue(savedDraft)) return
+      manualPreviewDraftRef.current = null
+      setManualPreviewDraft(null)
+    }, 900)
   }
 
   useEffect(() => {
@@ -6691,7 +6731,7 @@ export function DashboardShell({
         setManualPreviewDraft(nextManualDraft)
         await persist(
           { ...latestData, paidOptionSourceColumns: nextPaidOptionSourceColumns, weeklyReport: nextWeekly },
-          { immediate: true, updatedViews: ["manual-input", "weekly-report"] },
+          { immediate: true, updatedViews: ["manual-input", "weekly-report"], suppressFailureAlert: true, rollbackOnFailure: false },
         )
         const verifyResponse = await fetch(`/api/dashboard?slice=weeklyReport&verify=${Date.now()}`, { cache: "no-store" }).catch(() => null)
         const verifyPayload = verifyResponse?.ok ? await verifyResponse.json().catch(() => null) : null
@@ -6700,8 +6740,8 @@ export function DashboardShell({
         }
         isSyncingManualDraftRef.current = true
         manualBaseDraftRef.current = cloneData(nextManualDraft)
-        manualPreviewDraftRef.current = null
-        setManualPreviewDraft(null)
+        manualPreviewDraftRef.current = nextManualDraft
+        scheduleManualPreviewClear(saveRequestId, nextManualDraft)
         if (manualSaveRequestIdRef.current === saveRequestId) {
           setManualSaveStatus({
             phase: "success",
@@ -8980,7 +9020,7 @@ export function DashboardShell({
                   <div>
                     <div className="text-[18px] font-bold text-slate-950">주간 신규/대체/해지 반영 검토</div>
                     <div className="mt-1 text-[12px] font-semibold text-slate-500">
-                      체크된 주간 항목을 확인하고 업종별 위치와 영역별 순증 위치를 지정합니다.
+                      체크된 주간 항목의 영역별 위치만 지정하면 업종별 요약은 자동으로 반영됩니다.
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-[12px] font-bold">
@@ -9001,8 +9041,8 @@ export function DashboardShell({
                     <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
                       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
                         <div>
-                          <div className="text-[14px] font-bold text-slate-900">신규/대체 업종 배치</div>
-                          <div className="mt-0.5 text-[11px] font-semibold text-slate-500">회사 정보와 배치 위치를 한 줄에서 확인합니다.</div>
+                          <div className="text-[14px] font-bold text-slate-900">신규/대체 영역 배치</div>
+                          <div className="mt-0.5 text-[11px] font-semibold text-slate-500">영역별 위치 선택 기준으로 업종별 카운팅이 자동 반영됩니다.</div>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <button
@@ -9039,11 +9079,10 @@ export function DashboardShell({
                           </button>
                         </div>
                       </div>
-                      <div className="hidden shrink-0 grid-cols-[34px_minmax(220px,1fr)_112px_170px_160px] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500 lg:grid">
+                      <div className="hidden shrink-0 grid-cols-[34px_minmax(240px,1fr)_112px_240px] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500 lg:grid">
                         <div className="text-center">선택</div>
                         <div>대상</div>
                         <div>구분</div>
-                        <div>업종별 위치</div>
                         <div>영역별 위치</div>
                       </div>
                       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
@@ -9051,7 +9090,7 @@ export function DashboardShell({
                           typeAnalysisImportReview.newRows.map((row: any) => (
                             <div
                               key={row.tempId}
-                              className={`grid grid-cols-[34px_minmax(0,1fr)] items-center gap-2 rounded-xl border px-3 py-2.5 transition lg:grid-cols-[34px_minmax(220px,1fr)_112px_170px_160px] ${
+                              className={`grid grid-cols-[34px_minmax(0,1fr)] items-center gap-2 rounded-xl border px-3 py-2.5 transition lg:grid-cols-[34px_minmax(240px,1fr)_112px_240px] ${
                                 row.include === false
                                   ? "border-slate-200 bg-slate-50 text-slate-400"
                                   : "border-slate-200 bg-white text-slate-900 hover:border-blue-200 hover:bg-blue-50/30"
@@ -9084,21 +9123,6 @@ export function DashboardShell({
                               </select>
                               <select
                                 className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
-                                value={row.group || TYPE_ANALYSIS_OTHER_FINANCE_LABEL}
-                                onChange={(event) =>
-                                  updateTypeAnalysisReviewNewRow(row.tempId, {
-                                    group: event.target.value,
-                                    areaGroup: normalizeTypeAnalysisAreaGroup(event.target.value, row.companyName),
-                                  })
-                                }
-                                aria-label="업종별 위치"
-                              >
-                                {TYPE_ANALYSIS_INDUSTRY_LABELS.map((item) => (
-                                  <option key={item} value={item}>{item}</option>
-                                ))}
-                              </select>
-                              <select
-                                className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
                                 value={row.areaGroup || normalizeTypeAnalysisAreaGroup(row.group || row.industry, row.companyName)}
                                 onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { areaGroup: event.target.value })}
                                 aria-label="영역별 위치"
@@ -9121,7 +9145,7 @@ export function DashboardShell({
                       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
                         <div>
                           <div className="text-[14px] font-bold text-slate-900">해지 반영 항목</div>
-                          <div className="mt-0.5 text-[11px] font-semibold text-slate-500">해지 사유와 반영 위치를 같은 흐름에서 정리합니다.</div>
+                          <div className="mt-0.5 text-[11px] font-semibold text-slate-500">해지 사유와 영역별 위치만 정리하면 업종별 요약이 자동 반영됩니다.</div>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <button
@@ -9158,11 +9182,10 @@ export function DashboardShell({
                           </button>
                         </div>
                       </div>
-                      <div className="hidden shrink-0 grid-cols-[34px_minmax(220px,1fr)_150px_170px_160px] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500 lg:grid">
+                      <div className="hidden shrink-0 grid-cols-[34px_minmax(240px,1fr)_150px_240px] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500 lg:grid">
                         <div className="text-center">선택</div>
                         <div>대상</div>
                         <div>해지 사유</div>
-                        <div>업종별 위치</div>
                         <div>영역별 위치</div>
                       </div>
                       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
@@ -9170,7 +9193,7 @@ export function DashboardShell({
                           typeAnalysisImportReview.terminationRows.map((row: any) => (
                             <div
                               key={row.tempId}
-                              className={`grid grid-cols-[34px_minmax(0,1fr)] items-center gap-2 rounded-xl border px-3 py-2.5 transition lg:grid-cols-[34px_minmax(220px,1fr)_150px_170px_160px] ${
+                              className={`grid grid-cols-[34px_minmax(0,1fr)] items-center gap-2 rounded-xl border px-3 py-2.5 transition lg:grid-cols-[34px_minmax(240px,1fr)_150px_240px] ${
                                 row.include === false
                                   ? "border-slate-200 bg-slate-50 text-slate-400"
                                   : "border-slate-200 bg-white text-slate-900 hover:border-rose-200 hover:bg-rose-50/30"
@@ -9208,21 +9231,6 @@ export function DashboardShell({
                                   "회사합병매각",
                                   "구독료 미수",
                                 ].map((item) => (
-                                  <option key={item} value={item}>{item}</option>
-                                ))}
-                              </select>
-                              <select
-                                className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
-                                value={row.group || TYPE_ANALYSIS_OTHER_FINANCE_LABEL}
-                                onChange={(event) =>
-                                  updateTypeAnalysisReviewTerminationRow(row.tempId, {
-                                    group: event.target.value,
-                                    areaGroup: normalizeTypeAnalysisAreaGroup(event.target.value, row.companyName),
-                                  })
-                                }
-                                aria-label="업종별 위치"
-                              >
-                                {TYPE_ANALYSIS_INDUSTRY_LABELS.map((item) => (
                                   <option key={item} value={item}>{item}</option>
                                 ))}
                               </select>
