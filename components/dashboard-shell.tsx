@@ -2787,7 +2787,9 @@ export function DashboardShell({
   const manualBaseDraftRef = useRef<any>(cloneData(manualDraft))
   const manualDraftReadyRef = useRef(false)
   const isSyncingManualDraftRef = useRef(false)
+  const manualSaveInFlightRef = useRef(false)
   const manualSaveRequestIdRef = useRef(0)
+  const manualSaveScrollRef = useRef<{ x: number; y: number } | null>(null)
   const flushPendingSave = useRef<() => void>(() => {})
   const heartbeatIdRef = useRef(`conn-${Math.random().toString(36).slice(2, 10)}`)
   const lastActivityAtRef = useRef(Date.now())
@@ -3410,7 +3412,7 @@ export function DashboardShell({
   ])
 
   useEffect(() => {
-    if (dirtyViewsRef.current["manual-input"]) return
+    if (dirtyViewsRef.current["manual-input"] || manualSaveInFlightRef.current || manualPreviewDraftRef.current) return
     isSyncingManualDraftRef.current = true
     const nextDraft = buildManualDraftFromWeekly(weeklyReport, contracts, paidOptionSourceColumns)
     manualBaseDraftRef.current = cloneData(nextDraft)
@@ -4136,6 +4138,25 @@ export function DashboardShell({
     markViewsDirty(["manual-input"])
   }
 
+  function captureManualScrollPosition() {
+    if (typeof window === "undefined") return
+    manualSaveScrollRef.current = {
+      x: window.scrollX,
+      y: window.scrollY,
+    }
+  }
+
+  function restoreManualScrollPosition() {
+    if (typeof window === "undefined") return
+    const snapshot = manualSaveScrollRef.current
+    if (!snapshot) return
+    const restore = () => window.scrollTo({ left: snapshot.x, top: snapshot.y, behavior: "auto" })
+    window.requestAnimationFrame(() => {
+      restore()
+      window.requestAnimationFrame(restore)
+    })
+  }
+
   useEffect(() => {
     manualDraftRef.current = manualDraft
     if (!manualDraftReadyRef.current) {
@@ -4579,7 +4600,10 @@ export function DashboardShell({
         },
       ]),
     }))
-    window.alert("추가매출에 반영했습니다.")
+    setManualSaveStatus({
+      phase: "dirty",
+      message: "추가매출에 반영했습니다. 저장을 눌러 확정해주세요.",
+    })
   }
 
   function addAdditionalSaleRow() {
@@ -6560,6 +6584,7 @@ export function DashboardShell({
   }
 
   function handleManualUpdate() {
+    captureManualScrollPosition()
     if (typeof document !== "undefined" && document.activeElement instanceof HTMLInputElement) {
       document.activeElement.blur()
     }
@@ -6577,75 +6602,88 @@ export function DashboardShell({
   function runManualUpdate() {
     const saveRequestId = manualSaveRequestIdRef.current + 1
     manualSaveRequestIdRef.current = saveRequestId
+    manualSaveInFlightRef.current = true
     setManualSaveStatus({
       phase: "saving",
       message: "수동입력 값을 저장하고 있습니다...",
     })
     startTransition(async () => {
-      const latestData = pendingDataRef.current || data
-      const draftRaw = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
-      const latestSliceResponse = await fetch("/api/dashboard?slice=weeklyReport", { cache: "no-store" }).catch(() => null)
-      const latestSlice = latestSliceResponse?.ok ? await latestSliceResponse.json().catch(() => null) : null
-      const latestWeeklyReport = latestSlice?.weeklyReport || latestData?.weeklyReport || weeklyReport
-      const latestPaidOptionSourceColumns =
-        latestSlice?.paidOptionSourceColumns ||
-        latestData?.paidOptionSourceColumns ||
-        paidOptionSourceColumns ||
-        []
-      const serverDraft = buildManualDraftFromWeekly(latestWeeklyReport, contracts, latestPaidOptionSourceColumns)
-      const baseDraft = manualBaseDraftRef.current || serverDraft
-      const draft = mergeManualDraftForSave(serverDraft, baseDraft, draftRaw)
-      const normalizedRevenueRows = buildRevenueRowsWithComputedTotal(draft.revenueRows || [])
-      const draftSummary = applyWeeklyAutoSummary(draft.manualSummary || {})
-      const draftRevenueDisplay = buildRevenueDisplaySet({
-        revenueHeaderText: draft.revenueHeaderText,
-        subtitleOne: draft.subtitleOne,
-        subtitleTwo: draft.subtitleTwo,
-        revenueUnitPrice: draft.revenueUnitPrice,
-        additionalContractCount: draft.additionalContractCount,
-        additionalSales: draft.additionalSales || [],
-        manualSummary: draftSummary,
-        revenueRows: normalizedRevenueRows,
-        fallbackSelectedCount: weeklyNetAutoCount,
-      })
-      const nextManualDraft = {
-        ...draft,
-        revenueRows: cloneData(normalizedRevenueRows),
-        terminationOverviewRows: cloneData(buildTerminationOverviewRowsWithComputedTotals(draft.terminationOverviewRows || [])),
-      }
-      const manualSavedAt = new Date().toISOString()
-      const nextWeekly = {
-        ...latestWeeklyReport,
-        // Persist the exact values currently shown in the manual input view so
-        // weekly report behaves like an Excel cell reference. The save first
-        // merges against the latest server copy so stale tabs cannot roll back
-        // unrelated manual-input cells.
-        revenueHeaderText: draftRevenueDisplay.header,
-        revenueUnitPrice: toNumber(draft.revenueUnitPrice),
-        additionalContractCount: toNumber(draft.additionalContractCount),
-        manualLastSavedAt: manualSavedAt,
-        manualLastSavedBy: currentUser?.name || "",
-        manualSaveVersion: `${manualSavedAt}-${saveRequestId}`,
-        subtitleOne: draftRevenueDisplay.subtitleOne,
-        subtitleTwo: draftRevenueDisplay.subtitleTwo,
-        revenueNoteText: draft.revenueNoteText,
-        manualSummary: draftSummary,
-        revenueRows: cloneData(normalizedRevenueRows),
-        goalRows: cloneData(buildGoalRows(draft.goalRows || [])),
-        industryStats: cloneData(draft.industryStats || []),
-        paidOptionInfoColumns: cloneData(draft.paidOptionInfoColumns || []),
-        terminationOverviewRows: cloneData(nextManualDraft.terminationOverviewRows || []),
-        weeklyIndustryOverviewRows: cloneData(draft.weeklyIndustryOverviewRows || []),
-        additionalSales: normalizeAdditionalSalesRows(cloneData(draft.additionalSales || [])),
-        manualSaveHistory: [
-          buildManualSaveSnapshot(latestWeeklyReport, currentUser),
-          ...(Array.isArray(latestWeeklyReport?.manualSaveHistory) ? latestWeeklyReport.manualSaveHistory : []),
-        ].slice(0, 10),
-      }
-      const nextPaidOptionSourceColumns = manualValueChanged(baseDraft?.paidOptionInfoColumns, draftRaw?.paidOptionInfoColumns)
-        ? cloneData(nextWeekly.paidOptionInfoColumns || [])
-        : cloneData(latestPaidOptionSourceColumns || latestData?.paidOptionSourceColumns || [])
       try {
+        const latestData = pendingDataRef.current || data
+        const draftRaw = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
+        const latestSliceResponse = await fetch("/api/dashboard?slice=weeklyReport", { cache: "no-store" }).catch(() => null)
+        const latestSlice = latestSliceResponse?.ok ? await latestSliceResponse.json().catch(() => null) : null
+        const latestWeeklyReport = latestSlice?.weeklyReport || latestData?.weeklyReport || weeklyReport
+        const latestPaidOptionSourceColumns =
+          latestSlice?.paidOptionSourceColumns ||
+          latestData?.paidOptionSourceColumns ||
+          paidOptionSourceColumns ||
+          []
+        const serverDraft = buildManualDraftFromWeekly(latestWeeklyReport, contracts, latestPaidOptionSourceColumns)
+        const baseDraft = manualBaseDraftRef.current || serverDraft
+        const draft = mergeManualDraftForSave(serverDraft, baseDraft, draftRaw)
+        const normalizedRevenueRows = buildRevenueRowsWithComputedTotal(draft.revenueRows || [])
+        const draftSummary = applyWeeklyAutoSummary(draft.manualSummary || {})
+        const draftRevenueDisplay = buildRevenueDisplaySet({
+          revenueHeaderText: draft.revenueHeaderText,
+          subtitleOne: draft.subtitleOne,
+          subtitleTwo: draft.subtitleTwo,
+          revenueUnitPrice: draft.revenueUnitPrice,
+          additionalContractCount: draft.additionalContractCount,
+          additionalSales: draft.additionalSales || [],
+          manualSummary: draftSummary,
+          revenueRows: normalizedRevenueRows,
+          fallbackSelectedCount: weeklyNetAutoCount,
+        })
+        const normalizedTerminationOverviewRows = buildTerminationOverviewRowsWithComputedTotals(draft.terminationOverviewRows || [])
+        const normalizedGoalRows = buildGoalRows(draft.goalRows || [])
+        const normalizedAdditionalSales = normalizeAdditionalSalesRows(cloneData(draft.additionalSales || []))
+        const nextManualDraft = {
+          ...draft,
+          revenueHeaderText: draftRevenueDisplay.header,
+          revenueUnitPrice: String(toNumber(draft.revenueUnitPrice)),
+          additionalContractCount: String(toNumber(draft.additionalContractCount) || 0),
+          manualLastSavedAt: new Date().toISOString(),
+          subtitleOne: draftRevenueDisplay.subtitleOne,
+          subtitleTwo: draftRevenueDisplay.subtitleTwo,
+          manualSummary: draftSummary,
+          revenueRows: cloneData(normalizedRevenueRows),
+          goalRows: cloneData(normalizedGoalRows),
+          terminationOverviewRows: cloneData(normalizedTerminationOverviewRows),
+          additionalSales: cloneData(normalizedAdditionalSales),
+        }
+        const manualSavedAt = nextManualDraft.manualLastSavedAt
+        const nextWeekly = {
+          ...latestWeeklyReport,
+          // Persist the exact values currently shown in the manual input view so
+          // weekly report behaves like an Excel cell reference. The save first
+          // merges against the latest server copy so stale tabs cannot roll back
+          // unrelated manual-input cells.
+          revenueHeaderText: draftRevenueDisplay.header,
+          revenueUnitPrice: toNumber(draft.revenueUnitPrice),
+          additionalContractCount: toNumber(draft.additionalContractCount),
+          manualLastSavedAt: manualSavedAt,
+          manualLastSavedBy: currentUser?.name || "",
+          manualSaveVersion: `${manualSavedAt}-${saveRequestId}`,
+          subtitleOne: draftRevenueDisplay.subtitleOne,
+          subtitleTwo: draftRevenueDisplay.subtitleTwo,
+          revenueNoteText: draft.revenueNoteText,
+          manualSummary: draftSummary,
+          revenueRows: cloneData(normalizedRevenueRows),
+          goalRows: cloneData(normalizedGoalRows),
+          industryStats: cloneData(draft.industryStats || []),
+          paidOptionInfoColumns: cloneData(draft.paidOptionInfoColumns || []),
+          terminationOverviewRows: cloneData(normalizedTerminationOverviewRows),
+          weeklyIndustryOverviewRows: cloneData(draft.weeklyIndustryOverviewRows || []),
+          additionalSales: cloneData(normalizedAdditionalSales),
+          manualSaveHistory: [
+            buildManualSaveSnapshot(latestWeeklyReport, currentUser),
+            ...(Array.isArray(latestWeeklyReport?.manualSaveHistory) ? latestWeeklyReport.manualSaveHistory : []),
+          ].slice(0, 10),
+        }
+        const nextPaidOptionSourceColumns = manualValueChanged(baseDraft?.paidOptionInfoColumns, draftRaw?.paidOptionInfoColumns)
+          ? cloneData(nextWeekly.paidOptionInfoColumns || [])
+          : cloneData(latestPaidOptionSourceColumns || latestData?.paidOptionSourceColumns || [])
         isSyncingManualDraftRef.current = true
         manualDraftRef.current = nextManualDraft
         setManualDraft(nextManualDraft)
@@ -6678,6 +6716,9 @@ export function DashboardShell({
             message: "저장 확인에 실패했습니다. 다시 저장해주세요.",
           })
         }
+      } finally {
+        manualSaveInFlightRef.current = false
+        restoreManualScrollPosition()
       }
     })
   }
@@ -9251,7 +9292,7 @@ export function DashboardShell({
                   onClick={handleManualUpdate}
                   title="저장"
                   aria-label="저장"
-                  className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-2xl px-4 text-[13px] font-bold transition ${manualSaveButtonClass}`}
+                  className={`inline-flex h-10 min-w-[112px] shrink-0 items-center justify-center gap-2 rounded-2xl px-4 text-[13px] font-bold transition ${manualSaveButtonClass}`}
                 >
                   <SaveIcon className={manualSaveStatus.phase === "saving" ? "h-[18px] w-[18px] animate-pulse" : "h-[18px] w-[18px]"} />
                   <span>{manualSaveButtonLabel}</span>
