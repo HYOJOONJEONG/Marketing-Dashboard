@@ -3274,14 +3274,17 @@ export function DashboardShell({
     normalizedTerminationOnceRef.current = true
     const nextActiveSheet = normalizedSheets[0]
     startTransition(async () => {
-      await persist({
-        ...data,
-        termination: {
-          ...termination,
-          currentSheetId: nextActiveSheet.id,
-          sheets: needsPrune ? [nextActiveSheet] : normalizedSheets,
+      await persist(
+        {
+          ...data,
+          termination: {
+            ...termination,
+            currentSheetId: nextActiveSheet.id,
+            sheets: needsPrune ? [nextActiveSheet] : normalizedSheets,
+          },
         },
-      })
+        { updatedViews: ["termination"] },
+      )
     })
   }, [data, termination, startTransition])
   useEffect(() => {
@@ -4804,8 +4807,9 @@ export function DashboardShell({
   function toggleWeeklySelection(contractId: string) {
     const latestData = pendingDataRef.current || data
     const latestContracts = Array.isArray(latestData?.contracts) ? latestData.contracts : contracts
+    const includedInWeeklyUpdatedAt = new Date().toISOString()
     const nextContracts = latestContracts.map((row: any) =>
-      row.id === contractId ? { ...row, includedInWeekly: !row.includedInWeekly } : row,
+      row.id === contractId ? { ...row, includedInWeekly: !row.includedInWeekly, includedInWeeklyUpdatedAt } : row,
     )
     persist(
       { ...latestData, contracts: nextContracts },

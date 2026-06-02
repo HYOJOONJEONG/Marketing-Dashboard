@@ -371,14 +371,64 @@ function describeDashboardPut(changedKeys: DashboardStateSliceKey[], existingDat
   return "대시보드 저장"
 }
 
+function contractMergeKey(row: any) {
+  const id = safeText(row?.id)
+  if (id) return `id:${id}`
+  const idCode = normalizeContractIdCode(row?.idCode)
+  return idCode ? `idCode:${idCode}` : ""
+}
+
+function mergeContractWeeklySelection(existing: any, incoming: any) {
+  if (!existing) return incoming
+  const existingAt = safeText(existing?.includedInWeeklyUpdatedAt || existing?.weeklySelectionUpdatedAt)
+  const incomingAt = safeText(incoming?.includedInWeeklyUpdatedAt || incoming?.weeklySelectionUpdatedAt)
+  const existingTime = parseTimestamp(existingAt)
+  const incomingTime = parseTimestamp(incomingAt)
+  const existingChecked = Boolean(existing?.includedInWeekly)
+  const incomingChecked = Boolean(incoming?.includedInWeekly)
+
+  if (existingTime || incomingTime) {
+    if (existingTime > incomingTime) {
+      return {
+        ...incoming,
+        includedInWeekly: existingChecked,
+        ...(existingAt ? { includedInWeeklyUpdatedAt: existingAt } : {}),
+      }
+    }
+    return {
+      ...incoming,
+      includedInWeekly: incomingChecked,
+      ...(incomingAt ? { includedInWeeklyUpdatedAt: incomingAt } : {}),
+    }
+  }
+
+  if (existingChecked && !incomingChecked) {
+    return { ...incoming, includedInWeekly: true }
+  }
+  return incoming
+}
+
+function mergeContractRowsPreservingWeeklySelection(existingContracts: any[], incomingContracts: any[]) {
+  const existingByKey = new Map<string, any>()
+  existingContracts.forEach((contract) => {
+    const key = contractMergeKey(contract)
+    if (key) existingByKey.set(key, contract)
+  })
+  return incomingContracts.map((contract) => {
+    const key = contractMergeKey(contract)
+    return mergeContractWeeklySelection(key ? existingByKey.get(key) : null, contract)
+  })
+}
+
 function mergeContractsForScope(existingContracts: any[], incomingContracts: any[], user: any, scope: ReturnType<typeof getContractAccessScope>) {
-  if (scope === "all") return incomingContracts
+  const scopedIncoming = mergeContractRowsPreservingWeeklySelection(existingContracts, incomingContracts)
+  if (scope === "all") return scopedIncoming
   if (scope === "team") {
     const preserved = existingContracts.filter((contract) => String(contract?.teamId || "") !== user.teamId)
-    return [...incomingContracts, ...preserved]
+    return [...scopedIncoming, ...preserved]
   }
   const preserved = existingContracts.filter((contract) => !isOwnedContractForUser(contract, user))
-  return [...incomingContracts, ...preserved]
+  return [...scopedIncoming, ...preserved]
 }
 
 function isBusanUniversityTerminationRow(row: any) {
