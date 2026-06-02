@@ -700,104 +700,123 @@ function NewReplacementExcelSummary({
   const asOfLabel = cleanedAsOf.startsWith("(") ? cleanedAsOf : `(${cleanedAsOf || "기준일 확인 필요"})`
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-300 bg-white">
-      <div className="overflow-x-auto">
-        <div className="min-w-[1160px] bg-white px-0 pb-4 pt-5 text-slate-950">
-          <h2 className="mb-6 text-center text-[28px] font-bold tracking-[0] text-black">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-blue-600">New / Replacement</div>
+          <h2 className="mt-1 text-[20px] font-black tracking-[-0.03em] text-slate-950">
             {year}년 인포맥스 신규단말기 대체현황
           </h2>
-          <div className="mb-2 px-1 text-[16px] font-bold text-red-600">{asOfLabel}</div>
+        </div>
+        <span className="inline-flex w-fit items-center rounded-full border border-rose-100 bg-rose-50 px-3 py-1.5 text-[12px] font-bold text-rose-600">
+          {asOfLabel}
+        </span>
+      </div>
 
-          <table className="w-[920px] border-collapse text-[13px] text-black">
-            <tbody>
-              <tr>
-                <th rowSpan={2} className="w-[156px] border border-black bg-[#bfbfbf] px-2 py-2 text-center font-bold">
-                  업무성격
-                </th>
-                {workColumns.map((column) => (
-                  <th key={column.label} className="border border-black bg-[#bfbfbf] px-2 py-1 text-center font-bold">
-                    {column.label}
-                  </th>
-                ))}
-              </tr>
-              <tr>
-                {workColumns.map((column) => (
-                  <td key={column.label} className="border border-black px-3 py-1 text-right tabular-nums">
-                    {excelNumber(column.value)}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
+      <div className="overflow-x-auto">
+        <div className="min-w-[1160px] space-y-4 p-5">
+          <div className="grid gap-4 xl:grid-cols-[0.95fr_1.45fr]">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <table className="w-full border-collapse text-[12px]">
+                <tbody>
+                  <tr className="border-b border-slate-200">
+                    <th rowSpan={2} className="w-[120px] border-r border-slate-200 bg-blue-50 px-3 text-center text-[13px] font-bold text-blue-700">
+                      업무성격
+                    </th>
+                    {workColumns.map((column) => (
+                      <th key={column.label} className="border-r border-slate-200 bg-slate-50 px-3 py-2 text-center font-semibold text-slate-600 last:border-r-0">
+                        {column.label}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    {workColumns.map((column) => (
+                      <td key={column.label} className="border-r border-slate-100 px-3 py-2.5 text-right text-[15px] font-semibold tabular-nums text-slate-950 last:border-r-0">
+                        {excelNumber(column.value)}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
-          <table className="mt-5 w-full border-collapse text-[13px] text-black">
-            <tbody>
-              <tr>
-                <th rowSpan={2} className="w-[156px] border border-black bg-[#bfbfbf] px-2 py-2 text-center font-bold leading-tight">
-                  타사단말기<br />대체
-                </th>
-                {replacementColumns.map((column) => (
-                  <th key={column.label} className="border border-black bg-[#bfbfbf] px-2 py-1 text-center font-bold">
-                    {column.label}
-                  </th>
-                ))}
-              </tr>
-              <tr>
-                {replacementColumns.map((column) => (
-                  <td key={column.label} className="border border-black px-3 py-1 text-right tabular-nums">
-                    {excelNumber(column.value, true)}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-          <div className="mb-6 mt-1 text-[12px] font-medium text-black">
-            * 분류의 첫글자 이니셜을 아래 표에 표시
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <table className="w-full border-collapse text-[12px]">
+                <tbody>
+                  <tr className="border-b border-slate-200">
+                    <th rowSpan={2} className="w-[120px] border-r border-slate-200 bg-indigo-50 px-3 text-center text-[13px] font-bold leading-tight text-indigo-700">
+                      타사단말기<br />대체
+                    </th>
+                    {replacementColumns.map((column) => (
+                      <th key={column.label} className="border-r border-slate-200 bg-slate-50 px-3 py-2 text-center font-semibold text-slate-600 last:border-r-0">
+                        {column.label}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    {replacementColumns.map((column) => (
+                      <td key={column.label} className="border-r border-slate-100 px-3 py-2.5 text-right text-[15px] font-semibold tabular-nums text-slate-950 last:border-r-0">
+                        {excelNumber(column.value, true)}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <table className="w-full border-collapse text-[13px] text-black">
-            <thead>
-              <tr>
-                {matrixColumns.map((column) => (
-                  <th key={column.key} className={`${column.className} border border-black bg-[#bfbfbf] px-2 py-2 text-center font-bold`}>
-                    {column.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {industryRows.length ? (
-                industryRows.map((row, index) => {
-                  const isTotal = isTotalIndustryRow(row)
-                  return (
-                    <tr key={`${row?.label || "industry"}-${index}`} className={isTotal ? "bg-[#bfbfbf]" : "bg-white"}>
-                      {matrixColumns.map((column) => (
-                        <td
-                          key={column.key}
-                          className={`${column.className} border border-black px-2 py-3 align-middle tabular-nums ${isTotal ? "font-medium" : ""}`}
-                        >
-                          {column.key === "label" ? (
-                            <span className="block whitespace-normal break-keep text-center leading-[1.35]">{row?.label}</span>
-                          ) : (
-                            excelNumber(row?.[column.key])
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  )
-                })
-              ) : (
-                <tr>
-                  <td colSpan={matrixColumns.length} className="border border-black px-4 py-8 text-center font-semibold text-slate-500">
-                    업종별 신규/대체 요약이 없습니다.
-                  </td>
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5">
+              <div className="text-[13px] font-bold text-slate-900">업종별 대체 현황</div>
+              <div className="text-[11px] font-semibold text-slate-400">분류 이니셜 기준</div>
+            </div>
+            <table className="w-full border-collapse text-[12px]">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                  {matrixColumns.map((column) => (
+                    <th key={column.key} className={`${column.className} border-r border-slate-200 px-3 py-2.5 text-center font-bold last:border-r-0`}>
+                      {column.label}
+                    </th>
+                  ))}
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {industryRows.length ? (
+                  industryRows.map((row, index) => {
+                    const isTotal = isTotalIndustryRow(row)
+                    return (
+                      <tr
+                        key={`${row?.label || "industry"}-${index}`}
+                        className={`border-b border-slate-100 last:border-0 ${isTotal ? "bg-blue-50/70" : "hover:bg-blue-50/30"}`}
+                      >
+                        {matrixColumns.map((column) => (
+                          <td
+                            key={column.key}
+                            className={`${column.className} border-r border-slate-100 px-3 py-2.5 align-middle tabular-nums last:border-r-0 ${isTotal ? "font-bold text-blue-800" : "text-slate-700"}`}
+                          >
+                            {column.key === "label" ? (
+                              <span className={`block whitespace-normal break-keep text-left leading-[1.35] ${isTotal ? "text-center" : ""}`}>{row?.label}</span>
+                            ) : (
+                              excelNumber(row?.[column.key])
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    )
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={matrixColumns.length} className="px-4 py-8 text-center font-semibold text-slate-400">
+                      업종별 신규/대체 요약이 없습니다.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
   )
 }
 
