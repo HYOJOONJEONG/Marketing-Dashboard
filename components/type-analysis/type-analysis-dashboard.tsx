@@ -16,8 +16,16 @@ type Props = {
     terminationCount: number
     netCount: number
   }
+  industryMoveOptions?: string[]
+  areaMoveOptions?: string[]
   onImportWeekly: () => void
   onSave: () => void
+  onMoveRecord?: (
+    kind: "new" | "termination",
+    record: any,
+    target: string,
+    targetKind: "industry" | "area",
+  ) => void
 }
 
 type ReportColumn = {
@@ -230,6 +238,42 @@ function makeGroups(records: any[], orderedLabels: string[], getLabel: (row: any
     ...Array.from(buckets.keys()).filter((label) => !orderedLabels.includes(label)),
   ]
   return labels.map((label) => ({ label, rows: buckets.get(label) || [] })).filter((group) => group.rows.length > 0)
+}
+
+function buildMoveOptions(options: string[] = [], current: unknown) {
+  const currentText = String(current || "").trim()
+  const base = options.map((item) => String(item || "").trim()).filter(Boolean)
+  return currentText && !base.includes(currentText) ? [currentText, ...base] : base
+}
+
+function MoveSelect({
+  value,
+  options,
+  label,
+  onChange,
+}: {
+  value: string
+  options: string[]
+  label: string
+  onChange: (value: string) => void
+}) {
+  const items = buildMoveOptions(options, value)
+  if (!items.length) return <span className="text-slate-300">-</span>
+  return (
+    <select
+      className="h-7 w-full min-w-[190px] rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+      value={value || items[0]}
+      onChange={(event) => {
+        const nextValue = event.target.value
+        if (nextValue && nextValue !== value) onChange(nextValue)
+      }}
+      aria-label={label}
+    >
+      {items.map((item) => (
+        <option key={item} value={item}>{item}</option>
+      ))}
+    </select>
+  )
 }
 
 function StatusPill({ children, tone = "slate" }: { children: string; tone?: "slate" | "blue" | "green" | "amber" }) {
@@ -462,7 +506,15 @@ function IndustryMatrixTable({ rows }: { rows: any[] }) {
   )
 }
 
-function GroupedNewRecordsTable({ groups }: { groups: Array<{ label: string; rows: any[] }> }) {
+function GroupedNewRecordsTable({
+  groups,
+  industryOptions,
+  onMoveRecord,
+}: {
+  groups: Array<{ label: string; rows: any[] }>
+  industryOptions: string[]
+  onMoveRecord?: Props["onMoveRecord"]
+}) {
   const totalCount = groups.reduce((sum, group) => sum + group.rows.length, 0)
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -470,24 +522,26 @@ function GroupedNewRecordsTable({ groups }: { groups: Array<{ label: string; row
         상세 목록 {formatNumber(totalCount)}건
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[980px] border-collapse text-[12px]">
+        <table className="w-full min-w-[1300px] border-collapse text-[12px]">
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
               <th className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold">NO</th>
-              <th className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold">날짜</th>
+              <th className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold">반영일</th>
               <th className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-semibold">ID</th>
               <th className="min-w-[170px] border-r border-slate-200 px-2 py-2 text-left font-semibold">회사명</th>
               <th className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-semibold">부서</th>
               <th className="w-[86px] border-r border-slate-200 px-2 py-2 text-left font-semibold">권유자</th>
               <th className="w-[88px] border-r border-slate-200 px-2 py-2 text-left font-semibold">구분</th>
-              <th className="min-w-[180px] px-2 py-2 text-left font-semibold">비고</th>
+              <th className="w-[82px] border-r border-slate-200 px-2 py-2 text-left font-semibold">업무성격</th>
+              <th className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold">비고</th>
+              <th className="w-[220px] px-2 py-2 text-left font-semibold">업종 이동</th>
             </tr>
           </thead>
           <tbody>
             {groups.length ? (
               groups.flatMap((group) => [
                 <tr key={`${group.label}-header`} className="border-y border-slate-200 bg-gradient-to-r from-slate-50 to-white">
-                  <td colSpan={8} className="px-3 py-1.5">
+                  <td colSpan={10} className="px-3 py-1.5">
                     <GroupHeaderLabel label={group.label} count={group.rows.length} />
                   </td>
                 </tr>,
@@ -500,13 +554,24 @@ function GroupedNewRecordsTable({ groups }: { groups: Array<{ label: string; row
                     <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.departmentName}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.recommender}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-700">{row.replacementType || "신규"}</td>
-                    <td className="px-2 py-1.5 text-slate-600">{row.note}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-700">{row.businessType || "기타"}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.note}</td>
+                    <td className="px-2 py-1.5">
+                      {onMoveRecord ? (
+                        <MoveSelect
+                          value={String(row?.group || group.label || "").trim()}
+                          options={industryOptions}
+                          label="신규/대체 업종 이동"
+                          onChange={(value) => onMoveRecord("new", row, value, "industry")}
+                        />
+                      ) : <span className="text-slate-300">-</span>}
+                    </td>
                   </tr>
                 )),
               ])
             ) : (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
+                <td colSpan={10} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
                   검색 조건에 맞는 신규/대체 데이터가 없습니다.
                 </td>
               </tr>
@@ -574,7 +639,15 @@ function TerminationMatrixTable({ rows }: { rows: any[] }) {
   )
 }
 
-function GroupedTerminationRecordsTable({ groups }: { groups: Array<{ label: string; rows: any[] }> }) {
+function GroupedTerminationRecordsTable({
+  groups,
+  industryOptions,
+  onMoveRecord,
+}: {
+  groups: Array<{ label: string; rows: any[] }>
+  industryOptions: string[]
+  onMoveRecord?: Props["onMoveRecord"]
+}) {
   const totalCount = groups.reduce((sum, group) => sum + group.rows.length, 0)
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -582,25 +655,26 @@ function GroupedTerminationRecordsTable({ groups }: { groups: Array<{ label: str
         상세 목록 {formatNumber(totalCount)}건
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1040px] border-collapse text-[12px]">
+        <table className="w-full min-w-[1260px] border-collapse text-[12px]">
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
               <th className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold">NO</th>
-              <th className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold">날짜</th>
+              <th className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold">반영일</th>
               <th className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-semibold">ID</th>
               <th className="min-w-[170px] border-r border-slate-200 px-2 py-2 text-left font-semibold">회사명</th>
               <th className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-semibold">부서</th>
               <th className="w-[86px] border-r border-slate-200 px-2 py-2 text-left font-semibold">담당자</th>
               <th className="min-w-[140px] border-r border-slate-200 px-2 py-2 text-left font-semibold">해지사유</th>
               <th className="w-[98px] border-r border-slate-200 px-2 py-2 text-right font-semibold">위약금</th>
-              <th className="min-w-[180px] px-2 py-2 text-left font-semibold">비고</th>
+              <th className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold">비고</th>
+              <th className="w-[220px] px-2 py-2 text-left font-semibold">업종 이동</th>
             </tr>
           </thead>
           <tbody>
             {groups.length ? (
               groups.flatMap((group) => [
                 <tr key={`${group.label}-header`} className="border-y border-slate-200 bg-gradient-to-r from-slate-50 to-white">
-                  <td colSpan={9} className="px-3 py-1.5">
+                  <td colSpan={10} className="px-3 py-1.5">
                     <GroupHeaderLabel label={group.label} count={group.rows.length} />
                   </td>
                 </tr>,
@@ -614,13 +688,23 @@ function GroupedTerminationRecordsTable({ groups }: { groups: Array<{ label: str
                     <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.recommender}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-700">{row.reason}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 text-right tabular-nums text-slate-600">{formatNumber(row.penalty)}</td>
-                    <td className="px-2 py-1.5 text-slate-600">{row.note}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.note}</td>
+                    <td className="px-2 py-1.5">
+                      {onMoveRecord ? (
+                        <MoveSelect
+                          value={String(row?.group || group.label || "").trim()}
+                          options={industryOptions}
+                          label="해지 업종 이동"
+                          onChange={(value) => onMoveRecord("termination", row, value, "industry")}
+                        />
+                      ) : <span className="text-slate-300">-</span>}
+                    </td>
                   </tr>
                 )),
               ])
             ) : (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
+                <td colSpan={10} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
                   검색 조건에 맞는 해지 데이터가 없습니다.
                 </td>
               </tr>
@@ -683,7 +767,15 @@ function AreaSummaryTable({ rows }: { rows: any[] }) {
   )
 }
 
-function GroupedAreaRecordsTable({ groups }: { groups: Array<{ label: string; rows: any[] }> }) {
+function GroupedAreaRecordsTable({
+  groups,
+  areaOptions,
+  onMoveRecord,
+}: {
+  groups: Array<{ label: string; rows: any[] }>
+  areaOptions: string[]
+  onMoveRecord?: Props["onMoveRecord"]
+}) {
   const totalCount = groups.reduce((sum, group) => sum + group.rows.length, 0)
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -691,24 +783,25 @@ function GroupedAreaRecordsTable({ groups }: { groups: Array<{ label: string; ro
         상세 목록 {formatNumber(totalCount)}건
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1040px] border-collapse text-[12px]">
+        <table className="w-full min-w-[1260px] border-collapse text-[12px]">
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
               <th className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold">NO</th>
               <th className="w-[86px] border-r border-slate-200 px-2 py-2 text-center font-semibold">구분</th>
-              <th className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold">날짜</th>
+              <th className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold">반영일</th>
               <th className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-semibold">ID</th>
               <th className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold">기관</th>
               <th className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-semibold">부서</th>
               <th className="w-[130px] border-r border-slate-200 px-2 py-2 text-left font-semibold">세부구분</th>
-              <th className="min-w-[180px] px-2 py-2 text-left font-semibold">비고</th>
+              <th className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold">비고</th>
+              <th className="w-[260px] px-2 py-2 text-left font-semibold">영역 이동</th>
             </tr>
           </thead>
           <tbody>
             {groups.length ? (
               groups.flatMap((group) => [
                 <tr key={`${group.label}-header`} className="border-y border-slate-200 bg-gradient-to-r from-slate-50 to-white">
-                  <td colSpan={8} className="px-3 py-1.5">
+                  <td colSpan={9} className="px-3 py-1.5">
                     <GroupHeaderLabel category="영역" label={group.label} count={group.rows.length} />
                   </td>
                 </tr>,
@@ -728,14 +821,24 @@ function GroupedAreaRecordsTable({ groups }: { groups: Array<{ label: string; ro
                       <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">{row.companyName}</td>
                       <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.departmentName}</td>
                       <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-700">{isTermination ? row.reason : row.replacementType || "신규"}</td>
-                      <td className="px-2 py-1.5 text-slate-600">{row.note}</td>
+                      <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">{row.note}</td>
+                      <td className="px-2 py-1.5">
+                        {onMoveRecord ? (
+                          <MoveSelect
+                            value={String(row?.areaGroup || row?.group || group.label || "").trim()}
+                            options={areaOptions}
+                            label="영역 이동"
+                            onChange={(value) => onMoveRecord(isTermination ? "termination" : "new", row, value, "area")}
+                          />
+                        ) : <span className="text-slate-300">-</span>}
+                      </td>
                     </tr>
                   )
                 }),
               ])
             ) : (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
+                <td colSpan={9} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
                   검색 조건에 맞는 영역별 순증 데이터가 없습니다.
                 </td>
               </tr>
@@ -754,8 +857,11 @@ export function TypeAnalysisDashboard({
   isSaving,
   saveMessage,
   weeklyImportSummary,
+  industryMoveOptions = [],
+  areaMoveOptions = [],
   onImportWeekly,
   onSave,
+  onMoveRecord,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("summary")
   const [query, setQuery] = useState("")
@@ -877,13 +983,14 @@ export function TypeAnalysisDashboard({
     ]
     const newDetailColumns: ReportColumn[] = [
       { label: "NO", width: "5%", align: "center", noWrap: true, get: (row) => row.no },
-      { label: "날짜", width: "9%", noWrap: true, get: (row) => row.date },
+      { label: "반영일", width: "9%", noWrap: true, get: (row) => row.date },
       { label: "ID", width: "9%", noWrap: true, get: (row) => row.idCode },
-      { label: "회사명", width: "18%", get: (row) => row.companyName },
-      { label: "부서", width: "17%", get: (row) => row.departmentName },
+      { label: "회사명", width: "17%", get: (row) => row.companyName },
+      { label: "부서", width: "16%", get: (row) => row.departmentName },
       { label: "권유자", width: "8%", noWrap: true, get: (row) => row.recommender },
-      { label: "구분", width: "9%", noWrap: true, get: (row) => row.replacementType || "신규" },
-      { label: "비고", width: "25%", get: (row) => row.note },
+      { label: "구분", width: "8%", noWrap: true, get: (row) => row.replacementType || "신규" },
+      { label: "업무", width: "7%", noWrap: true, get: (row) => row.businessType || "기타" },
+      { label: "비고", width: "20%", get: (row) => row.note },
     ]
     const terminationIndustryColumnsForReport: ReportColumn[] = [
       { label: "업종", width: "27%", get: (row) => row.label },
@@ -900,7 +1007,7 @@ export function TypeAnalysisDashboard({
     ]
     const terminationDetailColumns: ReportColumn[] = [
       { label: "NO", width: "5%", align: "center", noWrap: true, get: (row) => row.no },
-      { label: "날짜", width: "9%", noWrap: true, get: (row) => row.date },
+      { label: "반영일", width: "9%", noWrap: true, get: (row) => row.date },
       { label: "ID", width: "9%", noWrap: true, get: (row) => row.idCode },
       { label: "회사명", width: "18%", get: (row) => row.companyName },
       { label: "부서", width: "17%", get: (row) => row.departmentName },
@@ -920,7 +1027,7 @@ export function TypeAnalysisDashboard({
     const areaDetailColumns: ReportColumn[] = [
       { label: "NO", width: "5%", align: "center", noWrap: true, get: (row) => row.no },
       { label: "구분", width: "8%", noWrap: true, get: (row) => (row.kind === "termination" || row.transactionType === "해지" ? "해지" : "신규/대체") },
-      { label: "날짜", width: "9%", noWrap: true, get: (row) => row.date },
+      { label: "반영일", width: "9%", noWrap: true, get: (row) => row.date },
       { label: "ID", width: "9%", noWrap: true, get: (row) => row.idCode },
       { label: "기관", width: "20%", get: (row) => row.companyName },
       { label: "부서", width: "18%", get: (row) => row.departmentName },
@@ -1229,22 +1336,35 @@ export function TypeAnalysisDashboard({
 
       {tab === "new" ? (
         <div className="space-y-4">
+          <MiniSummaryTable title="업무성격 요약" rows={data?.newReplacement?.workSummary || []} />
           <IndustryMatrixTable rows={industryMatrixRows} />
-          <GroupedNewRecordsTable groups={groupedNewRecords} />
+          <GroupedNewRecordsTable
+            groups={groupedNewRecords}
+            industryOptions={industryMoveOptions}
+            onMoveRecord={onMoveRecord}
+          />
         </div>
       ) : null}
 
       {tab === "termination" ? (
         <div className="space-y-4">
           <TerminationMatrixTable rows={terminationMatrixRows} />
-          <GroupedTerminationRecordsTable groups={groupedTerminationRecords} />
+          <GroupedTerminationRecordsTable
+            groups={groupedTerminationRecords}
+            industryOptions={industryMoveOptions}
+            onMoveRecord={onMoveRecord}
+          />
         </div>
       ) : null}
 
       {tab === "area" ? (
         <div className="space-y-4">
           <AreaSummaryTable rows={areaSummaryRows} />
-          <GroupedAreaRecordsTable groups={groupedAreaRecords} />
+          <GroupedAreaRecordsTable
+            groups={groupedAreaRecords}
+            areaOptions={areaMoveOptions}
+            onMoveRecord={onMoveRecord}
+          />
         </div>
       ) : null}
 

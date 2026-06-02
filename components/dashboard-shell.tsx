@@ -1749,6 +1749,16 @@ function createTypeAnalysisReplacementFlags(replacementType: string) {
   }
 }
 
+const TYPE_ANALYSIS_BUSINESS_TYPE_OPTIONS = ["외환", "주식", "채권", "기타"] as const
+
+function normalizeTypeAnalysisBusinessType(value: unknown) {
+  const text = String(value || "").trim()
+  if (text.includes("외") || text.includes("환")) return "외환"
+  if (text.includes("주") || text.includes("선물") || text.includes("옵션")) return "주식"
+  if (text.includes("채")) return "채권"
+  return "기타"
+}
+
 function buildTypeAnalysisReplacementSummary(records: any[]) {
   const counts = {
     check: 0,
@@ -1782,16 +1792,16 @@ function buildTypeAnalysisReplacementSummary(records: any[]) {
 function buildTypeAnalysisWorkSummary(records: any[]) {
   const counts = { forex: 0, stock: 0, bond: 0, other: 0 }
   ;(Array.isArray(records) ? records : []).forEach((record: any) => {
-    const text = String(record?.businessType || "").trim()
-    if (text.includes("외환")) counts.forex += 1
-    else if (text.includes("주식") || text.includes("선물") || text.includes("옵션")) counts.stock += 1
-    else if (text.includes("채권")) counts.bond += 1
+    const businessType = normalizeTypeAnalysisBusinessType(record?.businessType)
+    if (businessType === "외환") counts.forex += 1
+    else if (businessType === "주식") counts.stock += 1
+    else if (businessType === "채권") counts.bond += 1
     else counts.other += 1
   })
   const total = counts.forex + counts.stock + counts.bond + counts.other
   return [
     { label: "외환", value: counts.forex },
-    { label: "주식,선물,옵션", value: counts.stock },
+    { label: "주식", value: counts.stock },
     { label: "채권", value: counts.bond },
     { label: "기타", value: counts.other },
     { label: "합 계", value: total },
@@ -2110,6 +2120,7 @@ function buildTypeAnalysisAreaNetGrowthState(baseAreaNetGrowth: any, newRecords:
 
 function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any[]) {
   const createdAt = new Date().toISOString()
+  const reflectedDate = getTypeAnalysisReflectionDateLabel()
   const newRows = (Array.isArray(newContracts) ? newContracts : []).map((row: any, index: number) => {
     const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
     const group = normalizeTypeAnalysisIndustryGroup(row?.industry, row?.companyName)
@@ -2118,13 +2129,14 @@ function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any
       tempId: `new-${row?.id || row?.idCode || index}`,
       include: true,
       no: index + 1,
-      date: normalizeDate(row?.registrationDate || row?.createdAt || createdAt),
+      date: reflectedDate,
+      sourceDate: normalizeDate(row?.registrationDate || row?.createdAt || createdAt),
       idCode: String(row?.idCode || "").trim(),
       companyName: String(row?.companyName || "").trim(),
       departmentName: String(row?.departmentName || "").trim(),
       recommender: String(row?.recommender || "").trim(),
       industry: String(row?.industry || "").trim(),
-      businessType: "기타",
+      businessType: normalizeTypeAnalysisBusinessType(row?.businessType || row?.workType || row?.note || "기타"),
       replacementType,
       replacementFlags: createTypeAnalysisReplacementFlags(replacementType),
       note: String(row?.note || "").trim(),
@@ -2141,7 +2153,8 @@ function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any
       tempId: `termination-${row?.id || row?.customerId || index}`,
       include: true,
       no: index + 1,
-      date: normalizeDate(row?.receivedDate || row?.terminationDate || createdAt),
+      date: reflectedDate,
+      sourceDate: normalizeDate(row?.receivedDate || row?.terminationDate || createdAt),
       idCode: String(row?.customerId || row?.idCode || "").trim(),
       companyName: String(row?.companyName || "").trim(),
       departmentName: String(row?.departmentName || "").trim(),
@@ -2168,6 +2181,7 @@ function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any
 
 function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
   const createdAt = new Date().toISOString()
+  const reflectedDate = getTypeAnalysisReflectionDateLabel()
   const newRecords = (Array.isArray(review?.newRows) ? review.newRows : [])
     .filter((row: any) => row?.include !== false)
     .map((row: any, index: number) => {
@@ -2176,13 +2190,14 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
       const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, row?.industry || row?.group, row?.companyName)
       return {
         no: index + 1,
-        date: normalizeDate(row?.date || createdAt),
+        date: normalizeDate(row?.date || reflectedDate),
+        sourceDate: normalizeDate(row?.sourceDate || ""),
         idCode: String(row?.idCode || "").trim(),
         companyName: String(row?.companyName || "").trim(),
         departmentName: String(row?.departmentName || "").trim(),
         recommender: String(row?.recommender || "").trim(),
         industry: String(row?.industry || "").trim(),
-        businessType: String(row?.businessType || "기타").trim() || "기타",
+        businessType: normalizeTypeAnalysisBusinessType(row?.businessType || "기타"),
         replacementType,
         replacementFlags: createTypeAnalysisReplacementFlags(replacementType),
         note: String(row?.note || "").trim(),
@@ -2199,7 +2214,8 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
       const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, row?.industry || row?.group, row?.companyName)
       return {
         no: index + 1,
-        date: normalizeDate(row?.date || createdAt),
+        date: normalizeDate(row?.date || reflectedDate),
+        sourceDate: normalizeDate(row?.sourceDate || ""),
         idCode: String(row?.idCode || "").trim(),
         companyName: String(row?.companyName || "").trim(),
         departmentName: String(row?.departmentName || "").trim(),
@@ -2218,8 +2234,9 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
     })
   return {
     id: `type-analysis-weekly-${Date.now()}`,
-    label: `${normalizeDate(getSeoulTodayKey())} 주간 반영`,
+    label: `${reflectedDate} 주간 반영`,
     createdAt,
+    reflectedDate,
     newCount: newRecords.length,
     terminationCount: terminationRecords.length,
     netCount: newRecords.length - terminationRecords.length,
@@ -2241,7 +2258,7 @@ function getTypeAnalysisRecordMergeKey(kind: "new" | "termination", record: any)
   const company = normalizeSearchIdentifier(record?.companyName)
   const department = normalizeSearchIdentifier(record?.departmentName)
 
-  if (idCode) return `${kind}:id:${idCode}:${date}:${company}`
+  if (idCode) return `${kind}:id:${idCode}:${company}:${department}`
   return `${kind}:fallback:${date}:${company}:${department}`
 }
 
@@ -2371,6 +2388,19 @@ function formatDateDashed(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0")
   const day = String(date.getDate()).padStart(2, "0")
   return `${year}-${month}-${day}`
+}
+
+function getTypeAnalysisReflectionDateKey(baseDate = new Date()) {
+  const seoulToday = getSeoulTodayKey()
+  const [year, month, day] = seoulToday.split("-").map((part) => Number(part))
+  const base = Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)
+    ? new Date(year, month - 1, day)
+    : baseDate
+  return formatDateDashed(getUpcomingThursday(base))
+}
+
+function getTypeAnalysisReflectionDateLabel(baseDate = new Date()) {
+  return normalizeDate(getTypeAnalysisReflectionDateKey(baseDate))
 }
 
 function shiftDashedDate(value: unknown, diffDays: number) {
@@ -3266,10 +3296,22 @@ export function DashboardShell({
     [includedContracts.length, typeAnalysisWeeklyTerminationRows.length],
   )
   const typeAnalysisReviewCounts = useMemo(
-    () => ({
-      newCount: (typeAnalysisImportReview?.newRows || []).filter((row: any) => row?.include !== false).length,
-      terminationCount: (typeAnalysisImportReview?.terminationRows || []).filter((row: any) => row?.include !== false).length,
-    }),
+    () => {
+      const selectedNewRows = (typeAnalysisImportReview?.newRows || []).filter((row: any) => row?.include !== false)
+      const workCounts = { forex: 0, stock: 0, bond: 0, other: 0 }
+      selectedNewRows.forEach((row: any) => {
+        const businessType = normalizeTypeAnalysisBusinessType(row?.businessType)
+        if (businessType === "외환") workCounts.forex += 1
+        else if (businessType === "주식") workCounts.stock += 1
+        else if (businessType === "채권") workCounts.bond += 1
+        else workCounts.other += 1
+      })
+      return {
+        newCount: selectedNewRows.length,
+        terminationCount: (typeAnalysisImportReview?.terminationRows || []).filter((row: any) => row?.include !== false).length,
+        workCounts,
+      }
+    },
     [typeAnalysisImportReview],
   )
   useEffect(() => {
@@ -6914,15 +6956,16 @@ export function DashboardShell({
       Array.isArray(item?.terminationRecords) ? item.terminationRecords : [],
     )
     const mergedNewRecords = mergeTypeAnalysisRecords(
-      baseTypeAnalysis.newReplacement?.records || [],
-      [...historicalNewRecords, ...snapshot.newRecords],
+      [...historicalNewRecords, ...(baseTypeAnalysis.newReplacement?.records || [])],
+      snapshot.newRecords,
       "new",
     )
     const mergedTerminationRecords = mergeTypeAnalysisRecords(
-      baseTypeAnalysis.terminationType?.records || [],
-      [...historicalTerminationRecords, ...snapshot.terminationRecords],
+      [...historicalTerminationRecords, ...(baseTypeAnalysis.terminationType?.records || [])],
+      snapshot.terminationRecords,
       "termination",
     )
+    const reflectedAsOf = `${snapshot.reflectedDate || getTypeAnalysisReflectionDateLabel()} 기준`
     const nextTypeAnalysis = {
       ...baseTypeAnalysis,
       currentSnapshotId: snapshot.id,
@@ -6930,18 +6973,18 @@ export function DashboardShell({
       newReplacement: buildTypeAnalysisNewReplacementState(
         baseTypeAnalysis.newReplacement,
         mergedNewRecords,
-        `${normalizeDate(getSeoulTodayKey())} 기준`,
+        reflectedAsOf,
       ),
       terminationType: buildTypeAnalysisTerminationState(
         baseTypeAnalysis.terminationType,
         mergedTerminationRecords,
-        `${normalizeDate(getSeoulTodayKey())} 기준`,
+        reflectedAsOf,
       ),
       areaNetGrowth: buildTypeAnalysisAreaNetGrowthState(
         baseTypeAnalysis.areaNetGrowth,
         mergedNewRecords,
         mergedTerminationRecords,
-        `${normalizeDate(getSeoulTodayKey())} 기준`,
+        reflectedAsOf,
       ),
       weeklySnapshots: [
         snapshot,
@@ -6959,6 +7002,74 @@ export function DashboardShell({
     setTypeAnalysisSaveMessage(
       `주간 반영 완료: 신규/대체 ${snapshot.newCount}건, 해지 ${snapshot.terminationCount}건을 누적했습니다. 저장을 눌러 확정해주세요.`,
     )
+  }
+
+  function handleTypeAnalysisMoveRecord(
+    kind: "new" | "termination",
+    record: any,
+    target: string,
+    targetKind: "industry" | "area",
+  ) {
+    const latestData = pendingDataRef.current || data
+    const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis)
+    const recordKey = getTypeAnalysisRecordMergeKey(kind, record)
+    const updateRecordPlacement = (row: any) => {
+      const companyName = row?.companyName
+      if (targetKind === "area") {
+        const areaGroup = normalizeTypeAnalysisAreaGroup(target, companyName)
+        const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, row?.industry || row?.group, companyName)
+        return { ...row, group, areaGroup }
+      }
+      const group = normalizeTypeAnalysisIndustryGroup(target, companyName)
+      const areaGroup = normalizeTypeAnalysisAreaGroup(group, companyName)
+      return { ...row, group, areaGroup }
+    }
+    const updateRows = (rows: any[]) =>
+      (Array.isArray(rows) ? rows : []).map((row: any) =>
+        getTypeAnalysisRecordMergeKey(kind, row) === recordKey ? updateRecordPlacement(row) : row,
+      )
+
+    const nextNewRecords = kind === "new"
+      ? updateRows(baseTypeAnalysis.newReplacement?.records || [])
+      : [...(baseTypeAnalysis.newReplacement?.records || [])]
+    const nextTerminationRecords = kind === "termination"
+      ? updateRows(baseTypeAnalysis.terminationType?.records || [])
+      : [...(baseTypeAnalysis.terminationType?.records || [])]
+    const nextWeeklySnapshots = (baseTypeAnalysis.weeklySnapshots || []).map((snapshot: any) => ({
+      ...snapshot,
+      newRecords: kind === "new" ? updateRows(snapshot?.newRecords || []) : snapshot?.newRecords || [],
+      terminationRecords: kind === "termination" ? updateRows(snapshot?.terminationRecords || []) : snapshot?.terminationRecords || [],
+    }))
+    const reflectedAsOf = `${getTypeAnalysisReflectionDateLabel()} 기준`
+    const nextTypeAnalysis = {
+      ...baseTypeAnalysis,
+      updatedAt: new Date().toISOString(),
+      newReplacement: buildTypeAnalysisNewReplacementState(
+        baseTypeAnalysis.newReplacement,
+        nextNewRecords,
+        reflectedAsOf,
+      ),
+      terminationType: buildTypeAnalysisTerminationState(
+        baseTypeAnalysis.terminationType,
+        nextTerminationRecords,
+        reflectedAsOf,
+      ),
+      areaNetGrowth: buildTypeAnalysisAreaNetGrowthState(
+        baseTypeAnalysis.areaNetGrowth,
+        nextNewRecords,
+        nextTerminationRecords,
+        reflectedAsOf,
+      ),
+      weeklySnapshots: nextWeeklySnapshots,
+    }
+    persist(
+      {
+        ...latestData,
+        typeAnalysis: nextTypeAnalysis,
+      },
+      { updatedViews: ["type-analysis"] },
+    )
+    setTypeAnalysisSaveMessage("분류 이동 반영 완료. 저장을 눌러 확정해주세요.")
   }
 
   async function handleTypeAnalysisSave() {
@@ -9154,6 +9265,9 @@ export function DashboardShell({
               weeklyImportSummary={typeAnalysisWeeklyImportSummary}
               onImportWeekly={handleTypeAnalysisImportWeekly}
               onSave={handleTypeAnalysisSave}
+              industryMoveOptions={[...TYPE_ANALYSIS_INDUSTRY_LABELS]}
+              areaMoveOptions={[...TYPE_ANALYSIS_AREA_LABELS]}
+              onMoveRecord={handleTypeAnalysisMoveRecord}
             />
           )}
 
@@ -9187,6 +9301,12 @@ export function DashboardShell({
                         <div>
                           <div className="text-[14px] font-bold text-slate-900">신규/대체 영역 배치</div>
                           <div className="mt-0.5 text-[11px] font-semibold text-slate-500">영역별 위치 선택 기준으로 업종별 카운팅이 자동 반영됩니다.</div>
+                          <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-bold">
+                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">외 {formatNumber(typeAnalysisReviewCounts.workCounts.forex)}</span>
+                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">주 {formatNumber(typeAnalysisReviewCounts.workCounts.stock)}</span>
+                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">채 {formatNumber(typeAnalysisReviewCounts.workCounts.bond)}</span>
+                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">기 {formatNumber(typeAnalysisReviewCounts.workCounts.other)}</span>
+                          </div>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <button
@@ -9223,10 +9343,11 @@ export function DashboardShell({
                           </button>
                         </div>
                       </div>
-                      <div className="hidden shrink-0 grid-cols-[34px_minmax(240px,1fr)_112px_240px] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500 lg:grid">
+                      <div className="hidden shrink-0 grid-cols-[34px_minmax(220px,1fr)_112px_112px_220px] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500 lg:grid">
                         <div className="text-center">선택</div>
                         <div>대상</div>
                         <div>구분</div>
+                        <div>업무성격</div>
                         <div>영역별 위치</div>
                       </div>
                       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
@@ -9234,7 +9355,7 @@ export function DashboardShell({
                           typeAnalysisImportReview.newRows.map((row: any) => (
                             <div
                               key={row.tempId}
-                              className={`grid grid-cols-[34px_minmax(0,1fr)] items-center gap-2 rounded-xl border px-3 py-2.5 transition lg:grid-cols-[34px_minmax(240px,1fr)_112px_240px] ${
+                              className={`grid grid-cols-[34px_minmax(0,1fr)] items-center gap-2 rounded-xl border px-3 py-2.5 transition lg:grid-cols-[34px_minmax(220px,1fr)_112px_112px_220px] ${
                                 row.include === false
                                   ? "border-slate-200 bg-slate-50 text-slate-400"
                                   : "border-slate-200 bg-white text-slate-900 hover:border-blue-200 hover:bg-blue-50/30"
@@ -9262,6 +9383,16 @@ export function DashboardShell({
                                 aria-label="신규/대체 구분"
                               >
                                 {["신규", "체크", "마켓포인트", "블룸버그", "로이터", "한경머니·기타"].map((item) => (
+                                  <option key={item} value={item}>{item}</option>
+                                ))}
+                              </select>
+                              <select
+                                className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
+                                value={normalizeTypeAnalysisBusinessType(row.businessType || "기타")}
+                                onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { businessType: event.target.value })}
+                                aria-label="업무성격"
+                              >
+                                {TYPE_ANALYSIS_BUSINESS_TYPE_OPTIONS.map((item) => (
                                   <option key={item} value={item}>{item}</option>
                                 ))}
                               </select>
