@@ -935,9 +935,21 @@ function mergePaidOptionImportedTotals(columns: any[], importedColumns: any[] | 
   })
 }
 
+function normalizePaidOptionIdKind(value: unknown): "contract" | "trial" | "free" {
+  const raw = String(value ?? "").trim().toLowerCase()
+  if (raw === "trial" || raw === "test" || raw === "시험" || raw === "테스트") return "trial"
+  if (raw === "free" || raw === "무료" || raw === "무상") return "free"
+  return "contract"
+}
+
+function isContractPaidOptionRecord(record: any) {
+  return normalizePaidOptionIdKind(record?.id_kind ?? record?.id_type ?? record?.idGroup ?? record?.option_id_type) === "contract"
+}
+
 function getPaidOptionRecordCountByCode(records: any[]) {
   const byCode = new Map<string, any[]>()
   ;(Array.isArray(records) ? records : []).forEach((record: any) => {
+    if (!isContractPaidOptionRecord(record)) return
     const code = String(record?.category_code || "").trim().toUpperCase()
     if (!code || code === "API") return
     byCode.set(code, [...(byCode.get(code) || []), record])
@@ -2175,6 +2187,41 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
 
 function buildTypeAnalysisWeeklySnapshot(newContracts: any[], terminationRows: any[]) {
   return buildTypeAnalysisWeeklySnapshotFromReview(buildTypeAnalysisWeeklyReview(newContracts, terminationRows))
+}
+
+function getTypeAnalysisRecordMergeKey(kind: "new" | "termination", record: any) {
+  const sourceId = normalizeCustomerIdentifier(record?.sourceId)
+  if (sourceId) return `${kind}:source:${sourceId}`
+
+  const idCode = normalizeCustomerIdentifier(record?.idCode || record?.customerId)
+  const date = normalizeDate(record?.date || record?.registrationDate || record?.receivedDate || record?.terminationDate || "")
+  const company = normalizeSearchIdentifier(record?.companyName)
+  const department = normalizeSearchIdentifier(record?.departmentName)
+
+  if (idCode) return `${kind}:id:${idCode}:${date}:${company}`
+  return `${kind}:fallback:${date}:${company}:${department}`
+}
+
+function mergeTypeAnalysisRecords(existingRecords: any[], incomingRecords: any[], kind: "new" | "termination") {
+  const order: string[] = []
+  const byKey = new Map<string, any>()
+
+  const put = (record: any) => {
+    const key = getTypeAnalysisRecordMergeKey(kind, record)
+    if (!byKey.has(key)) order.push(key)
+    byKey.set(key, {
+      ...(byKey.get(key) || {}),
+      ...record,
+    })
+  }
+
+  ;(Array.isArray(existingRecords) ? existingRecords : []).forEach(put)
+  ;(Array.isArray(incomingRecords) ? incomingRecords : []).forEach(put)
+
+  return order.map((key, index) => ({
+    ...byKey.get(key),
+    no: index + 1,
+  }))
 }
 
 function normalizeAdditionalSalesRows(rows: any[]) {
@@ -6817,24 +6864,41 @@ export function DashboardShell({
       window.alert("반영할 항목을 1건 이상 선택해주세요.")
       return
     }
+    const snapshotHistory = [...(baseTypeAnalysis.weeklySnapshots || [])].reverse()
+    const historicalNewRecords = snapshotHistory.flatMap((item: any) =>
+      Array.isArray(item?.newRecords) ? item.newRecords : [],
+    )
+    const historicalTerminationRecords = snapshotHistory.flatMap((item: any) =>
+      Array.isArray(item?.terminationRecords) ? item.terminationRecords : [],
+    )
+    const mergedNewRecords = mergeTypeAnalysisRecords(
+      baseTypeAnalysis.newReplacement?.records || [],
+      [...historicalNewRecords, ...snapshot.newRecords],
+      "new",
+    )
+    const mergedTerminationRecords = mergeTypeAnalysisRecords(
+      baseTypeAnalysis.terminationType?.records || [],
+      [...historicalTerminationRecords, ...snapshot.terminationRecords],
+      "termination",
+    )
     const nextTypeAnalysis = {
       ...baseTypeAnalysis,
       currentSnapshotId: snapshot.id,
       updatedAt: snapshot.createdAt,
       newReplacement: buildTypeAnalysisNewReplacementState(
         baseTypeAnalysis.newReplacement,
-        snapshot.newRecords,
+        mergedNewRecords,
         `${normalizeDate(getSeoulTodayKey())} 기준`,
       ),
       terminationType: buildTypeAnalysisTerminationState(
         baseTypeAnalysis.terminationType,
-        snapshot.terminationRecords,
+        mergedTerminationRecords,
         `${normalizeDate(getSeoulTodayKey())} 기준`,
       ),
       areaNetGrowth: buildTypeAnalysisAreaNetGrowthState(
         baseTypeAnalysis.areaNetGrowth,
-        snapshot.newRecords,
-        snapshot.terminationRecords,
+        mergedNewRecords,
+        mergedTerminationRecords,
         `${normalizeDate(getSeoulTodayKey())} 기준`,
       ),
       weeklySnapshots: [
@@ -6850,7 +6914,9 @@ export function DashboardShell({
       { updatedViews: ["type-analysis"] },
     )
     setTypeAnalysisImportReview(null)
-    setTypeAnalysisSaveMessage("주간 신규/대체/해지/영역별 순증 내역을 불러왔습니다. 저장을 눌러 확정해주세요.")
+    setTypeAnalysisSaveMessage(
+      `주간 반영 완료: 신규/대체 ${snapshot.newCount}건, 해지 ${snapshot.terminationCount}건을 누적했습니다. 저장을 눌러 확정해주세요.`,
+    )
   }
 
   async function handleTypeAnalysisSave() {
