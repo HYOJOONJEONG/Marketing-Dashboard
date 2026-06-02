@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { BarChart3, Database, FileText, RefreshCw, Save, Search, UsersRound } from "lucide-react"
+import { ArrowUpDown, BarChart3, CalendarDays, Database, FileText, RefreshCw, Save, Search, UsersRound } from "lucide-react"
 
 type TabKey = "summary" | "new" | "termination" | "area" | "personal"
 
@@ -35,6 +35,10 @@ type ReportColumn = {
   noWrap?: boolean
   get: (row: any, index: number) => unknown
 }
+
+type KpiTone = "blue" | "green" | "rose"
+type KpiItem = { label: string; value: string; tone?: KpiTone }
+type DateSortDir = "desc" | "asc"
 
 const tabItems: Array<{ key: TabKey; label: string }> = [
   { key: "summary", label: "요약" },
@@ -74,6 +78,139 @@ function compactDate(value: unknown) {
 function findSummaryValue(rows: any[], matcher: (label: string) => boolean) {
   const row = (Array.isArray(rows) ? rows : []).find((item) => matcher(String(item?.label || "")))
   return toNumber(row?.value)
+}
+
+function compactKpiLabel(value: unknown) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/\( C \)/g, "")
+    .replace(/\( M \)/g, "")
+    .replace(/\( B \)/g, "")
+    .replace(/\( R \)/g, "")
+    .replace(/\( H \)/g, "")
+    .replace(/\(N\)/g, "")
+    .replace(/\(E\)/g, "")
+    .replace(/합\s*계/g, "합계")
+    .trim()
+}
+
+function summaryRowsToKpis(
+  rows: any[],
+  options: { totalTone?: KpiTone; fallbackTone?: KpiTone; labelPrefix?: string; totalLabel?: string; unit?: string } = {},
+) {
+  return (Array.isArray(rows) ? rows : [])
+    .map((row: any) => {
+      const baseLabel = compactKpiLabel(row?.label ?? row?.area ?? row?.manager ?? row?.no)
+      const value = row?.value ?? row?.total ?? row?.newCount ?? row?.terminationCount ?? row?.netCount ?? row?.totalNew
+      if (!baseLabel) return null
+      const compact = baseLabel.replace(/\s+/g, "")
+      const isTotal = compact === "계" || compact.includes("합계")
+      const label = isTotal
+        ? options.totalLabel || baseLabel
+        : options.labelPrefix
+          ? `${options.labelPrefix} ${baseLabel}`
+          : baseLabel
+      return {
+        label,
+        value: `${formatNumber(value)}${options.unit ?? "건"}`,
+        tone: isTotal ? options.totalTone : options.fallbackTone,
+      } as KpiItem
+    })
+    .filter(Boolean) as KpiItem[]
+}
+
+function getRecordDateLabel(row: any) {
+  return compactDate(row?.date || row?.reflectedDate || row?.createdAt || "")
+}
+
+function dateSortValue(value: unknown) {
+  const digits = String(value || "").replace(/\D/g, "")
+  if (digits.length >= 8) return Number(digits.slice(0, 8))
+  return 0
+}
+
+function sortRecordsByReflectionDate(records: any[], dir: DateSortDir) {
+  const sign = dir === "asc" ? 1 : -1
+  return [...records].sort((a: any, b: any) => {
+    const diff = dateSortValue(getRecordDateLabel(a)) - dateSortValue(getRecordDateLabel(b))
+    if (diff) return diff * sign
+    return toNumber(a?.no) - toNumber(b?.no)
+  })
+}
+
+function filterRecordsByReflectionDate(records: any[], dateFilter: string) {
+  if (!dateFilter || dateFilter === "all") return records
+  return records.filter((row: any) => getRecordDateLabel(row) === dateFilter)
+}
+
+function normalizeBusinessType(value: unknown) {
+  const text = String(value || "").trim()
+  if (text.includes("외") || text.includes("환")) return "외환"
+  if (text.includes("주") || text.includes("선물") || text.includes("옵션")) return "주식"
+  if (text.includes("채")) return "채권"
+  return "기타"
+}
+
+function normalizeReplacementType(value: unknown) {
+  const text = String(value || "").trim()
+  if (text.includes("체크")) return "체크"
+  if (text.includes("마켓")) return "마켓포인트"
+  if (text.includes("블룸")) return "블룸버그"
+  if (text.includes("로이터") || text.includes("레피니티브")) return "로이터"
+  if (text.includes("기타") || text.includes("한경")) return "한경머니·기타"
+  return "신규"
+}
+
+function normalizeTerminationReason(value: unknown) {
+  const text = String(value || "").trim()
+  if (text.includes("퇴사") || text.includes("이직") || text === "사") return "사용자퇴사/이직"
+  if (text.includes("비용") || text.includes("예산") || text === "비") return "비용절감"
+  if (text.includes("활용") || text.includes("불필요") || text === "활") return "활용저조"
+  if (text.includes("콘텐츠") || text.includes("타사") || text === "콘,타") return "타사대체"
+  if (text.includes("조직")) return "조직개편"
+  if (text.includes("휴직") || text.includes("출장")) return "휴직/출장"
+  if (text.includes("합병") || text.includes("매각")) return "합병매각"
+  if (text.includes("미수")) return "미수"
+  return "계약만료"
+}
+
+function countByLabels(records: any[], labels: string[], getLabel: (row: any) => string) {
+  const counts = new Map(labels.map((label) => [label, 0]))
+  records.forEach((row: any) => {
+    const label = getLabel(row)
+    counts.set(label, (counts.get(label) || 0) + 1)
+  })
+  return labels.map((label) => ({ label, value: counts.get(label) || 0 }))
+}
+
+function cleanCumulativeLabel(value: unknown) {
+  const text = String(value ?? "").trim()
+  return text.replace(/^누적\s*:\s*/g, "").trim()
+}
+
+function areaSummaryRowsToKpis(rows: any[], cumulativeLabel?: unknown) {
+  const items = (Array.isArray(rows) ? rows : [])
+    .map((row: any) => {
+      const label = compactKpiLabel(row?.area || row?.no)
+      if (!label) return null
+      const compact = label.replace(/\s+/g, "")
+      const isTotal = compact === "계" || compact.includes("합계")
+      return {
+        label: isTotal ? "영역 합계" : label,
+        value: `${formatNumber(row?.newCount)} / ${formatNumber(row?.terminationCount)} / ${formatNumber(row?.netCount)}`,
+        tone: isTotal ? "green" : undefined,
+      } as KpiItem
+    })
+    .filter(Boolean) as KpiItem[]
+  const cumulative = cleanCumulativeLabel(cumulativeLabel)
+  return cumulative ? [...items, { label: "누적 순증", value: cumulative, tone: "green" }] : items
+}
+
+function personalRowsToKpis(rows: any[]) {
+  return (Array.isArray(rows) ? rows : []).map((row: any) => ({
+    label: compactKpiLabel(row?.manager),
+    value: `${formatNumber(row?.totalNew)}건`,
+  }))
 }
 
 function normalizeSearch(value: unknown) {
@@ -338,15 +475,15 @@ function MiniSummaryTable({
   )
 }
 
-function CompactKpiTable({ items }: { items: Array<{ label: string; value: string; tone?: "blue" | "green" | "rose" }> }) {
+function CompactKpiTable({ items }: { items: KpiItem[] }) {
   return (
     <div className="px-5 py-3">
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <table className="w-full table-fixed border-collapse text-[12px]">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <table className="min-w-full border-collapse text-[12px]">
           <thead>
             <tr className="bg-slate-50 text-slate-600">
-              {items.map((item) => (
-                <th key={item.label} className="border-r border-slate-200 px-2 py-2 text-center font-semibold last:border-r-0">
+              {items.map((item, index) => (
+                <th key={`${item.label}-${index}`} className="whitespace-nowrap border-r border-slate-200 px-3 py-2 text-center font-semibold last:border-r-0">
                   {item.label}
                 </th>
               ))}
@@ -354,7 +491,7 @@ function CompactKpiTable({ items }: { items: Array<{ label: string; value: strin
           </thead>
           <tbody>
             <tr>
-              {items.map((item) => {
+              {items.map((item, index) => {
                 const toneClass =
                   item.tone === "blue"
                     ? "text-blue-700"
@@ -364,7 +501,7 @@ function CompactKpiTable({ items }: { items: Array<{ label: string; value: strin
                         ? "text-rose-700"
                         : "text-slate-950"
                 return (
-                  <td key={item.label} className={`border-r border-slate-200 px-2 py-2 text-center text-[17px] font-semibold tabular-nums last:border-r-0 ${toneClass}`}>
+                  <td key={`${item.label}-${index}`} className={`whitespace-nowrap border-r border-slate-200 px-3 py-2 text-center text-[17px] font-semibold tabular-nums last:border-r-0 ${toneClass}`}>
                     {item.value}
                   </td>
                 )
@@ -865,6 +1002,8 @@ export function TypeAnalysisDashboard({
 }: Props) {
   const [tab, setTab] = useState<TabKey>("summary")
   const [query, setQuery] = useState("")
+  const [reflectionDateFilter, setReflectionDateFilter] = useState("all")
+  const [reflectionDateSort, setReflectionDateSort] = useState<DateSortDir>("desc")
   const normalizedQuery = normalizeSearch(query)
 
   const newRecords = Array.isArray(data?.newReplacement?.records) ? data.newReplacement.records : []
@@ -873,15 +1012,38 @@ export function TypeAnalysisDashboard({
   const terminationIndustrySummary = Array.isArray(data?.terminationType?.industrySummary) ? data.terminationType.industrySummary : []
   const areaRecords = Array.isArray(data?.areaNetGrowth?.records) ? data.areaNetGrowth.records : []
   const areaSummaryRows = Array.isArray(data?.areaNetGrowth?.summaryRows) ? data.areaNetGrowth.summaryRows : []
+  const cumulativeNetLabel = data?.areaNetGrowth?.cumulativeNetLabel
   const personalRows = Array.isArray(data?.personalPerformance?.rows) ? data.personalPerformance.rows : []
   const snapshots = Array.isArray(data?.weeklySnapshots) ? data.weeklySnapshots : []
   const latestSnapshot = snapshots[0]
+  const reflectionDateOptions = useMemo(() => {
+    const dates = [...newRecords, ...terminationRecords, ...areaRecords]
+      .map((row: any) => getRecordDateLabel(row))
+      .filter(Boolean)
+    return Array.from(new Set(dates)).sort((a, b) => dateSortValue(b) - dateSortValue(a))
+  }, [areaRecords, newRecords, terminationRecords])
+  const isDateScoped = reflectionDateFilter !== "all"
+  const dateScopedNewRecords = useMemo(
+    () => filterRecordsByReflectionDate(newRecords, reflectionDateFilter),
+    [newRecords, reflectionDateFilter],
+  )
+  const dateScopedTerminationRecords = useMemo(
+    () => filterRecordsByReflectionDate(terminationRecords, reflectionDateFilter),
+    [terminationRecords, reflectionDateFilter],
+  )
+  const dateScopedAreaRecords = useMemo(
+    () => filterRecordsByReflectionDate(areaRecords, reflectionDateFilter),
+    [areaRecords, reflectionDateFilter],
+  )
 
   const newTotal = findSummaryValue(data?.newReplacement?.replacementSummary || [], (label) => label.includes("합"))
   const pureNewTotal = findSummaryValue(data?.newReplacement?.replacementSummary || [], (label) => label.includes("신규"))
   const replacementTotal = Math.max(0, newTotal - pureNewTotal)
   const terminationTotal = findSummaryValue(data?.terminationType?.reasonSummary || [], (label) => label.includes("합"))
   const netTotal = newTotal - terminationTotal
+  const totalAreaRow = (Array.isArray(data?.areaNetGrowth?.summaryRows) ? data.areaNetGrowth.summaryRows : []).find((row: any) =>
+    String(row?.no || "").replace(/\s+/g, "") === "계",
+  )
   const industryRows = useMemo(() => newIndustrySummary.filter((row: any) => !isTotalIndustryRow(row)), [newIndustrySummary])
   const industryMatrixRows = useMemo(() => newIndustrySummary.filter((row: any) => row?.label), [newIndustrySummary])
   const terminationIndustryRows = useMemo(() => terminationIndustrySummary.filter((row: any) => !isTotalIndustryRow(row)), [terminationIndustrySummary])
@@ -891,10 +1053,160 @@ export function TypeAnalysisDashboard({
     () => personalRows.map((row: any) => ({ ...row, manager: normalizeManagerLabel(row?.manager) })),
     [personalRows],
   )
-
+  const personalTotals = useMemo(
+    () =>
+      personalRows.reduce(
+        (acc: any, row: any) => ({
+          totalNew: acc.totalNew + toNumber(row?.totalNew),
+          new: acc.new + toNumber(row?.new),
+          check: acc.check + toNumber(row?.check),
+          marketPoint: acc.marketPoint + toNumber(row?.marketPoint),
+          reutersBloomberg: acc.reutersBloomberg + toNumber(row?.reutersBloomberg),
+        }),
+        { totalNew: 0, new: 0, check: 0, marketPoint: 0, reutersBloomberg: 0 },
+      ),
+    [personalRows],
+  )
+  const scopedNewWorkSummary = useMemo(
+    () => countByLabels(dateScopedNewRecords, ["외환", "주식", "채권", "기타"], (row) => normalizeBusinessType(row?.businessType)),
+    [dateScopedNewRecords],
+  )
+  const scopedNewReplacementSummary = useMemo(
+    () => [
+      ...countByLabels(dateScopedNewRecords, ["체크", "마켓포인트", "블룸버그", "로이터", "한경머니·기타", "신규"], (row) =>
+        normalizeReplacementType(row?.replacementType),
+      ),
+      { label: "합계", value: dateScopedNewRecords.length },
+    ],
+    [dateScopedNewRecords],
+  )
+  const scopedTerminationReasonSummary = useMemo(
+    () => [
+      ...countByLabels(
+        dateScopedTerminationRecords,
+        ["사용자퇴사/이직", "비용절감", "활용저조", "타사대체", "계약만료", "조직개편", "휴직/출장", "합병매각", "미수"],
+        (row) => normalizeTerminationReason(row?.reason),
+      ),
+      { label: "합계", value: dateScopedTerminationRecords.length },
+    ],
+    [dateScopedTerminationRecords],
+  )
+  const scopedTerminationCompetitorSummary = useMemo(
+    () => [
+      ...countByLabels(dateScopedTerminationRecords, ["체크", "마켓포인트", "블룸버그", "로이터", "한경/기타", "아웃"], (row) => {
+        const type = normalizeReplacementType(row?.competitorType)
+        return type === "신규" ? "아웃" : type === "한경머니·기타" ? "한경/기타" : type
+      }),
+      { label: "합계", value: dateScopedTerminationRecords.length },
+    ],
+    [dateScopedTerminationRecords],
+  )
+  const scopedAreaSummaryRows = useMemo(() => {
+    const rows = areaRows.map((area: any) => {
+      const label = String(area?.area || "").trim()
+      const scopedRows = dateScopedAreaRecords.filter((row: any) => String(row?.areaGroup || row?.group || "").trim() === label)
+      const newCount = scopedRows.filter((row: any) => row?.kind !== "termination" && row?.transactionType !== "해지").length
+      const terminationCount = scopedRows.filter((row: any) => row?.kind === "termination" || row?.transactionType === "해지").length
+      return {
+        ...area,
+        newCount,
+        terminationCount,
+        netCount: newCount - terminationCount,
+      }
+    })
+    const total = rows.reduce(
+      (acc: any, row: any) => ({
+        newCount: acc.newCount + toNumber(row?.newCount),
+        terminationCount: acc.terminationCount + toNumber(row?.terminationCount),
+        netCount: acc.netCount + toNumber(row?.netCount),
+      }),
+      { newCount: 0, terminationCount: 0, netCount: 0 },
+    )
+    return [...rows, { no: "계", area: "계", manager: "", ...total }]
+  }, [areaRows, dateScopedAreaRecords])
+  const kpiItems = useMemo<KpiItem[]>(() => {
+    if (tab === "new") {
+      return [
+        ...summaryRowsToKpis(isDateScoped ? scopedNewWorkSummary : data?.newReplacement?.workSummary || [], {
+          labelPrefix: "업무",
+          totalLabel: "업무 합계",
+          totalTone: "green",
+        }),
+        ...summaryRowsToKpis(isDateScoped ? scopedNewReplacementSummary : data?.newReplacement?.replacementSummary || [], {
+          labelPrefix: "대체",
+          totalLabel: "신규/대체 합계",
+          totalTone: "blue",
+        }),
+      ]
+    }
+    if (tab === "termination") {
+      return [
+        ...summaryRowsToKpis(isDateScoped ? scopedTerminationReasonSummary : data?.terminationType?.reasonSummary || [], {
+          labelPrefix: "해지",
+          totalLabel: "해지 합계",
+          totalTone: "rose",
+        }),
+        ...summaryRowsToKpis(isDateScoped ? scopedTerminationCompetitorSummary : data?.terminationType?.competitorSummary || [], {
+          labelPrefix: "경쟁사",
+          totalLabel: "경쟁사 합계",
+          totalTone: "blue",
+        }),
+      ]
+    }
+    if (tab === "area") {
+      return areaSummaryRowsToKpis(isDateScoped ? scopedAreaSummaryRows : areaSummaryRows, isDateScoped ? undefined : cumulativeNetLabel)
+    }
+    if (tab === "personal") {
+      return [
+        { label: "담당자", value: `${formatNumber(personalRowsForDisplay.length)}명` },
+        { label: "총 신규", value: `${formatNumber(personalTotals.totalNew)}건`, tone: "blue" },
+        { label: "신규", value: `${formatNumber(personalTotals.new)}건` },
+        { label: "체크", value: `${formatNumber(personalTotals.check)}건` },
+        { label: "마켓/로이터", value: `${formatNumber(personalTotals.marketPoint + personalTotals.reutersBloomberg)}건` },
+        ...personalRowsToKpis(personalRowsForDisplay),
+      ]
+    }
+    const summaryNewTotal = isDateScoped ? dateScopedNewRecords.length : newTotal
+    const summaryTerminationTotal = isDateScoped ? dateScopedTerminationRecords.length : terminationTotal
+    const summaryItems: KpiItem[] = [
+      { label: "신규+대체", value: `${formatNumber(summaryNewTotal)}건`, tone: "blue" },
+      { label: "신규", value: `${formatNumber(isDateScoped ? scopedNewReplacementSummary.find((row) => row.label === "신규")?.value : pureNewTotal)}건` },
+      { label: "대체", value: `${formatNumber(isDateScoped ? Math.max(0, summaryNewTotal - toNumber(scopedNewReplacementSummary.find((row) => row.label === "신규")?.value)) : replacementTotal)}건` },
+      { label: "해지", value: `${formatNumber(summaryTerminationTotal)}건`, tone: "rose" },
+      { label: "순증", value: `${formatNumber(summaryNewTotal - summaryTerminationTotal)}건`, tone: "green" },
+    ]
+    const cumulative = cleanCumulativeLabel(cumulativeNetLabel)
+    return !isDateScoped && cumulative ? [...summaryItems, { label: "누적 순증", value: cumulative, tone: "green" }] : summaryItems
+  }, [
+    areaRecords.length,
+    areaRows.length,
+    areaSummaryRows,
+    cumulativeNetLabel,
+    data?.newReplacement?.workSummary,
+    data?.newReplacement?.replacementSummary,
+    data?.terminationType?.competitorSummary,
+    data?.terminationType?.reasonSummary,
+    dateScopedNewRecords.length,
+    dateScopedTerminationRecords.length,
+    isDateScoped,
+    newTotal,
+    netTotal,
+    personalRowsForDisplay.length,
+    personalTotals,
+    pureNewTotal,
+    replacementTotal,
+    scopedAreaSummaryRows,
+    scopedNewReplacementSummary,
+    scopedNewWorkSummary,
+    scopedTerminationCompetitorSummary,
+    scopedTerminationReasonSummary,
+    tab,
+    terminationTotal,
+    totalAreaRow,
+  ])
   const filteredNewRecords = useMemo(
-    () => newRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
-    [newRecords, normalizedQuery],
+    () => sortRecordsByReflectionDate(dateScopedNewRecords.filter((row: any) => recordMatches(row, normalizedQuery)), reflectionDateSort),
+    [dateScopedNewRecords, normalizedQuery, reflectionDateSort],
   )
   const groupedNewRecords = useMemo(() => {
     const buckets = new Map<string, any[]>()
@@ -911,8 +1223,8 @@ export function TypeAnalysisDashboard({
       .filter((group) => group.rows.length > 0)
   }, [filteredNewRecords, industryRows])
   const filteredTerminationRecords = useMemo(
-    () => terminationRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
-    [terminationRecords, normalizedQuery],
+    () => sortRecordsByReflectionDate(dateScopedTerminationRecords.filter((row: any) => recordMatches(row, normalizedQuery)), reflectionDateSort),
+    [dateScopedTerminationRecords, normalizedQuery, reflectionDateSort],
   )
   const groupedTerminationRecords = useMemo(() => {
     const buckets = new Map<string, any[]>()
@@ -929,8 +1241,8 @@ export function TypeAnalysisDashboard({
       .filter((group) => group.rows.length > 0)
   }, [filteredTerminationRecords, terminationIndustryRows])
   const filteredAreaRecords = useMemo(
-    () => areaRecords.filter((row: any) => recordMatches(row, normalizedQuery)),
-    [areaRecords, normalizedQuery],
+    () => sortRecordsByReflectionDate(dateScopedAreaRecords.filter((row: any) => recordMatches(row, normalizedQuery)), reflectionDateSort),
+    [dateScopedAreaRecords, normalizedQuery, reflectionDateSort],
   )
   const groupedAreaRecords = useMemo(() => {
     const buckets = new Map<string, any[]>()
@@ -1232,15 +1544,7 @@ export function TypeAnalysisDashboard({
           </div>
         </div>
 
-        <CompactKpiTable
-          items={[
-            { label: "신규", value: `${formatNumber(pureNewTotal)}건`, tone: "blue" },
-            { label: "대체", value: `${formatNumber(replacementTotal)}건` },
-            { label: "신규+대체", value: `${formatNumber(newTotal)}건` },
-            { label: "해지", value: `${formatNumber(terminationTotal)}건`, tone: "rose" },
-            { label: "순증", value: `${formatNumber(netTotal)}건`, tone: "green" },
-          ]}
-        />
+        <CompactKpiTable items={kpiItems} />
 
         <div className="border-t border-slate-100 px-5 pb-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1260,15 +1564,40 @@ export function TypeAnalysisDashboard({
                 </button>
               ))}
             </div>
-            <label className="relative block w-full lg:w-[320px]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="회사명, ID, 담당자, 사유 검색"
-                className="h-10 w-full rounded-2xl border border-slate-200 bg-white pl-9 pr-3 text-[13px] font-semibold outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-              />
-            </label>
+            <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+              <label className="relative block sm:w-[170px]">
+                <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <select
+                  value={reflectionDateFilter}
+                  onChange={(event) => setReflectionDateFilter(event.target.value)}
+                  className="h-10 w-full appearance-none rounded-2xl border border-slate-200 bg-white pl-9 pr-8 text-[13px] font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  aria-label="반영일 선택"
+                >
+                  <option value="all">반영일 전체</option>
+                  {reflectionDateOptions.map((date) => (
+                    <option key={date} value={date}>{date}</option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => setReflectionDateSort((value) => (value === "desc" ? "asc" : "desc"))}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50"
+                aria-label="반영일 정렬 방향 변경"
+              >
+                <ArrowUpDown className="h-4 w-4 text-slate-400" />
+                {reflectionDateSort === "desc" ? "최신순" : "과거순"}
+              </button>
+              <label className="relative block sm:w-[300px]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="회사명, ID, 담당자, 사유 검색"
+                  className="h-10 w-full rounded-2xl border border-slate-200 bg-white pl-9 pr-3 text-[13px] font-semibold outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+            </div>
           </div>
         </div>
       </section>

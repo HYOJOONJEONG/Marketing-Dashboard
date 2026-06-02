@@ -1584,6 +1584,17 @@ function cloneData<T>(value: T): T {
 function normalizeTypeAnalysisState(value: any) {
   const source = cloneData(typeAnalysisSource as any)
   if (!value || typeof value !== "object" || Array.isArray(value)) return source
+  const sourceUpdatedAt = Date.parse(String(source?.sourceUpdatedAt || ""))
+  const savedUpdatedAt = Date.parse(String(value?.sourceUpdatedAt || ""))
+  const shouldUseSourceCore =
+    Number.isFinite(sourceUpdatedAt) &&
+    (!Number.isFinite(savedUpdatedAt) || savedUpdatedAt < sourceUpdatedAt)
+  if (shouldUseSourceCore) {
+    return {
+      ...source,
+      weeklySnapshots: Array.isArray(value.weeklySnapshots) ? value.weeklySnapshots : [],
+    }
+  }
   return {
     ...source,
     ...value,

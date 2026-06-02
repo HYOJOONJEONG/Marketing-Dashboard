@@ -111,6 +111,23 @@ def first_flag(flags: dict[str, Any], fallback: str = "") -> str:
     return fallback
 
 
+def normalize_work_summary_label(label: Any) -> str:
+    text = clean_text(label)
+    if "주식" in text or "선물" in text or "옵션" in text:
+        return "주식"
+    return text
+
+
+def normalize_work_summary(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            **item,
+            "label": normalize_work_summary_label(item.get("label")),
+        }
+        for item in items
+    ]
+
+
 def trailing_note(ws, row: int, start_col: int) -> str:
     notes = []
     for column in range(start_col, ws.max_column + 1):
@@ -121,7 +138,7 @@ def trailing_note(ws, row: int, start_col: int) -> str:
 
 
 def parse_new_replacement(ws) -> dict[str, Any]:
-    business_labels = ["외환", "주식·선물·옵션", "채권", "기타"]
+    business_labels = ["외환", "주식", "채권", "기타"]
     replacement_labels = ["체크", "마켓포인트", "블룸버그", "로이터", "한경머니·기타", "신규"]
     records: list[dict[str, Any]] = []
     group = ""
@@ -162,7 +179,7 @@ def parse_new_replacement(ws) -> dict[str, Any]:
     return {
         "title": clean_text(ws.cell(1, 1).value),
         "asOf": source_as_of(ws),
-        "workSummary": sparse_pair_row_values(ws, 4, 5, [3, 4, 5, 6, 7]),
+        "workSummary": normalize_work_summary(sparse_pair_row_values(ws, 4, 5, [3, 4, 5, 6, 7])),
         "replacementSummary": sparse_pair_row_values(ws, 7, 8, [3, 4, 5, 6, 7, 10, 13]),
         "industrySummary": sparse_industry_summary(
             ws,
@@ -328,7 +345,10 @@ def parse_area_net_growth(ws) -> dict[str, Any]:
         first = clean_text(ws.cell(row, 1).value)
         if first.startswith("(") and first.endswith(")"):
             group_text = first.strip("()")
-            record_kind = "termination" if "해지" in group_text else "new"
+            # In the source workbook, only the first few termination section
+            # headers include "해지"; later termination section headers are just
+            # the area name. Once the termination block starts, keep that mode.
+            record_kind = "termination" if "해지" in group_text or record_kind == "termination" else "new"
             group = normalize_area_net_growth_group(group_text)
             continue
         id_code = clean_text(ws.cell(row, 3).value)
@@ -392,6 +412,7 @@ def parse_area_net_growth(ws) -> dict[str, Any]:
         "title": clean_text(ws.cell(1, 1).value),
         "asOf": source_as_of(ws) or clean_text(ws.cell(1, 1).value).split("(")[-1].strip(")") if "(" in clean_text(ws.cell(1, 1).value) else "",
         "summaryRows": summary_rows,
+        "cumulativeNetLabel": clean_text(ws.cell(12, 13).value),
         "records": records,
     }
 
@@ -420,6 +441,59 @@ def parse_personal(ws) -> dict[str, Any]:
     }
 
 
+def record_identity(record: dict[str, Any]) -> tuple[str, str]:
+    return (clean_text(record.get("idCode")).strip(), clean_text(record.get("companyName")).strip())
+
+
+def reconcile_area_net_growth(area_data: dict[str, Any], termination_data: dict[str, Any]) -> None:
+    records = area_data.get("records")
+    termination_records = termination_data.get("records")
+    if not isinstance(records, list) or not isinstance(termination_records, list):
+        return
+
+    existing_termination_counts: dict[tuple[str, str], int] = {}
+    for record in records:
+        if record.get("kind") != "termination":
+            continue
+        key = record_identity(record)
+        if not key[0] or not key[1]:
+            continue
+        existing_termination_counts[key] = existing_termination_counts.get(key, 0) + 1
+
+    next_no = max(
+        (clean_number(record.get("no")) for record in records if isinstance(clean_number(record.get("no")), int)),
+        default=0,
+    )
+    for source in termination_records:
+        key = record_identity(source)
+        if not key[0] or not key[1]:
+            continue
+        if existing_termination_counts.get(key, 0) > 0:
+            existing_termination_counts[key] -= 1
+            continue
+
+        next_no += 1
+        group = normalize_area_net_growth_group(source.get("group") or source.get("industry") or source.get("companyName"))
+        records.append(
+            {
+                "no": next_no,
+                "date": clean_text(source.get("date")),
+                "idCode": key[0],
+                "companyName": key[1],
+                "departmentName": clean_text(source.get("departmentName")),
+                "note": clean_text(source.get("note")),
+                "group": group,
+                "areaGroup": group,
+                "kind": "termination",
+                "transactionType": "해지",
+                "recommender": clean_text(source.get("recommender")),
+                "reason": clean_text(source.get("reason")) or "계약만료",
+                "reasonFlags": source.get("reasonFlags") if isinstance(source.get("reasonFlags"), dict) else {},
+                "reconciledFrom": "2026년 해지 유형 분석",
+            }
+        )
+
+
 def main() -> int:
     workbook_path = Path(sys.argv[1] if len(sys.argv) > 1 else DEFAULT_WORKBOOK)
     output_path = Path(sys.argv[2] if len(sys.argv) > 2 else "data/type-analysis-source.json")
@@ -436,6 +510,7 @@ def main() -> int:
         "personalPerformance": parse_personal(wb["2026년 개인별 실적"]),
         "weeklySnapshots": [],
     }
+    reconcile_area_net_growth(payload["areaNetGrowth"], payload["terminationType"])
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(
