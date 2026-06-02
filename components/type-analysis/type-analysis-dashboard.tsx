@@ -340,6 +340,26 @@ function isTotalIndustryRow(row: any) {
   return label === "계" || label.includes("합계")
 }
 
+function industryLabelParts(value: unknown) {
+  const text = String(value || "").trim()
+  if (!text) return { title: "-", detail: "", hasDetail: false }
+  if (text === "계" || text.includes("합계")) return { title: text, detail: "", hasDetail: false }
+
+  const baseText = text.replace(/\([^)]*\)\s*$/g, "").trim()
+  const items = baseText.split(",").map((item) => item.trim()).filter(Boolean)
+  const shouldFold = text.length > 18 || items.length > 2 || /\([^)]*\)/.test(text)
+  if (!shouldFold) return { title: text, detail: "", hasDetail: false }
+
+  const title =
+    items.length >= 3
+      ? `${items[0]}·${items[1]} 외`
+      : items.length === 2
+        ? `${items[0]}·${items[1]}`
+        : baseText || text
+
+  return { title, detail: text, hasDetail: title !== text }
+}
+
 function GroupHeaderLabel({
   category = "업종",
   label,
@@ -494,14 +514,14 @@ function NewReplacementExcelSummary({
     { label: "합 계", value: summaryValueByLabel(replacementSummary, ["합계", "합"]) },
   ]
   const matrixColumns = [
-    { key: "label", label: "구분", className: "w-[160px] text-center" },
-    { key: "check", label: "체크( C )", className: "w-[134px] text-right" },
-    { key: "marketPoint", label: "마켓포인트( M )", className: "w-[198px] text-right" },
-    { key: "bloomberg", label: "블룸버그( B )", className: "w-[194px] text-right" },
-    { key: "reuters", label: "로이터( R )", className: "w-[134px] text-right" },
-    { key: "hankyungEtc", label: "한경머니(H)", className: "w-[106px] text-right" },
-    { key: "new", label: "신규(N)", className: "w-[106px] text-right" },
-    { key: "total", label: "합계", className: "w-[140px] text-right" },
+    { key: "label", label: "구분", className: "w-[230px] text-left" },
+    { key: "check", label: "체크( C )", className: "w-[110px] text-right" },
+    { key: "marketPoint", label: "마켓포인트( M )", className: "w-[132px] text-right" },
+    { key: "bloomberg", label: "블룸버그( B )", className: "w-[122px] text-right" },
+    { key: "reuters", label: "로이터( R )", className: "w-[108px] text-right" },
+    { key: "hankyungEtc", label: "한경머니(H)", className: "w-[108px] text-right" },
+    { key: "new", label: "신규(N)", className: "w-[108px] text-right" },
+    { key: "total", label: "합계", className: "w-[108px] text-right" },
   ]
   const cleanedAsOf = String(asOf || "").trim()
   const asOfLabel = cleanedAsOf.startsWith("(") ? cleanedAsOf : `(${cleanedAsOf || "기준일 확인 필요"})`
@@ -521,7 +541,7 @@ function NewReplacementExcelSummary({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[1160px] space-y-4 p-5">
+        <div className="min-w-[1080px] space-y-4 p-5">
           <div className="grid gap-4 xl:grid-cols-[0.95fr_1.45fr]">
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <table className="w-full border-collapse text-[12px]">
@@ -577,11 +597,11 @@ function NewReplacementExcelSummary({
               <div className="text-[13px] font-bold text-slate-900">업종별 대체 현황</div>
               <div className="text-[11px] font-semibold text-slate-400">분류 이니셜 기준</div>
             </div>
-            <table className="w-full border-collapse text-[12px]">
+            <table className="w-full table-fixed border-collapse text-[12px]">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
                   {matrixColumns.map((column) => (
-                    <th key={column.key} className={`${column.className} border-r border-slate-200 px-3 py-2.5 text-center font-bold last:border-r-0`}>
+                    <th key={column.key} className={`${column.className} border-r border-slate-200 px-3 py-2.5 font-bold last:border-r-0`}>
                       {column.label}
                     </th>
                   ))}
@@ -596,18 +616,38 @@ function NewReplacementExcelSummary({
                         key={`${row?.label || "industry"}-${index}`}
                         className={`border-b border-slate-100 last:border-0 ${isTotal ? "bg-blue-50/70" : "hover:bg-blue-50/30"}`}
                       >
-                        {matrixColumns.map((column) => (
-                          <td
-                            key={column.key}
-                            className={`${column.className} border-r border-slate-100 px-3 py-2.5 align-middle tabular-nums last:border-r-0 ${isTotal ? "font-bold text-blue-800" : "text-slate-700"}`}
-                          >
-                            {column.key === "label" ? (
-                              <span className={`block whitespace-normal break-keep text-left leading-[1.35] ${isTotal ? "text-center" : ""}`}>{row?.label}</span>
-                            ) : (
-                              excelNumber(row?.[column.key])
-                            )}
-                          </td>
-                        ))}
+                        {matrixColumns.map((column) => {
+                          const labelParts = column.key === "label" ? industryLabelParts(row?.label) : null
+                          return (
+                            <td
+                              key={column.key}
+                              className={`${column.className} border-r border-slate-100 px-3 py-2 align-middle tabular-nums last:border-r-0 ${isTotal ? "font-bold text-blue-800" : "text-slate-700"}`}
+                            >
+                              {column.key === "label" ? (
+                                isTotal ? (
+                                  <span className="block text-center text-blue-800">{labelParts?.title}</span>
+                                ) : labelParts?.hasDetail ? (
+                                  <details className="group">
+                                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2 py-1 text-left transition hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+                                      <span className="min-w-0 truncate font-semibold text-slate-800">{labelParts.title}</span>
+                                      <span className="shrink-0 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                                        <span className="group-open:hidden">펼침</span>
+                                        <span className="hidden group-open:inline">접기</span>
+                                      </span>
+                                    </summary>
+                                    <div className="mt-1 rounded-lg bg-slate-50 px-2 py-1.5 text-[11px] font-medium leading-4 text-slate-500">
+                                      {labelParts.detail}
+                                    </div>
+                                  </details>
+                                ) : (
+                                  <span className="block truncate px-2 py-1 font-semibold text-slate-800">{labelParts?.title}</span>
+                                )
+                              ) : (
+                                excelNumber(row?.[column.key])
+                              )}
+                            </td>
+                          )
+                        })}
                       </tr>
                     )
                   })
