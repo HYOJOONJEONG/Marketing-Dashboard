@@ -827,6 +827,19 @@ const paidOptionTitleByCode: Record<string, string> = {
   SOFR: "SOFR",
 }
 
+function normalizePaidOptionTitle(text: unknown, fallback = "") {
+  const value = String(text ?? "").trim()
+  if (paidOptionOrderedTitles.includes(value as any)) return value
+  return sanitizeSummaryText(value, fallback)
+}
+
+function getPaidOptionColumnTitle(column: any, index = 0) {
+  const code = String(column?.category_code || "").trim().toUpperCase()
+  const fallbackByCode = paidOptionTitleByCode[code] || ""
+  const fallbackByIndex = normalizePaidOptionTitle(paidOptionInfoColumns[index]?.title, "")
+  return normalizePaidOptionTitle(column?.title, fallbackByCode || fallbackByIndex)
+}
+
 const weeklyTerminationOverviewRows = [
   { label: "주간", values: ["3", "1", "3", "", "1", "1", "", "", "1", "9"] },
   { label: "누적", values: ["40", "5", "36", "6", "1", "1", "5", "", "1", "95"] },
@@ -847,10 +860,7 @@ function buildPaidOptionInfoColumns(columns: any[]) {
   )
   const sourceByTitle = new Map<string, any>()
   source.forEach((column: any, idx: number) => {
-    const code = String(column?.category_code || "").trim()
-    const fallbackByCode = paidOptionTitleByCode[code] || ""
-    const fallbackByIndex = sanitizeSummaryText(paidOptionInfoColumns[idx]?.title, "")
-    const title = sanitizeSummaryText(column?.title, fallbackByCode || fallbackByIndex)
+    const title = getPaidOptionColumnTitle(column, idx)
     if (!paidOptionOrderedTitles.includes(title as any)) return
     sourceByTitle.set(title, column)
   })
@@ -868,13 +878,16 @@ function buildPaidOptionInfoColumns(columns: any[]) {
         ? [...fromBase.rows]
         : []
     const rowTotal = rows.reduce((sum: number, row: any[]) => sum + parseLooseNumber(row?.[1]), 0)
+    const sourceTotal = formatCountToKoreanUnit(fromSource?.total ?? fromSource?.count_value, "")
+    const computedTotal = rowTotal > 0 ? `${rowTotal}건` : ""
     return {
       id: fromSource?.id || fromBase?.id || `paid-option-${index}`,
       title,
       total:
-        title === "해외지수" && rowTotal > 0
-          ? `${rowTotal}건`
-          : sanitizeSummaryText(fromSource?.total, fromBase?.total || "0건"),
+        sourceTotal ||
+        (title === "해외지수" && computedTotal
+          ? computedTotal
+          : formatCountToKoreanUnit(fromBase?.total, "0건")),
       rows,
     }
   })
@@ -921,18 +934,48 @@ function mergePaidOptionImportedTotals(columns: any[], importedColumns: any[] | 
   if (!Array.isArray(importedColumns) || !importedColumns.length) return source
   const importedByTitle = new Map<string, string>()
   importedColumns.forEach((column: any, index: number) => {
-    const code = String(column?.category_code || "").trim()
-    const fallbackByCode = paidOptionTitleByCode[code] || ""
-    const fallbackByIndex = sanitizeSummaryText(paidOptionInfoColumns[index]?.title, "")
-    const title = sanitizeSummaryText(column?.title, fallbackByCode || fallbackByIndex)
+    const title = getPaidOptionColumnTitle(column, index)
     if (!paidOptionOrderedTitles.includes(title as any)) return
     const total = formatCountToKoreanUnit(column?.total ?? column?.count_value, "")
     if (total) importedByTitle.set(title, total)
   })
   return source.map((column: any) => {
-    const importedTotal = importedByTitle.get(sanitizeSummaryText(column?.title, ""))
+    const importedTotal = importedByTitle.get(normalizePaidOptionTitle(column?.title, ""))
     return importedTotal ? { ...column, total: importedTotal } : column
   })
+}
+
+function parsePaidOptionImportStatusTotals(status: string) {
+  const totals = new Map<string, string>()
+  const text = String(status || "").trim()
+  if (!text.startsWith("반영 완료:")) return totals
+  text
+    .replace(/^반영 완료:\s*/, "")
+    .split("·")
+    .forEach((part) => {
+      const value = part.trim()
+      const matched = value.match(/^(.+?)\s+([0-9,]+건)$/)
+      if (!matched) return
+      const title = normalizePaidOptionTitle(matched[1], "")
+      if (!paidOptionOrderedTitles.includes(title as any)) return
+      totals.set(title, formatCountToKoreanUnit(matched[2], ""))
+    })
+  return totals
+}
+
+function applyPaidOptionTotalOverrides(columns: any[], totalsByTitle: Map<string, string>) {
+  const source = buildPaidOptionInfoColumns(columns)
+  if (!totalsByTitle.size) return source
+  return source.map((column: any) => {
+    const title = normalizePaidOptionTitle(column?.title, "")
+    const total = totalsByTitle.get(title)
+    return total ? { ...column, total } : column
+  })
+}
+
+function buildPaidOptionImportStatus(columns: any[]) {
+  const normalizedColumns = buildPaidOptionInfoColumns(columns)
+  return `반영 완료: ${normalizedColumns.map((column: any) => `${column.title} ${column.total}`).join(" · ")}`
 }
 
 function normalizePaidOptionIdKind(value: unknown): "contract" | "trial" | "free" {
@@ -967,7 +1010,7 @@ function getPaidOptionRecordCountByCode(records: any[]) {
     if (code === "SOFR") {
       const total = rows.reduce((sum, row) => {
         const applyCount = parseLooseNumber(row?.apply_count)
-        return sum + (applyCount > 0 ? applyCount : 1)
+        return sum + (applyCount > 0 ? applyCount : 0)
       }, 0)
       countByCode.set(code, total)
       return
@@ -4583,8 +4626,7 @@ export function DashboardShell({
       pendingDataRef.current = nextData
       scheduleLocalDashboardCache(nextData)
       markViewsDirty(["manual-input", "weekly-report"])
-      const importedSummary = nextColumns.map((column: any) => `${column.title} ${column.total}`).join(" · ")
-      setPaidOptionImportStatus(`반영 완료: ${importedSummary}`)
+      setPaidOptionImportStatus(buildPaidOptionImportStatus(nextColumns))
     } catch (error: any) {
       const message = String(error?.message || "옵션정보를 불러오지 못했습니다.")
       setPaidOptionImportedColumns(null)
@@ -7043,13 +7085,26 @@ export function DashboardShell({
   const manualSummary = autoManualSummary
   const monthLabels = useMemo(() => Array.from({ length: 12 }, (_, index) => `${index + 1}월`), [])
   const paidOptionColumns = buildPaidOptionInfoColumns(weeklyReport.paidOptionInfoColumns || [])
+  const paidOptionImportStatusTotals = useMemo(
+    () => parsePaidOptionImportStatusTotals(paidOptionImportStatus),
+    [paidOptionImportStatus],
+  )
   const manualPaidOptionColumns = useMemo(
-    () =>
-      mergePaidOptionImportedTotals(
+    () => {
+      const mergedColumns = mergePaidOptionImportedTotals(
         paidOptionImportedColumns || manualDisplayDraft.paidOptionInfoColumns || [],
         paidOptionImportedColumns,
-      ),
-    [manualDisplayDraft.paidOptionInfoColumns, paidOptionImportedColumns],
+      )
+      return applyPaidOptionTotalOverrides(mergedColumns, paidOptionImportStatusTotals)
+    },
+    [manualDisplayDraft.paidOptionInfoColumns, paidOptionImportedColumns, paidOptionImportStatusTotals],
+  )
+  const paidOptionDisplayImportStatus = useMemo(
+    () => {
+      if (!paidOptionImportStatus.startsWith("반영 완료:")) return paidOptionImportStatus
+      return buildPaidOptionImportStatus(manualPaidOptionColumns)
+    },
+    [manualPaidOptionColumns, paidOptionImportStatus],
   )
   const reportTerminationColumns = [...reportTerminationColumnsStatic]
   const reportTerminationRows = useMemo(
@@ -7321,9 +7376,9 @@ export function DashboardShell({
                 <div className="flex items-center justify-between gap-3">
                   <span>유료 옵션 정보</span>
                   <div className="flex min-w-0 items-center gap-2">
-                    {paidOptionImportStatus ? (
+                    {paidOptionDisplayImportStatus ? (
                       <span className="max-w-[520px] truncate text-[11px] font-semibold text-blue-600">
-                        {paidOptionImportStatus}
+                        {paidOptionDisplayImportStatus}
                       </span>
                     ) : null}
                     <button
@@ -7357,7 +7412,7 @@ export function DashboardShell({
         </table>
       </div>
     ),
-    [manualPaidOptionColumns, paidOptionImportStatus, reloadPaidOptionInfo],
+    [manualPaidOptionColumns, paidOptionDisplayImportStatus, reloadPaidOptionInfo],
   )
 
   const manualTerminationOverviewSection = useMemo(
