@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { BarChart3, Database, FileText, RefreshCw, Save, UsersRound } from "lucide-react"
+import { FileText, RefreshCw, Save } from "lucide-react"
 
 type TabKey = "summary" | "new" | "termination" | "area" | "personal"
 
@@ -313,6 +313,128 @@ function MetricTile({
   )
 }
 
+type TypeAnalysisTone = "blue" | "indigo" | "rose" | "emerald" | "slate"
+
+function toneClass(tone: TypeAnalysisTone, part: "text" | "border" | "bg" | "softBg" | "ring") {
+  const map = {
+    blue: {
+      text: "text-blue-700",
+      border: "border-blue-100",
+      bg: "bg-blue-600",
+      softBg: "bg-blue-50",
+      ring: "ring-blue-100",
+    },
+    indigo: {
+      text: "text-indigo-700",
+      border: "border-indigo-100",
+      bg: "bg-indigo-600",
+      softBg: "bg-indigo-50",
+      ring: "ring-indigo-100",
+    },
+    rose: {
+      text: "text-rose-700",
+      border: "border-rose-100",
+      bg: "bg-rose-600",
+      softBg: "bg-rose-50",
+      ring: "ring-rose-100",
+    },
+    emerald: {
+      text: "text-emerald-700",
+      border: "border-emerald-100",
+      bg: "bg-emerald-600",
+      softBg: "bg-emerald-50",
+      ring: "ring-emerald-100",
+    },
+    slate: {
+      text: "text-slate-700",
+      border: "border-slate-200",
+      bg: "bg-slate-700",
+      softBg: "bg-slate-50",
+      ring: "ring-slate-100",
+    },
+  } as const
+  return map[tone][part]
+}
+
+function AnalysisCardHeader({
+  eyebrow,
+  title,
+  asOf,
+  tone = "blue",
+}: {
+  eyebrow: string
+  title: string
+  asOf: string
+  tone?: TypeAnalysisTone
+}) {
+  return (
+    <div className="flex flex-col gap-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <div className={`text-[11px] font-bold uppercase tracking-[0.16em] ${toneClass(tone, "text")}`}>{eyebrow}</div>
+        <h2 className="mt-1 text-[20px] font-black tracking-[-0.03em] text-slate-950">{title}</h2>
+      </div>
+      <span className={`inline-flex w-fit items-center rounded-full border px-3 py-1.5 text-[12px] font-bold ${toneClass("rose", "border")} ${toneClass("rose", "softBg")} ${toneClass("rose", "text")}`}>
+        {asOfBadgeLabel(asOf)}
+      </span>
+    </div>
+  )
+}
+
+function CompactMetricBand({
+  title,
+  tone = "blue",
+  items,
+}: {
+  title: string
+  tone?: TypeAnalysisTone
+  items: Array<{ label: string; value: unknown; sub?: string; title?: string; total?: boolean; dashZero?: boolean }>
+}) {
+  return (
+    <div className={`overflow-hidden rounded-xl border bg-white ${toneClass(tone, "border")}`}>
+      <div className={`border-b px-4 py-2.5 text-center text-[13px] font-bold ${toneClass(tone, "border")} ${toneClass(tone, "softBg")} ${toneClass(tone, "text")}`}>
+        {title}
+      </div>
+      <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-4 lg:grid-cols-none lg:auto-cols-fr lg:grid-flow-col">
+        {items.map((item) => {
+          const value = typeof item.value === "string" ? item.value : excelNumber(item.value, item.dashZero)
+          return (
+            <div key={`${title}-${item.label}-${item.sub || ""}`} className={`min-w-[86px] bg-white px-3 py-3 text-center ${item.total ? toneClass(tone, "softBg") : ""}`}>
+              <div title={item.title || item.label} className="mx-auto max-w-[120px] truncate text-[12px] font-bold text-slate-600">
+                {item.label}
+              </div>
+              {item.sub ? <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">{item.sub}</div> : null}
+              <div className={`mt-1 text-[19px] font-black tabular-nums ${item.total ? toneClass(tone, "text") : "text-slate-950"}`}>
+                {value}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function SimpleKpiGrid({
+  items,
+}: {
+  items: Array<{ label: string; value: string; tone?: TypeAnalysisTone; sub?: string }>
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+      {items.map((item) => {
+        const tone = item.tone || "slate"
+        return (
+          <div key={item.label} className={`rounded-xl border bg-white px-4 py-3 text-center shadow-sm ${toneClass(tone, "border")}`}>
+            <div className="text-[12px] font-bold text-slate-500">{item.label}</div>
+            <div className={`mt-1 text-[24px] font-black tabular-nums ${toneClass(tone, "text")}`}>{item.value}</div>
+            {item.sub ? <div className="mt-1 truncate text-[11px] font-semibold text-slate-400">{item.sub}</div> : null}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function MiniSummaryTable({
   title,
   rows,
@@ -543,19 +665,19 @@ function NewReplacementExcelSummary({
 }) {
   const workColumns = [
     { label: "외환", value: summaryValueByLabel(workSummary, ["외환"]) },
-    { label: "주식,선물,옵션", value: summaryValueByLabel(workSummary, ["주식"]) },
+    { label: "주식", value: summaryValueByLabel(workSummary, ["주식"]), title: "주식, 선물, 옵션" },
     { label: "채권", value: summaryValueByLabel(workSummary, ["채권"]) },
     { label: "기타", value: summaryValueByLabel(workSummary, ["기타"]) },
-    { label: "합 계", value: summaryValueByLabel(workSummary, ["합계", "합"]) },
+    { label: "합계", value: summaryValueByLabel(workSummary, ["합계", "합"]), total: true },
   ]
   const replacementColumns = [
-    { label: "체크( C )", value: summaryValueByLabel(replacementSummary, ["체크"]) },
-    { label: "마켓포인트( M )", value: summaryValueByLabel(replacementSummary, ["마켓포인트", "마켓"]) },
-    { label: "블룸버그( B )", value: summaryValueByLabel(replacementSummary, ["블룸버그", "블룸"]) },
-    { label: "로이터( R )", value: summaryValueByLabel(replacementSummary, ["로이터"]) },
-    { label: "기타( H )", value: summaryValueByLabel(replacementSummary, ["기타", "한경"]) },
-    { label: "신규(N)", value: summaryValueByLabel(replacementSummary, ["신규"]) },
-    { label: "합 계", value: summaryValueByLabel(replacementSummary, ["합계", "합"]) },
+    { label: "체크", sub: "C", value: summaryValueByLabel(replacementSummary, ["체크"]) },
+    { label: "마켓", sub: "M", value: summaryValueByLabel(replacementSummary, ["마켓포인트", "마켓"]), title: "마켓포인트" },
+    { label: "블룸", sub: "B", value: summaryValueByLabel(replacementSummary, ["블룸버그", "블룸"]), title: "블룸버그" },
+    { label: "로이터", sub: "R", value: summaryValueByLabel(replacementSummary, ["로이터"]) },
+    { label: "기타", sub: "H", value: summaryValueByLabel(replacementSummary, ["기타", "한경"]), title: "한경머니/기타" },
+    { label: "신규", sub: "N", value: summaryValueByLabel(replacementSummary, ["신규"]) },
+    { label: "합계", value: summaryValueByLabel(replacementSummary, ["합계", "합"]), total: true },
   ]
   const matrixColumns = [
     { key: "label", label: "구분", className: "w-[230px] text-left" },
@@ -567,72 +689,20 @@ function NewReplacementExcelSummary({
     { key: "new", label: "신규(N)", className: "w-[108px] text-center" },
     { key: "total", label: "합계", className: "w-[108px] text-center" },
   ]
-  const asOfLabel = asOfBadgeLabel(asOf)
-
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-blue-600">New / Replacement</div>
-          <h2 className="mt-1 text-[20px] font-black tracking-[-0.03em] text-slate-950">
-            {year}년 인포맥스 신규단말기 대체현황
-          </h2>
-        </div>
-        <span className="inline-flex w-fit items-center rounded-full border border-rose-100 bg-rose-50 px-3 py-1.5 text-[12px] font-bold text-rose-600">
-          {asOfLabel}
-        </span>
-      </div>
+      <AnalysisCardHeader
+        eyebrow="New / Replacement"
+        title={`${year}년 인포맥스 신규단말기 대체현황`}
+        asOf={asOf}
+        tone="blue"
+      />
 
       <div className="overflow-x-auto">
         <div className="min-w-[1080px] space-y-4 p-5">
           <div className="grid gap-4 xl:grid-cols-[0.95fr_1.45fr]">
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <table className="w-full border-collapse text-[12px]">
-                <tbody>
-                  <tr className="border-b border-slate-200">
-                    <th rowSpan={2} className="w-[120px] border-r border-slate-200 bg-blue-50 px-3 text-center text-[13px] font-bold text-blue-700">
-                      업무성격
-                    </th>
-                    {workColumns.map((column) => (
-                      <th key={column.label} className="border-r border-slate-200 bg-slate-50 px-3 py-2 text-center font-semibold text-slate-600 last:border-r-0">
-                        {column.label}
-                      </th>
-                    ))}
-                  </tr>
-                  <tr>
-                    {workColumns.map((column) => (
-                      <td key={column.label} className="border-r border-slate-100 px-3 py-2.5 text-center text-[15px] font-semibold tabular-nums text-slate-950 last:border-r-0">
-                        {excelNumber(column.value)}
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <table className="w-full border-collapse text-[12px]">
-                <tbody>
-                  <tr className="border-b border-slate-200">
-                    <th rowSpan={2} className="w-[120px] border-r border-slate-200 bg-indigo-50 px-3 text-center text-[13px] font-bold leading-tight text-indigo-700">
-                      타사단말기<br />대체
-                    </th>
-                    {replacementColumns.map((column) => (
-                      <th key={column.label} className="border-r border-slate-200 bg-slate-50 px-3 py-2 text-center font-semibold text-slate-600 last:border-r-0">
-                        {column.label}
-                      </th>
-                    ))}
-                  </tr>
-                  <tr>
-                    {replacementColumns.map((column) => (
-                      <td key={column.label} className="border-r border-slate-100 px-3 py-2.5 text-center text-[15px] font-semibold tabular-nums text-slate-950 last:border-r-0">
-                        {excelNumber(column.value, true)}
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <CompactMetricBand title="업무성격" tone="blue" items={workColumns} />
+            <CompactMetricBand title="타사단말기 대체" tone="indigo" items={replacementColumns.map((item) => ({ ...item, dashZero: true }))} />
           </div>
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -795,90 +865,40 @@ function TerminationMatrixTable({
   rows: any[]
 }) {
   const reasonColumns = [
-    { label: "사용자퇴사,이직", value: summaryValueByLabel(reasonSummary, ["사용자퇴사", "이직"]) },
+    { label: "퇴사/이직", value: summaryValueByLabel(reasonSummary, ["사용자퇴사", "이직"]), title: "사용자 퇴사/이직" },
     { label: "비용절감", value: summaryValueByLabel(reasonSummary, ["비용절감", "예산삭감"]) },
-    { label: "활용도저조", value: summaryValueByLabel(reasonSummary, ["활용"]) },
-    { label: "콘텐츠불만 타사대체", value: summaryValueByLabel(reasonSummary, ["콘텐츠", "타사대체"]) },
+    { label: "활용저조", value: summaryValueByLabel(reasonSummary, ["활용"]) },
+    { label: "타사대체", value: summaryValueByLabel(reasonSummary, ["콘텐츠", "타사대체"]), title: "콘텐츠 불만/타사대체" },
     { label: "계약만료", value: summaryValueByLabel(reasonSummary, ["계약만료"]) },
     { label: "조직개편", value: summaryValueByLabel(reasonSummary, ["조직개편"]) },
-    { label: "휴직 장기출장", value: summaryValueByLabel(reasonSummary, ["휴직", "출장"]) },
-    { label: "회사 합병매각", value: summaryValueByLabel(reasonSummary, ["합병", "매각"]) },
-    { label: "구독료 미수", value: summaryValueByLabel(reasonSummary, ["미수"]) },
-    { label: "합계", value: summaryValueByLabel(reasonSummary, ["합계", "합"]) },
+    { label: "휴직/출장", value: summaryValueByLabel(reasonSummary, ["휴직", "출장"]) },
+    { label: "합병매각", value: summaryValueByLabel(reasonSummary, ["합병", "매각"]) },
+    { label: "미수", value: summaryValueByLabel(reasonSummary, ["미수"]), title: "구독료 미수" },
+    { label: "합계", value: summaryValueByLabel(reasonSummary, ["합계", "합"]), total: true },
   ]
   const competitorColumns = [
-    { label: "체크( C )", value: summaryValueByLabel(competitorSummary, ["체크"]) },
-    { label: "마켓포인트( M )", value: summaryValueByLabel(competitorSummary, ["마켓포인트", "마켓"]) },
-    { label: "블룸버그( B )", value: summaryValueByLabel(competitorSummary, ["블룸버그", "블룸"]) },
-    { label: "로이터( R )", value: summaryValueByLabel(competitorSummary, ["로이터"]) },
-    { label: "한경/기타( H )", value: summaryValueByLabel(competitorSummary, ["한경", "기타"]) },
-    { label: "아웃(E)", value: summaryValueByLabel(competitorSummary, ["아웃"]) },
-    { label: "합계", value: summaryValueByLabel(competitorSummary, ["합계", "합"]) },
+    { label: "체크", sub: "C", value: summaryValueByLabel(competitorSummary, ["체크"]) },
+    { label: "마켓", sub: "M", value: summaryValueByLabel(competitorSummary, ["마켓포인트", "마켓"]), title: "마켓포인트" },
+    { label: "블룸", sub: "B", value: summaryValueByLabel(competitorSummary, ["블룸버그", "블룸"]), title: "블룸버그" },
+    { label: "로이터", sub: "R", value: summaryValueByLabel(competitorSummary, ["로이터"]) },
+    { label: "한경/기타", sub: "H", value: summaryValueByLabel(competitorSummary, ["한경", "기타"]) },
+    { label: "아웃", sub: "E", value: summaryValueByLabel(competitorSummary, ["아웃"]) },
+    { label: "합계", value: summaryValueByLabel(competitorSummary, ["합계", "합"]), total: true },
   ]
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-rose-600">Termination Type</div>
-          <h2 className="mt-1 text-[20px] font-black tracking-[-0.03em] text-slate-950">
-            {year}년 인포맥스 해지 유형 분석
-          </h2>
-        </div>
-        <span className="inline-flex w-fit items-center rounded-full border border-rose-100 bg-rose-50 px-3 py-1.5 text-[12px] font-bold text-rose-600">
-          {asOfBadgeLabel(asOf)}
-        </span>
-      </div>
+      <AnalysisCardHeader
+        eyebrow="Termination Type"
+        title={`${year}년 인포맥스 해지 유형 분석`}
+        asOf={asOf}
+        tone="rose"
+      />
       <div className="overflow-x-auto">
         <div className="min-w-[1240px] space-y-4 p-5">
           <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <table className="w-full border-collapse text-[12px]">
-                <tbody>
-                  <tr className="border-b border-slate-200">
-                    <th rowSpan={2} className="w-[120px] border-r border-slate-200 bg-rose-50 px-3 text-center text-[13px] font-bold text-rose-700">
-                      해지유형
-                    </th>
-                    {reasonColumns.map((column) => (
-                      <th key={column.label} className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold leading-tight text-slate-600 last:border-r-0">
-                        {column.label}
-                      </th>
-                    ))}
-                  </tr>
-                  <tr>
-                    {reasonColumns.map((column) => (
-                      <td key={column.label} className="border-r border-slate-100 px-2 py-2.5 text-center text-[15px] font-semibold tabular-nums text-slate-950 last:border-r-0">
-                        {excelNumber(column.value, true)}
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <table className="w-full border-collapse text-[12px]">
-                <tbody>
-                  <tr className="border-b border-slate-200">
-                    <th rowSpan={2} className="w-[120px] border-r border-slate-200 bg-indigo-50 px-3 text-center text-[13px] font-bold leading-tight text-indigo-700">
-                      경쟁사로<br />변경
-                    </th>
-                    {competitorColumns.map((column) => (
-                      <th key={column.label} className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold leading-tight text-slate-600 last:border-r-0">
-                        {column.label}
-                      </th>
-                    ))}
-                  </tr>
-                  <tr>
-                    {competitorColumns.map((column) => (
-                      <td key={column.label} className="border-r border-slate-100 px-2 py-2.5 text-center text-[15px] font-semibold tabular-nums text-slate-950 last:border-r-0">
-                        {excelNumber(column.value, true)}
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <CompactMetricBand title="해지유형" tone="rose" items={reasonColumns.map((item) => ({ ...item, dashZero: true }))} />
+            <CompactMetricBand title="경쟁사 변경" tone="indigo" items={competitorColumns.map((item) => ({ ...item, dashZero: true }))} />
           </div>
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -1029,36 +1049,24 @@ function AreaSummaryTable({
 }) {
   const totalRow = rows.find((row) => String(row?.no || "").replace(/\s+/g, "") === "계")
   const kpiItems = [
-    { label: "신규", value: `${formatNumber(totalRow?.newCount)}건`, className: "border-blue-100 bg-blue-50/70 text-blue-700" },
-    { label: "해지", value: `${formatNumber(totalRow?.terminationCount)}건`, className: "border-rose-100 bg-rose-50/70 text-rose-700" },
-    { label: "순증", value: `${formatNumber(totalRow?.netCount)}건`, className: "border-emerald-100 bg-emerald-50/70 text-emerald-700" },
+    { label: "신규", value: `${formatNumber(totalRow?.newCount)}건`, tone: "blue" as TypeAnalysisTone },
+    { label: "해지", value: `${formatNumber(totalRow?.terminationCount)}건`, tone: "rose" as TypeAnalysisTone },
+    { label: "순증", value: `${formatNumber(totalRow?.netCount)}건`, tone: "emerald" as TypeAnalysisTone },
   ]
   const cumulative = cleanCumulativeLabel(cumulativeLabel)
-  if (cumulative) kpiItems.push({ label: "누적", value: cumulative, className: "border-slate-200 bg-slate-50 text-slate-700" })
+  if (cumulative) kpiItems.push({ label: "누적", value: cumulative, tone: "slate" as TypeAnalysisTone })
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-600">Area Net Growth</div>
-          <h2 className="mt-1 text-[20px] font-black tracking-[-0.03em] text-slate-950">
-            {year}년 영역별 순증 현황
-          </h2>
-        </div>
-        <span className="inline-flex w-fit items-center rounded-full border border-rose-100 bg-rose-50 px-3 py-1.5 text-[12px] font-bold text-rose-600">
-          {asOfBadgeLabel(asOf)}
-        </span>
-      </div>
+      <AnalysisCardHeader
+        eyebrow="Area Net Growth"
+        title={`${year}년 영역별 순증 현황`}
+        asOf={asOf}
+        tone="emerald"
+      />
       <div className="overflow-x-auto">
         <div className="min-w-[980px] space-y-4 p-5">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {kpiItems.map((item) => (
-              <div key={item.label} className={`rounded-xl border px-4 py-3 text-center ${item.className}`}>
-                <div className="text-[12px] font-bold text-slate-500">{item.label}</div>
-                <div className="mt-1 text-[22px] font-black tabular-nums">{item.value}</div>
-              </div>
-            ))}
-          </div>
+          <SimpleKpiGrid items={kpiItems} />
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5">
@@ -1194,6 +1202,69 @@ function GroupedAreaRecordsTable({
   )
 }
 
+function PersonalPerformancePanel({
+  year,
+  asOf,
+  rows,
+}: {
+  year: number | string
+  asOf: string
+  rows: any[]
+}) {
+  const totals = rows.reduce(
+    (acc, row) => ({
+      totalNew: acc.totalNew + toNumber(row?.totalNew),
+      new: acc.new + toNumber(row?.new),
+      check: acc.check + toNumber(row?.check),
+      marketPoint: acc.marketPoint + toNumber(row?.marketPoint),
+      reutersBloomberg: acc.reutersBloomberg + toNumber(row?.reutersBloomberg),
+    }),
+    { totalNew: 0, new: 0, check: 0, marketPoint: 0, reutersBloomberg: 0 },
+  )
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <AnalysisCardHeader
+        eyebrow="Personal Performance"
+        title={`${year}년 개인별 실적`}
+        asOf={asOf}
+        tone="blue"
+      />
+      <div className="space-y-4 p-5">
+        <SimpleKpiGrid
+          items={[
+            { label: "담당자", value: `${formatNumber(rows.length)}명`, tone: "slate" },
+            { label: "총 신규", value: `${formatNumber(totals.totalNew)}건`, tone: "blue" },
+            { label: "신규", value: `${formatNumber(totals.new)}건`, tone: "emerald" },
+            { label: "체크", value: `${formatNumber(totals.check)}건`, tone: "indigo" },
+            { label: "마켓", value: `${formatNumber(totals.marketPoint)}건`, tone: "slate" },
+            { label: "로이터/블룸", value: `${formatNumber(totals.reutersBloomberg)}건`, tone: "rose" },
+          ]}
+        />
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5">
+            <div className="text-[13px] font-bold text-slate-900">개인별 신규 실적</div>
+            <div className="text-[11px] font-semibold text-slate-400">담당자 기준</div>
+          </div>
+          <DenseTable
+            columns={[
+              { key: "no", label: "구분", className: "w-[72px] text-center" },
+              { key: "manager", label: "담당자", className: "min-w-[160px] font-medium text-slate-900" },
+              { key: "totalNew", label: "총 신규", className: "text-center font-medium tabular-nums text-blue-700" },
+              { key: "new", label: "신규", className: "text-center tabular-nums" },
+              { key: "check", label: "체크", className: "text-center tabular-nums" },
+              { key: "marketPoint", label: "마켓", className: "text-center tabular-nums" },
+              { key: "reutersBloomberg", label: "로이터/블룸", className: "text-center tabular-nums" },
+            ]}
+            rows={rows}
+            emptyText="개인별 실적 데이터가 없습니다."
+          />
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function TypeAnalysisDashboard({
   data,
   currentYear,
@@ -1223,9 +1294,6 @@ export function TypeAnalysisDashboard({
   const replacementTotal = Math.max(0, newTotal - pureNewTotal)
   const terminationTotal = findSummaryValue(data?.terminationType?.reasonSummary || [], (label) => label.includes("합"))
   const netTotal = newTotal - terminationTotal
-  const totalAreaRow = (Array.isArray(data?.areaNetGrowth?.summaryRows) ? data.areaNetGrowth.summaryRows : []).find((row: any) =>
-    String(row?.no || "").replace(/\s+/g, "") === "계",
-  )
   const industryRows = useMemo(() => newIndustrySummary.filter((row: any) => !isTotalIndustryRow(row)), [newIndustrySummary])
   const industryMatrixRows = useMemo(() => newIndustrySummary.filter((row: any) => row?.label), [newIndustrySummary])
   const terminationIndustryRows = useMemo(() => terminationIndustrySummary.filter((row: any) => !isTotalIndustryRow(row)), [terminationIndustrySummary])
@@ -1289,6 +1357,44 @@ export function TypeAnalysisDashboard({
       .map((label) => ({ label, rows: buckets.get(label) || [] }))
       .filter((group) => group.rows.length > 0)
   }, [filteredAreaRecords, areaRows])
+
+  const summaryWorkMetrics = [
+    { label: "외환", value: summaryValueByLabel(data?.newReplacement?.workSummary || [], ["외환"]) },
+    { label: "주식", value: summaryValueByLabel(data?.newReplacement?.workSummary || [], ["주식"]), title: "주식, 선물, 옵션" },
+    { label: "채권", value: summaryValueByLabel(data?.newReplacement?.workSummary || [], ["채권"]) },
+    { label: "기타", value: summaryValueByLabel(data?.newReplacement?.workSummary || [], ["기타"]) },
+    { label: "합계", value: summaryValueByLabel(data?.newReplacement?.workSummary || [], ["합계", "합"]), total: true },
+  ]
+  const summaryReplacementMetrics = [
+    { label: "체크", sub: "C", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["체크"]) },
+    { label: "마켓", sub: "M", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["마켓포인트", "마켓"]), title: "마켓포인트" },
+    { label: "블룸", sub: "B", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["블룸버그", "블룸"]), title: "블룸버그" },
+    { label: "로이터", sub: "R", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["로이터"]) },
+    { label: "기타", sub: "H", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["기타", "한경"]), title: "한경머니/기타" },
+    { label: "신규", sub: "N", value: pureNewTotal },
+    { label: "합계", value: newTotal, total: true },
+  ]
+  const summaryTerminationMetrics = [
+    { label: "퇴사/이직", value: summaryValueByLabel(data?.terminationType?.reasonSummary || [], ["사용자퇴사", "이직"]), title: "사용자 퇴사/이직" },
+    { label: "비용절감", value: summaryValueByLabel(data?.terminationType?.reasonSummary || [], ["비용절감", "예산삭감"]) },
+    { label: "활용저조", value: summaryValueByLabel(data?.terminationType?.reasonSummary || [], ["활용"]) },
+    { label: "타사대체", value: summaryValueByLabel(data?.terminationType?.reasonSummary || [], ["콘텐츠", "타사대체"]), title: "콘텐츠 불만/타사대체" },
+    { label: "계약만료", value: summaryValueByLabel(data?.terminationType?.reasonSummary || [], ["계약만료"]) },
+    { label: "조직개편", value: summaryValueByLabel(data?.terminationType?.reasonSummary || [], ["조직개편"]) },
+    { label: "휴직/출장", value: summaryValueByLabel(data?.terminationType?.reasonSummary || [], ["휴직", "출장"]) },
+    { label: "합병매각", value: summaryValueByLabel(data?.terminationType?.reasonSummary || [], ["합병", "매각"]) },
+    { label: "미수", value: summaryValueByLabel(data?.terminationType?.reasonSummary || [], ["미수"]) },
+    { label: "합계", value: terminationTotal, total: true },
+  ]
+  const summaryCompetitorMetrics = [
+    { label: "체크", sub: "C", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["체크"]) },
+    { label: "마켓", sub: "M", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["마켓포인트", "마켓"]), title: "마켓포인트" },
+    { label: "블룸", sub: "B", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["블룸버그", "블룸"]), title: "블룸버그" },
+    { label: "로이터", sub: "R", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["로이터"]) },
+    { label: "한경/기타", sub: "H", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["한경", "기타"]) },
+    { label: "아웃", sub: "E", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["아웃"]) },
+    { label: "합계", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["합계", "합"]), total: true },
+  ]
 
   const saveText = isSaving ? "저장 중" : isDirty ? "저장 필요" : saveMessage || "저장 완료"
 
@@ -1593,64 +1699,45 @@ export function TypeAnalysisDashboard({
       </section>
 
       {tab === "summary" ? (
-        <div className="grid gap-4">
-          <div className="grid gap-4 xl:grid-cols-2">
-            <MiniSummaryTable title="업무성격 요약" rows={data?.newReplacement?.workSummary || []} />
-            <MiniSummaryTable title="타사단말기 대체 요약" rows={data?.newReplacement?.replacementSummary || []} />
-            <MiniSummaryTable title="해지 유형 요약" rows={data?.terminationType?.reasonSummary || []} />
-            <MiniSummaryTable title="경쟁사 변경 요약" rows={data?.terminationType?.competitorSummary || []} />
-          </div>
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <AnalysisCardHeader
+            eyebrow="Overview"
+            title={`${currentYear}년 신규/대체/해지 유형 분석 요약`}
+            asOf={sourceTitle(data) || "엑셀 기준"}
+            tone="slate"
+          />
+          <div className="space-y-4 p-5">
+            <SimpleKpiGrid
+              items={[
+                { label: "신규/대체", value: `${formatNumber(newTotal)}건`, tone: "blue", sub: `신규 ${formatNumber(pureNewTotal)} · 대체 ${formatNumber(replacementTotal)}` },
+                { label: "해지", value: `${formatNumber(terminationTotal)}건`, tone: "rose" },
+                { label: "순증", value: `${formatNumber(netTotal)}건`, tone: "emerald" },
+                { label: "영역 상세", value: `${formatNumber(areaRecords.length)}건`, tone: "slate" },
+                { label: "개인별", value: `${formatNumber(personalRowsForDisplay.length)}명`, tone: "indigo" },
+                { label: "누적", value: cleanCumulativeLabel(data?.areaNetGrowth?.cumulativeNetLabel) || "-", tone: "slate" },
+              ]}
+            />
 
-          <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="mb-3 flex items-center gap-2 text-[15px] font-semibold text-slate-900">
-                <Database className="h-4 w-4 text-blue-600" />
-                추출 현황
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <MetricTile label="신규 상세" value={`${formatNumber(newRecords.length)}건`} />
-                <MetricTile label="해지 상세" value={`${formatNumber(terminationRecords.length)}건`} />
-                <MetricTile label="영역별 상세" value={`${formatNumber(areaRecords.length)}건`} />
-                <MetricTile label="개인별 실적" value={`${formatNumber(personalRowsForDisplay.length)}명`} />
-              </div>
-              <div className="mt-3 text-[12px] font-semibold text-slate-500">
-                원본 파일 수정 시각: {sourceUpdatedLabel(data?.sourceUpdatedAt) || "확인 필요"}
-              </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <CompactMetricBand title="업무성격" tone="blue" items={summaryWorkMetrics} />
+              <CompactMetricBand title="타사단말기 대체" tone="indigo" items={summaryReplacementMetrics.map((item) => ({ ...item, dashZero: true }))} />
+              <CompactMetricBand title="해지유형" tone="rose" items={summaryTerminationMetrics.map((item) => ({ ...item, dashZero: true }))} />
+              <CompactMetricBand title="경쟁사 변경" tone="indigo" items={summaryCompetitorMetrics.map((item) => ({ ...item, dashZero: true }))} />
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="mb-3 flex items-center gap-2 text-[15px] font-semibold text-slate-900">
-                <BarChart3 className="h-4 w-4 text-blue-600" />
-                최근 주간 반영 결과
+            <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] font-semibold text-slate-500">
+                원본 파일 수정 시각: <span className="text-slate-700">{sourceUpdatedLabel(data?.sourceUpdatedAt) || "확인 필요"}</span>
               </div>
-              {latestSnapshot ? (
-                <div className="space-y-2 text-[13px] font-semibold text-slate-600">
-                  <div className="rounded-xl bg-slate-50 px-3 py-2">
-                    {latestSnapshot.label || "마지막 반영"} · {compactDate(latestSnapshot.createdAt)}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-xl border border-slate-200 px-3 py-2 text-center">
-                      <div className="text-[11px] text-slate-400">신규/대체</div>
-                      <div className="text-[17px] font-semibold text-slate-950">{formatNumber(latestSnapshot.newCount)}</div>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 px-3 py-2 text-center">
-                      <div className="text-[11px] text-slate-400">해지</div>
-                      <div className="text-[17px] font-semibold text-slate-950">{formatNumber(latestSnapshot.terminationCount)}</div>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 px-3 py-2 text-center">
-                      <div className="text-[11px] text-slate-400">순증</div>
-                      <div className="text-[17px] font-semibold text-slate-950">{formatNumber(latestSnapshot.netCount)}</div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-[13px] font-semibold text-slate-400">
-                  아직 주간 반영 내역이 없습니다.
-                </div>
-              )}
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-[12px] font-semibold text-slate-500">
+                최근 반영:{" "}
+                <span className="text-slate-700">
+                  {latestSnapshot ? `${latestSnapshot.label || "마지막 반영"} · ${compactDate(latestSnapshot.createdAt)}` : "주간 반영 내역 없음"}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
       ) : null}
 
       {tab === "new" ? (
@@ -1705,25 +1792,11 @@ export function TypeAnalysisDashboard({
 
       {tab === "personal" ? (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="mb-3 flex items-center gap-2 text-[15px] font-semibold text-slate-900">
-              <UsersRound className="h-4 w-4 text-blue-600" />
-              개인별 신규 실적
-            </div>
-            <DenseTable
-              columns={[
-                { key: "no", label: "구분", className: "w-[72px] text-center" },
-                { key: "manager", label: "담당자", className: "min-w-[160px] font-medium text-slate-900" },
-                { key: "totalNew", label: "총 신규", className: "text-right font-medium tabular-nums text-slate-950" },
-                { key: "new", label: "신규", className: "text-right tabular-nums" },
-                { key: "check", label: "체크", className: "text-right tabular-nums" },
-                { key: "marketPoint", label: "마켓", className: "text-right tabular-nums" },
-                { key: "reutersBloomberg", label: "로이터/블룸", className: "text-right tabular-nums" },
-              ]}
-              rows={personalRowsForDisplay}
-              emptyText="개인별 실적 데이터가 없습니다."
-            />
-          </div>
+          <PersonalPerformancePanel
+            year={currentYear}
+            asOf={data?.personalPerformance?.asOf || sourceTitle(data)}
+            rows={personalRowsForDisplay}
+          />
         </div>
       ) : null}
     </div>
