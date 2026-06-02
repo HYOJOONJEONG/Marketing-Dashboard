@@ -6,6 +6,11 @@ import { useRouter } from "next/navigation"
 import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, LogOut, MessageSquare, OctagonAlert, Plus, Save, Trash2, UserRound } from "lucide-react"
 import type { PopupMessageRecord, UserTestIdEntry } from "@/lib/auth/model"
 
+type ContractCreateResult = {
+  data?: any
+  contract?: any
+}
+
 type Props = {
   currentUser: {
     id: string
@@ -29,6 +34,7 @@ type Props = {
     messageHistory?: PopupMessageRecord[]
   }
   embedded?: boolean
+  onContractCreated?: (result: ContractCreateResult) => void
 }
 
 type MobileMyPageSection = "contracts" | "pending" | "termination" | "hold" | "testIds"
@@ -91,6 +97,22 @@ function formatSaveTime(value = new Date()) {
     second: "2-digit",
     hour12: false,
   }).format(value)
+}
+
+function getSeoulTodayKey() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+}
+
+function normalizeDateDotted(value: unknown) {
+  const digits = String(value ?? "").replace(/[^\d]/g, "")
+  if (digits.length >= 8) return `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6, 8)}`
+  if (digits.length === 6) return `20${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4, 6)}`
+  return String(value ?? "").trim()
 }
 
 async function fetchProfileUpdate(body: Record<string, unknown>) {
@@ -220,7 +242,7 @@ function buildRangeTestIds(startId: string, endId: string) {
   return Array.from({ length: end - start + 1 }, (_, index) => `E${String(start + index).padStart(6, "0")}`)
 }
 
-export function PersonalDashboard({ currentUser, data, embedded = false }: Props) {
+export function PersonalDashboard({ currentUser, data, embedded = false, onContractCreated }: Props) {
   const router = useRouter()
   const [profileMessage, setProfileMessage] = useState("")
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>(data.assignedIndustries || [])
@@ -243,6 +265,7 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
   const [bulkEndId, setBulkEndId] = useState("")
   const [bulkCompanyName, setBulkCompanyName] = useState("")
   const [testIdMessage, setTestIdMessage] = useState("")
+  const [convertingTestId, setConvertingTestId] = useState<string | null>(null)
   const [messageHistory, setMessageHistory] = useState<PopupMessageRecord[]>(data.messageHistory || [])
   const [isMessageBoxOpen, setIsMessageBoxOpen] = useState(false)
   const [isLogoutPending, setIsLogoutPending] = useState(false)
@@ -492,6 +515,77 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
       setTestIdSaveStatus({ phase: "error", message: errorMessage })
     } finally {
       setIsTestIdSaving(false)
+    }
+  }
+
+  const registerTestIdAsContract = async (entry: UserTestIdEntry) => {
+    if (convertingTestId) return
+
+    const idCode = normalizeTestId(entry.testId)
+    const rawCompanyName = String(entry.companyName || "").trim()
+    const companyName = rawCompanyName || "미입력"
+    if (!idCode) {
+      setTestIdMessage("시험아이디 형식을 확인해주세요. 예: E260403")
+      setTestIdSaveStatus({ phase: "error", message: "ID 형식 확인 필요" })
+      return
+    }
+
+    setConvertingTestId(entry.id)
+    setTestIdMessage(`${idCode} 신규계약 등록 중...`)
+    try {
+      const noteParts = [String(entry.note || "").trim(), rawCompanyName ? "" : "회사명 확인 필요", "시험아이디 전환"].filter(Boolean)
+      const nextContract = {
+        id: `c-test-${idCode}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        registrationDate: normalizeDateDotted(getSeoulTodayKey()),
+        companyName,
+        departmentName: String(entry.departmentName || "").trim(),
+        idCode,
+        industry: selectedIndustries[0] || "국내증권",
+        contractMonth: "",
+        documentStatus: "미회수",
+        replacementType: "신규",
+        includedInWeekly: false,
+        recommender: currentUser.name,
+        note: noteParts.join(" / "),
+      }
+
+      let payload: any = null
+      let lastError: Error | null = null
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const response = await fetch("/api/dashboard", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: "addContract", contract: nextContract }),
+          })
+          payload = await response.json().catch(() => null)
+          if (response.ok && payload?.ok) break
+          lastError = new Error(payload?.error || `신규계약 등록 실패 (${response.status})`)
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error("신규계약 등록 요청에 실패했습니다.")
+        }
+        if (attempt === 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, 300))
+        }
+      }
+
+      if (!payload?.ok) {
+        throw lastError || new Error("신규계약 등록 저장에 실패했습니다.")
+      }
+
+      setTestIdMessage(`${idCode} 신규계약 리스트에 등록했습니다. 부족한 필드는 리스트에서 수정해주세요.`)
+      setTestIdSaveStatus({ phase: "success", message: `${formatSaveTime()} 신규계약 등록 완료` })
+      if (onContractCreated) {
+        onContractCreated({ data: payload?.data, contract: payload?.contract || nextContract })
+      } else {
+        startTransition(() => router.push("/?view=contracts"))
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "신규계약 등록 저장에 실패했습니다."
+      setTestIdMessage(message)
+      setTestIdSaveStatus({ phase: "error", message })
+    } finally {
+      setConvertingTestId(null)
     }
   }
 
@@ -904,15 +998,27 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                               <span className="truncate">{entry.testId}</span>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => removeTestIdEntry(entry.id)}
-                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
-                            aria-label={`${entry.testId} 삭제`}
-                            title="삭제"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => registerTestIdAsContract(entry)}
+                              disabled={Boolean(convertingTestId)}
+                              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-blue-100 bg-blue-50 px-2.5 text-[12px] font-bold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+                              title="신규계약 리스트에 등록"
+                            >
+                              <FileSignature className={convertingTestId === entry.id ? "h-4 w-4 animate-pulse" : "h-4 w-4"} />
+                              {convertingTestId === entry.id ? "등록 중" : "계약등록"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeTestIdEntry(entry.id)}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
+                              aria-label={`${entry.testId} 삭제`}
+                              title="삭제"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         </div>
 
                         <div className="mt-3 grid gap-2">
@@ -970,10 +1076,10 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
 
                   <div className="mt-3 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_22px_rgba(15,23,42,0.04)] md:block">
                     <div className="overflow-x-auto">
-                      <table className="w-full min-w-[900px] border-separate border-spacing-0 text-[13px]">
+                      <table className="w-full min-w-[1040px] border-separate border-spacing-0 text-[13px]">
                         <thead>
                           <tr className="bg-slate-50 text-[11px] font-black text-slate-500">
-                            {["시험아이디", "회사명", "부서", "담당자", "연락처", "비고", ""].map((head) => (
+                            {["시험아이디", "회사명", "부서", "담당자", "연락처", "비고", "작업"].map((head) => (
                               <th key={head || "actions"} className="border-b border-slate-200 px-3 py-2.5 text-left">
                                 {head}
                               </th>
@@ -1029,16 +1135,28 @@ export function PersonalDashboard({ currentUser, data, embedded = false }: Props
                                   className="h-8 w-full rounded-lg border border-transparent bg-transparent px-2 text-slate-700 outline-none transition placeholder:text-slate-300 hover:border-slate-200 hover:bg-white focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
                                 />
                               </td>
-                              <td className="w-12 px-2 py-2 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => removeTestIdEntry(entry.id)}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                                  aria-label={`${entry.testId} 삭제`}
-                                  title="삭제"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
+                              <td className="w-[170px] px-2 py-2">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => registerTestIdAsContract(entry)}
+                                    disabled={Boolean(convertingTestId)}
+                                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-2.5 text-[11px] font-bold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+                                    title="신규계약 리스트에 등록"
+                                  >
+                                    <FileSignature className={convertingTestId === entry.id ? "h-3.5 w-3.5 animate-pulse" : "h-3.5 w-3.5"} />
+                                    {convertingTestId === entry.id ? "등록 중" : "신규계약 등록"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeTestIdEntry(entry.id)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                                    aria-label={`${entry.testId} 삭제`}
+                                    title="삭제"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}

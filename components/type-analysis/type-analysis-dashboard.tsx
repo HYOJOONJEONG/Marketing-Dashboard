@@ -1195,12 +1195,12 @@ export function TypeAnalysisDashboard({
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="mb-3 flex items-center gap-2 text-[15px] font-semibold text-slate-900">
                 <BarChart3 className="h-4 w-4 text-blue-600" />
-                주간 불러오기 저장본
+                최근 주간 반영 결과
               </div>
               {latestSnapshot ? (
                 <div className="space-y-2 text-[13px] font-semibold text-slate-600">
                   <div className="rounded-xl bg-slate-50 px-3 py-2">
-                    {latestSnapshot.label || "최근 불러오기"} · {compactDate(latestSnapshot.createdAt)}
+                    {latestSnapshot.label || "마지막 반영"} · {compactDate(latestSnapshot.createdAt)}
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="rounded-xl border border-slate-200 px-3 py-2 text-center">
@@ -1219,7 +1219,7 @@ export function TypeAnalysisDashboard({
                 </div>
               ) : (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-[13px] font-semibold text-slate-400">
-                  아직 저장된 주간 불러오기 내역이 없습니다.
+                  아직 주간 반영 내역이 없습니다.
                 </div>
               )}
             </div>

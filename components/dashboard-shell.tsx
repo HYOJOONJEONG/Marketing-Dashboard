@@ -2163,7 +2163,7 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
     })
   return {
     id: `type-analysis-weekly-${Date.now()}`,
-    label: `${normalizeDate(getSeoulTodayKey())} 주간 불러오기`,
+    label: `${normalizeDate(getSeoulTodayKey())} 주간 반영`,
     createdAt,
     newCount: newRecords.length,
     terminationCount: terminationRecords.length,
@@ -8191,6 +8191,29 @@ export function DashboardShell({
                 testIdEntries: currentUser.testIdEntries || [],
               }}
               data={personalDashboardData}
+              onContractCreated={(result) => {
+                const createdContract = result?.contract || {}
+                const createdId = String(createdContract?.id || "")
+                const mergedData = result?.data
+                  ? {
+                      ...(pendingDataRef.current || data),
+                      ...result.data,
+                    }
+                  : pendingDataRef.current || data
+                setData(mergedData)
+                pendingDataRef.current = mergedData
+                clearDirtyViews(["contracts"])
+                scheduleLocalDashboardCache(mergedData)
+                setContractQuery(String(createdContract?.idCode || ""))
+                setContractStatusFilter("all")
+                setContractReplacementFilter("all")
+                setContractMonthFilter("all")
+                setContractSort({ key: "registrationDate", dir: "desc" })
+                if (createdId) {
+                  flashRecentRow(setRecentContractId, createdId)
+                }
+                navigateToView("contracts")
+              }}
             />
           ) : null}
 
