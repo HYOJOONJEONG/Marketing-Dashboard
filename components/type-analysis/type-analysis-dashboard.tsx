@@ -80,6 +80,20 @@ function findSummaryValue(rows: any[], matcher: (label: string) => boolean) {
   return toNumber(row?.value)
 }
 
+function summaryValueByLabel(rows: any[], matchers: string[]) {
+  const normalizedMatchers = matchers.map((item) => item.replace(/\s+/g, ""))
+  return findSummaryValue(rows, (label) => {
+    const normalizedLabel = label.replace(/\s+/g, "")
+    return normalizedMatchers.some((matcher) => normalizedLabel.includes(matcher))
+  })
+}
+
+function excelNumber(value: unknown, dashZero = false) {
+  const number = toNumber(value)
+  if (dashZero && number === 0) return "-"
+  return formatNumber(number)
+}
+
 function compactKpiLabel(value: unknown) {
   return String(value || "")
     .replace(/\s+/g, " ")
@@ -638,6 +652,150 @@ function IndustryMatrixTable({ rows }: { rows: any[] }) {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+function NewReplacementExcelSummary({
+  year,
+  asOf,
+  workSummary,
+  replacementSummary,
+  industryRows,
+}: {
+  year: number | string
+  asOf: string
+  workSummary: any[]
+  replacementSummary: any[]
+  industryRows: any[]
+}) {
+  const workColumns = [
+    { label: "외환", value: summaryValueByLabel(workSummary, ["외환"]) },
+    { label: "주식,선물,옵션", value: summaryValueByLabel(workSummary, ["주식"]) },
+    { label: "채권", value: summaryValueByLabel(workSummary, ["채권"]) },
+    { label: "기타", value: summaryValueByLabel(workSummary, ["기타"]) },
+    { label: "합 계", value: summaryValueByLabel(workSummary, ["합계", "합"]) },
+  ]
+  const replacementColumns = [
+    { label: "체크( C )", value: summaryValueByLabel(replacementSummary, ["체크"]) },
+    { label: "마켓포인트( M )", value: summaryValueByLabel(replacementSummary, ["마켓포인트", "마켓"]) },
+    { label: "블룸버그( B )", value: summaryValueByLabel(replacementSummary, ["블룸버그", "블룸"]) },
+    { label: "로이터( R )", value: summaryValueByLabel(replacementSummary, ["로이터"]) },
+    { label: "기타( H )", value: summaryValueByLabel(replacementSummary, ["기타", "한경"]) },
+    { label: "신규(N)", value: summaryValueByLabel(replacementSummary, ["신규"]) },
+    { label: "합 계", value: summaryValueByLabel(replacementSummary, ["합계", "합"]) },
+  ]
+  const matrixColumns = [
+    { key: "label", label: "구분", className: "w-[160px] text-center" },
+    { key: "check", label: "체크( C )", className: "w-[134px] text-right" },
+    { key: "marketPoint", label: "마켓포인트( M )", className: "w-[198px] text-right" },
+    { key: "bloomberg", label: "블룸버그( B )", className: "w-[194px] text-right" },
+    { key: "reuters", label: "로이터( R )", className: "w-[134px] text-right" },
+    { key: "hankyungEtc", label: "한경머니(H)", className: "w-[106px] text-right" },
+    { key: "new", label: "신규(N)", className: "w-[106px] text-right" },
+    { key: "total", label: "합계", className: "w-[140px] text-right" },
+  ]
+  const cleanedAsOf = String(asOf || "").trim()
+  const asOfLabel = cleanedAsOf.startsWith("(") ? cleanedAsOf : `(${cleanedAsOf || "기준일 확인 필요"})`
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-300 bg-white">
+      <div className="overflow-x-auto">
+        <div className="min-w-[1160px] bg-white px-0 pb-4 pt-5 text-slate-950">
+          <h2 className="mb-6 text-center text-[28px] font-bold tracking-[0] text-black">
+            {year}년 인포맥스 신규단말기 대체현황
+          </h2>
+          <div className="mb-2 px-1 text-[16px] font-bold text-red-600">{asOfLabel}</div>
+
+          <table className="w-[920px] border-collapse text-[13px] text-black">
+            <tbody>
+              <tr>
+                <th rowSpan={2} className="w-[156px] border border-black bg-[#bfbfbf] px-2 py-2 text-center font-bold">
+                  업무성격
+                </th>
+                {workColumns.map((column) => (
+                  <th key={column.label} className="border border-black bg-[#bfbfbf] px-2 py-1 text-center font-bold">
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {workColumns.map((column) => (
+                  <td key={column.label} className="border border-black px-3 py-1 text-right tabular-nums">
+                    {excelNumber(column.value)}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+
+          <table className="mt-5 w-full border-collapse text-[13px] text-black">
+            <tbody>
+              <tr>
+                <th rowSpan={2} className="w-[156px] border border-black bg-[#bfbfbf] px-2 py-2 text-center font-bold leading-tight">
+                  타사단말기<br />대체
+                </th>
+                {replacementColumns.map((column) => (
+                  <th key={column.label} className="border border-black bg-[#bfbfbf] px-2 py-1 text-center font-bold">
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {replacementColumns.map((column) => (
+                  <td key={column.label} className="border border-black px-3 py-1 text-right tabular-nums">
+                    {excelNumber(column.value, true)}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+          <div className="mb-6 mt-1 text-[12px] font-medium text-black">
+            * 분류의 첫글자 이니셜을 아래 표에 표시
+          </div>
+
+          <table className="w-full border-collapse text-[13px] text-black">
+            <thead>
+              <tr>
+                {matrixColumns.map((column) => (
+                  <th key={column.key} className={`${column.className} border border-black bg-[#bfbfbf] px-2 py-2 text-center font-bold`}>
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {industryRows.length ? (
+                industryRows.map((row, index) => {
+                  const isTotal = isTotalIndustryRow(row)
+                  return (
+                    <tr key={`${row?.label || "industry"}-${index}`} className={isTotal ? "bg-[#bfbfbf]" : "bg-white"}>
+                      {matrixColumns.map((column) => (
+                        <td
+                          key={column.key}
+                          className={`${column.className} border border-black px-2 py-3 align-middle tabular-nums ${isTotal ? "font-medium" : ""}`}
+                        >
+                          {column.key === "label" ? (
+                            <span className="block whitespace-normal break-keep text-center leading-[1.35]">{row?.label}</span>
+                          ) : (
+                            excelNumber(row?.[column.key])
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  )
+                })
+              ) : (
+                <tr>
+                  <td colSpan={matrixColumns.length} className="border border-black px-4 py-8 text-center font-semibold text-slate-500">
+                    업종별 신규/대체 요약이 없습니다.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )
@@ -1665,8 +1823,13 @@ export function TypeAnalysisDashboard({
 
       {tab === "new" ? (
         <div className="space-y-4">
-          <MiniSummaryTable title="업무성격 요약" rows={data?.newReplacement?.workSummary || []} />
-          <IndustryMatrixTable rows={industryMatrixRows} />
+          <NewReplacementExcelSummary
+            year={currentYear}
+            asOf={data?.newReplacement?.asOf || sourceTitle(data)}
+            workSummary={data?.newReplacement?.workSummary || []}
+            replacementSummary={data?.newReplacement?.replacementSummary || []}
+            industryRows={industryMatrixRows}
+          />
           <GroupedNewRecordsTable
             groups={groupedNewRecords}
             industryOptions={industryMoveOptions}
