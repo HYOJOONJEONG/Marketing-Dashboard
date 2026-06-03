@@ -394,21 +394,29 @@ function CompactMetricBand({
       <div className={`border-b px-4 py-2.5 text-center text-[13px] font-bold ${toneClass(tone, "border")} ${toneClass(tone, "softBg")} ${toneClass(tone, "text")}`}>
         {title}
       </div>
-      <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-4 lg:grid-cols-none lg:auto-cols-fr lg:grid-flow-col">
-        {items.map((item) => {
-          const value = typeof item.value === "string" ? item.value : excelNumber(item.value, item.dashZero)
-          return (
-            <div key={`${title}-${item.label}-${item.sub || ""}`} className={`min-w-[86px] bg-white px-3 py-3 text-center ${item.total ? toneClass(tone, "softBg") : ""}`}>
-              <div title={item.title || item.label} className="mx-auto max-w-[120px] truncate text-[12px] font-bold text-slate-600">
-                {item.label}
+      <div className="overflow-x-auto">
+        <div
+          className="grid min-w-full gap-px bg-slate-100"
+          style={{ gridTemplateColumns: `repeat(${items.length}, minmax(94px, 1fr))` }}
+        >
+          {items.map((item) => {
+            const value = typeof item.value === "string" ? item.value : excelNumber(item.value, item.dashZero)
+            return (
+              <div
+                key={`${title}-${item.label}-${item.sub || ""}`}
+                className={`flex min-h-[82px] flex-col items-center justify-center bg-white px-3 py-3 text-center ${item.total ? toneClass(tone, "softBg") : ""}`}
+              >
+                <div title={item.title || item.label} className="max-w-full truncate whitespace-nowrap text-[12px] font-bold text-slate-600">
+                  {item.label}
+                </div>
+                {item.sub ? <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">{item.sub}</div> : null}
+                <div className={`mt-1 text-[20px] font-black tabular-nums ${item.total ? toneClass(tone, "text") : "text-slate-950"}`}>
+                  {value}
+                </div>
               </div>
-              {item.sub ? <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">{item.sub}</div> : null}
-              <div className={`mt-1 text-[19px] font-black tabular-nums ${item.total ? toneClass(tone, "text") : "text-slate-950"}`}>
-                {value}
-              </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </div>
   )
@@ -896,7 +904,7 @@ function TerminationMatrixTable({
       />
       <div className="overflow-x-auto">
         <div className="min-w-[1240px] space-y-4 p-5">
-          <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
+          <div className="grid gap-4">
             <CompactMetricBand title="해지유형" tone="rose" items={reasonColumns.map((item) => ({ ...item, dashZero: true }))} />
             <CompactMetricBand title="경쟁사 변경" tone="indigo" items={competitorColumns.map((item) => ({ ...item, dashZero: true }))} />
           </div>
