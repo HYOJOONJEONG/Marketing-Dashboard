@@ -1652,7 +1652,7 @@ export function TypeAnalysisDashboard({
             .report-code { flex: 0 0 auto; border: 1px solid #cbd5e1; border-radius: 999px; padding: 5px 9px; color: #334155; font-size: 9px; font-weight: 700; letter-spacing: .04em; background: #f8fafc; }
             .meta { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; padding-top: 8px; border-top: 1px solid #e2e8f0; color: #475569; font-size: 10px; }
             .meta span::before { content: ""; display: inline-block; width: 3px; height: 3px; margin: 0 6px 2px 0; border-radius: 999px; background: #64748b; }
-            .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin: 12px 0 8px; border: 1px solid #cbd5e1; border-radius: 2px; overflow: hidden; }
+            .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 12px 0 8px; border: 1px solid #cbd5e1; border-radius: 2px; overflow: hidden; }
             .kpi { min-height: 50px; border-right: 1px solid #e2e8f0; padding: 8px 10px; background: #fff; }
             .kpi:last-child { border-right: 0; }
             .kpi .label { color: #475569; font-size: 9px; font-weight: 700; letter-spacing: .04em; }
@@ -1728,7 +1728,6 @@ export function TypeAnalysisDashboard({
               <div class="kpi"><div class="label">신규/대체</div><div class="value">${formatNumber(newTotal)}건</div><div class="sub">신규 ${formatNumber(pureNewTotal)} · 대체 ${formatNumber(replacementTotal)}</div></div>
               <div class="kpi"><div class="label">해지</div><div class="value">${formatNumber(terminationTotal)}건</div></div>
               <div class="kpi"><div class="label">순증</div><div class="value">${formatNumber(netTotal)}건</div></div>
-              <div class="kpi"><div class="label">영역 상세</div><div class="value">${formatNumber(areaRecords.length)}건</div></div>
               <div class="kpi"><div class="label">누적</div><div class="value">${escapeReportHtml(cleanCumulativeLabel(data?.areaNetGrowth?.cumulativeNetLabel) || "-")}</div></div>
             </div>
 
@@ -1877,7 +1876,6 @@ export function TypeAnalysisDashboard({
                 { label: "신규/대체", value: `${formatNumber(newTotal)}건`, tone: "blue", sub: `신규 ${formatNumber(pureNewTotal)} · 대체 ${formatNumber(replacementTotal)}` },
                 { label: "해지", value: `${formatNumber(terminationTotal)}건`, tone: "rose" },
                 { label: "순증", value: `${formatNumber(netTotal)}건`, tone: "emerald" },
-                { label: "영역 상세", value: `${formatNumber(areaRecords.length)}건`, tone: "slate" },
                 { label: "누적", value: cleanCumulativeLabel(data?.areaNetGrowth?.cumulativeNetLabel) || "-", tone: "slate" },
               ]}
             />
