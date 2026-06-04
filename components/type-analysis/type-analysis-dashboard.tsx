@@ -227,6 +227,7 @@ function groupedReportTable(
   emptyText: string,
   groupLabel = "업종",
 ) {
+  let detailNo = 0
   const rows = groups.flatMap((group) => [
     { __group: true, label: group.label, count: group.rows.length },
     ...group.rows,
@@ -244,10 +245,11 @@ function groupedReportTable(
             if (row.__group) {
               return `<tr class="group-row"><td colspan="${columns.length}"><div class="group-title"><span><em>${escapeReportHtml(groupLabel)}</em><b>${escapeReportHtml(row.label)}</b></span><strong>${formatNumber(row.count)}건</strong></div></td></tr>`
             }
+            const rowForReport = { ...row, reportNo: ++detailNo }
             return `
               <tr class="${isReportTotalRow(row) ? "total-row" : ""}">
                 ${columns
-                  .map((column) => `<td class="${reportCellClass(column)}">${escapeReportHtml(column.get(row, index))}</td>`)
+                  .map((column) => `<td class="${reportCellClass(column)}">${escapeReportHtml(column.get(rowForReport, detailNo - 1))}</td>`)
                   .join("")}
               </tr>
             `
@@ -801,6 +803,7 @@ function GroupedNewRecordsTable({
   onMoveRecord?: Props["onMoveRecord"]
 }) {
   const totalCount = groups.reduce((sum, group) => sum + group.rows.length, 0)
+  let displayNo = 0
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="border-b border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-900">
@@ -830,9 +833,11 @@ function GroupedNewRecordsTable({
                     <GroupHeaderLabel label={group.label} count={group.rows.length} />
                   </td>
                 </tr>,
-                ...group.rows.map((row, index) => (
+                ...group.rows.map((row, index) => {
+                  const rowNo = ++displayNo
+                  return (
                   <tr key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`} className="border-b border-slate-100 hover:bg-blue-50/30">
-                    <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{row.no || index + 1}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{rowNo}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 tabular-nums text-slate-600">{row.date}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">{row.idCode}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">{row.companyName}</td>
@@ -852,7 +857,8 @@ function GroupedNewRecordsTable({
                       ) : <span className="text-slate-300">-</span>}
                     </td>
                   </tr>
-                )),
+                  )
+                }),
               ])
             ) : (
               <tr>
@@ -991,6 +997,7 @@ function GroupedTerminationRecordsTable({
   onMoveRecord?: Props["onMoveRecord"]
 }) {
   const totalCount = groups.reduce((sum, group) => sum + group.rows.length, 0)
+  let displayNo = 0
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="border-b border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-900">
@@ -1020,9 +1027,11 @@ function GroupedTerminationRecordsTable({
                     <GroupHeaderLabel label={group.label} count={group.rows.length} />
                   </td>
                 </tr>,
-                ...group.rows.map((row, index) => (
+                ...group.rows.map((row, index) => {
+                  const rowNo = ++displayNo
+                  return (
                   <tr key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`} className="border-b border-slate-100 hover:bg-rose-50/30">
-                    <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{row.no || index + 1}</td>
+                    <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{rowNo}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 tabular-nums text-slate-600">{row.date}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">{row.idCode}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">{row.companyName}</td>
@@ -1042,7 +1051,8 @@ function GroupedTerminationRecordsTable({
                       ) : <span className="text-slate-300">-</span>}
                     </td>
                   </tr>
-                )),
+                  )
+                }),
               ])
             ) : (
               <tr>
@@ -1160,6 +1170,7 @@ function GroupedAreaRecordsTable({
   onMoveRecord?: Props["onMoveRecord"]
 }) {
   const totalCount = groups.reduce((sum, group) => sum + group.rows.length, 0)
+  let displayNo = 0
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="border-b border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-900">
@@ -1189,11 +1200,12 @@ function GroupedAreaRecordsTable({
                   </td>
                 </tr>,
                 ...group.rows.map((row, index) => {
+                  const rowNo = ++displayNo
                   const isTermination = row?.kind === "termination" || row?.transactionType === "해지"
                   const tone = isTermination ? "border-rose-100 bg-rose-50 text-rose-700" : "border-blue-100 bg-blue-50 text-blue-700"
                   return (
                     <tr key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`} className={`border-b border-slate-100 ${isTermination ? "hover:bg-rose-50/30" : "hover:bg-blue-50/30"}`}>
-                      <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{row.no || index + 1}</td>
+                      <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{rowNo}</td>
                       <td className="border-r border-slate-100 px-2 py-1.5 text-center">
                         <span className={`inline-flex h-6 items-center rounded-full border px-2 text-[11px] font-semibold ${tone}`}>
                           {isTermination ? "해지" : "신규/대체"}
@@ -1526,7 +1538,7 @@ export function TypeAnalysisDashboard({
       { label: "합계", width: "11%", align: "right", noWrap: true, get: (row) => formatNumber(row.total) },
     ]
     const newDetailColumns: ReportColumn[] = [
-      { label: "NO", width: "5%", align: "center", noWrap: true, get: (row) => row.no },
+      { label: "NO", width: "5%", align: "center", noWrap: true, get: (row) => row.reportNo ?? row.no },
       { label: "반영일", width: "9%", noWrap: true, get: (row) => row.date },
       { label: "ID", width: "9%", noWrap: true, get: (row) => row.idCode },
       { label: "회사명", width: "17%", get: (row) => row.companyName },
@@ -1550,7 +1562,7 @@ export function TypeAnalysisDashboard({
       { label: "합계", width: "7%", align: "right", noWrap: true, get: (row) => formatNumber(row.total) },
     ]
     const terminationDetailColumns: ReportColumn[] = [
-      { label: "NO", width: "5%", align: "center", noWrap: true, get: (row) => row.no },
+      { label: "NO", width: "5%", align: "center", noWrap: true, get: (row) => row.reportNo ?? row.no },
       { label: "반영일", width: "9%", noWrap: true, get: (row) => row.date },
       { label: "ID", width: "9%", noWrap: true, get: (row) => row.idCode },
       { label: "회사명", width: "18%", get: (row) => row.companyName },
@@ -1569,7 +1581,7 @@ export function TypeAnalysisDashboard({
       { label: "순증", width: "10%", align: "right", noWrap: true, get: (row) => formatNumber(row.netCount) },
     ]
     const areaDetailColumns: ReportColumn[] = [
-      { label: "NO", width: "5%", align: "center", noWrap: true, get: (row) => row.no },
+      { label: "NO", width: "5%", align: "center", noWrap: true, get: (row) => row.reportNo ?? row.no },
       { label: "구분", width: "8%", noWrap: true, get: (row) => (row.kind === "termination" || row.transactionType === "해지" ? "해지" : "신규/대체") },
       { label: "반영일", width: "9%", noWrap: true, get: (row) => row.date },
       { label: "ID", width: "9%", noWrap: true, get: (row) => row.idCode },
