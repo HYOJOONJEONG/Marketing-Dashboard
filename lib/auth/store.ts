@@ -437,7 +437,7 @@ function normalizeRequiredDirectoryUsers(state: AuthState) {
       existing.name = seedUser.name
       existing.role = seedUser.role
       existing.teamId = teamId
-      existing.title = getUserTitle(seedUser.name, seedUser.role)
+      existing.title = String(existing.title || "").trim() || getUserTitle(seedUser.name, seedUser.role)
       existing.avatarEmoji = existing.avatarEmoji ? String(existing.avatarEmoji).trim() : null
       existing.displayOrder = displayOrderByName[seedUser.name] || 99
       existing.active = true
