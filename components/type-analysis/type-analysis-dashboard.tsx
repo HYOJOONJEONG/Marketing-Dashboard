@@ -1229,12 +1229,21 @@ function PersonalPerformancePanel({
     }),
     { totalNew: 0, new: 0, check: 0, marketPoint: 0, reutersBloomberg: 0 },
   )
+  const tableColumns = [
+    { key: "no", label: "구분", className: "w-[72px] text-center" },
+    { key: "manager", label: "담당자", className: "w-[240px] text-center" },
+    { key: "totalNew", label: "총 신규", className: "w-[150px] text-center tabular-nums" },
+    { key: "new", label: "신규", className: "w-[150px] text-center tabular-nums" },
+    { key: "check", label: "체크", className: "w-[150px] text-center tabular-nums" },
+    { key: "marketPoint", label: "마켓", className: "w-[150px] text-center tabular-nums" },
+    { key: "reutersBloomberg", label: "로이터/블룸", className: "w-[150px] text-center tabular-nums" },
+  ]
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <AnalysisCardHeader
         eyebrow="Personal Performance"
-        title={`${year}년 개인별 실적`}
+        title={`${year}년 개인별 신규 현황`}
         asOf={asOf}
         tone="blue"
       />
@@ -1251,22 +1260,53 @@ function PersonalPerformancePanel({
         />
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5">
-            <div className="text-[13px] font-bold text-slate-900">개인별 신규 실적</div>
-            <div className="text-[11px] font-semibold text-slate-400">담당자 기준</div>
+            <div className="text-[13px] font-bold text-slate-900">개인별 신규 현황</div>
+            <div className="text-[11px] font-semibold text-slate-400">담당자 기준 · 총계 포함</div>
           </div>
-          <DenseTable
-            columns={[
-              { key: "no", label: "구분", className: "w-[72px] text-center" },
-              { key: "manager", label: "담당자", className: "min-w-[160px] font-medium text-slate-900" },
-              { key: "totalNew", label: "총 신규", className: "text-center font-medium tabular-nums text-blue-700" },
-              { key: "new", label: "신규", className: "text-center tabular-nums" },
-              { key: "check", label: "체크", className: "text-center tabular-nums" },
-              { key: "marketPoint", label: "마켓", className: "text-center tabular-nums" },
-              { key: "reutersBloomberg", label: "로이터/블룸", className: "text-center tabular-nums" },
-            ]}
-            rows={rows}
-            emptyText="개인별 실적 데이터가 없습니다."
-          />
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1060px] table-fixed border-collapse text-[12px]">
+              <thead>
+                <tr className="border-b border-slate-200 bg-blue-50/80 text-slate-700">
+                  {tableColumns.map((column) => (
+                    <th key={column.key} className={`border-r border-blue-100 px-3 py-2.5 text-center font-bold last:border-r-0 ${column.className}`}>
+                      {column.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length ? (
+                  <>
+                    {rows.map((row, index) => (
+                      <tr key={`${row?.no || index}-${row?.manager || "manager"}`} className="border-b border-slate-100 hover:bg-blue-50/30">
+                        <td className="border-r border-slate-100 px-3 py-2.5 text-center font-semibold tabular-nums text-slate-700">{row.no || index + 1}</td>
+                        <td className="border-r border-slate-100 px-3 py-2.5 text-center font-semibold text-slate-900">{row.manager}</td>
+                        <td className="border-r border-slate-100 px-3 py-2.5 text-center font-bold tabular-nums text-blue-700">{formatNumber(row.totalNew)}</td>
+                        <td className="border-r border-slate-100 px-3 py-2.5 text-center tabular-nums text-slate-700">{formatNumber(row.new)}</td>
+                        <td className="border-r border-slate-100 px-3 py-2.5 text-center tabular-nums text-slate-700">{toNumber(row.check) ? formatNumber(row.check) : ""}</td>
+                        <td className="border-r border-slate-100 px-3 py-2.5 text-center tabular-nums text-slate-700">{toNumber(row.marketPoint) ? formatNumber(row.marketPoint) : ""}</td>
+                        <td className="px-3 py-2.5 text-center tabular-nums text-slate-700">{toNumber(row.reutersBloomberg) ? formatNumber(row.reutersBloomberg) : ""}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t border-blue-200 bg-blue-50/80 font-bold text-blue-900">
+                      <td colSpan={2} className="border-r border-blue-100 px-3 py-2.5 text-center">총계</td>
+                      <td className="border-r border-blue-100 px-3 py-2.5 text-center tabular-nums">{formatNumber(totals.totalNew)}</td>
+                      <td className="border-r border-blue-100 px-3 py-2.5 text-center tabular-nums">{formatNumber(totals.new)}</td>
+                      <td className="border-r border-blue-100 px-3 py-2.5 text-center tabular-nums">{formatNumber(totals.check)}</td>
+                      <td className="border-r border-blue-100 px-3 py-2.5 text-center tabular-nums">{formatNumber(totals.marketPoint)}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums">{formatNumber(totals.reutersBloomberg)}</td>
+                    </tr>
+                  </>
+                ) : (
+                  <tr>
+                    <td colSpan={tableColumns.length} className="px-4 py-10 text-center text-[13px] font-semibold text-slate-400">
+                      개인별 실적 데이터가 없습니다.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>
