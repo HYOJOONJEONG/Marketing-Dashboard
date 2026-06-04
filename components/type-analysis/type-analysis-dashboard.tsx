@@ -1610,9 +1610,15 @@ export function TypeAnalysisDashboard({
             * { box-sizing: border-box; }
             html { background: #eef2f7; }
             body { margin: 0; color: #0f172a; font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; background: #eef2f7; }
-            .toolbar { position: sticky; top: 0; z-index: 2; display: flex; justify-content: flex-end; gap: 8px; padding: 12px; background: rgba(248, 250, 252, 0.94); border-bottom: 1px solid #e2e8f0; }
-            .toolbar button { height: 34px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; padding: 0 12px; color: #0f172a; font-size: 12px; font-weight: 600; cursor: pointer; }
+            .toolbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; background: rgba(248, 250, 252, 0.96); border-bottom: 1px solid #e2e8f0; }
+            .report-tabs { display: inline-flex; flex-wrap: wrap; gap: 4px; border: 1px solid #dbe3ef; border-radius: 12px; background: #f1f5f9; padding: 4px; }
+            .toolbar-actions { display: inline-flex; flex: 0 0 auto; gap: 8px; }
+            .toolbar button { height: 34px; border: 1px solid #cbd5e1; border-radius: 9px; background: #fff; padding: 0 12px; color: #0f172a; font-size: 12px; font-weight: 700; cursor: pointer; }
+            .toolbar .report-tab { border: 0; background: transparent; color: #64748b; }
+            .toolbar .report-tab.is-active { background: #fff; color: #0f172a; box-shadow: 0 1px 2px rgba(15, 23, 42, .08); }
+            .toolbar .primary { border-color: #1d4ed8; background: #1d4ed8; color: #fff; }
             .report { width: 100%; max-width: 1120px; margin: 0 auto; padding: 20px 22px 42px; background: #fff; box-shadow: 0 18px 50px rgba(15, 23, 42, .08); }
+            .report.single-section .section.page { break-before: auto; }
             .cover { border-top: 4px solid #0b1f3a; border-bottom: 1px solid #94a3b8; padding: 14px 0 12px; }
             .cover-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
             .eyebrow { color: #0b1f3a; font-size: 9px; font-weight: 700; letter-spacing: .14em; }
@@ -1662,8 +1668,19 @@ export function TypeAnalysisDashboard({
         </head>
         <body>
           <div class="toolbar">
-            <button onclick="window.print()">PDF 저장/출력</button>
-            <button onclick="window.close()">닫기</button>
+            <div class="report-tabs" role="tablist" aria-label="리포트 섹션">
+              <button class="report-tab is-active" type="button" data-report-tab="all">전체</button>
+              <button class="report-tab" type="button" data-report-tab="summary">요약</button>
+              <button class="report-tab" type="button" data-report-tab="new">신규/대체</button>
+              <button class="report-tab" type="button" data-report-tab="termination">해지</button>
+              <button class="report-tab" type="button" data-report-tab="area">영역별 순증</button>
+              <button class="report-tab" type="button" data-report-tab="personal">개인별</button>
+            </div>
+            <div class="toolbar-actions">
+              <button class="primary" onclick="window.print()">PDF 저장/출력</button>
+              <button onclick="setReportSection('all'); window.print()">전체 PDF</button>
+              <button onclick="window.close()">닫기</button>
+            </div>
           </div>
           <main class="report">
             <header class="cover">
@@ -1689,7 +1706,7 @@ export function TypeAnalysisDashboard({
               <div class="kpi"><div class="label">누적</div><div class="value">${escapeReportHtml(cleanCumulativeLabel(data?.areaNetGrowth?.cumulativeNetLabel) || "-")}</div></div>
             </div>
 
-            <section class="section">
+            <section class="section report-section" data-section="summary">
               <h2>요약</h2>
               <div class="summary-grid">
                 <div><h3>업무성격 요약</h3>${reportTable(simpleColumns, data?.newReplacement?.workSummary || [], "데이터 없음")}</div>
@@ -1700,36 +1717,48 @@ export function TypeAnalysisDashboard({
               <div class="note">원본 파일 수정 시각: ${escapeReportHtml(sourceUpdatedLabel(data?.sourceUpdatedAt) || "확인 필요")}</div>
             </section>
 
-            <section class="section page">
+            <section class="section page report-section" data-section="new">
               <h2>신규/대체</h2>
               ${reportTable(newIndustryColumns, industryMatrixRows, "업종별 신규/대체 요약이 없습니다.")}
               <h3>상세 목록</h3>
               ${groupedReportTable(reportNewGroups, newDetailColumns, "신규/대체 상세 데이터가 없습니다.", "업종")}
             </section>
 
-            <section class="section page">
+            <section class="section page report-section" data-section="termination">
               <h2>해지</h2>
               ${reportTable(terminationIndustryColumnsForReport, terminationMatrixRows, "업종별 해지 요약이 없습니다.")}
               <h3>상세 목록</h3>
               ${groupedReportTable(reportTerminationGroups, terminationDetailColumns, "해지 상세 데이터가 없습니다.", "업종")}
             </section>
 
-            <section class="section page">
+            <section class="section page report-section" data-section="area">
               <h2>영역별 순증</h2>
               ${reportTable(areaColumns, areaSummaryRows, "영역별 순증 요약이 없습니다.")}
               <h3>상세 목록</h3>
               ${groupedReportTable(reportAreaGroups, areaDetailColumns, "영역별 상세 데이터가 없습니다.", "영역")}
             </section>
 
-            <section class="section page">
+            <section class="section page report-section" data-section="personal">
               <h2>개인별 실적</h2>
               ${reportTable(personalColumns, personalRowsForReport, "개인별 실적 데이터가 없습니다.")}
             </section>
           </main>
           <script>
-            window.addEventListener("load", () => {
-              setTimeout(() => window.print(), 350);
+            function setReportSection(key) {
+              const nextKey = key || "all";
+              document.querySelectorAll("[data-report-tab]").forEach((button) => {
+                button.classList.toggle("is-active", button.dataset.reportTab === nextKey);
+              });
+              document.querySelectorAll(".report-section").forEach((section) => {
+                section.hidden = nextKey !== "all" && section.dataset.section !== nextKey;
+              });
+              const report = document.querySelector(".report");
+              if (report) report.classList.toggle("single-section", nextKey !== "all");
+            }
+            document.querySelectorAll("[data-report-tab]").forEach((button) => {
+              button.addEventListener("click", () => setReportSection(button.dataset.reportTab));
             });
+            setReportSection("all");
           </script>
         </body>
       </html>`
