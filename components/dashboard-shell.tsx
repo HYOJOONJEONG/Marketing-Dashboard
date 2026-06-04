@@ -2318,6 +2318,17 @@ function getWeeklyAdditionalContractAmount(currentAmount: unknown) {
   return Math.max(0, toNumber(currentAmount))
 }
 
+function getAdditionalSalesAmount(rows: any[]) {
+  return normalizeAdditionalSalesRows(rows || []).reduce(
+    (sum, row) => sum + Math.max(0, parseLooseNumber(row?.amount)),
+    0,
+  )
+}
+
+function getAnnualAdditionalRevenueAmount(currentAmount: unknown, rows: any[]) {
+  return Math.max(0, parseLooseNumber(currentAmount)) + getAdditionalSalesAmount(rows)
+}
+
 function buildAutoRevenueHeader(unitPrice: unknown, selectedCount: number, additionalContractCount: unknown) {
   const baseUnitPrice = toNumber(unitPrice) || 6160000
   const bonusRevenue = Math.max(0, toNumber(additionalContractCount))
@@ -2362,20 +2373,22 @@ function getRevenueRowMillionsByLabel(rows: any[], label: string) {
   return (targetRow?.months || []).reduce((sum: number, value: number) => sum + toNumber(value), 0)
 }
 
-function buildAnnualNetRevenueSubtitle(rows: any[], summary: any, unitPrice: unknown) {
+function buildAnnualNetRevenueSubtitle(rows: any[], summary: any, unitPrice: unknown, additionalRevenueAmount: unknown = 0) {
   const totalMillions = getRevenueTotalMillions(rows)
   const salesMillions = getRevenueRowMillionsByLabel(rows, "매출순증")
   const nonSalesRevenue = (totalMillions - salesMillions) * 1000000
   const cumulativeNetUnits = toNumber(summary?.cumulativeNetUnits)
   const baseUnitPrice = toNumber(unitPrice) || 6160000
   const cumulativeNetRevenue = cumulativeNetUnits * baseUnitPrice
-  return `26년 순증 매출 (약 ${formatMoney(Math.round(nonSalesRevenue + cumulativeNetRevenue))})`
+  const additionalRevenue = Math.max(0, parseLooseNumber(additionalRevenueAmount))
+  return `26년 순증 매출 (약 ${formatMoney(Math.round(nonSalesRevenue + cumulativeNetRevenue + additionalRevenue))})`
 }
 
-function buildAnnualCumulativeRevenueSubtitle(totalContracts: unknown, unitPrice: unknown) {
+function buildAnnualCumulativeRevenueSubtitle(totalContracts: unknown, unitPrice: unknown, additionalRevenueAmount: unknown = 0) {
   const contractCount = Math.max(0, toNumber(totalContracts))
   const baseUnitPrice = toNumber(unitPrice) || 6160000
-  return `연간 누적 매출 (약 ${formatMoney(contractCount * baseUnitPrice)})`
+  const additionalRevenue = Math.max(0, parseLooseNumber(additionalRevenueAmount))
+  return `연간 누적 매출 (약 ${formatMoney(contractCount * baseUnitPrice + additionalRevenue)})`
 }
 
 function buildRevenueNoteText(baseDate: unknown, unitPrice: unknown) {
@@ -2383,7 +2396,7 @@ function buildRevenueNoteText(baseDate: unknown, unitPrice: unknown) {
   const mmdd = normalized && normalized.length >= 10 ? normalized.slice(5, 10).replace(".", "/") : ""
   const baseUnitPrice = toNumber(unitPrice) || 6160000
   const dateLabel = mmdd ? ` (${mmdd} 기준)` : ""
-  return `※대당 연 ${formatNumber(baseUnitPrice)}원으로 매출을 산정${dateLabel} / 주간 순증 매출은 추가계약금액을 포함하며, 연간 순증 매출은 (누적순증 합계 × 단가) + ((합계 - 매출순증) × 1,000,000) 기준입니다. 연간 누적 매출은 총 계약대수 × 단가 기준이며 위약금 및 이전비는 월 단위로 계산하되 모든 금액 단위는 백만 원으로 표기.`
+  return `※대당 연 ${formatNumber(baseUnitPrice)}원으로 매출을 산정${dateLabel} / 주간 순증 매출은 추가계약금액을 포함하며, 연간 순증 매출은 (누적순증 합계 × 단가) + ((합계 - 매출순증) × 1,000,000) + 추가매출 기준입니다. 연간 누적 매출은 (총 계약대수 × 단가) + 추가매출 기준이며 위약금 및 이전비는 월 단위로 계산하되 모든 금액 단위는 백만 원으로 표기.`
 }
 
 function getUpcomingThursday(baseDate = new Date()) {
@@ -2466,6 +2479,10 @@ function buildRevenueDisplaySet(params: {
 }) {
   const selectedContractCount = Number(params.fallbackSelectedCount || 0)
   const weeklyAdditionalContractAmount = getWeeklyAdditionalContractAmount(params.additionalContractCount)
+  const annualAdditionalRevenueAmount = getAnnualAdditionalRevenueAmount(
+    params.additionalContractCount,
+    params.additionalSales || [],
+  )
   const computedHeader = buildAutoRevenueHeader(
     params.revenueUnitPrice,
     selectedContractCount,
@@ -2475,10 +2492,12 @@ function buildRevenueDisplaySet(params: {
     params.revenueRows || [],
     params.manualSummary,
     params.revenueUnitPrice,
+    annualAdditionalRevenueAmount,
   )
   const computedSubtitleTwo = buildAnnualCumulativeRevenueSubtitle(
     params?.manualSummary?.totalContracts,
     params.revenueUnitPrice,
+    annualAdditionalRevenueAmount,
   )
   return {
     // Always use the current computed values so the weekly report behaves like
@@ -3558,14 +3577,20 @@ export function DashboardShell({
   }, [manualDraft.additionalContractCount, manualDraft.revenueUnitPrice, manualRevenueHeaderEdited, weeklyNetAutoCount])
 
   useEffect(() => {
+    const annualAdditionalRevenueAmount = getAnnualAdditionalRevenueAmount(
+      manualDraft.additionalContractCount,
+      manualDraft.additionalSales || [],
+    )
     const nextSubtitleOne = buildAnnualNetRevenueSubtitle(
       manualDraft.revenueRows || [],
       manualDraft.manualSummary,
       manualDraft.revenueUnitPrice,
+      annualAdditionalRevenueAmount,
     )
     const nextSubtitleTwo = buildAnnualCumulativeRevenueSubtitle(
       manualDraft?.manualSummary?.totalContracts,
       manualDraft.revenueUnitPrice,
+      annualAdditionalRevenueAmount,
     )
     updateManualDraft((prev: any) => {
       if (prev.subtitleOne === nextSubtitleOne && prev.subtitleTwo === nextSubtitleTwo) return prev
@@ -3580,6 +3605,8 @@ export function DashboardShell({
     manualDraft.manualSummary?.cumulativeNetUnits,
     manualDraft.manualSummary?.totalContracts,
     manualDraft.revenueUnitPrice,
+    manualDraft.additionalContractCount,
+    manualDraft.additionalSales,
   ])
 
   useEffect(() => {
@@ -7332,7 +7359,7 @@ export function DashboardShell({
           <label className="space-y-1.5">
             <div className="text-[12px] font-semibold text-slate-500">
               연간 순증 매출 <span className="text-amber-600">(자동계산)</span>
-              {calcHint("누적순증 합계(단말기 순증 및 해지) × 단가 + ((매출 자동계산 설정 표의 합계 - 매출순증) × 1,000,000)")}
+              {calcHint("누적순증 합계(단말기 순증 및 해지) × 단가 + ((매출 자동계산 설정 표의 합계 - 매출순증) × 1,000,000) + 추가매출")}
             </div>
             <input
               className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
@@ -7343,7 +7370,7 @@ export function DashboardShell({
           <label className="space-y-1.5">
             <div className="text-[12px] font-semibold text-slate-500">
               연간 누적 매출 <span className="text-amber-600">(자동계산)</span>
-              {calcHint("총 계약대수 × 단가")}
+              {calcHint("총 계약대수 × 단가 + 추가매출")}
             </div>
             <input
               className="h-10 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 text-[14px]"
