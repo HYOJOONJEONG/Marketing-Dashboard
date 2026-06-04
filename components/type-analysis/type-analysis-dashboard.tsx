@@ -52,6 +52,9 @@ const tabItems: Array<{ key: TabKey; label: string }> = [
   { key: "personal", label: "개인별 실적" },
 ]
 
+const AREA_ASSIGNMENT_NOTE =
+  "기타금융 범주: 선물, 중개사, 중앙회, 공제회, 투자자문, 연구소, 재단, 카드, 캐피탈, 협회, 평가사, 기타, 개인 / 증권1: ㄱ~ㅅ, 증권2: ㅇ~ㅎ"
+
 const ADMIN_TITLE_BY_NAME: Record<string, string> = {
   이상철: "본부장",
   신무길: "팀장",
@@ -1361,9 +1364,12 @@ function AreaSummaryTable({
           <SimpleKpiGrid items={kpiItems} />
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2.5">
               <div className="text-[13px] font-bold text-slate-900">영역별 순증 현황</div>
               <div className="text-[11px] font-semibold text-slate-400">신규 - 해지 기준</div>
+            </div>
+            <div className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold leading-5 text-slate-500">
+              {AREA_ASSIGNMENT_NOTE}
             </div>
             <table className="w-full table-fixed border-collapse text-[12px]">
               <thead>
@@ -2023,6 +2029,7 @@ export function TypeAnalysisDashboard({
 
             <section class="section page report-section" data-section="area">
               <h2>영역별 순증</h2>
+              <div class="note">${escapeReportHtml(AREA_ASSIGNMENT_NOTE)}</div>
               ${reportTable(areaColumns, areaSummaryRowsForDisplay, "영역별 순증 요약이 없습니다.")}
               <h3>상세 목록</h3>
               ${groupedReportTable(reportAreaGroups, areaDetailColumns, "영역별 상세 데이터가 없습니다.", "영역")}

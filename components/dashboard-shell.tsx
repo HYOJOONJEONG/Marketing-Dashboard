@@ -1676,13 +1676,13 @@ const TYPE_ANALYSIS_PUBLIC_EARLY_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[6]
 const TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[7]
 
 const TYPE_ANALYSIS_AREA_ROWS = [
-  { no: "1", area: "증권1, 공기업", manager: "이상철 본부장" },
+  { no: "1", area: "증권1(ㄱ~ㅅ), 공기업", manager: "이상철 본부장" },
   { no: "2", area: "기업", manager: "이홍민 부장" },
-  { no: "3", area: "증권2, 정부기관", manager: "신무길 팀장" },
+  { no: "3", area: "증권2(ㅇ~ㅎ), 정부기관", manager: "신무길 팀장" },
   { no: "4", area: "은행, 공사(전광판)", manager: "정효준 차장" },
   { no: "5", area: "자산운용, 연기금(API)", manager: "조홍희 대리" },
   { no: "6", area: "기타금융, 외국계", manager: "정진영 사원" },
-  { no: "7", area: "보험, 중개사", manager: "박혜리 사원" },
+  { no: "7", area: "보험", manager: "박혜리 사원" },
 ] as const
 
 const TYPE_ANALYSIS_AREA_LABELS = TYPE_ANALYSIS_AREA_ROWS.map((row) => row.area)
@@ -1692,8 +1692,23 @@ const TYPE_ANALYSIS_SECURITIES_GOVERNMENT_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[2
 const TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[3].area
 const TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[4].area
 const TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[5].area
-const TYPE_ANALYSIS_INSURANCE_BROKER_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[6].area
+const TYPE_ANALYSIS_INSURANCE_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[6].area
 const TYPE_ANALYSIS_OTHER_AREA_LABEL = TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL
+const TYPE_ANALYSIS_OTHER_FINANCE_KEYWORDS = [
+  "선물",
+  "중개사",
+  "중앙회",
+  "공제회",
+  "투자자문",
+  "연구소",
+  "재단",
+  "카드",
+  "캐피탈",
+  "협회",
+  "평가사",
+  "기타",
+  "개인",
+] as const
 
 function firstHangulCharacter(value: unknown) {
   return [...String(value || "").trim()].find((char) => /[가-힣]/.test(char)) || ""
@@ -1715,7 +1730,7 @@ function normalizeTypeAnalysisAreaGroup(value: unknown, companyName?: unknown) {
   }
   if (compact.includes("공제회") && compact.includes("기타금융")) {
     if (companyCompact.includes("공사")) return TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL
-    if (companyCompact.includes("보험") || companyCompact.includes("중개사")) return TYPE_ANALYSIS_INSURANCE_BROKER_AREA_LABEL
+    if (companyCompact.includes("보험")) return TYPE_ANALYSIS_INSURANCE_AREA_LABEL
     return TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL
   }
   if (compact.includes("국내은행") || compact.includes("지주") || compact.includes("은행")) return TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL
@@ -1731,7 +1746,7 @@ function normalizeTypeAnalysisAreaGroup(value: unknown, companyName?: unknown) {
   if (compact.includes("자산운용") || compact.includes("운용") || compact.includes("연기금") || compact.includes("API")) {
     return TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL
   }
-  if (combined.includes("보험") || combined.includes("중개사")) return TYPE_ANALYSIS_INSURANCE_BROKER_AREA_LABEL
+  if (combined.includes("보험")) return TYPE_ANALYSIS_INSURANCE_AREA_LABEL
   if (combined.includes("공사") || compact.includes("전광판")) return TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL
   if (combined.includes("공기업")) return TYPE_ANALYSIS_SECURITIES_PUBLIC_AREA_LABEL
   if (
@@ -1751,18 +1766,13 @@ function normalizeTypeAnalysisAreaGroup(value: unknown, companyName?: unknown) {
   }
   if (
     compact.includes("기타금융") ||
-    compact.includes("공제회") ||
-    compact.includes("선물사") ||
-    compact.includes("카드") ||
-    compact.includes("캐피탈") ||
     compact.includes("저축은행") ||
     compact.includes("금고") ||
-    compact.includes("연구소") ||
     compact.includes("거래소") ||
     compact.includes("증권금융") ||
     compact.includes("예탁") ||
     compact.includes("금투협") ||
-    compact.includes("개인")
+    TYPE_ANALYSIS_OTHER_FINANCE_KEYWORDS.some((keyword) => combined.includes(keyword))
   ) {
     return TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL
   }
@@ -1809,7 +1819,7 @@ function deriveTypeAnalysisIndustryGroupFromArea(areaGroup: unknown, fallbackInd
     if (fallbackText.includes("연기금") || companyText.includes("연기금")) return "외국계은행,증권,연기금"
     return "자산운용"
   }
-  if (area === TYPE_ANALYSIS_INSURANCE_BROKER_AREA_LABEL) {
+  if (area === TYPE_ANALYSIS_INSURANCE_AREA_LABEL) {
     if (fallbackText.includes("중개사") || companyText.includes("중개사")) return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
     return "보험사"
   }
