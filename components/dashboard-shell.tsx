@@ -9301,6 +9301,7 @@ export function DashboardShell({
             <TypeAnalysisDashboard
               data={typeAnalysis}
               currentYear={currentYear}
+              directoryUsers={directoryUsers}
               isDirty={currentViewDirty}
               isSaving={isSavingDashboard}
               saveMessage={typeAnalysisSaveMessage}

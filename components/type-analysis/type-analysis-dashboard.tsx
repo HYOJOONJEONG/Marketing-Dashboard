@@ -8,6 +8,10 @@ type TabKey = "summary" | "new" | "termination" | "area" | "personal"
 type Props = {
   data: any
   currentYear: number | string
+  directoryUsers?: Array<{
+    name?: string | null
+    title?: string | null
+  }>
   isDirty: boolean
   isSaving: boolean
   saveMessage: string
@@ -60,6 +64,22 @@ const ADMIN_TITLE_BY_NAME: Record<string, string> = {
   진효정: "과장",
   김다빈: "사원",
   김대일: "사원",
+}
+
+const ADMIN_TITLE_PATTERN = "본부장|팀장|부장|차장|과장|대리|사원|인턴사원|관리자"
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function buildUserTitleMap(users: Props["directoryUsers"]) {
+  const map = new Map(Object.entries(ADMIN_TITLE_BY_NAME))
+  ;(Array.isArray(users) ? users : []).forEach((user) => {
+    const name = String(user?.name || "").trim()
+    const title = String(user?.title || "").trim()
+    if (name && title) map.set(name, title)
+  })
+  return map
 }
 
 function toNumber(value: unknown) {
@@ -218,11 +238,21 @@ function displaySummaryRows(rows: any[]) {
   return (Array.isArray(rows) ? rows : []).map((row) => ({ ...row, label: cleanSummaryDisplayLabel(row?.label) }))
 }
 
-function normalizeManagerLabel(value: unknown) {
+function normalizeManagerLabel(value: unknown, userTitleByName?: Map<string, string>) {
   const text = String(value ?? "").trim()
-  const matchedName = Object.keys(ADMIN_TITLE_BY_NAME).find((name) => text === name || text.startsWith(`${name} `))
-  if (!matchedName) return text
-  return `${matchedName} ${ADMIN_TITLE_BY_NAME[matchedName]}`
+  if (!text) return text
+
+  const titleMap = userTitleByName || buildUserTitleMap([])
+  const knownNames = Array.from(new Set([...Object.keys(ADMIN_TITLE_BY_NAME), ...titleMap.keys()]))
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+
+  return knownNames.reduce((label, name) => {
+    const title = titleMap.get(name) || ADMIN_TITLE_BY_NAME[name]
+    if (!title) return label
+    const pattern = new RegExp(`${escapeRegExp(name)}(?:\\s*(?:${ADMIN_TITLE_PATTERN}))?`, "g")
+    return label.replace(pattern, `${name} ${title}`)
+  }, text)
 }
 
 const KOREAN_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"]
@@ -1566,6 +1596,7 @@ function PersonalPerformancePanel({
 export function TypeAnalysisDashboard({
   data,
   currentYear,
+  directoryUsers = [],
   isDirty,
   isSaving,
   saveMessage,
@@ -1583,6 +1614,7 @@ export function TypeAnalysisDashboard({
   const [areaSummarySort, setAreaSummarySort] = useState<TableSortState | null>(null)
   const [areaDetailSort, setAreaDetailSort] = useState<TableSortState | null>({ key: "date", dir: "desc" })
   const [personalSort, setPersonalSort] = useState<TableSortState | null>(null)
+  const userTitleByName = useMemo(() => buildUserTitleMap(directoryUsers), [directoryUsers])
 
   const newRecords = Array.isArray(data?.newReplacement?.records) ? data.newReplacement.records : []
   const newIndustrySummary = Array.isArray(data?.newReplacement?.industrySummary) ? data.newReplacement.industrySummary : []
@@ -1603,13 +1635,17 @@ export function TypeAnalysisDashboard({
   const industryMatrixRows = useMemo(() => newIndustrySummary.filter((row: any) => row?.label), [newIndustrySummary])
   const terminationIndustryRows = useMemo(() => terminationIndustrySummary.filter((row: any) => !isTotalIndustryRow(row)), [terminationIndustrySummary])
   const terminationMatrixRows = useMemo(() => terminationIndustrySummary.filter((row: any) => row?.label), [terminationIndustrySummary])
-  const areaRows = useMemo(() => areaSummaryRows.filter((row: any) => String(row?.no || "").replace(/\s+/g, "") !== "계"), [areaSummaryRows])
+  const areaSummaryRowsForDisplay = useMemo(
+    () => areaSummaryRows.map((row: any) => ({ ...row, manager: normalizeManagerLabel(row?.manager, userTitleByName) })),
+    [areaSummaryRows, userTitleByName],
+  )
+  const areaRows = useMemo(() => areaSummaryRowsForDisplay.filter((row: any) => String(row?.no || "").replace(/\s+/g, "") !== "계"), [areaSummaryRowsForDisplay])
   const sortedIndustryMatrixRows = useMemo(() => sortTableRows(industryMatrixRows, newIndustrySort, true), [industryMatrixRows, newIndustrySort])
   const sortedTerminationMatrixRows = useMemo(() => sortTableRows(terminationMatrixRows, terminationIndustrySort, true), [terminationMatrixRows, terminationIndustrySort])
-  const sortedAreaSummaryRows = useMemo(() => sortTableRows(areaSummaryRows, areaSummarySort, true), [areaSummaryRows, areaSummarySort])
+  const sortedAreaSummaryRows = useMemo(() => sortTableRows(areaSummaryRowsForDisplay, areaSummarySort, true), [areaSummaryRowsForDisplay, areaSummarySort])
   const personalRowsForDisplay = useMemo(
-    () => personalRows.map((row: any) => ({ ...row, manager: normalizeManagerLabel(row?.manager) })),
-    [personalRows],
+    () => personalRows.map((row: any) => ({ ...row, manager: normalizeManagerLabel(row?.manager, userTitleByName) })),
+    [personalRows, userTitleByName],
   )
   const sortedPersonalRowsForDisplay = useMemo(
     () => sortTableRows(personalRowsForDisplay, personalSort, false),
@@ -1961,7 +1997,7 @@ export function TypeAnalysisDashboard({
 
             <section class="section page report-section" data-section="area">
               <h2>영역별 순증</h2>
-              ${reportTable(areaColumns, areaSummaryRows, "영역별 순증 요약이 없습니다.")}
+              ${reportTable(areaColumns, areaSummaryRowsForDisplay, "영역별 순증 요약이 없습니다.")}
               <h3>상세 목록</h3>
               ${groupedReportTable(reportAreaGroups, areaDetailColumns, "영역별 상세 데이터가 없습니다.", "영역")}
             </section>
