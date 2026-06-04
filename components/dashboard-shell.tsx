@@ -1581,21 +1581,41 @@ function cloneData<T>(value: T): T {
   return JSON.parse(JSON.stringify(value))
 }
 
+function normalizeTypeAnalysisAreaAssignments(state: any) {
+  const newRecords = Array.isArray(state?.newReplacement?.records) ? state.newReplacement.records : []
+  const terminationRecords = Array.isArray(state?.terminationType?.records) ? state.terminationType.records : []
+  if (!newRecords.length && !terminationRecords.length) return state
+  const asOf =
+    state?.areaNetGrowth?.asOf ||
+    state?.newReplacement?.asOf ||
+    state?.terminationType?.asOf ||
+    `${getTypeAnalysisReflectionDateLabel()} 기준`
+  return {
+    ...state,
+    areaNetGrowth: buildTypeAnalysisAreaNetGrowthState(
+      state?.areaNetGrowth || {},
+      newRecords,
+      terminationRecords,
+      asOf,
+    ),
+  }
+}
+
 function normalizeTypeAnalysisState(value: any) {
   const source = cloneData(typeAnalysisSource as any)
-  if (!value || typeof value !== "object" || Array.isArray(value)) return source
+  if (!value || typeof value !== "object" || Array.isArray(value)) return normalizeTypeAnalysisAreaAssignments(source)
   const sourceUpdatedAt = Date.parse(String(source?.sourceUpdatedAt || ""))
   const savedUpdatedAt = Date.parse(String(value?.sourceUpdatedAt || ""))
   const shouldUseSourceCore =
     Number.isFinite(sourceUpdatedAt) &&
     (!Number.isFinite(savedUpdatedAt) || savedUpdatedAt < sourceUpdatedAt)
   if (shouldUseSourceCore) {
-    return {
+    return normalizeTypeAnalysisAreaAssignments({
       ...source,
       weeklySnapshots: Array.isArray(value.weeklySnapshots) ? value.weeklySnapshots : [],
-    }
+    })
   }
-  return {
+  return normalizeTypeAnalysisAreaAssignments({
     ...source,
     ...value,
     newReplacement: {
@@ -1627,7 +1647,7 @@ function normalizeTypeAnalysisState(value: any) {
         : source.personalPerformance.rows,
     },
     weeklySnapshots: Array.isArray(value.weeklySnapshots) ? value.weeklySnapshots : [],
-  }
+  })
 }
 
 function normalizeTypeAnalysisReplacementType(value: unknown) {
@@ -1656,20 +1676,24 @@ const TYPE_ANALYSIS_PUBLIC_EARLY_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[6]
 const TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[7]
 
 const TYPE_ANALYSIS_AREA_ROWS = [
-  { no: "1", area: "국내은행/지주", manager: "본부장님(K), 정효준 과장" },
-  { no: "2", area: "국내증권", manager: "본부장님(K), 이상철 팀장(ㄱ~ㅅ), 정진영 사원(ㅇ~ㅎ)" },
-  { no: "3", area: "외국계은행, 외국계증권", manager: "신무길 차장" },
-  { no: "4", area: "자산운용", manager: "본부장님(ㅇ~ㅎ), 조홍희 대리(ㄱ~ㅅ)" },
-  { no: "5", area: "보험사", manager: "본부장님(K), 박혜리 사원" },
-  { no: "6", area: "일반기업,대학교", manager: "본부장님(K), 이홍민 부장" },
-  { no: "7", area: "공제회, 중개사, 선물사, 공사, 개인 등 기타금융 전체", manager: "신무길 차장, 박혜리 사원" },
-  { no: "8", area: "연기금, 공기업, 정부", manager: "이홍민 부장, 조홍희 과장 외" },
+  { no: "1", area: "증권1, 공기업", manager: "이상철 본부장" },
+  { no: "2", area: "기업", manager: "이홍민 부장" },
+  { no: "3", area: "증권2, 정부기관", manager: "신무길 팀장" },
+  { no: "4", area: "은행, 공사(전광판)", manager: "정효준 차장" },
+  { no: "5", area: "자산운용, 연기금(API)", manager: "조홍희 대리" },
+  { no: "6", area: "기타금융, 외국계", manager: "정진영 사원" },
+  { no: "7", area: "보험, 중개사", manager: "박혜리 사원" },
 ] as const
 
 const TYPE_ANALYSIS_AREA_LABELS = TYPE_ANALYSIS_AREA_ROWS.map((row) => row.area)
-const TYPE_ANALYSIS_OTHER_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[6].area
-const TYPE_ANALYSIS_PUBLIC_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[7].area
-const TYPE_ANALYSIS_GENERAL_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[5].area
+const TYPE_ANALYSIS_SECURITIES_PUBLIC_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[0].area
+const TYPE_ANALYSIS_GENERAL_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[1].area
+const TYPE_ANALYSIS_SECURITIES_GOVERNMENT_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[2].area
+const TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[3].area
+const TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[4].area
+const TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[5].area
+const TYPE_ANALYSIS_INSURANCE_BROKER_AREA_LABEL = TYPE_ANALYSIS_AREA_ROWS[6].area
+const TYPE_ANALYSIS_OTHER_AREA_LABEL = TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL
 
 function firstHangulCharacter(value: unknown) {
   return [...String(value || "").trim()].find((char) => /[가-힣]/.test(char)) || ""
@@ -1678,29 +1702,69 @@ function firstHangulCharacter(value: unknown) {
 function normalizeTypeAnalysisAreaGroup(value: unknown, companyName?: unknown) {
   const text = String(value || "").replace(/해지/g, "").trim()
   const compact = text.replace(/\s+/g, "")
-  if (!compact) return TYPE_ANALYSIS_OTHER_AREA_LABEL
+  const companyText = String(companyName || "")
+  const companyCompact = companyText.replace(/\s+/g, "")
+  const combined = `${compact} ${companyCompact}`
+  if (!compact && !companyCompact) return TYPE_ANALYSIS_OTHER_AREA_LABEL
   if (TYPE_ANALYSIS_AREA_LABELS.includes(text as any)) return text
-  if (compact.includes("국내은행") || compact.includes("지주")) return "국내은행/지주"
-  if (compact.includes("국내증권")) return "국내증권"
-  if (compact.includes("외국계") || compact.includes("외국")) return "외국계은행, 외국계증권"
-  if (compact.includes("자산운용") || compact.includes("운용")) return "자산운용"
-  if (compact.includes("보험")) return "보험사"
+  if (compact.includes("연기금") && compact.includes("공기업") && compact.includes("정부")) {
+    if (companyCompact.includes("공사")) return TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL
+    if (companyCompact.includes("공기업") || companyCompact.includes("공공")) return TYPE_ANALYSIS_SECURITIES_PUBLIC_AREA_LABEL
+    if (companyCompact.includes("연기금") || companyCompact.includes("API")) return TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL
+    return TYPE_ANALYSIS_SECURITIES_GOVERNMENT_AREA_LABEL
+  }
+  if (compact.includes("공제회") && compact.includes("기타금융")) {
+    if (companyCompact.includes("공사")) return TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL
+    if (companyCompact.includes("보험") || companyCompact.includes("중개사")) return TYPE_ANALYSIS_INSURANCE_BROKER_AREA_LABEL
+    return TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL
+  }
+  if (compact.includes("국내은행") || compact.includes("지주") || compact.includes("은행")) return TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL
+  if (compact.includes("국내증권") || compact.includes("증권1") || compact.includes("증권2")) {
+    if (compact.includes("증권2")) return TYPE_ANALYSIS_SECURITIES_GOVERNMENT_AREA_LABEL
+    if (compact.includes("증권1")) return TYPE_ANALYSIS_SECURITIES_PUBLIC_AREA_LABEL
+    const firstHangul = firstHangulCharacter(companyName)
+    return firstHangul && firstHangul >= "아"
+      ? TYPE_ANALYSIS_SECURITIES_GOVERNMENT_AREA_LABEL
+      : TYPE_ANALYSIS_SECURITIES_PUBLIC_AREA_LABEL
+  }
+  if (compact.includes("외국계") || compact.includes("외국")) return TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL
+  if (compact.includes("자산운용") || compact.includes("운용") || compact.includes("연기금") || compact.includes("API")) {
+    return TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL
+  }
+  if (combined.includes("보험") || combined.includes("중개사")) return TYPE_ANALYSIS_INSURANCE_BROKER_AREA_LABEL
+  if (combined.includes("공사") || compact.includes("전광판")) return TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL
+  if (combined.includes("공기업")) return TYPE_ANALYSIS_SECURITIES_PUBLIC_AREA_LABEL
   if (
-    compact.includes("연기금") ||
     compact.includes("정부") ||
-    compact.includes("공기업") ||
     compact.includes("공공") ||
     compact.includes("협회") ||
     compact.includes("금감") ||
     compact.includes("대통령실")
   ) {
-    return TYPE_ANALYSIS_PUBLIC_AREA_LABEL
+    return TYPE_ANALYSIS_SECURITIES_GOVERNMENT_AREA_LABEL
   }
   if (compact.includes("대학") || compact.includes("학교") || compact.includes("일반기업")) {
     return TYPE_ANALYSIS_GENERAL_AREA_LABEL
   }
   if (compact.includes("기업체") || compact.includes("기업")) {
     return TYPE_ANALYSIS_GENERAL_AREA_LABEL
+  }
+  if (
+    compact.includes("기타금융") ||
+    compact.includes("공제회") ||
+    compact.includes("선물사") ||
+    compact.includes("카드") ||
+    compact.includes("캐피탈") ||
+    compact.includes("저축은행") ||
+    compact.includes("금고") ||
+    compact.includes("연구소") ||
+    compact.includes("거래소") ||
+    compact.includes("증권금융") ||
+    compact.includes("예탁") ||
+    compact.includes("금투협") ||
+    compact.includes("개인")
+  ) {
+    return TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL
   }
   return TYPE_ANALYSIS_OTHER_AREA_LABEL
 }
@@ -1727,18 +1791,32 @@ function normalizeTypeAnalysisIndustryGroup(industry: unknown, companyName: unkn
 
 function deriveTypeAnalysisIndustryGroupFromArea(areaGroup: unknown, fallbackIndustry: unknown, companyName: unknown) {
   const area = normalizeTypeAnalysisAreaGroup(areaGroup, companyName)
-  if (area === "국내은행/지주") return "국내은행"
-  if (area === "국내증권") return "국내증권"
-  if (area === "외국계은행, 외국계증권") return "외국계은행,증권,연기금"
-  if (area === "자산운용") return "자산운용"
-  if (area === "보험사") return "보험사"
-  if (area === TYPE_ANALYSIS_PUBLIC_AREA_LABEL) return TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
+  const fallbackText = String(fallbackIndustry || "")
+  const companyText = String(companyName || "")
+  if (area === TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL) {
+    if (fallbackText.includes("공사") || companyText.includes("공사") || fallbackText.includes("전광판")) return TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
+    return "국내은행"
+  }
+  if (area === TYPE_ANALYSIS_SECURITIES_PUBLIC_AREA_LABEL || area === TYPE_ANALYSIS_SECURITIES_GOVERNMENT_AREA_LABEL) {
+    if (fallbackText.includes("증권") || companyText.includes("증권")) return "국내증권"
+    return TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
+  }
+  if (area === TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL) {
+    if (fallbackText.includes("외국") || companyText.includes("외국")) return "외국계은행,증권,연기금"
+    return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
+  }
+  if (area === TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL) {
+    if (fallbackText.includes("연기금") || companyText.includes("연기금")) return "외국계은행,증권,연기금"
+    return "자산운용"
+  }
+  if (area === TYPE_ANALYSIS_INSURANCE_BROKER_AREA_LABEL) {
+    if (fallbackText.includes("중개사") || companyText.includes("중개사")) return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
+    return "보험사"
+  }
   if (area === TYPE_ANALYSIS_GENERAL_AREA_LABEL) {
-    const fallbackText = String(fallbackIndustry || "")
     if (fallbackText.includes("국내은행") || fallbackText.includes("국내증권") || fallbackText.includes("외국") || fallbackText.includes("자산") || fallbackText.includes("보험")) {
       return normalizeTypeAnalysisIndustryGroup(fallbackText, companyName)
     }
-    const companyText = String(companyName || "")
     if (companyText.includes("대학") || companyText.includes("학교")) return TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL
     const firstHangul = firstHangulCharacter(companyName)
     return firstHangul && firstHangul >= "가" && firstHangul <= "바"
