@@ -412,9 +412,8 @@ function CompactMetricBand({
 }) {
   return (
     <div className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${toneClass(tone, "border")}`}>
-      <div className={`flex items-center justify-between border-b px-4 py-2.5 ${toneClass(tone, "border")} ${toneClass(tone, "softBg")}`}>
+      <div className={`border-b px-4 py-2.5 text-center ${toneClass(tone, "border")} ${toneClass(tone, "softBg")}`}>
         <div className={`text-[12px] font-black ${toneClass(tone, "text")}`}>{title}</div>
-        <div className={`h-1.5 w-10 rounded-full ${toneClass(tone, "bg")}`} />
       </div>
       <div className="overflow-x-auto">
         <div
@@ -1277,8 +1276,8 @@ function PersonalPerformancePanel({
             { label: "총 신규", value: `${formatNumber(totals.totalNew)}건`, tone: "blue" },
             { label: "신규", value: `${formatNumber(totals.new)}건`, tone: "emerald" },
             { label: "체크", value: `${formatNumber(totals.check)}건`, tone: "indigo" },
-            { label: "마켓", value: `${formatNumber(totals.marketPoint)}건`, tone: "slate" },
-            { label: "로이터/블룸", value: `${formatNumber(totals.reutersBloomberg)}건`, tone: "rose" },
+            { label: "마켓", value: `${formatNumber(totals.marketPoint)}건`, tone: "indigo" },
+            { label: "로이터/블룸", value: `${formatNumber(totals.reutersBloomberg)}건`, tone: "indigo" },
           ]}
         />
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -1306,18 +1305,18 @@ function PersonalPerformancePanel({
                         <td className="border-r border-slate-100 px-3 py-2.5 text-center font-semibold text-slate-900">{row.manager}</td>
                         <td className="border-r border-slate-100 px-3 py-2.5 text-center font-bold tabular-nums text-blue-700">{formatNumber(row.totalNew)}</td>
                         <td className="border-r border-slate-100 px-3 py-2.5 text-center tabular-nums text-slate-700">{formatNumber(row.new)}</td>
-                        <td className="border-r border-slate-100 px-3 py-2.5 text-center tabular-nums text-slate-700">{toNumber(row.check) ? formatNumber(row.check) : ""}</td>
-                        <td className="border-r border-slate-100 px-3 py-2.5 text-center tabular-nums text-slate-700">{toNumber(row.marketPoint) ? formatNumber(row.marketPoint) : ""}</td>
-                        <td className="px-3 py-2.5 text-center tabular-nums text-slate-700">{toNumber(row.reutersBloomberg) ? formatNumber(row.reutersBloomberg) : ""}</td>
+                        <td className="border-r border-slate-100 px-3 py-2.5 text-center font-semibold tabular-nums text-indigo-700">{toNumber(row.check) ? formatNumber(row.check) : ""}</td>
+                        <td className="border-r border-slate-100 px-3 py-2.5 text-center font-semibold tabular-nums text-indigo-700">{toNumber(row.marketPoint) ? formatNumber(row.marketPoint) : ""}</td>
+                        <td className="px-3 py-2.5 text-center font-semibold tabular-nums text-indigo-700">{toNumber(row.reutersBloomberg) ? formatNumber(row.reutersBloomberg) : ""}</td>
                       </tr>
                     ))}
                     <tr className="border-t border-blue-200 bg-blue-50/80 font-bold text-blue-900">
                       <td colSpan={2} className="border-r border-blue-100 px-3 py-2.5 text-center">총계</td>
                       <td className="border-r border-blue-100 px-3 py-2.5 text-center tabular-nums">{formatNumber(totals.totalNew)}</td>
                       <td className="border-r border-blue-100 px-3 py-2.5 text-center tabular-nums">{formatNumber(totals.new)}</td>
-                      <td className="border-r border-blue-100 px-3 py-2.5 text-center tabular-nums">{formatNumber(totals.check)}</td>
-                      <td className="border-r border-blue-100 px-3 py-2.5 text-center tabular-nums">{formatNumber(totals.marketPoint)}</td>
-                      <td className="px-3 py-2.5 text-center tabular-nums">{formatNumber(totals.reutersBloomberg)}</td>
+                      <td className="border-r border-blue-100 px-3 py-2.5 text-center tabular-nums text-indigo-700">{formatNumber(totals.check)}</td>
+                      <td className="border-r border-blue-100 px-3 py-2.5 text-center tabular-nums text-indigo-700">{formatNumber(totals.marketPoint)}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums text-indigo-700">{formatNumber(totals.reutersBloomberg)}</td>
                     </tr>
                   </>
                 ) : (
