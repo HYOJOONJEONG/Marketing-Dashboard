@@ -42,7 +42,7 @@ const tabPermissionMap: Record<AdminTabKey, string> = {
   activityLogs: "activityLog",
 }
 
-const TITLE_OPTIONS = ["본부장", "팀장", "부장", "과장", "대리", "사원"] as const
+const TITLE_OPTIONS = ["본부장", "팀장", "부장", "차장", "과장", "대리", "사원"] as const
 const EDITABLE_ACTIONS = ["create", "edit", "delete", "approve", "admin"] as const
 type PermissionUpdate = { menuKey: string; action: string; allowed: boolean }
 
