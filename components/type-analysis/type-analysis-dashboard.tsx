@@ -67,6 +67,8 @@ const ADMIN_TITLE_BY_NAME: Record<string, string> = {
 }
 
 const ADMIN_TITLE_PATTERN = "본부장|팀장|부장|차장|과장|대리|사원|인턴사원|관리자"
+const PERSONAL_MANAGER_ORDER = ["이상철", "신무길", "이홍민", "정효준", "조홍희", "정진영", "박혜리", "기타"] as const
+const PERSONAL_MANAGER_ORDER_INDEX = new Map(PERSONAL_MANAGER_ORDER.map((name, index) => [name, index]))
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -253,6 +255,30 @@ function normalizeManagerLabel(value: unknown, userTitleByName?: Map<string, str
     const pattern = new RegExp(`${escapeRegExp(name)}(?:\\s*(?:${ADMIN_TITLE_PATTERN}))?`, "g")
     return label.replace(pattern, `${name} ${title}`)
   }, text)
+}
+
+function getPersonalManagerOrderKey(value: unknown) {
+  const text = String(value ?? "").trim()
+  if (!text) return ""
+  if (text.includes("기타")) return "기타"
+  return PERSONAL_MANAGER_ORDER.find((name) => text === name || text.startsWith(`${name} `) || text.includes(name)) || text
+}
+
+function orderPersonalPerformanceRows(rows: any[]) {
+  return [...rows]
+    .sort((a, b) => {
+      const aKey = getPersonalManagerOrderKey(a?.manager)
+      const bKey = getPersonalManagerOrderKey(b?.manager)
+      const aOrder = PERSONAL_MANAGER_ORDER_INDEX.get(aKey as any) ?? 99
+      const bOrder = PERSONAL_MANAGER_ORDER_INDEX.get(bKey as any) ?? 99
+      if (aOrder !== bOrder) return aOrder - bOrder
+      return String(a?.manager || "").localeCompare(String(b?.manager || ""), "ko", { numeric: true, sensitivity: "base" })
+    })
+    .map((row, index) => ({ ...row, no: index + 1 }))
+}
+
+function renumberRows(rows: any[]) {
+  return rows.map((row, index) => ({ ...row, no: index + 1 }))
 }
 
 const KOREAN_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"]
@@ -1644,11 +1670,11 @@ export function TypeAnalysisDashboard({
   const sortedTerminationMatrixRows = useMemo(() => sortTableRows(terminationMatrixRows, terminationIndustrySort, true), [terminationMatrixRows, terminationIndustrySort])
   const sortedAreaSummaryRows = useMemo(() => sortTableRows(areaSummaryRowsForDisplay, areaSummarySort, true), [areaSummaryRowsForDisplay, areaSummarySort])
   const personalRowsForDisplay = useMemo(
-    () => personalRows.map((row: any) => ({ ...row, manager: normalizeManagerLabel(row?.manager, userTitleByName) })),
+    () => orderPersonalPerformanceRows(personalRows.map((row: any) => ({ ...row, manager: normalizeManagerLabel(row?.manager, userTitleByName) }))),
     [personalRows, userTitleByName],
   )
   const sortedPersonalRowsForDisplay = useMemo(
-    () => sortTableRows(personalRowsForDisplay, personalSort, false),
+    () => renumberRows(sortTableRows(personalRowsForDisplay, personalSort, false)),
     [personalRowsForDisplay, personalSort],
   )
   const filteredNewRecords = useMemo(
