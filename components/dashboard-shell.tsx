@@ -1680,7 +1680,7 @@ const TYPE_ANALYSIS_AREA_ROWS = [
   { no: "2", area: "기업", manager: "이홍민 부장" },
   { no: "3", area: "증권2(ㅇ~ㅎ), 정부기관", manager: "신무길 팀장" },
   { no: "4", area: "은행, 공사(전광판)", manager: "정효준 차장" },
-  { no: "5", area: "자산운용, 연기금(API)", manager: "조홍희 대리" },
+  { no: "5", area: "자산운용, 연기금", manager: "조홍희 대리" },
   { no: "6", area: "기타금융, 외국계", manager: "정진영 사원" },
   { no: "7", area: "보험", manager: "박혜리 사원" },
 ] as const
@@ -1725,7 +1725,7 @@ function normalizeTypeAnalysisAreaGroup(value: unknown, companyName?: unknown) {
   if (compact.includes("연기금") && compact.includes("공기업") && compact.includes("정부")) {
     if (companyCompact.includes("공사")) return TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL
     if (companyCompact.includes("공기업") || companyCompact.includes("공공")) return TYPE_ANALYSIS_SECURITIES_PUBLIC_AREA_LABEL
-    if (companyCompact.includes("연기금") || companyCompact.includes("API")) return TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL
+    if (companyCompact.includes("연기금")) return TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL
     return TYPE_ANALYSIS_SECURITIES_GOVERNMENT_AREA_LABEL
   }
   if (compact.includes("공제회") && compact.includes("기타금융")) {
@@ -1743,7 +1743,7 @@ function normalizeTypeAnalysisAreaGroup(value: unknown, companyName?: unknown) {
       : TYPE_ANALYSIS_SECURITIES_PUBLIC_AREA_LABEL
   }
   if (compact.includes("외국계") || compact.includes("외국")) return TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL
-  if (compact.includes("자산운용") || compact.includes("운용") || compact.includes("연기금") || compact.includes("API")) {
+  if (compact.includes("자산운용") || compact.includes("운용") || compact.includes("연기금")) {
     return TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL
   }
   if (combined.includes("보험")) return TYPE_ANALYSIS_INSURANCE_AREA_LABEL
