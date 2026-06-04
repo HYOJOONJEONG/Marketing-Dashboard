@@ -38,6 +38,7 @@ type ReportColumn = {
 }
 
 type DateSortDir = "desc" | "asc"
+type TableSortState = { key: string; dir: DateSortDir }
 
 const tabItems: Array<{ key: TabKey; label: string }> = [
   { key: "summary", label: "요약" },
@@ -131,6 +132,89 @@ function sortRecordsByReflectionDate(records: any[], dir: DateSortDir) {
     if (diff) return diff * sign
     return toNumber(a?.no) - toNumber(b?.no)
   })
+}
+
+function nextSortState(current: TableSortState | null, key: string): TableSortState {
+  return { key, dir: current?.key === key && current.dir === "desc" ? "asc" : "desc" }
+}
+
+function isTotalTableRow(row: any) {
+  const markers = [row?.label, row?.no, row?.area, row?.manager]
+    .map((value) => String(value ?? "").replace(/\s+/g, ""))
+    .filter(Boolean)
+  return markers.some((marker) => marker === "계" || marker === "총계" || marker.includes("합계"))
+}
+
+function tableSortValue(row: any, key: string) {
+  if (key === "date") return dateSortValue(getRecordDateLabel(row))
+  if (key === "kind") return row?.kind === "termination" || row?.transactionType === "해지" ? "해지" : "신규/대체"
+  if (key === "detailType") return row?.reason || row?.replacementType || "신규"
+
+  const numericKeys = new Set([
+    "no",
+    "check",
+    "marketPoint",
+    "bloomberg",
+    "reuters",
+    "hankyungEtc",
+    "new",
+    "total",
+    "userMove",
+    "costCut",
+    "lowUsage",
+    "contentOrCompetitor",
+    "contractEnd",
+    "reorg",
+    "leave",
+    "merger",
+    "unpaid",
+    "newCount",
+    "terminationCount",
+    "netCount",
+    "totalNew",
+    "penalty",
+    "reutersBloomberg",
+  ])
+  if (numericKeys.has(key)) return toNumber(row?.[key])
+  return row?.[key] ?? ""
+}
+
+function compareTableRows(a: any, b: any, sort: TableSortState) {
+  const sign = sort.dir === "asc" ? 1 : -1
+  const aValue = tableSortValue(a, sort.key)
+  const bValue = tableSortValue(b, sort.key)
+  let diff = 0
+
+  if (typeof aValue === "number" || typeof bValue === "number") {
+    diff = toNumber(aValue) - toNumber(bValue)
+  } else {
+    diff = String(aValue).localeCompare(String(bValue), "ko", { numeric: true, sensitivity: "base" })
+  }
+
+  if (diff) return diff * sign
+  const dateDiff = dateSortValue(getRecordDateLabel(b)) - dateSortValue(getRecordDateLabel(a))
+  if (dateDiff) return dateDiff
+  return toNumber(a?.no) - toNumber(b?.no)
+}
+
+function sortTableRows(rows: any[], sort: TableSortState | null, keepTotalLast = false) {
+  if (!sort) return rows
+  const normalRows = keepTotalLast ? rows.filter((row) => !isTotalTableRow(row)) : rows
+  const totalRows = keepTotalLast ? rows.filter(isTotalTableRow) : []
+  return [...normalRows].sort((a, b) => compareTableRows(a, b, sort)).concat(totalRows)
+}
+
+function cleanSummaryDisplayLabel(value: unknown) {
+  const text = String(value ?? "")
+    .trim()
+    .replace(/\(\s*[A-Z]\s*\)/g, "")
+    .replace(/\s+[A-Z]\s*$/g, "")
+    .trim()
+  return text === "아웃" ? "만료" : text.replace(/아웃/g, "만료")
+}
+
+function displaySummaryRows(rows: any[]) {
+  return (Array.isArray(rows) ? rows : []).map((row) => ({ ...row, label: cleanSummaryDisplayLabel(row?.label) }))
 }
 
 function normalizeManagerLabel(value: unknown) {
@@ -434,29 +518,31 @@ function CompactMetricBand({
   title,
   tone = "blue",
   items,
+  fit = false,
 }: {
   title: string
   tone?: TypeAnalysisTone
   items: Array<{ label: string; value: unknown; sub?: string; title?: string; total?: boolean; dashZero?: boolean }>
+  fit?: boolean
 }) {
   return (
     <div className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${toneClass(tone, "border")}`}>
       <div className={`border-b px-4 py-2.5 text-center ${toneClass(tone, "border")} ${toneClass(tone, "softBg")}`}>
         <div className={`text-[12px] font-black ${toneClass(tone, "text")}`}>{title}</div>
       </div>
-      <div className="overflow-x-auto">
+      <div className={fit ? "overflow-hidden" : "overflow-x-auto"}>
         <div
           className="grid min-w-full gap-px bg-slate-100"
-          style={{ gridTemplateColumns: `repeat(${items.length}, minmax(94px, 1fr))` }}
+          style={{ gridTemplateColumns: `repeat(${items.length}, minmax(${fit ? "0" : "94px"}, 1fr))` }}
         >
           {items.map((item) => {
             const value = typeof item.value === "string" ? item.value : excelNumber(item.value, item.dashZero)
             return (
               <div
                 key={`${title}-${item.label}-${item.sub || ""}`}
-                className={`flex min-h-[74px] flex-col items-center justify-center bg-white px-3 py-2.5 text-center transition hover:bg-slate-50 ${item.total ? toneClass(tone, "softBg") : ""}`}
+                className={`flex min-h-[74px] min-w-0 flex-col items-center justify-center bg-white px-2 py-2.5 text-center transition hover:bg-slate-50 ${item.total ? toneClass(tone, "softBg") : ""}`}
               >
-                <div title={item.title || item.label} className="max-w-full truncate whitespace-nowrap text-[12px] font-bold text-slate-600">
+                <div title={item.title || item.label} className={`max-w-full text-[12px] font-bold leading-4 text-slate-600 ${fit ? "whitespace-normal break-keep" : "truncate whitespace-nowrap"}`}>
                   {item.label}
                 </div>
                 {item.sub ? <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">{item.sub}</div> : null}
@@ -607,6 +693,42 @@ function GroupHeaderLabel({
   )
 }
 
+function SortableHeader({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  className = "",
+  align = "left",
+}: {
+  label: string
+  sortKey: string
+  sort: TableSortState | null
+  onSort?: (key: string) => void
+  className?: string
+  align?: "left" | "center" | "right"
+}) {
+  const active = sort?.key === sortKey
+  const justify = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start"
+  const indicator = active ? (sort?.dir === "desc" ? "▼" : "▲") : "↕"
+  if (!onSort) {
+    return <th className={className}>{label}</th>
+  }
+  return (
+    <th className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={`flex w-full items-center gap-1 ${justify} text-inherit outline-none transition hover:text-blue-700 focus:text-blue-700`}
+        aria-label={`${label} 정렬`}
+      >
+        <span className="truncate">{label}</span>
+        <span className={`shrink-0 text-[10px] ${active ? "text-blue-600" : "text-slate-300"}`}>{indicator}</span>
+      </button>
+    </th>
+  )
+}
+
 function DenseTable({
   columns,
   rows,
@@ -667,7 +789,15 @@ const newReplacementIndustryColumns = [
   { key: "total", label: "합계", className: "text-right font-medium tabular-nums text-slate-950" },
 ]
 
-function IndustryMatrixTable({ rows }: { rows: any[] }) {
+function IndustryMatrixTable({
+  rows,
+  sort,
+  onSort,
+}: {
+  rows: any[]
+  sort?: TableSortState | null
+  onSort?: (key: string) => void
+}) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="overflow-x-auto">
@@ -675,9 +805,15 @@ function IndustryMatrixTable({ rows }: { rows: any[] }) {
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
               {newReplacementIndustryColumns.map((column) => (
-                <th key={column.key} className={`border-r border-slate-200 px-2 py-2 font-semibold last:border-r-0 ${column.className}`}>
-                  {column.label}
-                </th>
+                <SortableHeader
+                  key={column.key}
+                  label={column.label}
+                  sortKey={column.key}
+                  sort={sort || null}
+                  onSort={onSort}
+                  align={column.className.includes("text-right") ? "right" : column.className.includes("text-center") ? "center" : "left"}
+                  className={`border-r border-slate-200 px-2 py-2 font-semibold last:border-r-0 ${column.className}`}
+                />
               ))}
             </tr>
           </thead>
@@ -715,12 +851,16 @@ function NewReplacementExcelSummary({
   workSummary,
   replacementSummary,
   industryRows,
+  industrySort,
+  onIndustrySort,
 }: {
   year: number | string
   asOf: string
   workSummary: any[]
   replacementSummary: any[]
   industryRows: any[]
+  industrySort?: TableSortState | null
+  onIndustrySort?: (key: string) => void
 }) {
   const workColumns = [
     { label: "외환", value: summaryValueByLabel(workSummary, ["외환"]) },
@@ -730,22 +870,22 @@ function NewReplacementExcelSummary({
     { label: "합계", value: summaryValueByLabel(workSummary, ["합계", "합"]), total: true },
   ]
   const replacementColumns = [
-    { label: "체크", sub: "C", value: summaryValueByLabel(replacementSummary, ["체크"]) },
-    { label: "마켓", sub: "M", value: summaryValueByLabel(replacementSummary, ["마켓포인트", "마켓"]), title: "마켓포인트" },
-    { label: "블룸", sub: "B", value: summaryValueByLabel(replacementSummary, ["블룸버그", "블룸"]), title: "블룸버그" },
-    { label: "로이터", sub: "R", value: summaryValueByLabel(replacementSummary, ["로이터"]) },
-    { label: "기타", sub: "H", value: summaryValueByLabel(replacementSummary, ["기타", "한경"]), title: "한경머니/기타" },
-    { label: "신규", sub: "N", value: summaryValueByLabel(replacementSummary, ["신규"]) },
+    { label: "체크", value: summaryValueByLabel(replacementSummary, ["체크"]) },
+    { label: "마켓", value: summaryValueByLabel(replacementSummary, ["마켓포인트", "마켓"]), title: "마켓포인트" },
+    { label: "블룸", value: summaryValueByLabel(replacementSummary, ["블룸버그", "블룸"]), title: "블룸버그" },
+    { label: "로이터", value: summaryValueByLabel(replacementSummary, ["로이터"]) },
+    { label: "기타", value: summaryValueByLabel(replacementSummary, ["기타", "한경"]), title: "한경머니/기타" },
+    { label: "신규", value: summaryValueByLabel(replacementSummary, ["신규"]) },
     { label: "합계", value: summaryValueByLabel(replacementSummary, ["합계", "합"]), total: true },
   ]
   const matrixColumns = [
     { key: "label", label: "구분", className: "w-[230px] text-left" },
-    { key: "check", label: "체크( C )", className: "w-[110px] text-center" },
-    { key: "marketPoint", label: "마켓포인트( M )", className: "w-[132px] text-center" },
-    { key: "bloomberg", label: "블룸버그( B )", className: "w-[122px] text-center" },
-    { key: "reuters", label: "로이터( R )", className: "w-[108px] text-center" },
-    { key: "hankyungEtc", label: "한경머니(H)", className: "w-[108px] text-center" },
-    { key: "new", label: "신규(N)", className: "w-[108px] text-center" },
+    { key: "check", label: "체크", className: "w-[110px] text-center" },
+    { key: "marketPoint", label: "마켓포인트", className: "w-[132px] text-center" },
+    { key: "bloomberg", label: "블룸버그", className: "w-[122px] text-center" },
+    { key: "reuters", label: "로이터", className: "w-[108px] text-center" },
+    { key: "hankyungEtc", label: "한경머니", className: "w-[108px] text-center" },
+    { key: "new", label: "신규", className: "w-[108px] text-center" },
     { key: "total", label: "합계", className: "w-[108px] text-center" },
   ]
   return (
@@ -767,15 +907,21 @@ function NewReplacementExcelSummary({
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5">
               <div className="text-[13px] font-bold text-slate-900">업종별 대체 현황</div>
-              <div className="text-[11px] font-semibold text-slate-400">분류 이니셜 기준</div>
+              <div className="text-[11px] font-semibold text-slate-400">업종 기준</div>
             </div>
             <table className="w-full table-fixed border-collapse text-[12px]">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
                   {matrixColumns.map((column) => (
-                    <th key={column.key} className={`${column.className} border-r border-slate-200 px-3 py-2.5 font-bold last:border-r-0`}>
-                      {column.label}
-                    </th>
+                    <SortableHeader
+                      key={column.key}
+                      label={column.label}
+                      sortKey={column.key}
+                      sort={industrySort || null}
+                      onSort={onIndustrySort}
+                      align={column.className.includes("text-right") ? "right" : column.className.includes("text-center") ? "center" : "left"}
+                      className={`${column.className} border-r border-slate-200 px-3 py-2.5 font-bold last:border-r-0`}
+                    />
                   ))}
                 </tr>
               </thead>
@@ -823,10 +969,14 @@ function GroupedNewRecordsTable({
   groups,
   industryOptions,
   onMoveRecord,
+  sort,
+  onSort,
 }: {
   groups: Array<{ label: string; rows: any[] }>
   industryOptions: string[]
   onMoveRecord?: Props["onMoveRecord"]
+  sort?: TableSortState | null
+  onSort?: (key: string) => void
 }) {
   const totalCount = groups.reduce((sum, group) => sum + group.rows.length, 0)
   let displayNo = 0
@@ -839,15 +989,15 @@ function GroupedNewRecordsTable({
         <table className="w-full min-w-[1300px] border-collapse text-[12px]">
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
-              <th className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold">NO</th>
-              <th className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold">반영일</th>
-              <th className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-semibold">ID</th>
-              <th className="min-w-[170px] border-r border-slate-200 px-2 py-2 text-left font-semibold">회사명</th>
-              <th className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-semibold">부서</th>
-              <th className="w-[86px] border-r border-slate-200 px-2 py-2 text-left font-semibold">권유자</th>
-              <th className="w-[88px] border-r border-slate-200 px-2 py-2 text-left font-semibold">구분</th>
-              <th className="w-[82px] border-r border-slate-200 px-2 py-2 text-left font-semibold">업무성격</th>
-              <th className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold">비고</th>
+              <SortableHeader label="NO" sortKey="no" sort={sort || null} onSort={onSort} align="center" className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold" />
+              <SortableHeader label="반영일" sortKey="date" sort={sort || null} onSort={onSort} className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="ID" sortKey="idCode" sort={sort || null} onSort={onSort} className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="회사명" sortKey="companyName" sort={sort || null} onSort={onSort} className="min-w-[170px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="부서" sortKey="departmentName" sort={sort || null} onSort={onSort} className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="권유자" sortKey="recommender" sort={sort || null} onSort={onSort} className="w-[86px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="구분" sortKey="replacementType" sort={sort || null} onSort={onSort} className="w-[88px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="업무성격" sortKey="businessType" sort={sort || null} onSort={onSort} className="w-[82px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="비고" sortKey="note" sort={sort || null} onSort={onSort} className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
               <th className="w-[220px] px-2 py-2 text-left font-semibold">업종 이동</th>
             </tr>
           </thead>
@@ -920,12 +1070,16 @@ function TerminationMatrixTable({
   reasonSummary,
   competitorSummary,
   rows,
+  industrySort,
+  onIndustrySort,
 }: {
   year: number | string
   asOf: string
   reasonSummary: any[]
   competitorSummary: any[]
   rows: any[]
+  industrySort?: TableSortState | null
+  onIndustrySort?: (key: string) => void
 }) {
   const reasonColumns = [
     { label: "퇴사/이직", value: summaryValueByLabel(reasonSummary, ["사용자퇴사", "이직"]), title: "사용자 퇴사/이직" },
@@ -940,12 +1094,12 @@ function TerminationMatrixTable({
     { label: "합계", value: summaryValueByLabel(reasonSummary, ["합계", "합"]), total: true },
   ]
   const competitorColumns = [
-    { label: "체크", sub: "C", value: summaryValueByLabel(competitorSummary, ["체크"]) },
-    { label: "마켓", sub: "M", value: summaryValueByLabel(competitorSummary, ["마켓포인트", "마켓"]), title: "마켓포인트" },
-    { label: "블룸", sub: "B", value: summaryValueByLabel(competitorSummary, ["블룸버그", "블룸"]), title: "블룸버그" },
-    { label: "로이터", sub: "R", value: summaryValueByLabel(competitorSummary, ["로이터"]) },
-    { label: "한경/기타", sub: "H", value: summaryValueByLabel(competitorSummary, ["한경", "기타"]) },
-    { label: "아웃", sub: "E", value: summaryValueByLabel(competitorSummary, ["아웃"]) },
+    { label: "체크", value: summaryValueByLabel(competitorSummary, ["체크"]) },
+    { label: "마켓", value: summaryValueByLabel(competitorSummary, ["마켓포인트", "마켓"]), title: "마켓포인트" },
+    { label: "블룸", value: summaryValueByLabel(competitorSummary, ["블룸버그", "블룸"]), title: "블룸버그" },
+    { label: "로이터", value: summaryValueByLabel(competitorSummary, ["로이터"]) },
+    { label: "한경/기타", value: summaryValueByLabel(competitorSummary, ["한경", "기타"]) },
+    { label: "만료", value: summaryValueByLabel(competitorSummary, ["아웃", "만료"]) },
     { label: "합계", value: summaryValueByLabel(competitorSummary, ["합계", "합"]), total: true },
   ]
 
@@ -957,25 +1111,31 @@ function TerminationMatrixTable({
         asOf={asOf}
         tone="rose"
       />
-      <div className="overflow-x-auto">
-        <div className="min-w-[1240px] space-y-4 p-5">
+      <div className="p-5">
+        <div className="space-y-4">
           <div className="grid gap-4">
-            <CompactMetricBand title="해지유형" tone="rose" items={reasonColumns.map((item) => ({ ...item, dashZero: true }))} />
-            <CompactMetricBand title="경쟁사 변경" tone="indigo" items={competitorColumns.map((item) => ({ ...item, dashZero: true }))} />
+            <CompactMetricBand title="해지유형" tone="rose" fit items={reasonColumns.map((item) => ({ ...item, dashZero: true }))} />
+            <CompactMetricBand title="경쟁사 변경" tone="indigo" fit items={competitorColumns.map((item) => ({ ...item, dashZero: true }))} />
           </div>
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5">
               <div className="text-[13px] font-bold text-slate-900">업종별 해지 현황</div>
-              <div className="text-[11px] font-semibold text-slate-400">분류 이니셜 기준</div>
+              <div className="text-[11px] font-semibold text-slate-400">업종 기준</div>
             </div>
             <table className="w-full table-fixed border-collapse text-[12px]">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
                   {terminationIndustryColumns.map((column) => (
-                    <th key={column.key} className={`border-r border-slate-200 px-3 py-2.5 font-bold last:border-r-0 ${column.className}`}>
-                      {column.label}
-                    </th>
+                    <SortableHeader
+                      key={column.key}
+                      label={column.label}
+                      sortKey={column.key}
+                      sort={industrySort || null}
+                      onSort={onIndustrySort}
+                      align={column.className.includes("text-right") ? "right" : column.className.includes("text-center") ? "center" : "left"}
+                      className={`border-r border-slate-200 px-2 py-2.5 font-bold last:border-r-0 ${column.className}`}
+                    />
                   ))}
                 </tr>
               </thead>
@@ -1017,10 +1177,14 @@ function GroupedTerminationRecordsTable({
   groups,
   industryOptions,
   onMoveRecord,
+  sort,
+  onSort,
 }: {
   groups: Array<{ label: string; rows: any[] }>
   industryOptions: string[]
   onMoveRecord?: Props["onMoveRecord"]
+  sort?: TableSortState | null
+  onSort?: (key: string) => void
 }) {
   const totalCount = groups.reduce((sum, group) => sum + group.rows.length, 0)
   let displayNo = 0
@@ -1033,15 +1197,15 @@ function GroupedTerminationRecordsTable({
         <table className="w-full min-w-[1260px] border-collapse text-[12px]">
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
-              <th className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold">NO</th>
-              <th className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold">반영일</th>
-              <th className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-semibold">ID</th>
-              <th className="min-w-[170px] border-r border-slate-200 px-2 py-2 text-left font-semibold">회사명</th>
-              <th className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-semibold">부서</th>
-              <th className="w-[86px] border-r border-slate-200 px-2 py-2 text-left font-semibold">담당자</th>
-              <th className="min-w-[140px] border-r border-slate-200 px-2 py-2 text-left font-semibold">해지사유</th>
-              <th className="w-[98px] border-r border-slate-200 px-2 py-2 text-right font-semibold">위약금</th>
-              <th className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold">비고</th>
+              <SortableHeader label="NO" sortKey="no" sort={sort || null} onSort={onSort} align="center" className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold" />
+              <SortableHeader label="반영일" sortKey="date" sort={sort || null} onSort={onSort} className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="ID" sortKey="idCode" sort={sort || null} onSort={onSort} className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="회사명" sortKey="companyName" sort={sort || null} onSort={onSort} className="min-w-[170px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="부서" sortKey="departmentName" sort={sort || null} onSort={onSort} className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="담당자" sortKey="recommender" sort={sort || null} onSort={onSort} className="w-[86px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="해지사유" sortKey="reason" sort={sort || null} onSort={onSort} className="min-w-[140px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="위약금" sortKey="penalty" sort={sort || null} onSort={onSort} align="right" className="w-[98px] border-r border-slate-200 px-2 py-2 text-right font-semibold" />
+              <SortableHeader label="비고" sortKey="note" sort={sort || null} onSort={onSort} className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
               <th className="w-[220px] px-2 py-2 text-left font-semibold">업종 이동</th>
             </tr>
           </thead>
@@ -1108,11 +1272,15 @@ function AreaSummaryTable({
   asOf,
   cumulativeLabel,
   rows,
+  sort,
+  onSort,
 }: {
   year: number | string
   asOf: string
   cumulativeLabel?: unknown
   rows: any[]
+  sort?: TableSortState | null
+  onSort?: (key: string) => void
 }) {
   const totalRow = rows.find((row) => String(row?.no || "").replace(/\s+/g, "") === "계")
   const kpiItems = [
@@ -1144,9 +1312,15 @@ function AreaSummaryTable({
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
                   {areaSummaryColumns.map((column) => (
-                    <th key={column.key} className={`border-r border-slate-200 px-3 py-2.5 font-bold last:border-r-0 ${column.className}`}>
-                      {column.label}
-                    </th>
+                    <SortableHeader
+                      key={column.key}
+                      label={column.label}
+                      sortKey={column.key}
+                      sort={sort || null}
+                      onSort={onSort}
+                      align={column.className.includes("text-center") ? "center" : column.className.includes("text-right") ? "right" : "left"}
+                      className={`border-r border-slate-200 px-3 py-2.5 font-bold last:border-r-0 ${column.className}`}
+                    />
                   ))}
                 </tr>
               </thead>
@@ -1190,10 +1364,14 @@ function GroupedAreaRecordsTable({
   groups,
   areaOptions,
   onMoveRecord,
+  sort,
+  onSort,
 }: {
   groups: Array<{ label: string; rows: any[] }>
   areaOptions: string[]
   onMoveRecord?: Props["onMoveRecord"]
+  sort?: TableSortState | null
+  onSort?: (key: string) => void
 }) {
   const totalCount = groups.reduce((sum, group) => sum + group.rows.length, 0)
   let displayNo = 0
@@ -1206,14 +1384,14 @@ function GroupedAreaRecordsTable({
         <table className="w-full min-w-[1260px] border-collapse text-[12px]">
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
-              <th className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold">NO</th>
-              <th className="w-[86px] border-r border-slate-200 px-2 py-2 text-center font-semibold">구분</th>
-              <th className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold">반영일</th>
-              <th className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-semibold">ID</th>
-              <th className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold">기관</th>
-              <th className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-semibold">부서</th>
-              <th className="w-[130px] border-r border-slate-200 px-2 py-2 text-left font-semibold">세부구분</th>
-              <th className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold">비고</th>
+              <SortableHeader label="NO" sortKey="no" sort={sort || null} onSort={onSort} align="center" className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold" />
+              <SortableHeader label="구분" sortKey="kind" sort={sort || null} onSort={onSort} align="center" className="w-[86px] border-r border-slate-200 px-2 py-2 text-center font-semibold" />
+              <SortableHeader label="반영일" sortKey="date" sort={sort || null} onSort={onSort} className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="ID" sortKey="idCode" sort={sort || null} onSort={onSort} className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="기관" sortKey="companyName" sort={sort || null} onSort={onSort} className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="부서" sortKey="departmentName" sort={sort || null} onSort={onSort} className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="세부구분" sortKey="detailType" sort={sort || null} onSort={onSort} className="w-[130px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
+              <SortableHeader label="비고" sortKey="note" sort={sort || null} onSort={onSort} className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
               <th className="w-[260px] px-2 py-2 text-left font-semibold">영역 이동</th>
             </tr>
           </thead>
@@ -1275,10 +1453,14 @@ function PersonalPerformancePanel({
   year,
   asOf,
   rows,
+  sort,
+  onSort,
 }: {
   year: number | string
   asOf: string
   rows: any[]
+  sort?: TableSortState | null
+  onSort?: (key: string) => void
 }) {
   const totals = rows.reduce(
     (acc, row) => ({
@@ -1329,9 +1511,15 @@ function PersonalPerformancePanel({
               <thead>
                 <tr className="border-b border-slate-200 bg-blue-50/80 text-slate-700">
                   {tableColumns.map((column) => (
-                    <th key={column.key} className={`border-r border-blue-100 px-3 py-2.5 text-center font-bold last:border-r-0 ${column.className}`}>
-                      {column.label}
-                    </th>
+                    <SortableHeader
+                      key={column.key}
+                      label={column.label}
+                      sortKey={column.key}
+                      sort={sort || null}
+                      onSort={onSort}
+                      align="center"
+                      className={`border-r border-blue-100 px-3 py-2.5 text-center font-bold last:border-r-0 ${column.className}`}
+                    />
                   ))}
                 </tr>
               </thead>
@@ -1387,6 +1575,13 @@ export function TypeAnalysisDashboard({
   onMoveRecord,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("summary")
+  const [newIndustrySort, setNewIndustrySort] = useState<TableSortState | null>(null)
+  const [newDetailSort, setNewDetailSort] = useState<TableSortState | null>({ key: "date", dir: "desc" })
+  const [terminationIndustrySort, setTerminationIndustrySort] = useState<TableSortState | null>(null)
+  const [terminationDetailSort, setTerminationDetailSort] = useState<TableSortState | null>({ key: "date", dir: "desc" })
+  const [areaSummarySort, setAreaSummarySort] = useState<TableSortState | null>(null)
+  const [areaDetailSort, setAreaDetailSort] = useState<TableSortState | null>({ key: "date", dir: "desc" })
+  const [personalSort, setPersonalSort] = useState<TableSortState | null>(null)
 
   const newRecords = Array.isArray(data?.newReplacement?.records) ? data.newReplacement.records : []
   const newIndustrySummary = Array.isArray(data?.newReplacement?.industrySummary) ? data.newReplacement.industrySummary : []
@@ -1408,13 +1603,20 @@ export function TypeAnalysisDashboard({
   const terminationIndustryRows = useMemo(() => terminationIndustrySummary.filter((row: any) => !isTotalIndustryRow(row)), [terminationIndustrySummary])
   const terminationMatrixRows = useMemo(() => terminationIndustrySummary.filter((row: any) => row?.label), [terminationIndustrySummary])
   const areaRows = useMemo(() => areaSummaryRows.filter((row: any) => String(row?.no || "").replace(/\s+/g, "") !== "계"), [areaSummaryRows])
+  const sortedIndustryMatrixRows = useMemo(() => sortTableRows(industryMatrixRows, newIndustrySort, true), [industryMatrixRows, newIndustrySort])
+  const sortedTerminationMatrixRows = useMemo(() => sortTableRows(terminationMatrixRows, terminationIndustrySort, true), [terminationMatrixRows, terminationIndustrySort])
+  const sortedAreaSummaryRows = useMemo(() => sortTableRows(areaSummaryRows, areaSummarySort, true), [areaSummaryRows, areaSummarySort])
   const personalRowsForDisplay = useMemo(
     () => personalRows.map((row: any) => ({ ...row, manager: normalizeManagerLabel(row?.manager) })),
     [personalRows],
   )
+  const sortedPersonalRowsForDisplay = useMemo(
+    () => sortTableRows(personalRowsForDisplay, personalSort, false),
+    [personalRowsForDisplay, personalSort],
+  )
   const filteredNewRecords = useMemo(
-    () => sortRecordsByReflectionDate(newRecords, "desc"),
-    [newRecords],
+    () => sortTableRows(newRecords, newDetailSort),
+    [newRecords, newDetailSort],
   )
   const groupedNewRecords = useMemo(() => {
     const buckets = new Map<string, any[]>()
@@ -1431,8 +1633,8 @@ export function TypeAnalysisDashboard({
       .filter((group) => group.rows.length > 0)
   }, [filteredNewRecords, industryRows])
   const filteredTerminationRecords = useMemo(
-    () => sortRecordsByReflectionDate(terminationRecords, "desc"),
-    [terminationRecords],
+    () => sortTableRows(terminationRecords, terminationDetailSort),
+    [terminationRecords, terminationDetailSort],
   )
   const groupedTerminationRecords = useMemo(() => {
     const buckets = new Map<string, any[]>()
@@ -1449,8 +1651,8 @@ export function TypeAnalysisDashboard({
       .filter((group) => group.rows.length > 0)
   }, [filteredTerminationRecords, terminationIndustryRows])
   const filteredAreaRecords = useMemo(
-    () => sortRecordsByReflectionDate(areaRecords, "desc"),
-    [areaRecords],
+    () => sortTableRows(areaRecords, areaDetailSort),
+    [areaRecords, areaDetailSort],
   )
   const groupedAreaRecords = useMemo(() => {
     const buckets = new Map<string, any[]>()
@@ -1475,12 +1677,12 @@ export function TypeAnalysisDashboard({
     { label: "합계", value: summaryValueByLabel(data?.newReplacement?.workSummary || [], ["합계", "합"]), total: true },
   ]
   const summaryReplacementMetrics = [
-    { label: "체크", sub: "C", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["체크"]) },
-    { label: "마켓", sub: "M", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["마켓포인트", "마켓"]), title: "마켓포인트" },
-    { label: "블룸", sub: "B", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["블룸버그", "블룸"]), title: "블룸버그" },
-    { label: "로이터", sub: "R", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["로이터"]) },
-    { label: "기타", sub: "H", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["기타", "한경"]), title: "한경머니/기타" },
-    { label: "신규", sub: "N", value: pureNewTotal },
+    { label: "체크", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["체크"]) },
+    { label: "마켓", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["마켓포인트", "마켓"]), title: "마켓포인트" },
+    { label: "블룸", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["블룸버그", "블룸"]), title: "블룸버그" },
+    { label: "로이터", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["로이터"]) },
+    { label: "기타", value: summaryValueByLabel(data?.newReplacement?.replacementSummary || [], ["기타", "한경"]), title: "한경머니/기타" },
+    { label: "신규", value: pureNewTotal },
     { label: "합계", value: newTotal, total: true },
   ]
   const summaryTerminationMetrics = [
@@ -1496,12 +1698,12 @@ export function TypeAnalysisDashboard({
     { label: "합계", value: terminationTotal, total: true },
   ]
   const summaryCompetitorMetrics = [
-    { label: "체크", sub: "C", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["체크"]) },
-    { label: "마켓", sub: "M", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["마켓포인트", "마켓"]), title: "마켓포인트" },
-    { label: "블룸", sub: "B", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["블룸버그", "블룸"]), title: "블룸버그" },
-    { label: "로이터", sub: "R", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["로이터"]) },
-    { label: "한경/기타", sub: "H", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["한경", "기타"]) },
-    { label: "아웃", sub: "E", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["아웃"]) },
+    { label: "체크", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["체크"]) },
+    { label: "마켓", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["마켓포인트", "마켓"]), title: "마켓포인트" },
+    { label: "블룸", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["블룸버그", "블룸"]), title: "블룸버그" },
+    { label: "로이터", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["로이터"]) },
+    { label: "한경/기타", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["한경", "기타"]) },
+    { label: "만료", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["아웃", "만료"]) },
     { label: "합계", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["합계", "합"]), total: true },
   ]
 
@@ -1734,10 +1936,10 @@ export function TypeAnalysisDashboard({
             <section class="section report-section" data-section="summary">
               <h2>요약</h2>
               <div class="summary-grid">
-                <div><h3>업무성격 요약</h3>${reportTable(simpleColumns, data?.newReplacement?.workSummary || [], "데이터 없음")}</div>
-                <div><h3>타사단말기 대체 요약</h3>${reportTable(simpleColumns, data?.newReplacement?.replacementSummary || [], "데이터 없음")}</div>
-                <div><h3>해지 유형 요약</h3>${reportTable(simpleColumns, data?.terminationType?.reasonSummary || [], "데이터 없음")}</div>
-                <div><h3>경쟁사 변경 요약</h3>${reportTable(simpleColumns, data?.terminationType?.competitorSummary || [], "데이터 없음")}</div>
+                <div><h3>업무성격 요약</h3>${reportTable(simpleColumns, displaySummaryRows(data?.newReplacement?.workSummary || []), "데이터 없음")}</div>
+                <div><h3>타사단말기 대체 요약</h3>${reportTable(simpleColumns, displaySummaryRows(data?.newReplacement?.replacementSummary || []), "데이터 없음")}</div>
+                <div><h3>해지 유형 요약</h3>${reportTable(simpleColumns, displaySummaryRows(data?.terminationType?.reasonSummary || []), "데이터 없음")}</div>
+                <div><h3>경쟁사 변경 요약</h3>${reportTable(simpleColumns, displaySummaryRows(data?.terminationType?.competitorSummary || []), "데이터 없음")}</div>
               </div>
               <div class="note">원본 파일 수정 시각: ${escapeReportHtml(sourceUpdatedLabel(data?.sourceUpdatedAt) || "확인 필요")}</div>
             </section>
@@ -1881,10 +2083,14 @@ export function TypeAnalysisDashboard({
             />
 
             <div className="grid gap-4 xl:grid-cols-2">
-              <CompactMetricBand title="업무성격" tone="blue" items={summaryWorkMetrics} />
-              <CompactMetricBand title="타사단말기 대체" tone="indigo" items={summaryReplacementMetrics.map((item) => ({ ...item, dashZero: true }))} />
-              <CompactMetricBand title="해지유형" tone="rose" items={summaryTerminationMetrics.map((item) => ({ ...item, dashZero: true }))} />
-              <CompactMetricBand title="경쟁사 변경" tone="indigo" items={summaryCompetitorMetrics.map((item) => ({ ...item, dashZero: true }))} />
+              <CompactMetricBand title="업무성격" tone="blue" fit items={summaryWorkMetrics} />
+              <CompactMetricBand title="타사단말기 대체" tone="indigo" fit items={summaryReplacementMetrics.map((item) => ({ ...item, dashZero: true }))} />
+              <div className="xl:col-span-2">
+                <CompactMetricBand title="해지유형" tone="rose" fit items={summaryTerminationMetrics.map((item) => ({ ...item, dashZero: true }))} />
+              </div>
+              <div className="xl:col-span-2">
+                <CompactMetricBand title="경쟁사 변경" tone="indigo" fit items={summaryCompetitorMetrics.map((item) => ({ ...item, dashZero: true }))} />
+              </div>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
@@ -1909,12 +2115,16 @@ export function TypeAnalysisDashboard({
             asOf={data?.newReplacement?.asOf || sourceTitle(data)}
             workSummary={data?.newReplacement?.workSummary || []}
             replacementSummary={data?.newReplacement?.replacementSummary || []}
-            industryRows={industryMatrixRows}
+            industryRows={sortedIndustryMatrixRows}
+            industrySort={newIndustrySort}
+            onIndustrySort={(key) => setNewIndustrySort((current) => nextSortState(current, key))}
           />
           <GroupedNewRecordsTable
             groups={groupedNewRecords}
             industryOptions={industryMoveOptions}
             onMoveRecord={onMoveRecord}
+            sort={newDetailSort}
+            onSort={(key) => setNewDetailSort((current) => nextSortState(current, key))}
           />
         </div>
       ) : null}
@@ -1926,12 +2136,16 @@ export function TypeAnalysisDashboard({
             asOf={data?.terminationType?.asOf || sourceTitle(data)}
             reasonSummary={data?.terminationType?.reasonSummary || []}
             competitorSummary={data?.terminationType?.competitorSummary || []}
-            rows={terminationMatrixRows}
+            rows={sortedTerminationMatrixRows}
+            industrySort={terminationIndustrySort}
+            onIndustrySort={(key) => setTerminationIndustrySort((current) => nextSortState(current, key))}
           />
           <GroupedTerminationRecordsTable
             groups={groupedTerminationRecords}
             industryOptions={industryMoveOptions}
             onMoveRecord={onMoveRecord}
+            sort={terminationDetailSort}
+            onSort={(key) => setTerminationDetailSort((current) => nextSortState(current, key))}
           />
         </div>
       ) : null}
@@ -1942,12 +2156,16 @@ export function TypeAnalysisDashboard({
             year={currentYear}
             asOf={data?.areaNetGrowth?.asOf || sourceTitle(data)}
             cumulativeLabel={data?.areaNetGrowth?.cumulativeNetLabel}
-            rows={areaSummaryRows}
+            rows={sortedAreaSummaryRows}
+            sort={areaSummarySort}
+            onSort={(key) => setAreaSummarySort((current) => nextSortState(current, key))}
           />
           <GroupedAreaRecordsTable
             groups={groupedAreaRecords}
             areaOptions={areaMoveOptions}
             onMoveRecord={onMoveRecord}
+            sort={areaDetailSort}
+            onSort={(key) => setAreaDetailSort((current) => nextSortState(current, key))}
           />
         </div>
       ) : null}
@@ -1957,7 +2175,9 @@ export function TypeAnalysisDashboard({
           <PersonalPerformancePanel
             year={currentYear}
             asOf={data?.personalPerformance?.asOf || sourceTitle(data)}
-            rows={personalRowsForDisplay}
+            rows={sortedPersonalRowsForDisplay}
+            sort={personalSort}
+            onSort={(key) => setPersonalSort((current) => nextSortState(current, key))}
           />
         </div>
       ) : null}
