@@ -33,6 +33,7 @@ type ReportColumn = {
   align?: "left" | "center" | "right"
   width?: string
   noWrap?: boolean
+  cssClass?: string
   get: (row: any, index: number) => unknown
 }
 
@@ -180,7 +181,7 @@ function reportTimestamp() {
 
 function reportCellClass(column: ReportColumn) {
   const align = column.align === "right" ? "right" : column.align === "center" ? "center" : "left"
-  return [align, column.align === "right" ? "numeric" : "", column.noWrap ? "nowrap" : ""].filter(Boolean).join(" ")
+  return [align, column.align === "right" ? "numeric" : "", column.noWrap ? "nowrap" : "", column.cssClass || ""].filter(Boolean).join(" ")
 }
 
 function reportColGroup(columns: ReportColumn[]) {
@@ -193,7 +194,7 @@ function isReportTotalRow(row: any) {
   const markers = [row?.label, row?.no, row?.area, row?.manager]
     .map((value) => String(value ?? "").replace(/\s+/g, ""))
     .filter(Boolean)
-  return markers.some((marker) => marker === "계" || marker.includes("합계"))
+  return markers.some((marker) => marker === "계" || marker === "총계" || marker.includes("합계"))
 }
 
 function reportTable(columns: ReportColumn[], rows: any[], emptyText: string) {
@@ -1469,25 +1470,50 @@ export function TypeAnalysisDashboard({
   const saveText = isSaving ? "저장 중" : isDirty ? "저장 필요" : saveMessage || "저장 완료"
 
   function handlePrintReport() {
+    const personalTotals = personalRowsForDisplay.reduce(
+      (acc: { totalNew: number; new: number; check: number; marketPoint: number; reutersBloomberg: number }, row: any) => ({
+        totalNew: acc.totalNew + toNumber(row?.totalNew),
+        new: acc.new + toNumber(row?.new),
+        check: acc.check + toNumber(row?.check),
+        marketPoint: acc.marketPoint + toNumber(row?.marketPoint),
+        reutersBloomberg: acc.reutersBloomberg + toNumber(row?.reutersBloomberg),
+      }),
+      { totalNew: 0, new: 0, check: 0, marketPoint: 0, reutersBloomberg: 0 },
+    )
+    const personalRowsForReport = personalRowsForDisplay.length
+      ? [
+          ...personalRowsForDisplay,
+          {
+            no: "총계",
+            manager: "총계",
+            ...personalTotals,
+          },
+        ]
+      : []
+    const reportNumber = (value: unknown, dashZero = false) => {
+      const number = toNumber(value)
+      if (dashZero && number === 0) return "-"
+      return formatNumber(number)
+    }
     const reportNewGroups = makeGroups(
-      newRecords,
+      filteredNewRecords,
       industryRows.map((row: any) => String(row?.label || "").trim()),
       (row) => String(row?.group || "기타").trim(),
     )
     const reportTerminationGroups = makeGroups(
-      terminationRecords,
+      filteredTerminationRecords,
       terminationIndustryRows.map((row: any) => String(row?.label || "").trim()),
       (row) => String(row?.group || "기타").trim(),
     )
     const reportAreaGroups = makeGroups(
-      areaRecords,
+      filteredAreaRecords,
       areaRows.map((row: any) => String(row?.area || "").trim()),
       (row) => String(row?.areaGroup || row?.group || "기타").trim(),
     )
 
     const simpleColumns: ReportColumn[] = [
       { label: "구분", width: "68%", get: (row) => row.label || row.area || row.manager || row.no },
-      { label: "값", width: "32%", align: "right", noWrap: true, get: (row) => `${formatNumber(row.value ?? row.totalNew ?? row.netCount ?? 0)}` },
+      { label: "값", width: "32%", align: "right", noWrap: true, get: (row) => reportNumber(row.value ?? row.totalNew ?? row.netCount ?? 0, true) },
     ]
     const newIndustryColumns: ReportColumn[] = [
       { label: "업종", width: "34%", get: (row) => row.label },
@@ -1557,9 +1583,9 @@ export function TypeAnalysisDashboard({
       { label: "담당자", width: "28%", get: (row) => row.manager },
       { label: "총 신규", width: "13%", align: "right", noWrap: true, get: (row) => formatNumber(row.totalNew) },
       { label: "신규", width: "13%", align: "right", noWrap: true, get: (row) => formatNumber(row.new) },
-      { label: "체크", width: "12%", align: "right", noWrap: true, get: (row) => formatNumber(row.check) },
-      { label: "마켓", width: "12%", align: "right", noWrap: true, get: (row) => formatNumber(row.marketPoint) },
-      { label: "로이터/블룸", width: "14%", align: "right", noWrap: true, get: (row) => formatNumber(row.reutersBloomberg) },
+      { label: "체크", width: "12%", align: "right", noWrap: true, cssClass: "accent-indigo", get: (row) => reportNumber(row.check, row.manager !== "총계") },
+      { label: "마켓", width: "12%", align: "right", noWrap: true, cssClass: "accent-indigo", get: (row) => reportNumber(row.marketPoint, row.manager !== "총계") },
+      { label: "로이터/블룸", width: "14%", align: "right", noWrap: true, cssClass: "accent-indigo", get: (row) => reportNumber(row.reutersBloomberg, row.manager !== "총계") },
     ]
 
     const html = `<!doctype html>
@@ -1587,6 +1613,7 @@ export function TypeAnalysisDashboard({
             .kpi:last-child { border-right: 0; }
             .kpi .label { color: #475569; font-size: 9px; font-weight: 700; letter-spacing: .04em; }
             .kpi .value { margin-top: 2px; font-size: 17px; font-weight: 700; color: #0b1f3a; text-align: right; font-variant-numeric: tabular-nums; }
+            .kpi .sub { margin-top: 2px; color: #64748b; font-size: 8px; font-weight: 700; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .section { margin-top: 14px; break-inside: avoid; }
             .section.page { break-before: page; }
             h2 { margin: 0 0 8px; padding-bottom: 5px; border-bottom: 1px solid #0b1f3a; font-size: 14px; font-weight: 700; color: #0b1f3a; }
@@ -1601,6 +1628,7 @@ export function TypeAnalysisDashboard({
             .report-table .left { text-align: left; }
             .report-table .numeric { font-variant-numeric: tabular-nums; }
             .report-table .nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .report-table .accent-indigo { color: #4338ca; font-weight: 700; }
             .report-table .empty { text-align: center; color: #94a3b8; padding: 16px; }
             .total-row td { background: #fff7ed !important; color: #0f172a; font-weight: 700; }
             .group-row td { background: #f1f5f9 !important; color: #0f172a; font-weight: 700; border-top: 1.5px solid #94a3b8; border-bottom: 1px solid #cbd5e1; }
@@ -1642,11 +1670,11 @@ export function TypeAnalysisDashboard({
             </header>
 
             <div class="kpis">
-              <div class="kpi"><div class="label">신규</div><div class="value">${formatNumber(pureNewTotal)}건</div></div>
-              <div class="kpi"><div class="label">대체</div><div class="value">${formatNumber(replacementTotal)}건</div></div>
-              <div class="kpi"><div class="label">신규+대체</div><div class="value">${formatNumber(newTotal)}건</div></div>
+              <div class="kpi"><div class="label">신규/대체</div><div class="value">${formatNumber(newTotal)}건</div><div class="sub">신규 ${formatNumber(pureNewTotal)} · 대체 ${formatNumber(replacementTotal)}</div></div>
               <div class="kpi"><div class="label">해지</div><div class="value">${formatNumber(terminationTotal)}건</div></div>
               <div class="kpi"><div class="label">순증</div><div class="value">${formatNumber(netTotal)}건</div></div>
+              <div class="kpi"><div class="label">영역 상세</div><div class="value">${formatNumber(areaRecords.length)}건</div></div>
+              <div class="kpi"><div class="label">누적</div><div class="value">${escapeReportHtml(cleanCumulativeLabel(data?.areaNetGrowth?.cumulativeNetLabel) || "-")}</div></div>
             </div>
 
             <section class="section">
@@ -1683,7 +1711,7 @@ export function TypeAnalysisDashboard({
 
             <section class="section page">
               <h2>개인별 실적</h2>
-              ${reportTable(personalColumns, personalRowsForDisplay, "개인별 실적 데이터가 없습니다.")}
+              ${reportTable(personalColumns, personalRowsForReport, "개인별 실적 데이터가 없습니다.")}
             </section>
           </main>
           <script>
