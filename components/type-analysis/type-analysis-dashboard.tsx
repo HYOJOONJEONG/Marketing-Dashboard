@@ -210,7 +210,8 @@ function cleanSummaryDisplayLabel(value: unknown) {
     .replace(/\(\s*[A-Z]\s*\)/g, "")
     .replace(/\s+[A-Z]\s*$/g, "")
     .trim()
-  return text === "아웃" ? "만료" : text.replace(/아웃/g, "만료")
+  if (text === "아웃" || text === "만료") return "자체해지"
+  return text.replace(/아웃/g, "자체해지")
 }
 
 function displaySummaryRows(rows: any[]) {
@@ -1099,7 +1100,7 @@ function TerminationMatrixTable({
     { label: "블룸", value: summaryValueByLabel(competitorSummary, ["블룸버그", "블룸"]), title: "블룸버그" },
     { label: "로이터", value: summaryValueByLabel(competitorSummary, ["로이터"]) },
     { label: "한경/기타", value: summaryValueByLabel(competitorSummary, ["한경", "기타"]) },
-    { label: "만료", value: summaryValueByLabel(competitorSummary, ["아웃", "만료"]) },
+    { label: "자체해지", value: summaryValueByLabel(competitorSummary, ["아웃", "만료", "자체해지"]) },
     { label: "합계", value: summaryValueByLabel(competitorSummary, ["합계", "합"]), total: true },
   ]
 
@@ -1703,7 +1704,7 @@ export function TypeAnalysisDashboard({
     { label: "블룸", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["블룸버그", "블룸"]), title: "블룸버그" },
     { label: "로이터", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["로이터"]) },
     { label: "한경/기타", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["한경", "기타"]) },
-    { label: "만료", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["아웃", "만료"]) },
+    { label: "자체해지", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["아웃", "만료", "자체해지"]) },
     { label: "합계", value: summaryValueByLabel(data?.terminationType?.competitorSummary || [], ["합계", "합"]), total: true },
   ]
 
