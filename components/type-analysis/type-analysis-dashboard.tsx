@@ -411,9 +411,10 @@ function CompactMetricBand({
   items: Array<{ label: string; value: unknown; sub?: string; title?: string; total?: boolean; dashZero?: boolean }>
 }) {
   return (
-    <div className={`overflow-hidden rounded-xl border bg-white ${toneClass(tone, "border")}`}>
-      <div className={`border-b px-4 py-2.5 text-center text-[13px] font-bold ${toneClass(tone, "border")} ${toneClass(tone, "softBg")} ${toneClass(tone, "text")}`}>
-        {title}
+    <div className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${toneClass(tone, "border")}`}>
+      <div className={`flex items-center justify-between border-b px-4 py-2.5 ${toneClass(tone, "border")} ${toneClass(tone, "softBg")}`}>
+        <div className={`text-[12px] font-black ${toneClass(tone, "text")}`}>{title}</div>
+        <div className={`h-1.5 w-10 rounded-full ${toneClass(tone, "bg")}`} />
       </div>
       <div className="overflow-x-auto">
         <div
@@ -425,13 +426,13 @@ function CompactMetricBand({
             return (
               <div
                 key={`${title}-${item.label}-${item.sub || ""}`}
-                className={`flex min-h-[82px] flex-col items-center justify-center bg-white px-3 py-3 text-center ${item.total ? toneClass(tone, "softBg") : ""}`}
+                className={`flex min-h-[74px] flex-col items-center justify-center bg-white px-3 py-2.5 text-center transition hover:bg-slate-50 ${item.total ? toneClass(tone, "softBg") : ""}`}
               >
                 <div title={item.title || item.label} className="max-w-full truncate whitespace-nowrap text-[12px] font-bold text-slate-600">
                   {item.label}
                 </div>
                 {item.sub ? <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">{item.sub}</div> : null}
-                <div className={`mt-1 text-[20px] font-black tabular-nums ${item.total ? toneClass(tone, "text") : "text-slate-950"}`}>
+                <div className={`mt-1 text-[19px] font-black tabular-nums ${item.total ? toneClass(tone, "text") : "text-slate-950"}`}>
                   {value}
                 </div>
               </div>
@@ -449,13 +450,14 @@ function SimpleKpiGrid({
   items: Array<{ label: string; value: string; tone?: TypeAnalysisTone; sub?: string }>
 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
       {items.map((item) => {
         const tone = item.tone || "slate"
         return (
-          <div key={item.label} className={`rounded-xl border bg-white px-4 py-3 text-center shadow-sm ${toneClass(tone, "border")}`}>
-            <div className="text-[12px] font-bold text-slate-500">{item.label}</div>
-            <div className={`mt-1 text-[24px] font-black tabular-nums ${toneClass(tone, "text")}`}>{item.value}</div>
+          <div key={item.label} className={`relative overflow-hidden rounded-2xl border bg-white px-4 py-3 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${toneClass(tone, "border")}`}>
+            <div className={`absolute inset-x-0 top-0 h-1 ${toneClass(tone, "bg")}`} />
+            <div className="text-[12px] font-black text-slate-500">{item.label}</div>
+            <div className={`mt-1 text-[25px] font-black tabular-nums tracking-normal ${toneClass(tone, "text")}`}>{item.value}</div>
             {item.sub ? <div className="mt-1 truncate text-[11px] font-semibold text-slate-400">{item.sub}</div> : null}
           </div>
         )
@@ -1747,17 +1749,17 @@ export function TypeAnalysisDashboard({
           </div>
         </div>
 
-        <div className="px-5 py-3">
-          <div className="flex min-w-0 flex-wrap gap-2">
+        <div className="border-t border-slate-100 px-5 py-3">
+          <div className="inline-flex max-w-full min-w-0 flex-wrap gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 p-1">
             {tabItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setTab(item.key)}
-                className={`h-9 rounded-full px-4 text-[13px] font-semibold transition ${
+                className={`h-9 rounded-xl px-4 text-[13px] font-bold transition ${
                   tab === item.key
-                    ? "bg-slate-950 text-white shadow-sm"
-                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200"
+                    : "text-slate-500 hover:bg-white hover:text-slate-800"
                 }`}
               >
                 {item.label}
@@ -1782,7 +1784,6 @@ export function TypeAnalysisDashboard({
                 { label: "해지", value: `${formatNumber(terminationTotal)}건`, tone: "rose" },
                 { label: "순증", value: `${formatNumber(netTotal)}건`, tone: "emerald" },
                 { label: "영역 상세", value: `${formatNumber(areaRecords.length)}건`, tone: "slate" },
-                { label: "개인별", value: `${formatNumber(personalRowsForDisplay.length)}명`, tone: "indigo" },
                 { label: "누적", value: cleanCumulativeLabel(data?.areaNetGrowth?.cumulativeNetLabel) || "-", tone: "slate" },
               ]}
             />
