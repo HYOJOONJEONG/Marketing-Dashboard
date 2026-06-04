@@ -140,8 +140,34 @@ function normalizeManagerLabel(value: unknown) {
   return `${matchedName} ${ADMIN_TITLE_BY_NAME[matchedName]}`
 }
 
+const KOREAN_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"]
+
+function normalizedAsOfDateText(value: unknown) {
+  const cleaned = String(value ?? "")
+    .trim()
+    .replace(/^기준\s*/g, "")
+    .replace(/\s*기준\s*$/g, "")
+    .trim()
+  if (!cleaned) return ""
+
+  const match = cleaned.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})(?:\s*\(?([월화수목금토일])\)?)?/)
+  if (!match) return cleaned.replace(/^\((.*)\)$/g, "$1").trim()
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const weekday = match[4] || KOREAN_WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()] || ""
+  return `${String(year).padStart(4, "0")}.${String(month).padStart(2, "0")}.${String(day).padStart(2, "0")}${weekday ? `(${weekday})` : ""}`
+}
+
 function sourceTitle(data: any) {
-  return String(data?.newReplacement?.asOf || data?.terminationType?.asOf || "").replace(" 기준", "")
+  return normalizedAsOfDateText(
+    data?.newReplacement?.asOf ||
+      data?.terminationType?.asOf ||
+      data?.areaNetGrowth?.asOf ||
+      data?.personalPerformance?.asOf ||
+      "",
+  )
 }
 
 function sourceUpdatedLabel(value: unknown) {
@@ -516,8 +542,8 @@ function industryLabelParts(value: unknown) {
 }
 
 function asOfBadgeLabel(value: unknown) {
-  const cleaned = String(value || "").trim()
-  return cleaned.startsWith("(") ? cleaned : `(${cleaned || "기준일 확인 필요"})`
+  const cleaned = normalizedAsOfDateText(value)
+  return cleaned ? `${cleaned} 기준` : "기준일 확인 필요"
 }
 
 function cleanCumulativeLabel(value: unknown) {
