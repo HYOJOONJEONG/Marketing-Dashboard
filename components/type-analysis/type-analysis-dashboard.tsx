@@ -78,10 +78,31 @@ function findSummaryValue(rows: any[], matcher: (label: string) => boolean) {
   return toNumber(row?.value)
 }
 
+function normalizeSummaryLabel(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, "")
+}
+
+function exactSummaryValueByLabel(rows: any[], labels: string[]) {
+  const normalizedLabels = labels.map(normalizeSummaryLabel)
+  const row = (Array.isArray(rows) ? rows : []).find((item) => {
+    const label = normalizeSummaryLabel(item?.label)
+    return normalizedLabels.includes(label)
+  })
+  return row ? toNumber(row.value) : null
+}
+
+function summaryTotalValue(rows: any[]) {
+  return exactSummaryValueByLabel(rows, ["합계", "합", "계", "총계"]) ?? 0
+}
+
 function summaryValueByLabel(rows: any[], matchers: string[]) {
-  const normalizedMatchers = matchers.map((item) => item.replace(/\s+/g, ""))
+  const normalizedMatchers = matchers.map(normalizeSummaryLabel)
+  if (normalizedMatchers.some((matcher) => ["합계", "합", "계", "총계"].includes(matcher))) {
+    const exactTotal = exactSummaryValueByLabel(rows, ["합계", "합", "계", "총계"])
+    if (exactTotal !== null) return exactTotal
+  }
   return findSummaryValue(rows, (label) => {
-    const normalizedLabel = label.replace(/\s+/g, "")
+    const normalizedLabel = normalizeSummaryLabel(label)
     return normalizedMatchers.some((matcher) => normalizedLabel.includes(matcher))
   })
 }
@@ -1337,10 +1358,10 @@ export function TypeAnalysisDashboard({
   const snapshots = Array.isArray(data?.weeklySnapshots) ? data.weeklySnapshots : []
   const latestSnapshot = snapshots[0]
 
-  const newTotal = findSummaryValue(data?.newReplacement?.replacementSummary || [], (label) => label.includes("합"))
+  const newTotal = summaryTotalValue(data?.newReplacement?.replacementSummary || [])
   const pureNewTotal = findSummaryValue(data?.newReplacement?.replacementSummary || [], (label) => label.includes("신규"))
   const replacementTotal = Math.max(0, newTotal - pureNewTotal)
-  const terminationTotal = findSummaryValue(data?.terminationType?.reasonSummary || [], (label) => label.includes("합"))
+  const terminationTotal = summaryTotalValue(data?.terminationType?.reasonSummary || [])
   const netTotal = newTotal - terminationTotal
   const industryRows = useMemo(() => newIndustrySummary.filter((row: any) => !isTotalIndustryRow(row)), [newIndustrySummary])
   const industryMatrixRows = useMemo(() => newIndustrySummary.filter((row: any) => row?.label), [newIndustrySummary])
