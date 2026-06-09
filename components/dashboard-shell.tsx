@@ -1837,6 +1837,10 @@ function deriveTypeAnalysisIndustryGroupFromArea(areaGroup: unknown, fallbackInd
   return normalizeTypeAnalysisIndustryGroup(fallbackIndustry, companyName)
 }
 
+function deriveTypeAnalysisAreaGroupFromIndustryGroup(industryGroup: unknown, companyName: unknown) {
+  return normalizeTypeAnalysisAreaGroup(normalizeTypeAnalysisIndustryGroup(industryGroup, companyName), companyName)
+}
+
 function createTypeAnalysisReplacementFlags(replacementType: string) {
   return {
     "체크": replacementType === "체크" ? 1 : 0,
@@ -2223,7 +2227,7 @@ function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any
   const newRows = (Array.isArray(newContracts) ? newContracts : []).map((row: any, index: number) => {
     const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
     const group = normalizeTypeAnalysisIndustryGroup(row?.industry, row?.companyName)
-    const areaGroup = normalizeTypeAnalysisAreaGroup(row?.industry || group, row?.companyName)
+    const areaGroup = deriveTypeAnalysisAreaGroupFromIndustryGroup(group, row?.companyName)
     return {
       tempId: `new-${row?.id || row?.idCode || index}`,
       include: true,
@@ -2285,8 +2289,8 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
     .filter((row: any) => row?.include !== false)
     .map((row: any, index: number) => {
       const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
-      const areaGroup = normalizeTypeAnalysisAreaGroup(row?.areaGroup || row?.group || row?.industry, row?.companyName)
-      const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, row?.industry || row?.group, row?.companyName)
+      const group = normalizeTypeAnalysisIndustryGroup(row?.group || row?.industry, row?.companyName)
+      const areaGroup = deriveTypeAnalysisAreaGroupFromIndustryGroup(group, row?.companyName)
       return {
         no: index + 1,
         date: normalizeDate(row?.date || reflectedDate),
@@ -9418,7 +9422,7 @@ export function DashboardShell({
                   <div>
                     <div className="text-[18px] font-bold text-slate-950">주간 신규/대체/해지 반영 검토</div>
                     <div className="mt-1 text-[12px] font-semibold text-slate-500">
-                      체크된 주간 항목의 영역별 위치만 지정하면 업종별 요약은 자동으로 반영됩니다.
+                      신규/대체는 상세목록 업종 기준으로 배치하고, 영역별 순증 위치는 자동으로 반영됩니다.
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-[12px] font-bold">
@@ -9439,8 +9443,8 @@ export function DashboardShell({
                     <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
                       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
                         <div>
-                          <div className="text-[14px] font-bold text-slate-900">신규/대체 영역 배치</div>
-                          <div className="mt-0.5 text-[11px] font-semibold text-slate-500">영역별 위치 선택 기준으로 업종별 카운팅이 자동 반영됩니다.</div>
+                          <div className="text-[14px] font-bold text-slate-900">신규/대체 업종 배치</div>
+                          <div className="mt-0.5 text-[11px] font-semibold text-slate-500">신규/대체 상세목록 업종을 선택하면 영역별 순증 위치가 자동 반영됩니다.</div>
                           <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-bold">
                             <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">외 {formatNumber(typeAnalysisReviewCounts.workCounts.forex)}</span>
                             <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">주 {formatNumber(typeAnalysisReviewCounts.workCounts.stock)}</span>
@@ -9488,7 +9492,7 @@ export function DashboardShell({
                         <div>대상</div>
                         <div>구분</div>
                         <div>업무성격</div>
-                        <div>영역별 위치</div>
+                        <div>상세목록 업종</div>
                       </div>
                       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
                         {(typeAnalysisImportReview.newRows || []).length ? (
@@ -9538,11 +9542,17 @@ export function DashboardShell({
                               </select>
                               <select
                                 className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
-                                value={row.areaGroup || normalizeTypeAnalysisAreaGroup(row.group || row.industry, row.companyName)}
-                                onChange={(event) => updateTypeAnalysisReviewNewRow(row.tempId, { areaGroup: event.target.value })}
-                                aria-label="영역별 위치"
+                                value={normalizeTypeAnalysisIndustryGroup(row.group || row.industry, row.companyName)}
+                                onChange={(event) => {
+                                  const group = normalizeTypeAnalysisIndustryGroup(event.target.value, row.companyName)
+                                  updateTypeAnalysisReviewNewRow(row.tempId, {
+                                    group,
+                                    areaGroup: deriveTypeAnalysisAreaGroupFromIndustryGroup(group, row.companyName),
+                                  })
+                                }}
+                                aria-label="신규/대체 상세목록 업종"
                               >
-                                {TYPE_ANALYSIS_AREA_LABELS.map((item) => (
+                                {TYPE_ANALYSIS_INDUSTRY_LABELS.map((item) => (
                                   <option key={item} value={item}>{item}</option>
                                 ))}
                               </select>
