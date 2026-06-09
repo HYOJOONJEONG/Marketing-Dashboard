@@ -301,6 +301,16 @@ function normalizeMergeIdentifierText(value: unknown) {
   return String(value ?? "").replace(/[^a-zA-Z0-9가-힣]/g, "").toUpperCase()
 }
 
+function normalizeTypeAnalysisIdCorrection(record: any) {
+  const companyName = String(record?.companyName ?? "").replace(/\s+/g, "")
+  const departmentName = String(record?.departmentName ?? "").replace(/\s+/g, "")
+  const idCode = normalizeCustomerIdentifier(record?.idCode || record?.customerId)
+  if (companyName.includes("대한소방공제회") && departmentName.includes("투자사업부") && idCode === "E250695") {
+    return { ...record, idCode: "E250634" }
+  }
+  return record
+}
+
 function matchesSearchQuery(value: unknown, query: string, identifierQuery: string) {
   const text = String(value ?? "").toLowerCase()
   if (query && text.includes(query)) return true
@@ -1587,17 +1597,19 @@ function cloneData<T>(value: T): T {
 
 function normalizeTypeAnalysisNewPlacementRecords(records: any[]) {
   return (Array.isArray(records) ? records : []).map((record: any) => {
-    const group = normalizeTypeAnalysisIndustryGroup(record?.group || record?.industry || record?.businessType, record?.companyName)
-    const areaGroup = deriveTypeAnalysisAreaGroupFromIndustryGroup(group, record?.companyName)
-    return { ...record, group, areaGroup }
+    const correctedRecord = normalizeTypeAnalysisIdCorrection(record)
+    const group = normalizeTypeAnalysisIndustryGroup(correctedRecord?.group || correctedRecord?.industry || correctedRecord?.businessType, correctedRecord?.companyName)
+    const areaGroup = deriveTypeAnalysisAreaGroupFromIndustryGroup(group, correctedRecord?.companyName)
+    return { ...correctedRecord, group, areaGroup }
   })
 }
 
 function normalizeTypeAnalysisTerminationPlacementRecords(records: any[]) {
   return (Array.isArray(records) ? records : []).map((record: any) => {
-    const areaGroup = normalizeTypeAnalysisAreaGroup(record?.areaGroup || record?.group || record?.industry, record?.companyName)
-    const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, record?.industry || record?.group, record?.companyName)
-    return { ...record, group, areaGroup }
+    const correctedRecord = normalizeTypeAnalysisIdCorrection(record)
+    const areaGroup = normalizeTypeAnalysisAreaGroup(correctedRecord?.areaGroup || correctedRecord?.group || correctedRecord?.industry, correctedRecord?.companyName)
+    const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, correctedRecord?.industry || correctedRecord?.group, correctedRecord?.companyName)
+    return { ...correctedRecord, group, areaGroup }
   })
 }
 
