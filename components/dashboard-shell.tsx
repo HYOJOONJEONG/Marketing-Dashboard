@@ -1613,7 +1613,7 @@ function normalizeTypeAnalysisTerminationPlacementRecords(records: any[]) {
   })
 }
 
-function normalizeTypeAnalysisAreaAssignments(state: any) {
+function normalizeTypeAnalysisAreaAssignments(state: any, totalContractsOverride?: unknown) {
   const rawNewRecords = Array.isArray(state?.newReplacement?.records) ? state.newReplacement.records : []
   const rawTerminationRecords = Array.isArray(state?.terminationType?.records) ? state.terminationType.records : []
   const newRecords = normalizeTypeAnalysisNewPlacementRecords(rawNewRecords)
@@ -1637,13 +1637,14 @@ function normalizeTypeAnalysisAreaAssignments(state: any) {
       newRecords,
       terminationRecords,
       asOf,
+      totalContractsOverride,
     ),
   }
 }
 
-function normalizeTypeAnalysisState(value: any) {
+function normalizeTypeAnalysisState(value: any, totalContractsOverride?: unknown) {
   const source = cloneData(typeAnalysisSource as any)
-  if (!value || typeof value !== "object" || Array.isArray(value)) return normalizeTypeAnalysisAreaAssignments(source)
+  if (!value || typeof value !== "object" || Array.isArray(value)) return normalizeTypeAnalysisAreaAssignments(source, totalContractsOverride)
   const sourceUpdatedAt = Date.parse(String(source?.sourceUpdatedAt || ""))
   const savedUpdatedAt = Date.parse(String(value?.sourceUpdatedAt || ""))
   const shouldUseSourceCore =
@@ -1653,7 +1654,7 @@ function normalizeTypeAnalysisState(value: any) {
     return normalizeTypeAnalysisAreaAssignments({
       ...source,
       weeklySnapshots: Array.isArray(value.weeklySnapshots) ? value.weeklySnapshots : [],
-    })
+    }, totalContractsOverride)
   }
   return normalizeTypeAnalysisAreaAssignments({
     ...source,
@@ -1687,7 +1688,7 @@ function normalizeTypeAnalysisState(value: any) {
         : source.personalPerformance.rows,
     },
     weeklySnapshots: Array.isArray(value.weeklySnapshots) ? value.weeklySnapshots : [],
-  })
+  }, totalContractsOverride)
 }
 
 function normalizeTypeAnalysisReplacementType(value: unknown) {
@@ -2204,7 +2205,10 @@ function parseTypeAnalysisCumulativeNetUnits(value: unknown) {
   return Number.isFinite(number) ? number : 0
 }
 
-function buildTypeAnalysisCumulativeNetLabel(baseAreaNetGrowth: any, currentNetCount: number) {
+function buildTypeAnalysisCumulativeNetLabel(baseAreaNetGrowth: any, currentNetCount: number, totalContractsOverride?: unknown) {
+  const weeklyTotalContracts = toNumber(totalContractsOverride)
+  if (weeklyTotalContracts > 0) return `누적 : ${formatNumber(weeklyTotalContracts)}대`
+
   const sourceAreaNetGrowth = (typeAnalysisSource as any)?.areaNetGrowth || {}
   const sourceTotal = getTypeAnalysisTotalRow(sourceAreaNetGrowth?.summaryRows || [])
   const sourceCumulative = parseTypeAnalysisCumulativeNetUnits(sourceAreaNetGrowth?.cumulativeNetLabel)
@@ -2220,7 +2224,13 @@ function buildTypeAnalysisCumulativeNetLabel(baseAreaNetGrowth: any, currentNetC
   return `누적 : ${formatNumber(baseCumulative + currentNetCount - baseNet)}대`
 }
 
-function buildTypeAnalysisAreaNetGrowthState(baseAreaNetGrowth: any, newRecords: any[], terminationRecords: any[], asOf: string) {
+function buildTypeAnalysisAreaNetGrowthState(
+  baseAreaNetGrowth: any,
+  newRecords: any[],
+  terminationRecords: any[],
+  asOf: string,
+  totalContractsOverride?: unknown,
+) {
   const buckets = new Map<string, { no: string; area: string; manager: string; newCount: number; terminationCount: number; netCount: number }>(
     TYPE_ANALYSIS_AREA_ROWS.map((row) => [
       row.area,
@@ -2307,7 +2317,7 @@ function buildTypeAnalysisAreaNetGrowthState(baseAreaNetGrowth: any, newRecords:
   return {
     ...baseAreaNetGrowth,
     asOf,
-    cumulativeNetLabel: buildTypeAnalysisCumulativeNetLabel(baseAreaNetGrowth, totals.netCount),
+    cumulativeNetLabel: buildTypeAnalysisCumulativeNetLabel(baseAreaNetGrowth, totals.netCount, totalContractsOverride),
     summaryRows: [...summaryRows, totals],
     records: areaRecords,
   }
@@ -3498,7 +3508,11 @@ export function DashboardShell({
     previousViewRef.current = view
   }, [view, collectionTab])
   const includedContracts = useMemo(() => contracts.filter((row: any) => row.includedInWeekly), [contracts])
-  const typeAnalysis = useMemo(() => normalizeTypeAnalysisState(data?.typeAnalysis), [data?.typeAnalysis])
+  const typeAnalysisTotalContracts = data?.weeklyReport?.manualSummary?.totalContracts
+  const typeAnalysis = useMemo(
+    () => normalizeTypeAnalysisState(data?.typeAnalysis, typeAnalysisTotalContracts),
+    [data?.typeAnalysis, typeAnalysisTotalContracts],
+  )
   const typeAnalysisNewDetailIndustryOptions = useMemo(
     () => buildTypeAnalysisNewDetailIndustryOptions(),
     [],
@@ -7180,7 +7194,8 @@ export function DashboardShell({
   function confirmTypeAnalysisImportWeekly() {
     if (!typeAnalysisImportReview) return
     const latestData = pendingDataRef.current || data
-    const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis)
+    const totalContractsOverride = latestData?.weeklyReport?.manualSummary?.totalContracts
+    const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis, totalContractsOverride)
     const snapshot = buildTypeAnalysisWeeklySnapshotFromReview(typeAnalysisImportReview)
     if (!snapshot.newCount && !snapshot.terminationCount) {
       window.alert("반영할 항목을 1건 이상 선택해주세요.")
@@ -7216,6 +7231,7 @@ export function DashboardShell({
         mergedNewRecords,
         mergedTerminationRecords,
         reflectedAsOf,
+        totalContractsOverride,
       ),
       weeklySnapshots: [
         snapshot,
@@ -7242,7 +7258,8 @@ export function DashboardShell({
     targetKind: "industry" | "area",
   ) {
     const latestData = pendingDataRef.current || data
-    const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis)
+    const totalContractsOverride = latestData?.weeklyReport?.manualSummary?.totalContracts
+    const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis, totalContractsOverride)
     const recordKey = getTypeAnalysisRecordMergeKey(kind, record)
     const updateRecordPlacement = (row: any) => {
       const companyName = row?.companyName
@@ -7290,6 +7307,7 @@ export function DashboardShell({
         nextNewRecords,
         nextTerminationRecords,
         reflectedAsOf,
+        totalContractsOverride,
       ),
       weeklySnapshots: nextWeeklySnapshots,
     }
@@ -7313,7 +7331,10 @@ export function DashboardShell({
         ? latestData
         : {
             ...latestData,
-            typeAnalysis: normalizeTypeAnalysisState(latestData?.typeAnalysis),
+            typeAnalysis: normalizeTypeAnalysisState(
+              latestData?.typeAnalysis,
+              latestData?.weeklyReport?.manualSummary?.totalContracts,
+            ),
           }
       if (sourceData !== latestData) {
         setData(sourceData)
