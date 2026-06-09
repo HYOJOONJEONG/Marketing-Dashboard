@@ -1841,6 +1841,28 @@ function deriveTypeAnalysisAreaGroupFromIndustryGroup(industryGroup: unknown, co
   return normalizeTypeAnalysisAreaGroup(normalizeTypeAnalysisIndustryGroup(industryGroup, companyName), companyName)
 }
 
+function isTypeAnalysisTotalIndustryLabel(value: unknown) {
+  const label = String(value || "").replace(/\s+/g, "")
+  return label === "계" || label.includes("합계")
+}
+
+function buildTypeAnalysisNewDetailIndustryOptions(state: any) {
+  const labels: string[] = []
+  const pushLabel = (value: unknown) => {
+    const label = String(value || "").trim()
+    if (!label || isTypeAnalysisTotalIndustryLabel(label) || labels.includes(label)) return
+    labels.push(label)
+  }
+  ;(Array.isArray(state?.newReplacement?.industrySummary) ? state.newReplacement.industrySummary : []).forEach((row: any) => {
+    pushLabel(row?.label)
+  })
+  ;(Array.isArray(state?.newReplacement?.records) ? state.newReplacement.records : []).forEach((row: any) => {
+    pushLabel(row?.group)
+  })
+  if (!labels.length) TYPE_ANALYSIS_INDUSTRY_LABELS.forEach(pushLabel)
+  return labels
+}
+
 function createTypeAnalysisReplacementFlags(replacementType: string) {
   return {
     "체크": replacementType === "체크" ? 1 : 0,
@@ -2289,7 +2311,7 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
     .filter((row: any) => row?.include !== false)
     .map((row: any, index: number) => {
       const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
-      const group = normalizeTypeAnalysisIndustryGroup(row?.group || row?.industry, row?.companyName)
+      const group = String(row?.group || "").trim() || normalizeTypeAnalysisIndustryGroup(row?.industry, row?.companyName)
       const areaGroup = deriveTypeAnalysisAreaGroupFromIndustryGroup(group, row?.companyName)
       return {
         no: index + 1,
@@ -3408,6 +3430,10 @@ export function DashboardShell({
   }, [view, collectionTab])
   const includedContracts = useMemo(() => contracts.filter((row: any) => row.includedInWeekly), [contracts])
   const typeAnalysis = useMemo(() => normalizeTypeAnalysisState(data?.typeAnalysis), [data?.typeAnalysis])
+  const typeAnalysisNewDetailIndustryOptions = useMemo(
+    () => buildTypeAnalysisNewDetailIndustryOptions(typeAnalysis),
+    [typeAnalysis],
+  )
   const typeAnalysisWeeklyTerminationRows = useMemo(
     () => (selectedSheet?.items || []).filter((row: any) => Boolean(row?.selected)),
     [selectedSheet],
@@ -9542,9 +9568,9 @@ export function DashboardShell({
                               </select>
                               <select
                                 className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
-                                value={normalizeTypeAnalysisIndustryGroup(row.group || row.industry, row.companyName)}
+                                value={String(row.group || "").trim() || normalizeTypeAnalysisIndustryGroup(row.industry, row.companyName)}
                                 onChange={(event) => {
-                                  const group = normalizeTypeAnalysisIndustryGroup(event.target.value, row.companyName)
+                                  const group = String(event.target.value || "").trim()
                                   updateTypeAnalysisReviewNewRow(row.tempId, {
                                     group,
                                     areaGroup: deriveTypeAnalysisAreaGroupFromIndustryGroup(group, row.companyName),
@@ -9552,7 +9578,12 @@ export function DashboardShell({
                                 }}
                                 aria-label="신규/대체 상세목록 업종"
                               >
-                                {TYPE_ANALYSIS_INDUSTRY_LABELS.map((item) => (
+                                {Array.from(
+                                  new Set([
+                                    ...typeAnalysisNewDetailIndustryOptions,
+                                    String(row.group || "").trim() || normalizeTypeAnalysisIndustryGroup(row.industry, row.companyName),
+                                  ]),
+                                ).map((item) => (
                                   <option key={item} value={item}>{item}</option>
                                 ))}
                               </select>
