@@ -1581,9 +1581,27 @@ function cloneData<T>(value: T): T {
   return JSON.parse(JSON.stringify(value))
 }
 
+function normalizeTypeAnalysisNewPlacementRecords(records: any[]) {
+  return (Array.isArray(records) ? records : []).map((record: any) => {
+    const group = normalizeTypeAnalysisIndustryGroup(record?.group || record?.industry || record?.businessType, record?.companyName)
+    const areaGroup = deriveTypeAnalysisAreaGroupFromIndustryGroup(group, record?.companyName)
+    return { ...record, group, areaGroup }
+  })
+}
+
+function normalizeTypeAnalysisTerminationPlacementRecords(records: any[]) {
+  return (Array.isArray(records) ? records : []).map((record: any) => {
+    const areaGroup = normalizeTypeAnalysisAreaGroup(record?.areaGroup || record?.group || record?.industry, record?.companyName)
+    const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, record?.industry || record?.group, record?.companyName)
+    return { ...record, group, areaGroup }
+  })
+}
+
 function normalizeTypeAnalysisAreaAssignments(state: any) {
-  const newRecords = Array.isArray(state?.newReplacement?.records) ? state.newReplacement.records : []
-  const terminationRecords = Array.isArray(state?.terminationType?.records) ? state.terminationType.records : []
+  const rawNewRecords = Array.isArray(state?.newReplacement?.records) ? state.newReplacement.records : []
+  const rawTerminationRecords = Array.isArray(state?.terminationType?.records) ? state.terminationType.records : []
+  const newRecords = normalizeTypeAnalysisNewPlacementRecords(rawNewRecords)
+  const terminationRecords = normalizeTypeAnalysisTerminationPlacementRecords(rawTerminationRecords)
   if (!newRecords.length && !terminationRecords.length) return state
   const asOf =
     state?.areaNetGrowth?.asOf ||
@@ -1592,6 +1610,12 @@ function normalizeTypeAnalysisAreaAssignments(state: any) {
     `${getTypeAnalysisReflectionDateLabel()} 기준`
   return {
     ...state,
+    newReplacement: newRecords.length
+      ? buildTypeAnalysisNewReplacementState(state?.newReplacement || {}, newRecords, state?.newReplacement?.asOf || asOf)
+      : state?.newReplacement,
+    terminationType: terminationRecords.length
+      ? buildTypeAnalysisTerminationState(state?.terminationType || {}, terminationRecords, state?.terminationType?.asOf || asOf)
+      : state?.terminationType,
     areaNetGrowth: buildTypeAnalysisAreaNetGrowthState(
       state?.areaNetGrowth || {},
       newRecords,
@@ -1663,17 +1687,18 @@ function normalizeTypeAnalysisReplacementType(value: unknown) {
 const TYPE_ANALYSIS_INDUSTRY_LABELS = [
   "국내은행",
   "국내증권",
-  "외국계은행,증권,연기금",
-  "자산운용",
   "보험사",
-  "선물사,투자자문,카드,공제회,캐피탈,저축은행,금고,연구소(원),거래소,증권금융,예탁결재원,금투협,개인",
-  "정부기관,금감원,금감위,대통령실,기업체(가,나,다,라,마,바)",
-  "대학교,기업체(사,아,자,차,카,타,파,하)",
+  "외국계 은행증권",
+  "선물사, 투자자문, 카드, 공제회, 캐피탈, 저축은행, 금고, 연구소(원), 거래소, 증권금융, 예탁결제원, 금투협, 개인, 중개사",
+  "연기금, 공사, 정부기관, 금감원, 금감위, 대통령실",
+  "대학교, 기업체",
 ] as const
 
-const TYPE_ANALYSIS_OTHER_FINANCE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[5]
-const TYPE_ANALYSIS_PUBLIC_EARLY_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[6]
-const TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[7]
+const TYPE_ANALYSIS_INSURANCE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[2]
+const TYPE_ANALYSIS_FOREIGN_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[3]
+const TYPE_ANALYSIS_OTHER_FINANCE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[4]
+const TYPE_ANALYSIS_PUBLIC_EARLY_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[5]
+const TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[6]
 
 const TYPE_ANALYSIS_AREA_ROWS = [
   { no: "1", area: "증권1(ㄱ~ㅅ), 공기업", manager: "이상철 본부장" },
@@ -1781,20 +1806,39 @@ function normalizeTypeAnalysisAreaGroup(value: unknown, companyName?: unknown) {
 
 function normalizeTypeAnalysisIndustryGroup(industry: unknown, companyName: unknown) {
   const text = String(industry || "").trim()
+  const compact = text.replace(/\s+/g, "")
+  const companyCompact = String(companyName || "").replace(/\s+/g, "")
+  const combined = `${compact} ${companyCompact}`
   if (!text) return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
   if (TYPE_ANALYSIS_INDUSTRY_LABELS.includes(text as any)) return text
-  if (text.includes("국내은행")) return "국내은행"
-  if (text.includes("국내증권")) return "국내증권"
-  if (text.includes("외국") || text.includes("연기금")) return "외국계은행,증권,연기금"
-  if (text.includes("자산") || text.includes("운용")) return "자산운용"
-  if (text.includes("보험")) return "보험사"
-  if (text.includes("공사") || text.includes("정부") || text.includes("공공")) return TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
-  if (text.includes("대학") || text.includes("학교")) return TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL
-  if (text.includes("일반기업") || text.includes("기업")) {
-    const firstHangul = firstHangulCharacter(companyName)
-    return firstHangul && firstHangul >= "가" && firstHangul <= "바"
-      ? TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
-      : TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL
+  if (compact.includes("국내은행")) return "국내은행"
+  if (compact.includes("국내증권")) return "국내증권"
+  if (compact.includes("보험")) return TYPE_ANALYSIS_INSURANCE_LABEL
+  if (compact.includes("외국계") || compact.includes("외국")) return TYPE_ANALYSIS_FOREIGN_LABEL
+  if (
+    compact.includes("연기금") ||
+    compact.includes("공사") ||
+    compact.includes("정부") ||
+    compact.includes("공공") ||
+    compact.includes("금감") ||
+    compact.includes("대통령실")
+  ) {
+    return TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
+  }
+  if (compact.includes("대학") || compact.includes("학교") || compact.includes("대학교")) return TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL
+  if (compact.includes("기업체") || compact.includes("일반기업") || compact.includes("기업")) return TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL
+  if (
+    compact.includes("자산") ||
+    compact.includes("운용") ||
+    compact.includes("저축은행") ||
+    compact.includes("금고") ||
+    compact.includes("거래소") ||
+    compact.includes("증권금융") ||
+    compact.includes("예탁") ||
+    compact.includes("금투협") ||
+    TYPE_ANALYSIS_OTHER_FINANCE_KEYWORDS.some((keyword) => combined.includes(keyword))
+  ) {
+    return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
   }
   return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
 }
@@ -1812,12 +1856,12 @@ function deriveTypeAnalysisIndustryGroupFromArea(areaGroup: unknown, fallbackInd
     return TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
   }
   if (area === TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL) {
-    if (fallbackText.includes("외국") || companyText.includes("외국")) return "외국계은행,증권,연기금"
+    if (fallbackText.includes("외국") || companyText.includes("외국")) return TYPE_ANALYSIS_FOREIGN_LABEL
     return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
   }
   if (area === TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL) {
-    if (fallbackText.includes("연기금") || companyText.includes("연기금")) return "외국계은행,증권,연기금"
-    return "자산운용"
+    if (fallbackText.includes("연기금") || companyText.includes("연기금")) return TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
+    return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
   }
   if (area === TYPE_ANALYSIS_INSURANCE_AREA_LABEL) {
     if (fallbackText.includes("중개사") || companyText.includes("중개사")) return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
@@ -1841,26 +1885,8 @@ function deriveTypeAnalysisAreaGroupFromIndustryGroup(industryGroup: unknown, co
   return normalizeTypeAnalysisAreaGroup(normalizeTypeAnalysisIndustryGroup(industryGroup, companyName), companyName)
 }
 
-function isTypeAnalysisTotalIndustryLabel(value: unknown) {
-  const label = String(value || "").replace(/\s+/g, "")
-  return label === "계" || label.includes("합계")
-}
-
-function buildTypeAnalysisNewDetailIndustryOptions(state: any) {
-  const labels: string[] = []
-  const pushLabel = (value: unknown) => {
-    const label = String(value || "").trim()
-    if (!label || isTypeAnalysisTotalIndustryLabel(label) || labels.includes(label)) return
-    labels.push(label)
-  }
-  ;(Array.isArray(state?.newReplacement?.industrySummary) ? state.newReplacement.industrySummary : []).forEach((row: any) => {
-    pushLabel(row?.label)
-  })
-  ;(Array.isArray(state?.newReplacement?.records) ? state.newReplacement.records : []).forEach((row: any) => {
-    pushLabel(row?.group)
-  })
-  if (!labels.length) TYPE_ANALYSIS_INDUSTRY_LABELS.forEach(pushLabel)
-  return labels
+function buildTypeAnalysisNewDetailIndustryOptions() {
+  return [...TYPE_ANALYSIS_INDUSTRY_LABELS]
 }
 
 function createTypeAnalysisReplacementFlags(replacementType: string) {
@@ -2311,7 +2337,7 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
     .filter((row: any) => row?.include !== false)
     .map((row: any, index: number) => {
       const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
-      const group = String(row?.group || "").trim() || normalizeTypeAnalysisIndustryGroup(row?.industry, row?.companyName)
+      const group = normalizeTypeAnalysisIndustryGroup(row?.group || row?.industry, row?.companyName)
       const areaGroup = deriveTypeAnalysisAreaGroupFromIndustryGroup(group, row?.companyName)
       return {
         no: index + 1,
@@ -3431,8 +3457,8 @@ export function DashboardShell({
   const includedContracts = useMemo(() => contracts.filter((row: any) => row.includedInWeekly), [contracts])
   const typeAnalysis = useMemo(() => normalizeTypeAnalysisState(data?.typeAnalysis), [data?.typeAnalysis])
   const typeAnalysisNewDetailIndustryOptions = useMemo(
-    () => buildTypeAnalysisNewDetailIndustryOptions(typeAnalysis),
-    [typeAnalysis],
+    () => buildTypeAnalysisNewDetailIndustryOptions(),
+    [],
   )
   const typeAnalysisWeeklyTerminationRows = useMemo(
     () => (selectedSheet?.items || []).filter((row: any) => Boolean(row?.selected)),
@@ -9568,9 +9594,9 @@ export function DashboardShell({
                               </select>
                               <select
                                 className="col-span-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 lg:col-span-1"
-                                value={String(row.group || "").trim() || normalizeTypeAnalysisIndustryGroup(row.industry, row.companyName)}
+                                value={normalizeTypeAnalysisIndustryGroup(row.group || row.industry, row.companyName)}
                                 onChange={(event) => {
-                                  const group = String(event.target.value || "").trim()
+                                  const group = normalizeTypeAnalysisIndustryGroup(event.target.value, row.companyName)
                                   updateTypeAnalysisReviewNewRow(row.tempId, {
                                     group,
                                     areaGroup: deriveTypeAnalysisAreaGroupFromIndustryGroup(group, row.companyName),
@@ -9578,12 +9604,7 @@ export function DashboardShell({
                                 }}
                                 aria-label="신규/대체 상세목록 업종"
                               >
-                                {Array.from(
-                                  new Set([
-                                    ...typeAnalysisNewDetailIndustryOptions,
-                                    String(row.group || "").trim() || normalizeTypeAnalysisIndustryGroup(row.industry, row.companyName),
-                                  ]),
-                                ).map((item) => (
+                                {typeAnalysisNewDetailIndustryOptions.map((item) => (
                                   <option key={item} value={item}>{item}</option>
                                 ))}
                               </select>
