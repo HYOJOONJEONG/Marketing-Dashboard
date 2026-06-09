@@ -2461,8 +2461,8 @@ function getTypeAnalysisRecordMergeKey(kind: "new" | "termination", record: any)
   const department = normalizeMergeIdentifierText(record?.departmentName)
   const sourceId = normalizeCustomerIdentifier(record?.sourceId)
 
-  if (idCode) return `${kind}:id:${idCode}:${company}:${department}`
   if (sourceId) return `${kind}:source:${sourceId}`
+  if (idCode) return `${kind}:id:${idCode}:${company}:${department}:${date}`
   return `${kind}:fallback:${date}:${company}:${department}`
 }
 
