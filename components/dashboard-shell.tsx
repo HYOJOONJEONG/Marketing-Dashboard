@@ -297,6 +297,10 @@ function normalizeSearchIdentifier(value: unknown) {
   return String(value ?? "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
 }
 
+function normalizeMergeIdentifierText(value: unknown) {
+  return String(value ?? "").replace(/[^a-zA-Z0-9가-힣]/g, "").toUpperCase()
+}
+
 function matchesSearchQuery(value: unknown, query: string, identifierQuery: string) {
   const text = String(value ?? "").toLowerCase()
   if (query && text.includes(query)) return true
@@ -2429,15 +2433,14 @@ function buildTypeAnalysisWeeklySnapshot(newContracts: any[], terminationRows: a
 }
 
 function getTypeAnalysisRecordMergeKey(kind: "new" | "termination", record: any) {
-  const sourceId = normalizeCustomerIdentifier(record?.sourceId)
-  if (sourceId) return `${kind}:source:${sourceId}`
-
   const idCode = normalizeCustomerIdentifier(record?.idCode || record?.customerId)
   const date = normalizeDate(record?.date || record?.registrationDate || record?.receivedDate || record?.terminationDate || "")
-  const company = normalizeSearchIdentifier(record?.companyName)
-  const department = normalizeSearchIdentifier(record?.departmentName)
+  const company = normalizeMergeIdentifierText(record?.companyName)
+  const department = normalizeMergeIdentifierText(record?.departmentName)
+  const sourceId = normalizeCustomerIdentifier(record?.sourceId)
 
   if (idCode) return `${kind}:id:${idCode}:${company}:${department}`
+  if (sourceId) return `${kind}:source:${sourceId}`
   return `${kind}:fallback:${date}:${company}:${department}`
 }
 
