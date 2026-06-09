@@ -1687,18 +1687,20 @@ function normalizeTypeAnalysisReplacementType(value: unknown) {
 const TYPE_ANALYSIS_INDUSTRY_LABELS = [
   "국내은행",
   "국내증권",
+  "외국계은행, 증권, 연기금",
+  "자산운용",
   "보험사",
-  "외국계 은행증권",
   "선물사, 투자자문, 카드, 공제회, 캐피탈, 저축은행, 금고, 연구소(원), 거래소, 증권금융, 예탁결제원, 금투협, 개인, 중개사",
-  "연기금, 공사, 정부기관, 금감원, 금감위, 대통령실",
-  "대학교, 기업체",
+  "정부기관, 금감원, 금감위, 대통령실, 기업체(가,나,다,라,마,바)",
+  "대학교, 기업체(사,아,자,차,카,타,파,하)",
 ] as const
 
-const TYPE_ANALYSIS_INSURANCE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[2]
-const TYPE_ANALYSIS_FOREIGN_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[3]
-const TYPE_ANALYSIS_OTHER_FINANCE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[4]
-const TYPE_ANALYSIS_PUBLIC_EARLY_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[5]
-const TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[6]
+const TYPE_ANALYSIS_FOREIGN_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[2]
+const TYPE_ANALYSIS_ASSET_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[3]
+const TYPE_ANALYSIS_INSURANCE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[4]
+const TYPE_ANALYSIS_OTHER_FINANCE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[5]
+const TYPE_ANALYSIS_PUBLIC_EARLY_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[6]
+const TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[7]
 
 const TYPE_ANALYSIS_AREA_ROWS = [
   { no: "1", area: "증권1(ㄱ~ㅅ), 공기업", manager: "이상철 본부장" },
@@ -1813,10 +1815,10 @@ function normalizeTypeAnalysisIndustryGroup(industry: unknown, companyName: unkn
   if (TYPE_ANALYSIS_INDUSTRY_LABELS.includes(text as any)) return text
   if (compact.includes("국내은행")) return "국내은행"
   if (compact.includes("국내증권")) return "국내증권"
+  if (compact.includes("외국계") || compact.includes("외국") || compact.includes("연기금")) return TYPE_ANALYSIS_FOREIGN_LABEL
+  if (compact.includes("자산") || compact.includes("운용")) return TYPE_ANALYSIS_ASSET_LABEL
   if (compact.includes("보험")) return TYPE_ANALYSIS_INSURANCE_LABEL
-  if (compact.includes("외국계") || compact.includes("외국")) return TYPE_ANALYSIS_FOREIGN_LABEL
   if (
-    compact.includes("연기금") ||
     compact.includes("공사") ||
     compact.includes("정부") ||
     compact.includes("공공") ||
@@ -1826,10 +1828,13 @@ function normalizeTypeAnalysisIndustryGroup(industry: unknown, companyName: unkn
     return TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
   }
   if (compact.includes("대학") || compact.includes("학교") || compact.includes("대학교")) return TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL
-  if (compact.includes("기업체") || compact.includes("일반기업") || compact.includes("기업")) return TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL
+  if (compact.includes("기업체") || compact.includes("일반기업") || compact.includes("기업")) {
+    const firstHangul = firstHangulCharacter(companyName)
+    return firstHangul && firstHangul >= "가" && firstHangul <= "바"
+      ? TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
+      : TYPE_ANALYSIS_UNIVERSITY_LATE_LABEL
+  }
   if (
-    compact.includes("자산") ||
-    compact.includes("운용") ||
     compact.includes("저축은행") ||
     compact.includes("금고") ||
     compact.includes("거래소") ||
@@ -1860,8 +1865,8 @@ function deriveTypeAnalysisIndustryGroupFromArea(areaGroup: unknown, fallbackInd
     return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
   }
   if (area === TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL) {
-    if (fallbackText.includes("연기금") || companyText.includes("연기금")) return TYPE_ANALYSIS_PUBLIC_EARLY_LABEL
-    return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
+    if (fallbackText.includes("연기금") || companyText.includes("연기금")) return TYPE_ANALYSIS_FOREIGN_LABEL
+    return TYPE_ANALYSIS_ASSET_LABEL
   }
   if (area === TYPE_ANALYSIS_INSURANCE_AREA_LABEL) {
     if (fallbackText.includes("중개사") || companyText.includes("중개사")) return TYPE_ANALYSIS_OTHER_FINANCE_LABEL
