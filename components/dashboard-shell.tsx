@@ -2174,6 +2174,36 @@ function buildTypeAnalysisTerminationState(baseTerminationType: any, records: an
   }
 }
 
+function getTypeAnalysisTotalRow(rows: any[]) {
+  return (Array.isArray(rows) ? rows : []).find((row: any) => {
+    const markers = [row?.no, row?.label, row?.area, row?.manager]
+      .map((value) => String(value ?? "").replace(/\s+/g, ""))
+      .filter(Boolean)
+    return markers.some((marker) => marker === "계" || marker === "총계" || marker.includes("합계"))
+  })
+}
+
+function parseTypeAnalysisCumulativeNetUnits(value: unknown) {
+  const number = Number(String(value ?? "").replace(/[^\d.-]/g, ""))
+  return Number.isFinite(number) ? number : 0
+}
+
+function buildTypeAnalysisCumulativeNetLabel(baseAreaNetGrowth: any, currentNetCount: number) {
+  const sourceAreaNetGrowth = (typeAnalysisSource as any)?.areaNetGrowth || {}
+  const sourceTotal = getTypeAnalysisTotalRow(sourceAreaNetGrowth?.summaryRows || [])
+  const sourceCumulative = parseTypeAnalysisCumulativeNetUnits(sourceAreaNetGrowth?.cumulativeNetLabel)
+  const sourceNet = toNumber(sourceTotal?.netCount)
+  const fallbackCumulative = parseTypeAnalysisCumulativeNetUnits(baseAreaNetGrowth?.cumulativeNetLabel)
+  const fallbackTotal = getTypeAnalysisTotalRow(baseAreaNetGrowth?.summaryRows || [])
+  const fallbackNet = toNumber(fallbackTotal?.netCount)
+
+  const baseCumulative = sourceCumulative || fallbackCumulative
+  if (!baseCumulative) return baseAreaNetGrowth?.cumulativeNetLabel
+
+  const baseNet = sourceNet || fallbackNet || 0
+  return `누적 : ${formatNumber(baseCumulative + currentNetCount - baseNet)}대`
+}
+
 function buildTypeAnalysisAreaNetGrowthState(baseAreaNetGrowth: any, newRecords: any[], terminationRecords: any[], asOf: string) {
   const buckets = new Map<string, { no: string; area: string; manager: string; newCount: number; terminationCount: number; netCount: number }>(
     TYPE_ANALYSIS_AREA_ROWS.map((row) => [
@@ -2261,6 +2291,7 @@ function buildTypeAnalysisAreaNetGrowthState(baseAreaNetGrowth: any, newRecords:
   return {
     ...baseAreaNetGrowth,
     asOf,
+    cumulativeNetLabel: buildTypeAnalysisCumulativeNetLabel(baseAreaNetGrowth, totals.netCount),
     summaryRows: [...summaryRows, totals],
     records: areaRecords,
   }
@@ -7140,20 +7171,13 @@ export function DashboardShell({
       window.alert("반영할 항목을 1건 이상 선택해주세요.")
       return
     }
-    const snapshotHistory = [...(baseTypeAnalysis.weeklySnapshots || [])].reverse()
-    const historicalNewRecords = snapshotHistory.flatMap((item: any) =>
-      Array.isArray(item?.newRecords) ? item.newRecords : [],
-    )
-    const historicalTerminationRecords = snapshotHistory.flatMap((item: any) =>
-      Array.isArray(item?.terminationRecords) ? item.terminationRecords : [],
-    )
     const mergedNewRecords = mergeTypeAnalysisRecords(
-      [...historicalNewRecords, ...(baseTypeAnalysis.newReplacement?.records || [])],
+      baseTypeAnalysis.newReplacement?.records || [],
       snapshot.newRecords,
       "new",
     )
     const mergedTerminationRecords = mergeTypeAnalysisRecords(
-      [...historicalTerminationRecords, ...(baseTypeAnalysis.terminationType?.records || [])],
+      baseTypeAnalysis.terminationType?.records || [],
       snapshot.terminationRecords,
       "termination",
     )
