@@ -23,8 +23,34 @@ function buildManualRestoreSnapshot(weeklyReport: any, appliedAt: string) {
   }
 }
 
+function parseTimestamp(value: unknown) {
+  const time = Date.parse(String(value || ""))
+  return Number.isFinite(time) ? time : 0
+}
+
+function hasManualUpdateAfterRestoreSource(data: DashboardState | null | undefined) {
+  const restoreSourceTime = parseTimestamp(restorePayload.sourceManualUpdatedAt || restorePayload.sourceGeneratedAt)
+  if (!restoreSourceTime) return false
+  const weeklyReport = data?.weeklyReport || {}
+  const ui = data?.ui || {}
+  const menuUpdatedAt = ui?.menuUpdatedAt || {}
+  const candidates = [
+    weeklyReport?.manualLastSavedAt,
+    weeklyReport?.manualRestoredAt,
+    menuUpdatedAt?.["manual-input"],
+    menuUpdatedAt?.["weekly-report"],
+    ...(Array.isArray(weeklyReport?.manualSaveHistory)
+      ? weeklyReport.manualSaveHistory.map((row: any) => row?.savedAt || row?.createdAt)
+      : []),
+  ]
+  return candidates.some((value) => parseTimestamp(value) > restoreSourceTime)
+}
+
 function isManualRestoreApplied(data: DashboardState | null | undefined) {
-  return String(data?.ui?.manualWeeklyRestore?.id || data?.weeklyReport?.manualRestoreId || "") === restorePayload.restoreId
+  if (String(data?.ui?.manualWeeklyRestore?.id || data?.weeklyReport?.manualRestoreId || "") === restorePayload.restoreId) {
+    return true
+  }
+  return hasManualUpdateAfterRestoreSource(data)
 }
 
 export async function ensureManualWeeklyRestore(data: DashboardState | null | undefined) {

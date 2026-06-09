@@ -6913,8 +6913,14 @@ export function DashboardShell({
         const latestData = pendingDataRef.current || data
         const draftRaw = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
         const latestSliceResponse = await fetch("/api/dashboard?slice=weeklyReport", { cache: "no-store" }).catch(() => null)
-        const latestSlice = latestSliceResponse?.ok ? await latestSliceResponse.json().catch(() => null) : null
-        const latestWeeklyReport = latestSlice?.weeklyReport || latestData?.weeklyReport || weeklyReport
+        if (!latestSliceResponse?.ok) {
+          throw new Error("최신 서버 저장본을 확인하지 못했습니다. 새로고침 후 다시 저장해주세요.")
+        }
+        const latestSlice = await latestSliceResponse.json().catch(() => null)
+        if (!latestSlice?.weeklyReport) {
+          throw new Error("최신 수동입력 저장본을 불러오지 못했습니다. 새로고침 후 다시 저장해주세요.")
+        }
+        const latestWeeklyReport = latestSlice.weeklyReport
         const latestPaidOptionSourceColumns =
           latestSlice?.paidOptionSourceColumns ||
           latestData?.paidOptionSourceColumns ||
@@ -7009,12 +7015,15 @@ export function DashboardShell({
             message: `${formatManualSaveTime()} 저장 완료`,
           })
         }
-      } catch {
+      } catch (error) {
         if (manualSaveRequestIdRef.current === saveRequestId) {
           markViewsDirty(["manual-input"])
+          const message = error instanceof Error && error.message
+            ? error.message
+            : "저장 확인에 실패했습니다. 다시 저장해주세요."
           setManualSaveStatus({
             phase: "error",
-            message: "저장 확인에 실패했습니다. 다시 저장해주세요.",
+            message,
           })
         }
       } finally {

@@ -51,6 +51,10 @@ const DASHBOARD_STATE_SLICE_KEYS = [
 
 type DashboardStateSliceKey = (typeof DASHBOARD_STATE_SLICE_KEYS)[number]
 
+class DashboardConflictError extends Error {
+  status = 409
+}
+
 function isTransientStoreError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || "")
   return /connect|connection|socket|timeout|timed out|econn|redis/i.test(message)
@@ -179,16 +183,154 @@ function mergeManualSaveHistory(existingHistory: any, incomingHistory: any) {
     .slice(0, 10)
 }
 
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value ?? null))
+}
+
+function buildCurrentWeeklyReportSnapshot(weeklyReport: any) {
+  if (!weeklyReport || typeof weeklyReport !== "object" || Array.isArray(weeklyReport)) return null
+  const savedAt = safeText(weeklyReport?.manualLastSavedAt || weeklyReport?.manualRestoredAt || weeklyReport?.updatedAt)
+  const hasManualPayload =
+    Array.isArray(weeklyReport?.revenueRows) ||
+    Array.isArray(weeklyReport?.goalRows) ||
+    Array.isArray(weeklyReport?.terminationOverviewRows) ||
+    Array.isArray(weeklyReport?.weeklyIndustryOverviewRows) ||
+    Array.isArray(weeklyReport?.additionalSales)
+  if (!savedAt && !hasManualPayload) return null
+  const stableId = safeText(weeklyReport?.manualSaveVersion || weeklyReport?.manualRestoreId || savedAt || "current")
+  return {
+    id: `server-current-weekly-${stableId}`,
+    savedAt: savedAt || new Date().toISOString(),
+    savedBy: safeText(weeklyReport?.manualLastSavedBy) || "server-current",
+    reason: "server-before-weekly-save",
+    revenueHeaderText: weeklyReport?.revenueHeaderText,
+    revenueUnitPrice: weeklyReport?.revenueUnitPrice,
+    additionalContractCount: weeklyReport?.additionalContractCount,
+    subtitleOne: weeklyReport?.subtitleOne,
+    subtitleTwo: weeklyReport?.subtitleTwo,
+    revenueNoteText: weeklyReport?.revenueNoteText,
+    revenueRows: cloneJson(weeklyReport?.revenueRows || []),
+    goalRows: cloneJson(weeklyReport?.goalRows || []),
+    manualSummary: cloneJson(weeklyReport?.manualSummary || {}),
+    industryStats: cloneJson(weeklyReport?.industryStats || []),
+    paidOptionInfoColumns: cloneJson(weeklyReport?.paidOptionInfoColumns || []),
+    terminationOverviewRows: cloneJson(weeklyReport?.terminationOverviewRows || []),
+    weeklyIndustryOverviewRows: cloneJson(weeklyReport?.weeklyIndustryOverviewRows || []),
+    additionalSales: cloneJson(weeklyReport?.additionalSales || []),
+  }
+}
+
+function isStaleManualWeeklyReport(existingWeeklyReport: any, incomingWeeklyReport: any) {
+  const existingTime = parseTimestamp(existingWeeklyReport?.manualLastSavedAt || existingWeeklyReport?.manualRestoredAt)
+  const incomingTime = parseTimestamp(incomingWeeklyReport?.manualLastSavedAt || incomingWeeklyReport?.manualRestoredAt)
+  return existingTime > 0 && (!incomingTime || incomingTime < existingTime)
+}
+
 function mergeWeeklyReportState(existingWeeklyReport: any, incomingWeeklyReport: any) {
   if (!incomingWeeklyReport || typeof incomingWeeklyReport !== "object" || Array.isArray(incomingWeeklyReport)) {
     return incomingWeeklyReport
   }
+  if (isStaleManualWeeklyReport(existingWeeklyReport, incomingWeeklyReport)) {
+    throw new DashboardConflictError("최신 수동입력 저장본이 있어 오래된 화면 저장을 차단했습니다. 새로고침 후 다시 저장해주세요.")
+  }
+  const currentSnapshot = buildCurrentWeeklyReportSnapshot(existingWeeklyReport)
+  const incomingHistory = [
+    ...(currentSnapshot ? [currentSnapshot] : []),
+    ...(Array.isArray(incomingWeeklyReport?.manualSaveHistory) ? incomingWeeklyReport.manualSaveHistory : []),
+  ]
   return {
     ...incomingWeeklyReport,
+    manualRestoreId: incomingWeeklyReport?.manualRestoreId || existingWeeklyReport?.manualRestoreId,
+    manualRestoredAt: incomingWeeklyReport?.manualRestoredAt || existingWeeklyReport?.manualRestoredAt,
     manualSaveHistory: mergeManualSaveHistory(
       existingWeeklyReport?.manualSaveHistory,
-      incomingWeeklyReport?.manualSaveHistory,
+      incomingHistory,
     ),
+  }
+}
+
+function mergeDashboardUiState(existingUi: any, incomingUi: any) {
+  if (!incomingUi || typeof incomingUi !== "object" || Array.isArray(incomingUi)) return incomingUi
+  const existingMenuUpdatedAt =
+    existingUi?.menuUpdatedAt && typeof existingUi.menuUpdatedAt === "object" && !Array.isArray(existingUi.menuUpdatedAt)
+      ? existingUi.menuUpdatedAt
+      : {}
+  const incomingMenuUpdatedAt =
+    incomingUi?.menuUpdatedAt && typeof incomingUi.menuUpdatedAt === "object" && !Array.isArray(incomingUi.menuUpdatedAt)
+      ? incomingUi.menuUpdatedAt
+      : {}
+  return {
+    ...(existingUi || {}),
+    ...incomingUi,
+    menuUpdatedAt: {
+      ...existingMenuUpdatedAt,
+      ...incomingMenuUpdatedAt,
+    },
+    manualWeeklyRestore: incomingUi?.manualWeeklyRestore || existingUi?.manualWeeklyRestore,
+  }
+}
+
+const MANUAL_WEEKLY_HISTORY_FIELDS = [
+  "revenueHeaderText",
+  "revenueUnitPrice",
+  "additionalContractCount",
+  "subtitleOne",
+  "subtitleTwo",
+  "revenueNoteText",
+  "manualSummary",
+  "revenueRows",
+  "goalRows",
+  "industryStats",
+  "paidOptionInfoColumns",
+  "terminationOverviewRows",
+  "weeklyIndustryOverviewRows",
+  "additionalSales",
+] as const
+
+function findLatestManualSaveSnapshot(weeklyReport: any) {
+  const history = Array.isArray(weeklyReport?.manualSaveHistory) ? weeklyReport.manualSaveHistory : []
+  return history
+    .filter((row: any) => parseTimestamp(row?.savedAt || row?.createdAt) > 0)
+    .sort((a: any, b: any) => parseTimestamp(b?.savedAt || b?.createdAt) - parseTimestamp(a?.savedAt || a?.createdAt))[0]
+}
+
+function restoreWeeklyReportFromHistoryIfNeeded(data: any) {
+  const weeklyReport = data?.weeklyReport
+  if (!weeklyReport || typeof weeklyReport !== "object" || Array.isArray(weeklyReport)) {
+    return { data, changed: false }
+  }
+  const latestSnapshot = findLatestManualSaveSnapshot(weeklyReport)
+  const latestTime = parseTimestamp(latestSnapshot?.savedAt || latestSnapshot?.createdAt)
+  const currentTime = parseTimestamp(weeklyReport?.manualLastSavedAt || weeklyReport?.manualRestoredAt)
+  if (!latestSnapshot || !latestTime || latestTime <= currentTime) return { data, changed: false }
+
+  const now = new Date().toISOString()
+  const nextWeeklyReport: any = {
+    ...weeklyReport,
+    manualLastSavedAt: safeText(latestSnapshot?.savedAt || latestSnapshot?.createdAt) || weeklyReport?.manualLastSavedAt,
+    manualLastSavedBy: safeText(latestSnapshot?.savedBy) || weeklyReport?.manualLastSavedBy || "history-restore",
+    manualRecoveredAt: now,
+    manualRecoverySourceId: safeText(latestSnapshot?.id),
+  }
+  MANUAL_WEEKLY_HISTORY_FIELDS.forEach((field) => {
+    if (latestSnapshot?.[field] !== undefined) {
+      nextWeeklyReport[field] = cloneJson(latestSnapshot[field])
+    }
+  })
+  return {
+    data: {
+      ...data,
+      weeklyReport: nextWeeklyReport,
+      ui: {
+        ...(data?.ui || {}),
+        menuUpdatedAt: {
+          ...(data?.ui?.menuUpdatedAt || {}),
+          "manual-input": now,
+          "weekly-report": now,
+        },
+      },
+    },
+    changed: true,
   }
 }
 
@@ -480,17 +622,23 @@ function applyTerminationIdCorrections(data: any) {
 }
 
 async function ensureDashboardDataCorrections(data: any) {
-  const corrected = applyTerminationIdCorrections(data)
-  if (!corrected.changed) return corrected.data
+  const terminationCorrected = applyTerminationIdCorrections(data)
+  const manualCorrected = restoreWeeklyReportFromHistoryIfNeeded(terminationCorrected.data)
+  const changedKeys: DashboardStateSliceKey[] = []
+  if (terminationCorrected.changed) changedKeys.push("termination")
+  if (manualCorrected.changed) changedKeys.push("weeklyReport", "ui")
+  if (!changedKeys.length) return manualCorrected.data
   await writeDashboardState(
-    corrected.data,
+    manualCorrected.data,
     {
-      menuLabel: "해지 진행사항",
-      changeLabel: "해지확정 부산대 고객번호 E150214 수정",
+      menuLabel: "Dashboard",
+      changeLabel: manualCorrected.changed
+        ? "수동입력 최신 히스토리 보호 복구"
+        : "해지확정 부산대 고객번호 E150214 수정",
     },
-    ["termination"],
+    changedKeys,
   )
-  return corrected.data
+  return manualCorrected.data
 }
 
 function buildDashboardResponse(data: any, session: any, permissions: any) {
@@ -628,6 +776,20 @@ export async function PUT(request: Request) {
       }
     }
 
+    if (changedKeys.includes("ui") && incomingBody?.ui) {
+      const existingData =
+        existingDataForMerge ||
+        existingDataForActivity ||
+        (await readDashboardState<any>(DATA_PATH)) ||
+        (await readDashboardState<any>(FALLBACK_PATH)) ||
+        EMPTY_DASHBOARD
+      existingDataForActivity = existingData
+      nextBody = {
+        ...nextBody,
+        ui: mergeDashboardUiState(existingData?.ui, incomingBody.ui),
+      }
+    }
+
     if (changedKeys.includes("weeklyReport") && incomingBody?.weeklyReport) {
       const existingData =
         existingDataForMerge ||
@@ -684,9 +846,10 @@ export async function PUT(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save dashboard state"
     const isReadOnly = message.toLowerCase().includes("read-only")
+    const status = error instanceof DashboardConflictError ? error.status : isReadOnly ? 403 : 500
     return NextResponse.json(
       { ok: false, error: message },
-      { status: isReadOnly ? 403 : 500 },
+      { status },
     )
   }
 }
