@@ -1715,6 +1715,11 @@ function normalizeTypeAnalysisAreaAssignments(state: any, totalContractsOverride
       asOf,
       totalContractsOverride,
     ),
+    personalPerformance: buildTypeAnalysisPersonalPerformanceState(
+      state?.personalPerformance || {},
+      newRecords,
+      state?.personalPerformance?.asOf || state?.newReplacement?.asOf || asOf,
+    ),
   }
 }
 
@@ -1787,6 +1792,8 @@ const TYPE_ANALYSIS_INDUSTRY_LABELS = [
   "정부기관·금감원 외",
   "대학교·기업체",
 ] as const
+
+const TYPE_ANALYSIS_PERSONAL_MANAGER_NAMES = ["이상철", "신무길", "이홍민", "정효준", "조홍희", "정진영", "박혜리", "기타"] as const
 
 const TYPE_ANALYSIS_FOREIGN_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[2]
 const TYPE_ANALYSIS_ASSET_LABEL = TYPE_ANALYSIS_INDUSTRY_LABELS[3]
@@ -2475,6 +2482,61 @@ function buildTypeAnalysisAreaNetGrowthState(
     cumulativeNetLabel: buildTypeAnalysisCumulativeNetLabel(baseAreaNetGrowth, totals.netCount, totalContractsOverride),
     summaryRows: [...summaryRows, totals],
     records: areaRecords,
+  }
+}
+
+function normalizeTypeAnalysisPersonalManagerName(value: unknown) {
+  const text = String(value || "").trim()
+  if (!text) return "기타"
+  const manager = TYPE_ANALYSIS_PERSONAL_MANAGER_NAMES.find((name) => name !== "기타" && text.includes(name))
+  return manager || "기타"
+}
+
+function createTypeAnalysisPersonalBucket(manager: string, index: number) {
+  return {
+    no: index + 1,
+    manager,
+    totalNew: 0,
+    new: 0,
+    check: 0,
+    marketPoint: 0,
+    reutersBloomberg: 0,
+  }
+}
+
+function buildTypeAnalysisPersonalPerformanceState(basePersonalPerformance: any, newRecords: any[], asOf: string) {
+  const buckets = new Map(
+    TYPE_ANALYSIS_PERSONAL_MANAGER_NAMES.map((manager, index) => [
+      manager,
+      createTypeAnalysisPersonalBucket(manager, index),
+    ]),
+  )
+
+  ;(Array.isArray(newRecords) ? newRecords : []).forEach((record: any) => {
+    const manager = normalizeTypeAnalysisPersonalManagerName(record?.recommender)
+    const bucket = buckets.get(manager) || buckets.get("기타")
+    if (!bucket) return
+
+    const replacementType = normalizeTypeAnalysisReplacementType(record?.replacementType)
+    bucket.totalNew += 1
+    if (replacementType === "체크") {
+      bucket.check += 1
+    } else if (replacementType === "마켓포인트") {
+      bucket.marketPoint += 1
+    } else if (replacementType === "로이터" || replacementType === "블룸버그") {
+      bucket.reutersBloomberg += 1
+    } else {
+      bucket.new += 1
+    }
+  })
+
+  return {
+    ...basePersonalPerformance,
+    asOf,
+    rows: TYPE_ANALYSIS_PERSONAL_MANAGER_NAMES.map((manager, index) => ({
+      ...(buckets.get(manager) || createTypeAnalysisPersonalBucket(manager, index)),
+      no: index + 1,
+    })),
   }
 }
 
@@ -7399,6 +7461,11 @@ export function DashboardShell({
         reflectedAsOf,
         totalContractsOverride,
       ),
+      personalPerformance: buildTypeAnalysisPersonalPerformanceState(
+        baseTypeAnalysis.personalPerformance,
+        mergedNewRecords,
+        reflectedAsOf,
+      ),
       weeklySnapshots: [
         snapshot,
         ...(baseTypeAnalysis.weeklySnapshots || []).filter((item: any) => item?.id !== snapshot.id),
@@ -7478,6 +7545,11 @@ export function DashboardShell({
         nextTerminationRecords,
         reflectedAsOf,
         totalContractsOverride,
+      ),
+      personalPerformance: buildTypeAnalysisPersonalPerformanceState(
+        baseTypeAnalysis.personalPerformance,
+        nextNewRecords,
+        reflectedAsOf,
       ),
       weeklySnapshots: nextWeeklySnapshots,
     }
