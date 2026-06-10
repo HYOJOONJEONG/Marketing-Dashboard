@@ -1613,11 +1613,77 @@ function normalizeTypeAnalysisTerminationPlacementRecords(records: any[]) {
   })
 }
 
-function normalizeTypeAnalysisAreaAssignments(state: any, totalContractsOverride?: unknown) {
+function getTypeAnalysisTerminationCompareKey(record: any) {
+  const idCode = normalizeCustomerIdentifier(record?.idCode || record?.customerId)
+  const company = normalizeMergeIdentifierText(record?.companyName)
+  const department = normalizeMergeIdentifierText(record?.departmentName)
+  if (!idCode && !company) return ""
+  return `${idCode}|${company}|${department}`
+}
+
+function buildTypeAnalysisTerminationRecordFromConfirmed(item: any, sourceRecord: any, index: number) {
+  const base = sourceRecord ? { ...sourceRecord } : {}
+  const companyName = String(base.companyName || item?.companyName || "").trim()
+  const reason = normalizeTypeAnalysisTerminationReason(base.reason || item?.reason)
+  const areaGroup = normalizeTypeAnalysisAreaGroup(base.areaGroup || base.group || base.industry || item?.industry, companyName)
+  const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, base.industry || base.group || item?.industry, companyName)
+  return {
+    ...base,
+    no: index + 1,
+    date: normalizeDate(base.date || item?.receivedDate || item?.terminationDate || item?.reflectedDate || ""),
+    sourceDate: normalizeDate(base.sourceDate || item?.receivedDate || ""),
+    idCode: String(base.idCode || item?.customerId || item?.idCode || "").trim(),
+    companyName,
+    departmentName: String(base.departmentName || item?.departmentName || "").trim(),
+    recommender: String(base.recommender || item?.manager || "").trim(),
+    reason,
+    reasonFlags: createTypeAnalysisTerminationReasonFlags(reason),
+    competitorType: base.competitorType || "아웃",
+    competitorFlags: base.competitorFlags || createTypeAnalysisCompetitorFlags(),
+    terminationDate: normalizeDate(base.terminationDate || item?.terminationDate || ""),
+    penalty: toNumber(base.penalty || item?.penalty),
+    note: String(base.note || item?.note || "").trim(),
+    group,
+    areaGroup,
+    sourceId: String(base.sourceId || item?.id || ""),
+  }
+}
+
+function reconcileTypeAnalysisTerminationsWithConfirmed(records: any[], confirmedItems: any[]) {
+  const normalizedRecords = normalizeTypeAnalysisTerminationPlacementRecords(records)
+  const confirmedRows = (Array.isArray(confirmedItems) ? confirmedItems : []).filter((item: any) => item?.selected !== false)
+  if (!confirmedRows.length) return normalizedRecords
+
+  const byKey = new Map<string, any>()
+  normalizedRecords.forEach((record: any) => {
+    const key = getTypeAnalysisTerminationCompareKey(record)
+    if (key) byKey.set(key, record)
+  })
+
+  const sourceRecords = normalizeTypeAnalysisTerminationPlacementRecords((typeAnalysisSource as any)?.terminationType?.records || [])
+  const sourceByKey = new Map<string, any>()
+  sourceRecords.forEach((record: any) => {
+    const key = getTypeAnalysisTerminationCompareKey(record)
+    if (key && !sourceByKey.has(key)) sourceByKey.set(key, record)
+  })
+
+  const merged = [...normalizedRecords]
+  confirmedRows.forEach((item: any) => {
+    const key = getTypeAnalysisTerminationCompareKey(item)
+    if (!key || byKey.has(key)) return
+    const record = buildTypeAnalysisTerminationRecordFromConfirmed(item, sourceByKey.get(key), merged.length)
+    merged.push(record)
+    byKey.set(key, record)
+  })
+
+  return merged.map((record: any, index: number) => ({ ...record, no: index + 1 }))
+}
+
+function normalizeTypeAnalysisAreaAssignments(state: any, totalContractsOverride?: unknown, confirmedItems?: any[]) {
   const rawNewRecords = Array.isArray(state?.newReplacement?.records) ? state.newReplacement.records : []
   const rawTerminationRecords = Array.isArray(state?.terminationType?.records) ? state.terminationType.records : []
   const newRecords = normalizeTypeAnalysisNewPlacementRecords(rawNewRecords)
-  const terminationRecords = normalizeTypeAnalysisTerminationPlacementRecords(rawTerminationRecords)
+  const terminationRecords = reconcileTypeAnalysisTerminationsWithConfirmed(rawTerminationRecords, confirmedItems || [])
   if (!newRecords.length && !terminationRecords.length) return state
   const asOf =
     state?.areaNetGrowth?.asOf ||
@@ -1642,9 +1708,9 @@ function normalizeTypeAnalysisAreaAssignments(state: any, totalContractsOverride
   }
 }
 
-function normalizeTypeAnalysisState(value: any, totalContractsOverride?: unknown) {
+function normalizeTypeAnalysisState(value: any, totalContractsOverride?: unknown, confirmedItems?: any[]) {
   const source = cloneData(typeAnalysisSource as any)
-  if (!value || typeof value !== "object" || Array.isArray(value)) return normalizeTypeAnalysisAreaAssignments(source, totalContractsOverride)
+  if (!value || typeof value !== "object" || Array.isArray(value)) return normalizeTypeAnalysisAreaAssignments(source, totalContractsOverride, confirmedItems)
   const sourceUpdatedAt = Date.parse(String(source?.sourceUpdatedAt || ""))
   const savedUpdatedAt = Date.parse(String(value?.sourceUpdatedAt || ""))
   const shouldUseSourceCore =
@@ -1654,7 +1720,7 @@ function normalizeTypeAnalysisState(value: any, totalContractsOverride?: unknown
     return normalizeTypeAnalysisAreaAssignments({
       ...source,
       weeklySnapshots: Array.isArray(value.weeklySnapshots) ? value.weeklySnapshots : [],
-    }, totalContractsOverride)
+    }, totalContractsOverride, confirmedItems)
   }
   return normalizeTypeAnalysisAreaAssignments({
     ...source,
@@ -1688,7 +1754,7 @@ function normalizeTypeAnalysisState(value: any, totalContractsOverride?: unknown
         : source.personalPerformance.rows,
     },
     weeklySnapshots: Array.isArray(value.weeklySnapshots) ? value.weeklySnapshots : [],
-  }, totalContractsOverride)
+  }, totalContractsOverride, confirmedItems)
 }
 
 function normalizeTypeAnalysisReplacementType(value: unknown) {
@@ -3509,9 +3575,10 @@ export function DashboardShell({
   }, [view, collectionTab])
   const includedContracts = useMemo(() => contracts.filter((row: any) => row.includedInWeekly), [contracts])
   const typeAnalysisTotalContracts = data?.weeklyReport?.manualSummary?.totalContracts
+  const typeAnalysisConfirmedItems = selectedSheet?.confirmedItems || []
   const typeAnalysis = useMemo(
-    () => normalizeTypeAnalysisState(data?.typeAnalysis, typeAnalysisTotalContracts),
-    [data?.typeAnalysis, typeAnalysisTotalContracts],
+    () => normalizeTypeAnalysisState(data?.typeAnalysis, typeAnalysisTotalContracts, typeAnalysisConfirmedItems),
+    [data?.typeAnalysis, typeAnalysisTotalContracts, typeAnalysisConfirmedItems],
   )
   const typeAnalysisNewDetailIndustryOptions = useMemo(
     () => buildTypeAnalysisNewDetailIndustryOptions(),
@@ -7195,7 +7262,11 @@ export function DashboardShell({
     if (!typeAnalysisImportReview) return
     const latestData = pendingDataRef.current || data
     const totalContractsOverride = latestData?.weeklyReport?.manualSummary?.totalContracts
-    const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis, totalContractsOverride)
+    const latestConfirmedItems =
+      (latestData?.termination?.sheets || []).find((sheet: any) => sheet.id === latestData?.termination?.currentSheetId)?.confirmedItems ||
+      latestData?.termination?.sheets?.[0]?.confirmedItems ||
+      []
+    const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis, totalContractsOverride, latestConfirmedItems)
     const snapshot = buildTypeAnalysisWeeklySnapshotFromReview(typeAnalysisImportReview)
     if (!snapshot.newCount && !snapshot.terminationCount) {
       window.alert("반영할 항목을 1건 이상 선택해주세요.")
@@ -7259,7 +7330,11 @@ export function DashboardShell({
   ) {
     const latestData = pendingDataRef.current || data
     const totalContractsOverride = latestData?.weeklyReport?.manualSummary?.totalContracts
-    const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis, totalContractsOverride)
+    const latestConfirmedItems =
+      (latestData?.termination?.sheets || []).find((sheet: any) => sheet.id === latestData?.termination?.currentSheetId)?.confirmedItems ||
+      latestData?.termination?.sheets?.[0]?.confirmedItems ||
+      []
+    const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis, totalContractsOverride, latestConfirmedItems)
     const recordKey = getTypeAnalysisRecordMergeKey(kind, record)
     const updateRecordPlacement = (row: any) => {
       const companyName = row?.companyName
@@ -7334,6 +7409,9 @@ export function DashboardShell({
             typeAnalysis: normalizeTypeAnalysisState(
               latestData?.typeAnalysis,
               latestData?.weeklyReport?.manualSummary?.totalContracts,
+              (latestData?.termination?.sheets || []).find((sheet: any) => sheet.id === latestData?.termination?.currentSheetId)?.confirmedItems ||
+                latestData?.termination?.sheets?.[0]?.confirmedItems ||
+                [],
             ),
           }
       if (sourceData !== latestData) {
