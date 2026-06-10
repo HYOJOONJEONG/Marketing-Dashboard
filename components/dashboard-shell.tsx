@@ -1599,7 +1599,7 @@ function normalizeTypeAnalysisNewPlacementRecords(records: any[]) {
   return (Array.isArray(records) ? records : []).map((record: any) => {
     const correctedRecord = normalizeTypeAnalysisIdCorrection(record)
     const group = normalizeTypeAnalysisIndustryGroup(correctedRecord?.group || correctedRecord?.industry || correctedRecord?.businessType, correctedRecord?.companyName)
-    const areaGroup = deriveTypeAnalysisAreaGroupFromIndustryGroup(group, correctedRecord?.companyName)
+    const areaGroup = normalizeTypeAnalysisRecordAreaGroup({ ...correctedRecord, group }, "new", group)
     return { ...correctedRecord, group, areaGroup }
   })
 }
@@ -1607,8 +1607,8 @@ function normalizeTypeAnalysisNewPlacementRecords(records: any[]) {
 function normalizeTypeAnalysisTerminationPlacementRecords(records: any[]) {
   return (Array.isArray(records) ? records : []).map((record: any) => {
     const correctedRecord = normalizeTypeAnalysisIdCorrection(record)
-    const areaGroup = normalizeTypeAnalysisAreaGroup(correctedRecord?.areaGroup || correctedRecord?.group || correctedRecord?.industry, correctedRecord?.companyName)
-    const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, correctedRecord?.industry || correctedRecord?.group, correctedRecord?.companyName)
+    const group = normalizeTypeAnalysisIndustryGroup(correctedRecord?.group || correctedRecord?.industry, correctedRecord?.companyName)
+    const areaGroup = normalizeTypeAnalysisRecordAreaGroup({ ...correctedRecord, group }, "termination", group)
     return { ...correctedRecord, group, areaGroup }
   })
 }
@@ -1625,8 +1625,18 @@ function buildTypeAnalysisTerminationRecordFromConfirmed(item: any, sourceRecord
   const base = sourceRecord ? { ...sourceRecord } : {}
   const companyName = String(base.companyName || item?.companyName || "").trim()
   const reason = normalizeTypeAnalysisTerminationReason(base.reason || item?.reason)
-  const areaGroup = normalizeTypeAnalysisAreaGroup(base.areaGroup || base.group || base.industry || item?.industry, companyName)
-  const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, base.industry || base.group || item?.industry, companyName)
+  const group = normalizeTypeAnalysisIndustryGroup(base.group || base.industry || item?.industry, companyName)
+  const areaGroup = normalizeTypeAnalysisRecordAreaGroup(
+    {
+      ...base,
+      group,
+      idCode: base.idCode || item?.customerId || item?.idCode,
+      companyName,
+      departmentName: base.departmentName || item?.departmentName,
+    },
+    "termination",
+    group,
+  )
   return {
     ...base,
     no: index + 1,
@@ -1832,10 +1842,22 @@ function normalizeTypeAnalysisAreaGroup(value: unknown, companyName?: unknown) {
   const combined = `${compact} ${companyCompact}`
   if (!compact && !companyCompact) return TYPE_ANALYSIS_OTHER_AREA_LABEL
   if (TYPE_ANALYSIS_AREA_LABELS.includes(text as any)) return text
-  if (compact.includes("연기금") && compact.includes("공기업") && compact.includes("정부")) {
+  if (
+    (compact.includes("연기금") || compact.includes("연금")) &&
+    (
+      compact.includes("정부") ||
+      compact.includes("공기업") ||
+      compact.includes("공공") ||
+      compact.includes("협회") ||
+      compact.includes("공사") ||
+      compact.includes("금감") ||
+      compact.includes("대통령실")
+    )
+  ) {
     if (companyCompact.includes("공사")) return TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL
     if (companyCompact.includes("공기업") || companyCompact.includes("공공")) return TYPE_ANALYSIS_SECURITIES_PUBLIC_AREA_LABEL
-    if (companyCompact.includes("연기금")) return TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL
+    if (companyCompact.includes("연금") || companyCompact.includes("연기금")) return TYPE_ANALYSIS_ASSET_PENSION_AREA_LABEL
+    if (companyCompact.includes("협회") || companyCompact.includes("금투협")) return TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL
     return TYPE_ANALYSIS_SECURITIES_GOVERNMENT_AREA_LABEL
   }
   if (compact.includes("공제회") && compact.includes("기타금융")) {
@@ -1860,21 +1882,6 @@ function normalizeTypeAnalysisAreaGroup(value: unknown, companyName?: unknown) {
   if (combined.includes("공사") || compact.includes("전광판")) return TYPE_ANALYSIS_BANK_PUBLIC_AREA_LABEL
   if (combined.includes("공기업")) return TYPE_ANALYSIS_SECURITIES_PUBLIC_AREA_LABEL
   if (
-    compact.includes("정부") ||
-    compact.includes("공공") ||
-    compact.includes("협회") ||
-    compact.includes("금감") ||
-    compact.includes("대통령실")
-  ) {
-    return TYPE_ANALYSIS_SECURITIES_GOVERNMENT_AREA_LABEL
-  }
-  if (compact.includes("대학") || compact.includes("학교") || compact.includes("일반기업")) {
-    return TYPE_ANALYSIS_GENERAL_AREA_LABEL
-  }
-  if (compact.includes("기업체") || compact.includes("기업")) {
-    return TYPE_ANALYSIS_GENERAL_AREA_LABEL
-  }
-  if (
     compact.includes("기타금융") ||
     compact.includes("저축은행") ||
     compact.includes("금고") ||
@@ -1886,7 +1893,92 @@ function normalizeTypeAnalysisAreaGroup(value: unknown, companyName?: unknown) {
   ) {
     return TYPE_ANALYSIS_OTHER_FOREIGN_AREA_LABEL
   }
+  if (
+    compact.includes("정부") ||
+    compact.includes("공공") ||
+    compact.includes("금감") ||
+    compact.includes("대통령실")
+  ) {
+    return TYPE_ANALYSIS_SECURITIES_GOVERNMENT_AREA_LABEL
+  }
+  if (compact.includes("대학") || compact.includes("학교") || compact.includes("일반기업")) {
+    return TYPE_ANALYSIS_GENERAL_AREA_LABEL
+  }
+  if (compact.includes("기업체") || compact.includes("기업")) {
+    return TYPE_ANALYSIS_GENERAL_AREA_LABEL
+  }
   return TYPE_ANALYSIS_OTHER_AREA_LABEL
+}
+
+function getTypeAnalysisAreaHintKey(kind: unknown, idCode: unknown, companyName?: unknown, departmentName?: unknown) {
+  const id = normalizeCustomerIdentifier(idCode)
+  if (!id) return ""
+  const company = normalizeMergeIdentifierText(companyName)
+  const department = normalizeMergeIdentifierText(departmentName)
+  return [String(kind || "").trim() || "new", id, company, department].join("|")
+}
+
+function buildTypeAnalysisSourceAreaHints() {
+  const exact = new Map<string, string>()
+  const byPair = new Map<string, string>()
+  const byIdBuckets = new Map<string, Set<string>>()
+  const sourceRecords = (typeAnalysisSource as any)?.areaNetGrowth?.records
+
+  ;(Array.isArray(sourceRecords) ? sourceRecords : []).forEach((record: any) => {
+    const kind = record?.kind === "termination" ? "termination" : "new"
+    const id = normalizeCustomerIdentifier(record?.idCode || record?.customerId)
+    const company = normalizeMergeIdentifierText(record?.companyName)
+    const department = normalizeMergeIdentifierText(record?.departmentName)
+    const area = String(record?.areaGroup || record?.group || "").trim()
+    if (!id || !area) return
+
+    const exactKey = getTypeAnalysisAreaHintKey(kind, id, company, department)
+    const pairKey = getTypeAnalysisAreaHintKey(kind, id, company)
+    const idKey = getTypeAnalysisAreaHintKey(kind, id)
+    if (exactKey && !exact.has(exactKey)) exact.set(exactKey, area)
+    if (pairKey && !byPair.has(pairKey)) byPair.set(pairKey, area)
+    if (idKey) {
+      const bucket = byIdBuckets.get(idKey) || new Set<string>()
+      bucket.add(area)
+      byIdBuckets.set(idKey, bucket)
+    }
+  })
+
+  const byId = new Map<string, string>()
+  byIdBuckets.forEach((bucket, key) => {
+    if (bucket.size === 1) byId.set(key, Array.from(bucket)[0])
+  })
+  return { exact, byPair, byId }
+}
+
+const TYPE_ANALYSIS_SOURCE_AREA_HINTS = buildTypeAnalysisSourceAreaHints()
+
+function getTypeAnalysisSourceAreaHint(record: any, kind: "new" | "termination") {
+  const id = record?.idCode || record?.customerId
+  const company = record?.companyName
+  const department = record?.departmentName
+  const exactKey = getTypeAnalysisAreaHintKey(kind, id, company, department)
+  const pairKey = getTypeAnalysisAreaHintKey(kind, id, company)
+  const idKey = getTypeAnalysisAreaHintKey(kind, id)
+  return (
+    TYPE_ANALYSIS_SOURCE_AREA_HINTS.exact.get(exactKey) ||
+    TYPE_ANALYSIS_SOURCE_AREA_HINTS.byPair.get(pairKey) ||
+    TYPE_ANALYSIS_SOURCE_AREA_HINTS.byId.get(idKey) ||
+    ""
+  )
+}
+
+function normalizeTypeAnalysisRecordAreaGroup(record: any, kind: "new" | "termination", fallback?: unknown) {
+  const explicitArea = String(record?.areaGroup || "").trim()
+  if (TYPE_ANALYSIS_AREA_LABELS.includes(explicitArea as any)) return explicitArea
+
+  const sourceArea = getTypeAnalysisSourceAreaHint(record, kind)
+  if (sourceArea) return normalizeTypeAnalysisAreaGroup(sourceArea, record?.companyName)
+
+  return normalizeTypeAnalysisAreaGroup(
+    fallback ?? record?.areaGroup ?? record?.group ?? record?.industry ?? record?.businessType,
+    record?.companyName,
+  )
 }
 
 function normalizeTypeAnalysisIndustryGroup(industry: unknown, companyName: unknown) {
@@ -2311,16 +2403,13 @@ function buildTypeAnalysisAreaNetGrowthState(
     ]),
   )
 
-  const normalizeArea = (row: any) =>
-    normalizeTypeAnalysisAreaGroup(row?.areaGroup || row?.group || row?.industry || row?.businessType, row?.companyName)
-
   ;(Array.isArray(newRecords) ? newRecords : []).forEach((record: any) => {
-    const area = normalizeArea(record)
+    const area = normalizeTypeAnalysisRecordAreaGroup(record, "new")
     const bucket = buckets.get(area) || buckets.get(TYPE_ANALYSIS_OTHER_AREA_LABEL)
     if (bucket) bucket.newCount += 1
   })
   ;(Array.isArray(terminationRecords) ? terminationRecords : []).forEach((record: any) => {
-    const area = normalizeArea(record)
+    const area = normalizeTypeAnalysisRecordAreaGroup(record, "termination")
     const bucket = buckets.get(area) || buckets.get(TYPE_ANALYSIS_OTHER_AREA_LABEL)
     if (bucket) bucket.terminationCount += 1
   })
@@ -2345,7 +2434,7 @@ function buildTypeAnalysisAreaNetGrowthState(
   const areaOrder = new Map(TYPE_ANALYSIS_AREA_ROWS.map((row, index) => [row.area, index]))
   const areaRecords = [
     ...(Array.isArray(newRecords) ? newRecords : []).map((record: any) => {
-      const area = normalizeArea(record)
+      const area = normalizeTypeAnalysisRecordAreaGroup(record, "new")
       const replacementType = normalizeTypeAnalysisReplacementType(record?.replacementType)
       return {
         ...record,
@@ -2358,7 +2447,7 @@ function buildTypeAnalysisAreaNetGrowthState(
       }
     }),
     ...(Array.isArray(terminationRecords) ? terminationRecords : []).map((record: any) => {
-      const area = normalizeArea(record)
+      const area = normalizeTypeAnalysisRecordAreaGroup(record, "termination")
       const reason = normalizeTypeAnalysisTerminationReason(record?.reason)
       return {
         ...record,
@@ -2395,8 +2484,7 @@ function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any
   const newRows = (Array.isArray(newContracts) ? newContracts : []).map((row: any, index: number) => {
     const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
     const group = normalizeTypeAnalysisIndustryGroup(row?.industry, row?.companyName)
-    const areaGroup = deriveTypeAnalysisAreaGroupFromIndustryGroup(group, row?.companyName)
-    return {
+    const reviewRow = {
       tempId: `new-${row?.id || row?.idCode || index}`,
       include: true,
       no: index + 1,
@@ -2412,15 +2500,18 @@ function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any
       replacementFlags: createTypeAnalysisReplacementFlags(replacementType),
       note: String(row?.note || "").trim(),
       group,
-      areaGroup,
+      areaGroup: "",
       sourceId: String(row?.id || ""),
+    }
+    return {
+      ...reviewRow,
+      areaGroup: normalizeTypeAnalysisRecordAreaGroup(reviewRow, "new", group),
     }
   })
   const terminationRowsForReview = (Array.isArray(terminationRows) ? terminationRows : []).map((row: any, index: number) => {
     const reason = normalizeTypeAnalysisTerminationReason(row?.reason)
     const group = normalizeTypeAnalysisIndustryGroup(row?.industry || row?.group, row?.companyName)
-    const areaGroup = normalizeTypeAnalysisAreaGroup(row?.industry || row?.group || group, row?.companyName)
-    return {
+    const reviewRow = {
       tempId: `termination-${row?.id || row?.customerId || index}`,
       include: true,
       no: index + 1,
@@ -2438,8 +2529,12 @@ function buildTypeAnalysisWeeklyReview(newContracts: any[], terminationRows: any
       penalty: toNumber(row?.penalty),
       note: String(row?.note || "").trim(),
       group,
-      areaGroup,
+      areaGroup: "",
       sourceId: String(row?.id || ""),
+    }
+    return {
+      ...reviewRow,
+      areaGroup: normalizeTypeAnalysisRecordAreaGroup(reviewRow, "termination", group),
     }
   })
   return {
@@ -2458,7 +2553,7 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
     .map((row: any, index: number) => {
       const replacementType = normalizeTypeAnalysisReplacementType(row?.replacementType)
       const group = normalizeTypeAnalysisIndustryGroup(row?.group || row?.industry, row?.companyName)
-      const areaGroup = deriveTypeAnalysisAreaGroupFromIndustryGroup(group, row?.companyName)
+      const areaGroup = normalizeTypeAnalysisRecordAreaGroup({ ...row, group }, "new", group)
       return {
         no: index + 1,
         date: normalizeDate(row?.date || reflectedDate),
@@ -2481,8 +2576,8 @@ function buildTypeAnalysisWeeklySnapshotFromReview(review: any) {
     .filter((row: any) => row?.include !== false)
     .map((row: any, index: number) => {
       const reason = normalizeTypeAnalysisTerminationReason(row?.reason)
-      const areaGroup = normalizeTypeAnalysisAreaGroup(row?.areaGroup || row?.group || row?.industry, row?.companyName)
-      const group = deriveTypeAnalysisIndustryGroupFromArea(areaGroup, row?.industry || row?.group, row?.companyName)
+      const group = normalizeTypeAnalysisIndustryGroup(row?.group || row?.industry, row?.companyName)
+      const areaGroup = normalizeTypeAnalysisRecordAreaGroup({ ...row, group }, "termination", group)
       return {
         no: index + 1,
         date: normalizeDate(row?.date || reflectedDate),
