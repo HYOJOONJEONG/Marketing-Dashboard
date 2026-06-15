@@ -648,6 +648,14 @@ function buildDashboardResponse(data: any, session: any, permissions: any) {
   }
 }
 
+function pickDashboardReturnData(data: any, keys: DashboardStateSliceKey[], session: any, permissions: any) {
+  const picked = Object.fromEntries(keys.map((key) => [key, data?.[key]]))
+  if (keys.includes("contracts")) {
+    picked.contracts = filterContractsForUser(Array.isArray(data?.contracts) ? data.contracts : [], session.user, permissions)
+  }
+  return picked
+}
+
 export async function GET(request: Request) {
   const session = await resolveRequestSession()
   if (!session) {
@@ -731,6 +739,9 @@ export async function PUT(request: Request) {
     const incomingBody = isPartial ? body.data : body
     const requestedChangedKeys = (
       Array.isArray(body?.changedKeys) ? body.changedKeys : []
+    ).filter((key: unknown): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))
+    const requestedReturnKeys = (
+      Array.isArray(body?.returnKeys) ? body.returnKeys : []
     ).filter((key: unknown): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))
     const sourceViews = Array.isArray(body?.sourceViews)
       ? body.sourceViews.map((key: unknown) => String(key || "")).filter(Boolean)
@@ -842,6 +853,12 @@ export async function PUT(request: Request) {
     }).catch((error) => {
       console.error("Failed to append dashboard activity log.", error)
     })
+    if (requestedReturnKeys.length) {
+      return NextResponse.json({
+        ok: true,
+        data: pickDashboardReturnData(correctedNextBody, requestedReturnKeys, session, permissions),
+      })
+    }
     return NextResponse.json({ ok: true })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save dashboard state"

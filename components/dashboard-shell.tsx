@@ -4483,6 +4483,7 @@ export function DashboardShell({
       if (!response.ok || payload?.ok === false) {
         throw new Error(payload?.error || `Dashboard save failed (${response.status})`)
       }
+      return payload || { ok: true }
     } finally {
       if (timeout) window.clearTimeout(timeout)
     }
@@ -4532,7 +4533,11 @@ export function DashboardShell({
     )
   }
 
-  async function commitDashboardData(sourceData: any = pendingDataRef.current || data, updatedViews: ViewKey[] = [view]) {
+  async function commitDashboardData(
+    sourceData: any = pendingDataRef.current || data,
+    updatedViews: ViewKey[] = [view],
+    options: { stateKeys?: string[]; returnKeys?: string[] } = {},
+  ) {
     // Saving one menu must not flush unrelated dirty views. A stale dirty
     // marker from another menu can otherwise expand changedKeys and make a
     // manual-input save look successful without actually persisting weeklyReport.
@@ -4549,24 +4554,35 @@ export function DashboardShell({
         menuUpdatedAt,
       },
     }
-    const changedKeys = collectStateKeysForViews(viewsToCommit)
+    const changedKeys = options.stateKeys?.length
+      ? Array.from(new Set(options.stateKeys))
+      : collectStateKeysForViews(viewsToCommit)
     const payload = JSON.stringify({
       partial: true,
       sourceViews: viewsToCommit,
       changedKeys,
+      ...(options.returnKeys?.length ? { returnKeys: Array.from(new Set(options.returnKeys)) } : {}),
       data: pickTopLevelState(nextDataWithMeta, changedKeys),
     })
-    await queueDashboardUpdate(payload)
+    const savePayload = await queueDashboardUpdate(payload)
     if (pendingDataRef.current !== sourceData) return
     setData(nextDataWithMeta)
     pendingDataRef.current = nextDataWithMeta
     scheduleLocalDashboardCache(nextDataWithMeta)
     clearDirtyViews(viewsToCommit)
+    return savePayload
   }
 
   function persist(
     nextData: any,
-    options: { immediate?: boolean; updatedViews?: ViewKey[]; suppressFailureAlert?: boolean; rollbackOnFailure?: boolean } = {},
+    options: {
+      immediate?: boolean
+      updatedViews?: ViewKey[]
+      suppressFailureAlert?: boolean
+      rollbackOnFailure?: boolean
+      stateKeys?: string[]
+      returnKeys?: string[]
+    } = {},
   ) {
     const now = Date.now()
     const updatedViews = options.updatedViews?.length ? options.updatedViews : [view]
@@ -4578,11 +4594,14 @@ export function DashboardShell({
     if (pendingSaveRef.current) {
       window.clearTimeout(pendingSaveRef.current)
     }
-    let savePromise: Promise<void> = Promise.resolve()
+    let savePromise: Promise<any> = Promise.resolve()
     if (options.immediate) {
       pendingPayloadRef.current = null
       pendingSaveRef.current = null
-      savePromise = commitDashboardData(nextData, updatedViews).catch((error) => {
+      savePromise = commitDashboardData(nextData, updatedViews, {
+        stateKeys: options.stateKeys,
+        returnKeys: options.returnKeys,
+      }).catch((error) => {
         const isLatestPending = pendingDataRef.current === nextData
         const shouldRollback = options.rollbackOnFailure !== false
         if (isLatestPending && shouldRollback) {
@@ -7348,23 +7367,37 @@ export function DashboardShell({
             ...(Array.isArray(latestWeeklyReport?.manualSaveHistory) ? latestWeeklyReport.manualSaveHistory : []),
           ].slice(0, 10),
         }
-        const nextPaidOptionSourceColumns = manualValueChanged(baseDraft?.paidOptionInfoColumns, draftRaw?.paidOptionInfoColumns)
+        const paidOptionSourceChanged = manualValueChanged(baseDraft?.paidOptionInfoColumns, draftRaw?.paidOptionInfoColumns)
+        const nextPaidOptionSourceColumns = paidOptionSourceChanged
           ? cloneData(nextWeekly.paidOptionInfoColumns || [])
           : cloneData(latestPaidOptionSourceColumns || latestData?.paidOptionSourceColumns || [])
+        const manualSaveStateKeys = paidOptionSourceChanged
+          ? ["weeklyReport", "paidOptionSourceColumns", "ui"]
+          : ["weeklyReport", "ui"]
         isSyncingManualDraftRef.current = true
         manualDraftRef.current = nextManualDraft
         setManualDraft(nextManualDraft)
         manualPreviewDraftRef.current = nextManualDraft
         setManualPreviewDraft(nextManualDraft)
-        await persist(
+        const savePayload = await persist(
           { ...latestData, paidOptionSourceColumns: nextPaidOptionSourceColumns, weeklyReport: nextWeekly },
-          { immediate: true, updatedViews: ["manual-input", "weekly-report"], suppressFailureAlert: true, rollbackOnFailure: false },
+          {
+            immediate: true,
+            updatedViews: ["manual-input", "weekly-report"],
+            suppressFailureAlert: true,
+            rollbackOnFailure: false,
+            stateKeys: manualSaveStateKeys,
+            returnKeys: ["weeklyReport", "ui"],
+          },
         )
-        const verifyResponse = await fetchNoStoreWithTimeout(`/api/dashboard?slice=weeklyReport&verify=${Date.now()}`).catch(() => null)
-        if (!verifyResponse?.ok) {
-          throw new Error("저장 확인 응답이 지연되었습니다. 잠시 후 다시 저장해주세요.")
+        let verifyPayload = savePayload?.data || null
+        if (!verifyPayload?.weeklyReport) {
+          const verifyResponse = await fetchNoStoreWithTimeout(`/api/dashboard?slice=weeklyReport&verify=${Date.now()}`).catch(() => null)
+          if (!verifyResponse?.ok) {
+            throw new Error("저장 확인 응답이 지연되었습니다. 잠시 후 다시 저장해주세요.")
+          }
+          verifyPayload = verifyResponse?.ok ? await verifyResponse.json().catch(() => null) : null
         }
-        const verifyPayload = verifyResponse?.ok ? await verifyResponse.json().catch(() => null) : null
         if (!manualPersistMatches(nextWeekly, verifyPayload?.weeklyReport)) {
           throw new Error("저장 확인값이 일치하지 않습니다. 다시 저장해주세요.")
         }
