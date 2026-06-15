@@ -3134,9 +3134,6 @@ function buildManualPersistFingerprint(weeklyReport: any) {
     additionalContractCount: weeklyReport?.additionalContractCount,
     subtitleOne: weeklyReport?.subtitleOne,
     subtitleTwo: weeklyReport?.subtitleTwo,
-    manualLastSavedAt: weeklyReport?.manualLastSavedAt,
-    manualLastSavedBy: weeklyReport?.manualLastSavedBy,
-    manualSaveVersion: weeklyReport?.manualSaveVersion,
     revenueNoteText: weeklyReport?.revenueNoteText,
     manualSummary: weeklyReport?.manualSummary || {},
     revenueRows: weeklyReport?.revenueRows || [],
@@ -3150,6 +3147,15 @@ function buildManualPersistFingerprint(weeklyReport: any) {
 }
 
 function manualPersistMatches(expectedWeeklyReport: any, actualWeeklyReport: any) {
+  if (!actualWeeklyReport || typeof actualWeeklyReport !== "object" || Array.isArray(actualWeeklyReport)) return false
+  const expectedSaveVersion = String(expectedWeeklyReport?.manualSaveVersion || "").trim()
+  const actualSaveVersion = String(actualWeeklyReport?.manualSaveVersion || "").trim()
+  if (expectedSaveVersion && actualSaveVersion === expectedSaveVersion) return true
+
+  const expectedSavedAt = String(expectedWeeklyReport?.manualLastSavedAt || "").trim()
+  const actualSavedAt = String(actualWeeklyReport?.manualLastSavedAt || "").trim()
+  if (expectedSavedAt && actualSavedAt === expectedSavedAt) return true
+
   return stableManualValue(buildManualPersistFingerprint(expectedWeeklyReport)) ===
     stableManualValue(buildManualPersistFingerprint(actualWeeklyReport))
 }
