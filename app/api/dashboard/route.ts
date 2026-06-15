@@ -656,6 +656,16 @@ function pickDashboardReturnData(data: any, keys: DashboardStateSliceKey[], sess
   return picked
 }
 
+function pickManualSaveReceipt(data: any) {
+  return {
+    weeklyReport: {
+      manualLastSavedAt: data?.weeklyReport?.manualLastSavedAt,
+      manualLastSavedBy: data?.weeklyReport?.manualLastSavedBy,
+      manualSaveVersion: data?.weeklyReport?.manualSaveVersion,
+    },
+  }
+}
+
 export async function GET(request: Request) {
   const session = await resolveRequestSession()
   if (!session) {
@@ -743,6 +753,7 @@ export async function PUT(request: Request) {
     const requestedReturnKeys = (
       Array.isArray(body?.returnKeys) ? body.returnKeys : []
     ).filter((key: unknown): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))
+    const returnMode = String(body?.returnMode || "").trim()
     const sourceViews = Array.isArray(body?.sourceViews)
       ? body.sourceViews.map((key: unknown) => String(key || "")).filter(Boolean)
       : []
@@ -809,9 +820,12 @@ export async function PUT(request: Request) {
         (await readDashboardState<any>(FALLBACK_PATH)) ||
         EMPTY_DASHBOARD
       existingDataForActivity = existingData
+      const incomingWeeklyReport = isManualWeeklySave && isPartial
+        ? { ...(existingData?.weeklyReport || {}), ...(incomingBody.weeklyReport || {}) }
+        : incomingBody.weeklyReport
       nextBody = {
         ...nextBody,
-        weeklyReport: mergeWeeklyReportState(existingData?.weeklyReport, incomingBody.weeklyReport),
+        weeklyReport: mergeWeeklyReportState(existingData?.weeklyReport, incomingWeeklyReport),
       }
     }
 
@@ -856,7 +870,9 @@ export async function PUT(request: Request) {
     if (requestedReturnKeys.length) {
       return NextResponse.json({
         ok: true,
-        data: pickDashboardReturnData(correctedNextBody, requestedReturnKeys, session, permissions),
+        data: returnMode === "manualSaveReceipt"
+          ? pickManualSaveReceipt(correctedNextBody)
+          : pickDashboardReturnData(correctedNextBody, requestedReturnKeys, session, permissions),
       })
     }
     return NextResponse.json({ ok: true })

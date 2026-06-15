@@ -3146,6 +3146,28 @@ function buildManualPersistFingerprint(weeklyReport: any) {
   }
 }
 
+function buildManualWeeklySavePatch(weeklyReport: any, includePaidOptionColumns: boolean) {
+  return {
+    revenueHeaderText: weeklyReport?.revenueHeaderText,
+    revenueUnitPrice: weeklyReport?.revenueUnitPrice,
+    additionalContractCount: weeklyReport?.additionalContractCount,
+    manualLastSavedAt: weeklyReport?.manualLastSavedAt,
+    manualLastSavedBy: weeklyReport?.manualLastSavedBy,
+    manualSaveVersion: weeklyReport?.manualSaveVersion,
+    subtitleOne: weeklyReport?.subtitleOne,
+    subtitleTwo: weeklyReport?.subtitleTwo,
+    revenueNoteText: weeklyReport?.revenueNoteText,
+    manualSummary: weeklyReport?.manualSummary || {},
+    revenueRows: weeklyReport?.revenueRows || [],
+    goalRows: weeklyReport?.goalRows || [],
+    industryStats: weeklyReport?.industryStats || [],
+    ...(includePaidOptionColumns ? { paidOptionInfoColumns: weeklyReport?.paidOptionInfoColumns || [] } : {}),
+    terminationOverviewRows: weeklyReport?.terminationOverviewRows || [],
+    weeklyIndustryOverviewRows: weeklyReport?.weeklyIndustryOverviewRows || [],
+    additionalSales: normalizeAdditionalSalesRows(weeklyReport?.additionalSales || []),
+  }
+}
+
 function manualPersistMatches(expectedWeeklyReport: any, actualWeeklyReport: any) {
   if (!actualWeeklyReport || typeof actualWeeklyReport !== "object" || Array.isArray(actualWeeklyReport)) return false
   const expectedSaveVersion = String(expectedWeeklyReport?.manualSaveVersion || "").trim()
@@ -4536,7 +4558,7 @@ export function DashboardShell({
   async function commitDashboardData(
     sourceData: any = pendingDataRef.current || data,
     updatedViews: ViewKey[] = [view],
-    options: { stateKeys?: string[]; returnKeys?: string[] } = {},
+    options: { stateKeys?: string[]; returnKeys?: string[]; returnMode?: string; payloadData?: Record<string, any>; compactUi?: boolean } = {},
   ) {
     // Saving one menu must not flush unrelated dirty views. A stale dirty
     // marker from another menu can otherwise expand changedKeys and make a
@@ -4557,12 +4579,18 @@ export function DashboardShell({
     const changedKeys = options.stateKeys?.length
       ? Array.from(new Set(options.stateKeys))
       : collectStateKeysForViews(viewsToCommit)
+    const payloadSource = {
+      ...nextDataWithMeta,
+      ...(options.payloadData || {}),
+      ...(options.compactUi && changedKeys.includes("ui") ? { ui: { menuUpdatedAt } } : {}),
+    }
     const payload = JSON.stringify({
       partial: true,
       sourceViews: viewsToCommit,
       changedKeys,
       ...(options.returnKeys?.length ? { returnKeys: Array.from(new Set(options.returnKeys)) } : {}),
-      data: pickTopLevelState(nextDataWithMeta, changedKeys),
+      ...(options.returnMode ? { returnMode: options.returnMode } : {}),
+      data: pickTopLevelState(payloadSource, changedKeys),
     })
     const savePayload = await queueDashboardUpdate(payload)
     if (pendingDataRef.current !== sourceData) return
@@ -4582,6 +4610,9 @@ export function DashboardShell({
       rollbackOnFailure?: boolean
       stateKeys?: string[]
       returnKeys?: string[]
+      returnMode?: string
+      payloadData?: Record<string, any>
+      compactUi?: boolean
     } = {},
   ) {
     const now = Date.now()
@@ -4601,6 +4632,9 @@ export function DashboardShell({
       savePromise = commitDashboardData(nextData, updatedViews, {
         stateKeys: options.stateKeys,
         returnKeys: options.returnKeys,
+        returnMode: options.returnMode,
+        payloadData: options.payloadData,
+        compactUi: options.compactUi,
       }).catch((error) => {
         const isLatestPending = pendingDataRef.current === nextData
         const shouldRollback = options.rollbackOnFailure !== false
@@ -7374,6 +7408,7 @@ export function DashboardShell({
         const manualSaveStateKeys = paidOptionSourceChanged
           ? ["weeklyReport", "paidOptionSourceColumns", "ui"]
           : ["weeklyReport", "ui"]
+        const manualWeeklySavePatch = buildManualWeeklySavePatch(nextWeekly, paidOptionSourceChanged)
         isSyncingManualDraftRef.current = true
         manualDraftRef.current = nextManualDraft
         setManualDraft(nextManualDraft)
@@ -7388,6 +7423,12 @@ export function DashboardShell({
             rollbackOnFailure: false,
             stateKeys: manualSaveStateKeys,
             returnKeys: ["weeklyReport", "ui"],
+            returnMode: "manualSaveReceipt",
+            payloadData: {
+              weeklyReport: manualWeeklySavePatch,
+              ...(paidOptionSourceChanged ? { paidOptionSourceColumns: nextPaidOptionSourceColumns } : {}),
+            },
+            compactUi: true,
           },
         )
         let verifyPayload = savePayload?.data || null
