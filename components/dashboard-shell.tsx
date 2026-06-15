@@ -1099,6 +1099,16 @@ function parseLooseNumber(value: unknown) {
   return Number.isNaN(num) ? 0 : num
 }
 
+async function fetchNoStoreWithTimeout(url: string, timeoutMs = 12000) {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null
+  const timeout = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null
+  try {
+    return await fetch(url, { cache: "no-store", signal: controller?.signal })
+  } finally {
+    if (timeout) window.clearTimeout(timeout)
+  }
+}
+
 function normalizeTerminationReason(reason: unknown) {
   const raw = String(reason ?? "").trim()
   if (!raw) return ""
@@ -2722,12 +2732,19 @@ function normalizeAdditionalSalesRows(rows: any[]) {
     return {
       idCode: String(row?.idCode ?? row?.id ?? ""),
       company: String(row?.company ?? ""),
-      amount: String(row?.amount ?? ""),
+      amount: normalizeAdditionalSaleAmount(row?.amount),
       content,
       note,
       kind: kind || (legacyLabel.includes("추가계약") || note.includes("추가계약") ? "additional-contract" : "manual"),
     }
   })
+}
+
+function normalizeAdditionalSaleAmount(value: unknown) {
+  const text = String(value ?? "").trim()
+  if (!text) return ""
+  const digits = text.replace(/[^\d]/g, "")
+  return digits ? String(Number(digits)) : ""
 }
 
 function getWeeklyAdditionalContractAmount(currentAmount: unknown) {
@@ -3128,7 +3145,7 @@ function buildManualPersistFingerprint(weeklyReport: any) {
     paidOptionInfoColumns: weeklyReport?.paidOptionInfoColumns || [],
     terminationOverviewRows: weeklyReport?.terminationOverviewRows || [],
     weeklyIndustryOverviewRows: weeklyReport?.weeklyIndustryOverviewRows || [],
-    additionalSales: weeklyReport?.additionalSales || [],
+    additionalSales: normalizeAdditionalSalesRows(weeklyReport?.additionalSales || []),
   }
 }
 
@@ -3509,7 +3526,7 @@ export function DashboardShell({
   function previewAdditionalSaleRow(rowIndex: number, field: string, value: string) {
     updateManualPreviewDraft((prev: any) => {
       const additionalSales = normalizeAdditionalSalesRows(cloneData(prev.additionalSales || [])) as Array<Record<string, string>>
-      additionalSales[rowIndex][field] = value
+      additionalSales[rowIndex][field] = field === "amount" ? normalizeAdditionalSaleAmount(value) : value
       return { ...prev, additionalSales }
     })
   }
@@ -5211,7 +5228,7 @@ export function DashboardShell({
   function updateAdditionalSaleRow(rowIndex: number, field: string, value: string) {
     applyAdditionalSalesDraft((rows) => {
       if (!rows[rowIndex]) return rows
-      rows[rowIndex][field] = value
+      rows[rowIndex][field] = field === "amount" ? normalizeAdditionalSaleAmount(value) : value
       return rows
     })
   }
@@ -7249,7 +7266,7 @@ export function DashboardShell({
       try {
         const latestData = pendingDataRef.current || data
         const draftRaw = manualPreviewDraftRef.current || manualDraftRef.current || manualDraft
-        const latestSliceResponse = await fetch("/api/dashboard?slice=weeklyReport", { cache: "no-store" }).catch(() => null)
+        const latestSliceResponse = await fetchNoStoreWithTimeout("/api/dashboard?slice=weeklyReport").catch(() => null)
         if (!latestSliceResponse?.ok) {
           throw new Error("최신 서버 저장본을 확인하지 못했습니다. 새로고침 후 다시 저장해주세요.")
         }
@@ -7337,10 +7354,13 @@ export function DashboardShell({
           { ...latestData, paidOptionSourceColumns: nextPaidOptionSourceColumns, weeklyReport: nextWeekly },
           { immediate: true, updatedViews: ["manual-input", "weekly-report"], suppressFailureAlert: true, rollbackOnFailure: false },
         )
-        const verifyResponse = await fetch(`/api/dashboard?slice=weeklyReport&verify=${Date.now()}`, { cache: "no-store" }).catch(() => null)
+        const verifyResponse = await fetchNoStoreWithTimeout(`/api/dashboard?slice=weeklyReport&verify=${Date.now()}`).catch(() => null)
+        if (!verifyResponse?.ok) {
+          throw new Error("저장 확인 응답이 지연되었습니다. 잠시 후 다시 저장해주세요.")
+        }
         const verifyPayload = verifyResponse?.ok ? await verifyResponse.json().catch(() => null) : null
         if (!manualPersistMatches(nextWeekly, verifyPayload?.weeklyReport)) {
-          throw new Error("Manual input save verification failed")
+          throw new Error("저장 확인값이 일치하지 않습니다. 다시 저장해주세요.")
         }
         isSyncingManualDraftRef.current = true
         manualBaseDraftRef.current = cloneData(nextManualDraft)
@@ -8198,7 +8218,7 @@ export function DashboardShell({
                     <BufferedManualInput className={manualTableTextInputClass} placeholder="회사" value={String(row.company ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "company", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "company", value)} />
                   </td>
                   <td className={`${tdClass} p-1`}>
-                    <BufferedManualInput className={manualTableInputClass} placeholder="금액" value={String(row.amount ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "amount", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "amount", value)} />
+                    <BufferedManualInput className={manualTableInputClass} placeholder="금액" inputMode="numeric" value={formatNumericInputDisplay(row.amount)} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "amount", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "amount", value)} />
                   </td>
                   <td className={`${tdClass} p-1`}>
                     <BufferedManualInput className={manualTableTextInputClass} placeholder="내용" value={String(row.content ?? "")} onDirty={markManualInputDirty} onLiveChange={(value) => previewAdditionalSaleRow(rowIndex, "content", value)} onCommit={(value) => updateAdditionalSaleRow(rowIndex, "content", value)} />
