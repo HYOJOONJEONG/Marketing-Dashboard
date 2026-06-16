@@ -4517,10 +4517,41 @@ export function DashboardShell({
     }
   }
 
+  async function sendManualInputUpdate(body: string) {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 15000)
+    try {
+      const response = await fetch("/api/dashboard/manual-input", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        signal: controller.signal,
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || payload?.ok === false) {
+        if (response.status === 413) {
+          throw new Error("저장 요청 데이터가 너무 큽니다. 화면을 새로고침한 뒤 다시 저장해주세요.")
+        }
+        throw new Error(payload?.error || `수동입력 저장 실패 (${response.status})`)
+      }
+      return payload || { ok: true }
+    } finally {
+      window.clearTimeout(timeout)
+    }
+  }
+
   function queueDashboardUpdate(body: string, keepalive = false) {
     const nextSave = saveQueueRef.current
       .catch(() => undefined)
       .then(() => sendDashboardUpdate(body, keepalive))
+    saveQueueRef.current = nextSave.catch(() => undefined)
+    return nextSave
+  }
+
+  function queueManualInputUpdate(body: string) {
+    const nextSave = saveQueueRef.current
+      .catch(() => undefined)
+      .then(() => sendManualInputUpdate(body))
     saveQueueRef.current = nextSave.catch(() => undefined)
     return nextSave
   }
@@ -7414,32 +7445,36 @@ export function DashboardShell({
         const nextPaidOptionSourceColumns = paidOptionSourceChanged
           ? cloneData(compactPaidOptionSourceColumns)
           : cloneData(latestPaidOptionSourceColumns || latestData?.paidOptionSourceColumns || [])
-        const manualSaveStateKeys = paidOptionSourceChanged
-          ? ["weeklyReport", "paidOptionSourceColumns", "ui"]
-          : ["weeklyReport", "ui"]
         const manualWeeklySavePatch = buildManualWeeklySavePatch(nextWeekly, paidOptionSourceChanged)
+        const nextLocalData = {
+          ...latestData,
+          paidOptionSourceColumns: nextPaidOptionSourceColumns,
+          weeklyReport: nextWeekly,
+          ui: {
+            ...(latestData?.ui || {}),
+            menuUpdatedAt: {
+              ...(latestData?.ui?.menuUpdatedAt || {}),
+              "manual-input": manualSavedAt,
+              "weekly-report": manualSavedAt,
+            },
+          },
+        }
         isSyncingManualDraftRef.current = true
         manualDraftRef.current = nextManualDraft
         setManualDraft(nextManualDraft)
         manualPreviewDraftRef.current = nextManualDraft
         setManualPreviewDraft(nextManualDraft)
-        const savePayload = await persist(
-          { ...latestData, paidOptionSourceColumns: nextPaidOptionSourceColumns, weeklyReport: nextWeekly },
-          {
-            immediate: true,
-            updatedViews: ["manual-input", "weekly-report"],
-            suppressFailureAlert: true,
-            rollbackOnFailure: false,
-            stateKeys: manualSaveStateKeys,
-            returnKeys: ["weeklyReport", "ui"],
-            returnMode: "manualSaveReceipt",
-            payloadData: {
-              weeklyReport: manualWeeklySavePatch,
-              ...(paidOptionSourceChanged ? { paidOptionSourceColumns: compactPaidOptionSourceColumns } : {}),
-            },
-            compactUi: true,
-          },
-        )
+        setData(nextLocalData)
+        pendingDataRef.current = nextLocalData
+        markViewsDirty(["manual-input", "weekly-report"])
+        scheduleLocalDashboardCache(nextLocalData)
+        const savePayload = await queueManualInputUpdate(JSON.stringify({
+          weeklyReport: manualWeeklySavePatch,
+          ...(paidOptionSourceChanged ? { paidOptionSourceColumns: compactPaidOptionSourceColumns } : {}),
+        }))
+        if (pendingDataRef.current === nextLocalData) {
+          clearDirtyViews(["manual-input", "weekly-report"])
+        }
         let verifyPayload = savePayload?.data || null
         if (!verifyPayload?.weeklyReport) {
           const verifyResponse = await fetchNoStoreWithTimeout(`/api/dashboard?slice=weeklyReport&verify=${Date.now()}`).catch(() => null)
