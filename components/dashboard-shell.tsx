@@ -907,6 +907,15 @@ function buildPaidOptionInfoColumns(columns: any[]) {
   })
 }
 
+function buildManualPaidOptionSummaryColumns(columns: any[]) {
+  return buildPaidOptionInfoColumns(columns).map((column: any, index: number) => ({
+    id: String(column?.id || `paid-option-${index}`),
+    title: normalizePaidOptionTitle(column?.title, paidOptionOrderedTitles[index] || ""),
+    total: formatCountToKoreanUnit(column?.total ?? column?.count_value, "0건"),
+    rows: [],
+  }))
+}
+
 function formatCountToKoreanUnit(value: unknown, fallback = "0건") {
   const text = String(value ?? "").trim()
   if (!text) return fallback
@@ -3148,7 +3157,7 @@ function buildManualPersistFingerprint(weeklyReport: any) {
 
 function buildManualWeeklySavePatch(weeklyReport: any, includePaidOptionColumns: boolean) {
   const compactPaidOptionColumns = includePaidOptionColumns
-    ? buildPaidOptionInfoColumns(weeklyReport?.paidOptionInfoColumns || [])
+    ? buildManualPaidOptionSummaryColumns(weeklyReport?.paidOptionInfoColumns || [])
     : []
   return {
     revenueHeaderText: weeklyReport?.revenueHeaderText,
@@ -7440,7 +7449,7 @@ export function DashboardShell({
         }
         const paidOptionSourceChanged = manualValueChanged(baseDraft?.paidOptionInfoColumns, draftRaw?.paidOptionInfoColumns)
         const compactPaidOptionSourceColumns = paidOptionSourceChanged
-          ? buildPaidOptionInfoColumns(nextWeekly.paidOptionInfoColumns || [])
+          ? buildManualPaidOptionSummaryColumns(nextWeekly.paidOptionInfoColumns || [])
           : []
         const nextPaidOptionSourceColumns = paidOptionSourceChanged
           ? cloneData(compactPaidOptionSourceColumns)
