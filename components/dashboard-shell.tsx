@@ -916,6 +916,14 @@ function buildManualPaidOptionSummaryColumns(columns: any[]) {
   }))
 }
 
+function getJsonByteLength(value: unknown) {
+  try {
+    return new Blob([typeof value === "string" ? value : JSON.stringify(value ?? null)]).size
+  } catch {
+    return String(value ?? "").length
+  }
+}
+
 function formatCountToKoreanUnit(value: unknown, fallback = "0건") {
   const text = String(value ?? "").trim()
   if (!text) return fallback
@@ -3155,6 +3163,59 @@ function buildManualPersistFingerprint(weeklyReport: any) {
   }
 }
 
+function compactManualSummary(summary: any) {
+  const fields = new Set<string>()
+  manualSummaryMatrixRows.forEach((section) => {
+    section.cells.forEach(([, field]) => fields.add(field))
+  })
+  const next: Record<string, string> = {}
+  fields.forEach((field) => {
+    if (summary && Object.prototype.hasOwnProperty.call(summary, field)) {
+      next[field] = sanitizeCellValue(summary?.[field], "")
+    }
+  })
+  return next
+}
+
+function compactRevenueRowsForSave(rows: any[]) {
+  return buildRevenueRowsWithComputedTotal(rows || []).slice(0, 4).map((row: any, index: number) => ({
+    key: sanitizeCellValue(row?.key, ["sales", "penalty", "move", "total"][index] || `row-${index}`),
+    label: sanitizeSummaryText(row?.label, ["매출순증", "위약금", "이전비", "합계"][index] || `항목 ${index + 1}`),
+    months: Array.from({ length: 12 }, (_, monthIndex) => sanitizeCellValue(row?.months?.[monthIndex], "")),
+  }))
+}
+
+function compactGoalRowsForSave(rows: any[]) {
+  return buildGoalRows(rows || []).slice(0, 13).map((row: any) => ({
+    month: sanitizeCellValue(row?.month, ""),
+    netTarget: sanitizeCellValue(row?.netTarget, ""),
+    targetContracts: sanitizeCellValue(row?.targetContracts, ""),
+    quarterNetTarget: sanitizeCellValue(row?.quarterNetTarget, ""),
+    monthlyActual: sanitizeCellValue(row?.monthlyActual, ""),
+    quarterActual: sanitizeCellValue(row?.quarterActual, ""),
+    gap: sanitizeCellValue(row?.gap, ""),
+  }))
+}
+
+function compactIndustryStatsForSave(rows: any[]) {
+  return buildIndustryStats(rows || []).slice(0, 10).map((row: any, index: number) => ({
+    category: sanitizeSummaryText(row?.category, `업종 ${index + 1}`),
+    newCount: toNumber(row?.newCount),
+    netCount: toNumber(row?.netCount),
+  }))
+}
+
+function compactAdditionalSalesForSave(rows: any[]) {
+  return normalizeAdditionalSalesRows(rows || []).slice(0, 200).map((row: any) => ({
+    idCode: sanitizeCellValue(row?.idCode, ""),
+    company: sanitizeCellValue(row?.company, ""),
+    amount: normalizeAdditionalSaleAmount(row?.amount),
+    content: sanitizeCellValue(row?.content, ""),
+    note: sanitizeCellValue(row?.note, ""),
+    kind: sanitizeCellValue(row?.kind, "manual"),
+  }))
+}
+
 function buildManualWeeklySavePatch(weeklyReport: any, includePaidOptionColumns: boolean) {
   const compactPaidOptionColumns = includePaidOptionColumns
     ? buildManualPaidOptionSummaryColumns(weeklyReport?.paidOptionInfoColumns || [])
@@ -3169,14 +3230,38 @@ function buildManualWeeklySavePatch(weeklyReport: any, includePaidOptionColumns:
     subtitleOne: weeklyReport?.subtitleOne,
     subtitleTwo: weeklyReport?.subtitleTwo,
     revenueNoteText: weeklyReport?.revenueNoteText,
-    manualSummary: weeklyReport?.manualSummary || {},
-    revenueRows: weeklyReport?.revenueRows || [],
-    goalRows: weeklyReport?.goalRows || [],
-    industryStats: weeklyReport?.industryStats || [],
+    manualSummary: compactManualSummary(weeklyReport?.manualSummary || {}),
+    revenueRows: compactRevenueRowsForSave(weeklyReport?.revenueRows || []),
+    goalRows: compactGoalRowsForSave(weeklyReport?.goalRows || []),
+    industryStats: compactIndustryStatsForSave(weeklyReport?.industryStats || []),
     ...(includePaidOptionColumns ? { paidOptionInfoColumns: compactPaidOptionColumns } : {}),
-    terminationOverviewRows: weeklyReport?.terminationOverviewRows || [],
-    weeklyIndustryOverviewRows: weeklyReport?.weeklyIndustryOverviewRows || [],
-    additionalSales: normalizeAdditionalSalesRows(weeklyReport?.additionalSales || []),
+    terminationOverviewRows: buildTerminationOverviewRowsWithComputedTotals(weeklyReport?.terminationOverviewRows || []).slice(0, 3),
+    weeklyIndustryOverviewRows: buildWeeklyIndustryOverviewRows(weeklyReport?.weeklyIndustryOverviewRows || []).slice(0, 2),
+    additionalSales: compactAdditionalSalesForSave(weeklyReport?.additionalSales || []),
+  }
+}
+
+function compactManualInputRequestBody(body: string) {
+  try {
+    const parsed = JSON.parse(body)
+    const includePaidOptionColumns =
+      Array.isArray(parsed?.weeklyReport?.paidOptionInfoColumns) ||
+      Array.isArray(parsed?.paidOptionSourceColumns)
+    const compact: any = {
+      weeklyReport: buildManualWeeklySavePatch(parsed?.weeklyReport || {}, includePaidOptionColumns),
+    }
+    if (Array.isArray(parsed?.paidOptionSourceColumns)) {
+      compact.paidOptionSourceColumns = buildManualPaidOptionSummaryColumns(parsed.paidOptionSourceColumns)
+    }
+    let serialized = JSON.stringify(compact)
+    if (getJsonByteLength(serialized) > 200_000) {
+      delete compact.paidOptionSourceColumns
+      delete compact.weeklyReport.paidOptionInfoColumns
+      serialized = JSON.stringify(compact)
+    }
+    return serialized
+  } catch {
+    return body
   }
 }
 
@@ -4516,6 +4601,20 @@ export function DashboardShell({
       const payload = await response.json().catch(() => null)
       if (!response.ok || payload?.ok === false) {
         if (response.status === 413) {
+          try {
+            const parsed = JSON.parse(body)
+            const sourceViews = Array.isArray(parsed?.sourceViews) ? parsed.sourceViews : []
+            if (sourceViews.includes("manual-input") && parsed?.data?.weeklyReport) {
+              return await sendManualInputUpdate(JSON.stringify({
+                weeklyReport: parsed.data.weeklyReport,
+                ...(Array.isArray(parsed?.data?.paidOptionSourceColumns)
+                  ? { paidOptionSourceColumns: parsed.data.paidOptionSourceColumns }
+                  : {}),
+              }))
+            }
+          } catch {
+            // Fall through to the user-facing error below.
+          }
           throw new Error("저장 요청 데이터가 너무 큽니다. 화면을 새로고침한 뒤 다시 저장해주세요.")
         }
         throw new Error(payload?.error || `Dashboard save failed (${response.status})`)
@@ -4527,19 +4626,34 @@ export function DashboardShell({
   }
 
   async function sendManualInputUpdate(body: string) {
+    let requestBody = compactManualInputRequestBody(body)
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), 15000)
     try {
       const response = await fetch("/api/dashboard/manual-input", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body,
+        body: requestBody,
         signal: controller.signal,
       })
       const payload = await response.json().catch(() => null)
       if (!response.ok || payload?.ok === false) {
         if (response.status === 413) {
-          throw new Error("저장 요청 데이터가 너무 큽니다. 화면을 새로고침한 뒤 다시 저장해주세요.")
+          const compact = JSON.parse(requestBody)
+          delete compact.paidOptionSourceColumns
+          delete compact.weeklyReport?.paidOptionInfoColumns
+          requestBody = JSON.stringify(compact)
+          const retryResponse = await fetch("/api/dashboard/manual-input", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: requestBody,
+            signal: controller.signal,
+          })
+          const retryPayload = await retryResponse.json().catch(() => null)
+          if (retryResponse.ok && retryPayload?.ok !== false) {
+            return retryPayload || { ok: true }
+          }
+          throw new Error(retryPayload?.error || "저장 요청 데이터가 너무 큽니다. 옵션정보를 제외한 값도 저장하지 못했습니다.")
         }
         throw new Error(payload?.error || `수동입력 저장 실패 (${response.status})`)
       }
