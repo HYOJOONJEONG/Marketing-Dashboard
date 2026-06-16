@@ -3147,6 +3147,9 @@ function buildManualPersistFingerprint(weeklyReport: any) {
 }
 
 function buildManualWeeklySavePatch(weeklyReport: any, includePaidOptionColumns: boolean) {
+  const compactPaidOptionColumns = includePaidOptionColumns
+    ? buildPaidOptionInfoColumns(weeklyReport?.paidOptionInfoColumns || [])
+    : []
   return {
     revenueHeaderText: weeklyReport?.revenueHeaderText,
     revenueUnitPrice: weeklyReport?.revenueUnitPrice,
@@ -3161,7 +3164,7 @@ function buildManualWeeklySavePatch(weeklyReport: any, includePaidOptionColumns:
     revenueRows: weeklyReport?.revenueRows || [],
     goalRows: weeklyReport?.goalRows || [],
     industryStats: weeklyReport?.industryStats || [],
-    ...(includePaidOptionColumns ? { paidOptionInfoColumns: weeklyReport?.paidOptionInfoColumns || [] } : {}),
+    ...(includePaidOptionColumns ? { paidOptionInfoColumns: compactPaidOptionColumns } : {}),
     terminationOverviewRows: weeklyReport?.terminationOverviewRows || [],
     weeklyIndustryOverviewRows: weeklyReport?.weeklyIndustryOverviewRows || [],
     additionalSales: normalizeAdditionalSalesRows(weeklyReport?.additionalSales || []),
@@ -4503,6 +4506,9 @@ export function DashboardShell({
       })
       const payload = await response.json().catch(() => null)
       if (!response.ok || payload?.ok === false) {
+        if (response.status === 413) {
+          throw new Error("저장 요청 데이터가 너무 큽니다. 화면을 새로고침한 뒤 다시 저장해주세요.")
+        }
         throw new Error(payload?.error || `Dashboard save failed (${response.status})`)
       }
       return payload || { ok: true }
@@ -7402,8 +7408,11 @@ export function DashboardShell({
           ].slice(0, 10),
         }
         const paidOptionSourceChanged = manualValueChanged(baseDraft?.paidOptionInfoColumns, draftRaw?.paidOptionInfoColumns)
+        const compactPaidOptionSourceColumns = paidOptionSourceChanged
+          ? buildPaidOptionInfoColumns(nextWeekly.paidOptionInfoColumns || [])
+          : []
         const nextPaidOptionSourceColumns = paidOptionSourceChanged
-          ? cloneData(nextWeekly.paidOptionInfoColumns || [])
+          ? cloneData(compactPaidOptionSourceColumns)
           : cloneData(latestPaidOptionSourceColumns || latestData?.paidOptionSourceColumns || [])
         const manualSaveStateKeys = paidOptionSourceChanged
           ? ["weeklyReport", "paidOptionSourceColumns", "ui"]
@@ -7426,7 +7435,7 @@ export function DashboardShell({
             returnMode: "manualSaveReceipt",
             payloadData: {
               weeklyReport: manualWeeklySavePatch,
-              ...(paidOptionSourceChanged ? { paidOptionSourceColumns: nextPaidOptionSourceColumns } : {}),
+              ...(paidOptionSourceChanged ? { paidOptionSourceColumns: compactPaidOptionSourceColumns } : {}),
             },
             compactUi: true,
           },
