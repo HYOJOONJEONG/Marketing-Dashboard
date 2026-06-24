@@ -560,14 +560,14 @@ function EditActionButtons({
   onCancel: () => void
 }) {
   return (
-    <div className="flex min-w-[190px] items-center gap-1.5">
+    <div className="flex min-w-[150px] items-center gap-1.5">
       <button
         type="button"
         onClick={onSave}
         className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-blue-600 px-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-blue-700"
       >
         <Check className="h-3.5 w-3.5" />
-        수정완료 및 저장
+        수정완료 저장
       </button>
       <button
         type="button"
@@ -596,7 +596,7 @@ function MoveSelect({
   if (!items.length) return <span className="text-slate-300">-</span>
   return (
     <select
-      className="h-7 w-full min-w-[190px] rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+      className="h-7 w-full min-w-[150px] rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
       value={value || items[0]}
       onChange={(event) => {
         const nextValue = event.target.value
@@ -1183,7 +1183,7 @@ function GroupedNewRecordsTable({
         상세 목록 {formatNumber(totalCount)}건
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1440px] border-collapse text-[12px]">
+        <table className="w-full min-w-[1280px] border-collapse text-[12px]">
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
               <SortableHeader label="NO" sortKey="no" sort={sort || null} onSort={onSort} align="center" className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold" />
@@ -1195,7 +1195,7 @@ function GroupedNewRecordsTable({
               <SortableHeader label="구분" sortKey="replacementType" sort={sort || null} onSort={onSort} className="w-[88px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
               <SortableHeader label="업무성격" sortKey="businessType" sort={sort || null} onSort={onSort} className="w-[82px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
               <SortableHeader label="비고" sortKey="note" sort={sort || null} onSort={onSort} className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <th className="w-[292px] px-2 py-2 text-left font-semibold">수정 / 업종 이동</th>
+              <th className="w-[236px] px-2 py-2 text-left font-semibold">수정 / 업종 이동</th>
             </tr>
           </thead>
           <tbody>
@@ -1255,8 +1255,8 @@ function GroupedNewRecordsTable({
                     </td>
                     <td className="px-2 py-1.5">
                       {isEditing ? (
-                        <div className="flex items-center gap-1.5">
-                          <div className="min-w-[170px] flex-1">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="min-w-0">
                             <InlineEditSelect value={draft.group || group.label || ""} options={industryOptions} onChange={(value) => updateDraft("group", value)} ariaLabel="신규/대체 업종" />
                           </div>
                           <EditActionButtons onSave={saveEdit} onCancel={cancelEdit} />
@@ -1451,7 +1451,7 @@ function GroupedTerminationRecordsTable({
         상세 목록 {formatNumber(totalCount)}건
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1440px] border-collapse text-[12px]">
+        <table className="w-full min-w-[1320px] border-collapse text-[12px]">
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
               <SortableHeader label="NO" sortKey="no" sort={sort || null} onSort={onSort} align="center" className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold" />
@@ -1463,7 +1463,7 @@ function GroupedTerminationRecordsTable({
               <SortableHeader label="해지사유" sortKey="reason" sort={sort || null} onSort={onSort} className="min-w-[140px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
               <SortableHeader label="위약금" sortKey="penalty" sort={sort || null} onSort={onSort} align="right" className="w-[98px] border-r border-slate-200 px-2 py-2 text-right font-semibold" />
               <SortableHeader label="비고" sortKey="note" sort={sort || null} onSort={onSort} className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <th className="w-[292px] px-2 py-2 text-left font-semibold">수정 / 업종 이동</th>
+              <th className="w-[236px] px-2 py-2 text-left font-semibold">수정 / 업종 이동</th>
             </tr>
           </thead>
           <tbody>
@@ -1521,8 +1521,8 @@ function GroupedTerminationRecordsTable({
                     </td>
                     <td className="px-2 py-1.5">
                       {isEditing ? (
-                        <div className="flex items-center gap-1.5">
-                          <div className="min-w-[170px] flex-1">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="min-w-0">
                             <InlineEditSelect value={draft.group || group.label || ""} options={industryOptions} onChange={(value) => updateDraft("group", value)} ariaLabel="해지 업종" />
                           </div>
                           <EditActionButtons onSave={saveEdit} onCancel={cancelEdit} />
