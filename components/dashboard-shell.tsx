@@ -7830,6 +7830,141 @@ export function DashboardShell({
     setTypeAnalysisSaveMessage("분류 이동 반영 완료. 저장을 눌러 확정해주세요.")
   }
 
+  async function handleTypeAnalysisUpdateRecord(
+    kind: "new" | "termination",
+    record: any,
+    patch: Record<string, any>,
+  ) {
+    if (isSavingDashboard) return
+    setIsSavingDashboard(true)
+    setTypeAnalysisSaveMessage("수정 저장 중...")
+    try {
+      const latestData = pendingDataRef.current || data
+      const totalContractsOverride = latestData?.weeklyReport?.manualSummary?.totalContracts
+      const latestConfirmedItems =
+        (latestData?.termination?.sheets || []).find((sheet: any) => sheet.id === latestData?.termination?.currentSheetId)?.confirmedItems ||
+        latestData?.termination?.sheets?.[0]?.confirmedItems ||
+        []
+      const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis, totalContractsOverride, latestConfirmedItems)
+      const recordKey = getTypeAnalysisRecordMergeKey(kind, record)
+      const hasPatchField = (field: string) => Object.prototype.hasOwnProperty.call(patch || {}, field)
+      const groupChanged = hasPatchField("group") || hasPatchField("industry")
+
+      const updateRecord = (row: any) => {
+        if (getTypeAnalysisRecordMergeKey(kind, row) !== recordKey) return row
+        const companyName = String(hasPatchField("companyName") ? patch.companyName : row?.companyName || "").trim()
+        const group = normalizeTypeAnalysisIndustryGroup(
+          hasPatchField("group") || hasPatchField("industry")
+            ? patch.group || patch.industry
+            : row?.group || row?.industry,
+          companyName,
+        )
+        const areaGroup = hasPatchField("areaGroup")
+          ? normalizeTypeAnalysisAreaGroup(patch.areaGroup, companyName)
+          : groupChanged
+            ? normalizeTypeAnalysisAreaGroup(group, companyName)
+            : normalizeTypeAnalysisRecordAreaGroup({ ...row, ...patch, companyName, group }, kind, group)
+
+        if (kind === "new") {
+          const replacementType = normalizeTypeAnalysisReplacementType(
+            hasPatchField("replacementType") ? patch.replacementType : row?.replacementType,
+          )
+          const businessType = normalizeTypeAnalysisBusinessType(
+            hasPatchField("businessType") ? patch.businessType : row?.businessType,
+          )
+          return {
+            ...row,
+            date: normalizeDate(hasPatchField("date") ? patch.date : row?.date),
+            idCode: String(hasPatchField("idCode") ? patch.idCode : row?.idCode || "").trim(),
+            companyName,
+            departmentName: String(hasPatchField("departmentName") ? patch.departmentName : row?.departmentName || "").trim(),
+            recommender: String(hasPatchField("recommender") ? patch.recommender : row?.recommender || "").trim(),
+            industry: group,
+            replacementType,
+            replacementFlags: createTypeAnalysisReplacementFlags(replacementType),
+            businessType,
+            note: String(hasPatchField("note") ? patch.note : row?.note || "").trim(),
+            group,
+            areaGroup,
+          }
+        }
+
+        const reason = normalizeTypeAnalysisTerminationReason(hasPatchField("reason") ? patch.reason : row?.reason)
+        return {
+          ...row,
+          date: normalizeDate(hasPatchField("date") ? patch.date : row?.date),
+          idCode: String(hasPatchField("idCode") ? patch.idCode : row?.idCode || "").trim(),
+          companyName,
+          departmentName: String(hasPatchField("departmentName") ? patch.departmentName : row?.departmentName || "").trim(),
+          recommender: String(hasPatchField("recommender") ? patch.recommender : row?.recommender || "").trim(),
+          industry: group,
+          reason,
+          reasonFlags: createTypeAnalysisTerminationReasonFlags(reason),
+          penalty: toNumber(hasPatchField("penalty") ? patch.penalty : row?.penalty),
+          note: String(hasPatchField("note") ? patch.note : row?.note || "").trim(),
+          group,
+          areaGroup,
+        }
+      }
+
+      const updateRows = (rows: any[]) => (Array.isArray(rows) ? rows : []).map(updateRecord)
+      const nextNewRecords = kind === "new"
+        ? updateRows(baseTypeAnalysis.newReplacement?.records || [])
+        : [...(baseTypeAnalysis.newReplacement?.records || [])]
+      const nextTerminationRecords = kind === "termination"
+        ? updateRows(baseTypeAnalysis.terminationType?.records || [])
+        : [...(baseTypeAnalysis.terminationType?.records || [])]
+      const nextWeeklySnapshots = (baseTypeAnalysis.weeklySnapshots || []).map((snapshot: any) => ({
+        ...snapshot,
+        newRecords: kind === "new" ? updateRows(snapshot?.newRecords || []) : snapshot?.newRecords || [],
+        terminationRecords: kind === "termination" ? updateRows(snapshot?.terminationRecords || []) : snapshot?.terminationRecords || [],
+      }))
+      const reflectedAsOf =
+        baseTypeAnalysis.newReplacement?.asOf ||
+        baseTypeAnalysis.terminationType?.asOf ||
+        `${getTypeAnalysisReflectionDateLabel()} 기준`
+      const nextTypeAnalysis = {
+        ...baseTypeAnalysis,
+        updatedAt: new Date().toISOString(),
+        newReplacement: buildTypeAnalysisNewReplacementState(
+          baseTypeAnalysis.newReplacement,
+          nextNewRecords,
+          reflectedAsOf,
+        ),
+        terminationType: buildTypeAnalysisTerminationState(
+          baseTypeAnalysis.terminationType,
+          nextTerminationRecords,
+          reflectedAsOf,
+        ),
+        areaNetGrowth: buildTypeAnalysisAreaNetGrowthState(
+          baseTypeAnalysis.areaNetGrowth,
+          nextNewRecords,
+          nextTerminationRecords,
+          reflectedAsOf,
+          totalContractsOverride,
+        ),
+        personalPerformance: buildTypeAnalysisPersonalPerformanceState(
+          baseTypeAnalysis.personalPerformance,
+          nextNewRecords,
+          reflectedAsOf,
+        ),
+        weeklySnapshots: nextWeeklySnapshots,
+      }
+      await persist(
+        {
+          ...latestData,
+          typeAnalysis: nextTypeAnalysis,
+        },
+        { immediate: true, updatedViews: ["type-analysis"] },
+      )
+      setTypeAnalysisSaveMessage(`${formatManualSaveTime()} 수정 저장 완료`)
+    } catch {
+      setTypeAnalysisSaveMessage("수정 저장 실패. 잠시 후 다시 시도해주세요.")
+    } finally {
+      setIsSavingDashboard(false)
+    }
+  }
+
   async function handleTypeAnalysisSave() {
     if (isSavingDashboard) return
     setIsSavingDashboard(true)
@@ -10033,6 +10168,7 @@ export function DashboardShell({
               industryMoveOptions={[...TYPE_ANALYSIS_INDUSTRY_LABELS]}
               areaMoveOptions={[...TYPE_ANALYSIS_AREA_LABELS]}
               onMoveRecord={handleTypeAnalysisMoveRecord}
+              onUpdateRecord={handleTypeAnalysisUpdateRecord}
             />
           )}
 
