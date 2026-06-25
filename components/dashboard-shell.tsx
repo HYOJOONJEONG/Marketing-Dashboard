@@ -289,6 +289,18 @@ function formatNumber(value: unknown) {
   return toNumber(value).toLocaleString("ko-KR")
 }
 
+function roundDecimal(value: unknown, digits = 2) {
+  const factor = 10 ** digits
+  const number = toNumber(value)
+  return Math.round((number + Number.EPSILON) * factor) / factor
+}
+
+function formatRoundedDecimal(value: unknown, digits = 2) {
+  const rounded = roundDecimal(value, digits)
+  if (!Number.isFinite(rounded)) return ""
+  return rounded.toFixed(digits).replace(/\.?0+$/, "")
+}
+
 function normalizeCustomerIdentifier(value: unknown) {
   return String(value ?? "").trim().toUpperCase()
 }
@@ -681,6 +693,35 @@ function buildRevenueRows(rows: any[]) {
   }))
 }
 
+function isSalesRevenueRow(row: any) {
+  return String(row?.key || "").trim() === "sales" || String(row?.label || "").trim() === "매출순증"
+}
+
+function getRevenueCellPrecision(row: any) {
+  return isSalesRevenueRow(row) ? 1 : 2
+}
+
+function toRevenueCellNumber(row: any, value: unknown) {
+  const text = String(value ?? "").trim()
+  if (!text) return 0
+  return roundDecimal(text, getRevenueCellPrecision(row))
+}
+
+function formatRevenueCellDisplay(row: any, value: unknown) {
+  const text = sanitizeCellValue(value, "")
+  if (!text) return ""
+  if (!/[0-9]/.test(text)) return text
+  return formatRoundedDecimal(text, getRevenueCellPrecision(row))
+}
+
+function sumRevenueMonths(row: any, months = row?.months || []) {
+  return roundDecimal((months || []).reduce((sum: number, value: unknown) => sum + toRevenueCellNumber(row, value), 0), 2)
+}
+
+function sumRevenueMonth(rows: any[], monthIndex: number) {
+  return roundDecimal((rows || []).reduce((sum, row) => sum + toRevenueCellNumber(row, row?.months?.[monthIndex]), 0), 2)
+}
+
 function buildRevenueRowsWithComputedTotal(rows: any[]) {
   const fallbackLabels = ["매출순증", "위약금", "이전비", "합계"]
   const fallbackKeys = ["sales", "penalty", "move", "total"]
@@ -706,13 +747,13 @@ function buildRevenueRowsWithComputedTotal(rows: any[]) {
     months: (row.months || []).map((value: unknown, monthIndex: number) => {
       const text = sanitizeCellValue(value, "")
       if (monthIndex > lastActiveMonthIndex && parseLooseNumber(text) === 0) return ""
-      return text
+      return formatRevenueCellDisplay(row, text)
     }),
   }))
 
   const totalMonths = Array.from({ length: 12 }, (_, monthIndex) =>
     displayBaseRows.some((row) => String(row?.months?.[monthIndex] ?? "").trim() !== "")
-      ? displayBaseRows.reduce((sum, row) => sum + toNumber(row?.months?.[monthIndex]), 0)
+      ? sumRevenueMonth(displayBaseRows, monthIndex)
       : "",
   )
   const totalRow =
@@ -2797,7 +2838,7 @@ function normalizeRevenueHeaderText(value: unknown, fallback: string) {
 
 function sumRevenueRowTotals(rows: any[]) {
   return buildRevenueRows(rows || []).reduce((sum, row) => {
-    const rowTotal = (row.months || []).reduce((rowSum: number, value: number) => rowSum + toNumber(value), 0)
+    const rowTotal = sumRevenueMonths(row)
     return sum + rowTotal
   }, 0)
 }
@@ -2807,20 +2848,20 @@ function getRevenueTotalMillions(rows: any[]) {
   const baseRows = normalizedRows.filter((row) => String(row?.label || "").trim() !== "합계")
   if (baseRows.length) {
     return baseRows.reduce((sum, row) => {
-      const rowTotal = (row.months || []).reduce((rowSum: number, value: number) => rowSum + toNumber(value), 0)
+      const rowTotal = sumRevenueMonths(row)
       return sum + rowTotal
     }, 0)
   }
   const totalRow =
     normalizedRows.find((row) => String(row?.label || "").trim() === "합계") ||
     normalizedRows[normalizedRows.length - 1]
-  return (totalRow?.months || []).reduce((sum: number, value: number) => sum + toNumber(value), 0)
+  return sumRevenueMonths(totalRow)
 }
 
 function getRevenueRowMillionsByLabel(rows: any[], label: string) {
   const normalizedRows = buildRevenueRows(rows || [])
   const targetRow = normalizedRows.find((row) => String(row?.label || "").trim() === label)
-  return (targetRow?.months || []).reduce((sum: number, value: number) => sum + toNumber(value), 0)
+  return sumRevenueMonths(targetRow)
 }
 
 function buildAnnualNetRevenueSubtitle(rows: any[], summary: any, unitPrice: unknown, additionalRevenueAmount: unknown = 0) {
@@ -8252,7 +8293,7 @@ export function DashboardShell({
                 const baseRows = manualRevenueRows.filter((row) => row.label !== "합계")
                 const revenueTotalMonths = monthLabels.map((_, monthIndex) =>
                   baseRows.some((row) => String(row.months?.[monthIndex] ?? "").trim() !== "")
-                    ? baseRows.reduce((sum: number, row) => sum + toNumber(row.months?.[monthIndex]), 0)
+                    ? sumRevenueMonth(baseRows, monthIndex)
                     : "",
                 )
                 return manualRevenueRows.map((row, rowIndex) => {
@@ -8260,7 +8301,7 @@ export function DashboardShell({
                   const displayMonths = isTotalRow
                     ? revenueTotalMonths
                     : monthLabels.map((_, monthIndex) => row.months?.[monthIndex] ?? "")
-                  const total = (displayMonths || []).reduce((sum: number, value: unknown) => sum + toNumber(value), 0)
+                  const total = sumRevenueMonths(row, displayMonths)
                   return (
                     <tr key={row.key || rowIndex}>
                       <td className={manualLabelCellClass}>{row.label}</td>
