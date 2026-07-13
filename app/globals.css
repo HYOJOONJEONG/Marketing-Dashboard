@@ -238,6 +238,173 @@ tr.recent-row-flash > td {
   text-align: center;
 }
 
+@media (max-width: 720px) {
+  .mobile-table-viewport {
+    max-width: 100%;
+  }
+
+  .mobile-table-viewport:has(.mobile-scroll-table) {
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .mobile-scroll-table {
+    min-width: max(720px, 100%);
+    border-collapse: separate !important;
+    border-spacing: 0;
+  }
+
+  .mobile-scroll-table th,
+  .mobile-scroll-table td {
+    padding: 0.5rem 0.6rem !important;
+    font-size: 12px !important;
+    line-height: 1.35;
+    white-space: nowrap;
+  }
+
+  .mobile-scroll-table th:first-child,
+  .mobile-scroll-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #ffffff;
+    box-shadow: 1px 0 0 #e2e8f0;
+  }
+
+  .mobile-scroll-table thead th:first-child {
+    z-index: 3;
+    background: #f8fafc;
+  }
+
+  .mobile-table-viewport:has(.mobile-card-table) {
+    overflow: visible !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  table.mobile-card-table {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: separate !important;
+    border-spacing: 0;
+    background: transparent !important;
+  }
+
+  .mobile-card-table thead,
+  .mobile-card-table colgroup {
+    display: none !important;
+  }
+
+  .mobile-card-table tbody {
+    display: grid;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.125rem;
+  }
+
+  .mobile-card-table tr:not(.hidden) {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid #dbe4f0;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  .mobile-card-table tr.hidden,
+  .mobile-card-table tr[hidden],
+  .mobile-card-table td.hidden,
+  .mobile-card-table td[hidden] {
+    display: none !important;
+  }
+
+  .mobile-card-table td {
+    display: grid !important;
+    grid-template-columns: minmax(84px, 34%) minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: center;
+    width: 100% !important;
+    min-height: 42px;
+    padding: 0.62rem 0.8rem !important;
+    border-top: 1px solid #eef2f7 !important;
+    border-right: 0 !important;
+    border-bottom: 0 !important;
+    border-left: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a;
+    font-size: 13px !important;
+    line-height: 1.35;
+    text-align: right !important;
+    white-space: normal !important;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-card-table td:first-child {
+    border-top: 0 !important;
+    background: linear-gradient(90deg, #f8fbff, #ffffff) !important;
+    font-weight: 800;
+  }
+
+  .mobile-card-table td::before {
+    content: attr(data-mobile-label);
+    min-width: 0;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.2;
+    text-align: left;
+  }
+
+  .mobile-card-table td[data-mobile-empty="true"] {
+    display: none !important;
+  }
+
+  .mobile-card-table td > * {
+    min-width: 0;
+    max-width: 100%;
+    justify-self: end;
+  }
+
+  .mobile-card-table input,
+  .mobile-card-table select,
+  .mobile-card-table textarea {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    text-align: right;
+  }
+
+  .mobile-card-table button {
+    white-space: nowrap;
+  }
+
+  .mobile-card-table td[data-mobile-label="작업"],
+  .mobile-card-table td[data-mobile-label*="수정"],
+  .mobile-card-table td[data-mobile-label*="관리"] {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .mobile-card-table td[data-mobile-label="작업"]::before,
+  .mobile-card-table td[data-mobile-label*="수정"]::before,
+  .mobile-card-table td[data-mobile-label*="관리"]::before {
+    display: none;
+  }
+
+  .mobile-card-table td[data-mobile-label="작업"] > *,
+  .mobile-card-table td[data-mobile-label*="수정"] > *,
+  .mobile-card-table td[data-mobile-label*="관리"] > * {
+    justify-self: stretch;
+  }
+}
+
 @media print {
   @page {
     size: A4 portrait;

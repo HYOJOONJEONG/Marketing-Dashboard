@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { Analytics } from "@vercel/analytics/react"
+import { MobileTableEnhancer } from "@/components/mobile-table-enhancer"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -16,6 +17,7 @@ export default function RootLayout({
     <html lang="ko">
       <body className="font-sans antialiased">
         {children}
+        <MobileTableEnhancer />
         <Analytics />
       </body>
     </html>
