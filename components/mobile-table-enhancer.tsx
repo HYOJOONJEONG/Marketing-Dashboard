@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 
-const MONTH_LABEL_PATTERN = /^(구분\(월\)|[1-9]월|1[0-2]월|합계)$/
+const MONTH_LABEL_PATTERN = /^(구분\(월\)|(?:\d{2,4}년\s*)?(?:[1-9]|1[0-2])월|합계)$/
 const ACTION_LABEL_PATTERN = /(작업|수정|삭제|저장|관리)/
 const REPORT_CLASS_PATTERN = /(weekly-report-table|report-table|summary-table|print-|pdf-)/
 
@@ -35,6 +35,21 @@ function shouldKeepScrollable(table: HTMLTableElement, headers: string[]) {
   )
 }
 
+function shouldUseCompactTable(table: HTMLTableElement, headers: string[]) {
+  const monthCount = headers.filter((header) => MONTH_LABEL_PATTERN.test(header)).length
+  const inputCount = table.querySelectorAll("input, textarea, select").length
+  const rowCount = table.tBodies.length
+    ? Array.from(table.tBodies).reduce((sum, tbody) => sum + tbody.rows.length, 0)
+    : table.rows.length
+
+  return inputCount === 0 && monthCount >= 4 && headers.length <= 8 && rowCount <= 6
+}
+
+function shouldUseWideScroll(table: HTMLTableElement, headers: string[]) {
+  const inputCount = table.querySelectorAll("input, textarea, select").length
+  return inputCount >= 8 || headers.length >= 12
+}
+
 function annotateCells(table: HTMLTableElement, headers: string[]) {
   const bodyRows = table.tBodies.length
     ? Array.from(table.tBodies).flatMap((tbody) => Array.from(tbody.rows))
@@ -61,9 +76,12 @@ function enhanceTable(table: HTMLTableElement) {
   const headers = getTableHeaders(table)
   if (headers.length === 0) return
 
-  const keepScrollable = shouldKeepScrollable(table, headers)
+  const useCompact = shouldUseCompactTable(table, headers)
+  const keepScrollable = !useCompact && shouldKeepScrollable(table, headers)
   table.classList.toggle("mobile-scroll-table", keepScrollable)
-  table.classList.toggle("mobile-card-table", !keepScrollable)
+  table.classList.toggle("mobile-wide-scroll-table", keepScrollable && shouldUseWideScroll(table, headers))
+  table.classList.toggle("mobile-compact-table", useCompact)
+  table.classList.toggle("mobile-card-table", !keepScrollable && !useCompact)
   table.dataset.mobileEnhanced = "true"
 
   const wrapper = table.parentElement

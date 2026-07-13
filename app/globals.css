@@ -252,9 +252,13 @@ tr.recent-row-flash > td {
   }
 
   .mobile-scroll-table {
-    min-width: max(720px, 100%);
+    min-width: max(780px, 100%);
     border-collapse: separate !important;
     border-spacing: 0;
+  }
+
+  .mobile-wide-scroll-table {
+    min-width: max(1040px, 100%);
   }
 
   .mobile-scroll-table th,
@@ -263,6 +267,24 @@ tr.recent-row-flash > td {
     font-size: 12px !important;
     line-height: 1.35;
     white-space: nowrap;
+  }
+
+  .mobile-scroll-table input,
+  .mobile-scroll-table select,
+  .mobile-scroll-table textarea {
+    min-width: 64px;
+    height: 34px;
+    padding-right: 0.35rem !important;
+    padding-left: 0.35rem !important;
+    color: #0f172a !important;
+    font-size: 12px !important;
+    line-height: 1.2;
+    text-align: center !important;
+  }
+
+  .mobile-wide-scroll-table th:first-child,
+  .mobile-wide-scroll-table td:first-child {
+    min-width: 108px;
   }
 
   .mobile-scroll-table th:first-child,
@@ -277,6 +299,74 @@ tr.recent-row-flash > td {
   .mobile-scroll-table thead th:first-child {
     z-index: 3;
     background: #f8fafc;
+  }
+
+  .mobile-table-viewport:has(.mobile-compact-table) {
+    overflow: hidden !important;
+  }
+
+  .mobile-compact-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed;
+    border-collapse: separate !important;
+    border-spacing: 0;
+  }
+
+  .mobile-compact-table th,
+  .mobile-compact-table td {
+    padding: 0.5rem 0.35rem !important;
+    font-size: 11px !important;
+    line-height: 1.25;
+    text-align: center !important;
+    white-space: normal !important;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  .weekly-report-print .print-revenue-meta {
+    padding: 0.75rem !important;
+  }
+
+  .weekly-report-print .print-revenue-kpis {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+
+  .weekly-report-print .print-revenue-kpi {
+    display: grid;
+    grid-template-columns: minmax(86px, 36%) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 0.75rem !important;
+    text-align: left;
+  }
+
+  .weekly-report-print .print-revenue-kpi-label {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.25;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .weekly-report-print .print-revenue-kpi-value {
+    margin: 0;
+    min-width: 0;
+    color: #0f172a;
+    font-size: clamp(14px, 4.2vw, 18px);
+    line-height: 1.2;
+    text-align: right;
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  .weekly-report-print .print-revenue-note,
+  .weekly-report-print .print-revenue-note-value {
+    align-items: stretch;
+    text-align: left;
+    font-size: 11px;
   }
 
   .mobile-table-viewport:has(.mobile-card-table) {

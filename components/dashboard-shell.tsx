@@ -10952,13 +10952,13 @@ export function DashboardShell({
           {view === "termination" && selectedSheet && (
             <div className="space-y-4">
               <div className={`${cardClass} p-5`}>
-                <div className="mb-4 flex items-start justify-between gap-4">
+                <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                     <div className="text-[18px] font-bold">단말기 해지 진행사항</div>
                     <div className="mt-2 text-[13px] text-slate-500">{getSafeTerminationTeamLabel(selectedSheet.teamLabel)}</div>
                     <div className="mt-1 space-y-1 text-[13px] text-slate-600">{getSafeTerminationGuidelines(selectedSheet.guidelines).map((line: string) => <div key={line}>{line}</div>)}</div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"><div className="text-[12px] text-slate-500">금주 해지 건수</div><div className="mt-1 text-[20px] font-extrabold">{formatNumber(visibleWeeklyTerminationCount)}건</div></div>
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                       <div className="text-[12px] text-slate-500">금주 청구보류 건수</div>
@@ -10989,7 +10989,7 @@ export function DashboardShell({
                   </div>
                 </div>
                 <div className={`${cardClass} p-4`}>
-                  <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="text-[16px] font-bold text-slate-900">
                         {terminationEntryMode === "termination" ? "해지 입력" : "청구보류 입력"}
@@ -10998,25 +10998,25 @@ export function DashboardShell({
                         필수 항목을 입력한 뒤 등록&저장하면 현재 시트에 바로 저장됩니다.
                       </div>
                     </div>
-                    <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                    <div className="grid w-full grid-cols-2 rounded-2xl border border-slate-200 bg-slate-50 p-1 sm:inline-grid sm:w-auto">
                       <button
                         type="button"
                         onClick={() => setTerminationEntryMode("termination")}
-                        className={`rounded-2xl px-3 py-1.5 text-[13px] font-semibold ${terminationEntryMode === "termination" ? "bg-blue-600 text-white" : "text-slate-600"}`}
+                        className={`whitespace-nowrap rounded-xl px-3 py-2 text-[13px] font-semibold ${terminationEntryMode === "termination" ? "bg-blue-600 text-white" : "text-slate-600"}`}
                       >
                         해지 입력
                       </button>
                       <button
                         type="button"
                         onClick={() => setTerminationEntryMode("hold")}
-                        className={`rounded-2xl px-3 py-1.5 text-[13px] font-semibold ${terminationEntryMode === "hold" ? "bg-blue-600 text-white" : "text-slate-600"}`}
+                        className={`whitespace-nowrap rounded-xl px-3 py-2 text-[13px] font-semibold ${terminationEntryMode === "hold" ? "bg-blue-600 text-white" : "text-slate-600"}`}
                       >
                         청구보류 입력
                       </button>
                     </div>
                   </div>
                   {terminationEntryMode === "termination" ? (
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <label className="space-y-1">
                         <div className="text-[12px] font-medium text-slate-600">접수일</div>
                         <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" type="date" value={terminationDraft.receivedDate} onChange={(e)=>updateTerminationDraft("receivedDate", e.target.value)} {...receivedDatePickerOnlyProps} />
@@ -11062,7 +11062,7 @@ export function DashboardShell({
                         <div className="text-[12px] font-medium text-slate-600">위약금</div>
                         <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" placeholder="위약금" value={terminationDraft.penalty} onChange={(e)=>updateTerminationDraft("penalty", e.target.value)} />
                       </label>
-                      <div className="col-span-4 flex justify-end pt-1">
+                      <div className="col-span-2 flex justify-end pt-1 sm:col-span-4">
                         <button
                           type="button"
                           onClick={handleTerminationCreate}
@@ -11074,7 +11074,7 @@ export function DashboardShell({
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <label className="space-y-1">
                         <div className="text-[12px] font-medium text-slate-600">접수일</div>
                         <input className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" type="date" value={holdDraft.receivedDate} onChange={(e)=>updateHoldDraft("receivedDate", e.target.value)} {...receivedDatePickerOnlyProps} />
@@ -11134,7 +11134,7 @@ export function DashboardShell({
                           onChange={(e)=>updateHoldDraft("note", e.target.value)}
                         />
                       </label>
-                      <div className="col-span-4 flex justify-end pt-1">
+                      <div className="col-span-2 flex justify-end pt-1 sm:col-span-4">
                         <button
                           type="button"
                           onClick={handleHoldCreate}
