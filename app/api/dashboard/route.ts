@@ -341,45 +341,103 @@ function rowMergeKey(row: any) {
   return customerId ? `customer:${customerId}` : ""
 }
 
-function mergeTerminationActiveRows(existingRows: any[], incomingRows: any[]) {
+function addRowMergeKey(target: Set<string>, row: any) {
+  const id = safeText(row?.id)
+  if (id) target.add(`id:${id}`)
+  const customerId = normalizeContractIdCode(row?.customerId || row?.idCode)
+  if (customerId) target.add(`customer:${customerId}`)
+}
+
+function buildRowMergeKeySet(...rowGroups: any[][]) {
+  const keys = new Set<string>()
+  rowGroups.forEach((rows) => {
+    if (!Array.isArray(rows)) return
+    rows.forEach((row) => addRowMergeKey(keys, row))
+  })
+  return keys
+}
+
+function mergeTerminationActiveRow(existingRow: any, incomingRow: any) {
+  if (!existingRow) return incomingRow
+
+  const existingSelected = Boolean(existingRow?.selected)
+  const incomingSelected = Boolean(incomingRow?.selected)
+  const existingSelectedAt = safeText(existingRow?.selectedUpdatedAt || existingRow?.selectionUpdatedAt)
+  const incomingSelectedAt = safeText(incomingRow?.selectedUpdatedAt || incomingRow?.selectionUpdatedAt)
+  const existingSelectedTime = parseTimestamp(existingSelectedAt)
+  const incomingSelectedTime = parseTimestamp(incomingSelectedAt)
+
+  if (existingSelectedTime || incomingSelectedTime) {
+    if (existingSelectedTime > incomingSelectedTime) {
+      return {
+        ...incomingRow,
+        selected: existingSelected,
+        ...(existingSelectedAt ? { selectedUpdatedAt: existingSelectedAt } : {}),
+      }
+    }
+    return {
+      ...incomingRow,
+      selected: incomingSelected,
+      ...(incomingSelectedAt ? { selectedUpdatedAt: incomingSelectedAt } : {}),
+    }
+  }
+
+  if (existingSelected && !incomingSelected) {
+    return { ...incomingRow, selected: true }
+  }
+  return incomingRow
+}
+
+function mergeTerminationRowsPreservingExisting(
+  existingRows: any[],
+  incomingRows: any[],
+  deletedMap: Record<string, string> = {},
+  removedRows: any[] = [],
+  mergeSameKey?: (existingRow: any, incomingRow: any) => any,
+) {
   const existingByKey = new Map<string, any>()
   existingRows.forEach((row) => {
     const key = rowMergeKey(row)
     if (key) existingByKey.set(key, row)
   })
 
-  return incomingRows.map((incomingRow) => {
+  const deletedIds = new Set(Object.keys(deletedMap))
+  const removedKeys = buildRowMergeKeySet(removedRows)
+  const incomingKeys = new Set<string>()
+  const mergedRows: any[] = []
+
+  incomingRows.forEach((incomingRow) => {
+    const id = safeText(incomingRow?.id)
     const key = rowMergeKey(incomingRow)
+    if ((id && deletedIds.has(id)) || (key && removedKeys.has(key))) return
+    if (key) incomingKeys.add(key)
     const existingRow = key ? existingByKey.get(key) : null
-    if (!existingRow) return incomingRow
-
-    const existingSelected = Boolean(existingRow?.selected)
-    const incomingSelected = Boolean(incomingRow?.selected)
-    const existingSelectedAt = safeText(existingRow?.selectedUpdatedAt || existingRow?.selectionUpdatedAt)
-    const incomingSelectedAt = safeText(incomingRow?.selectedUpdatedAt || incomingRow?.selectionUpdatedAt)
-    const existingSelectedTime = parseTimestamp(existingSelectedAt)
-    const incomingSelectedTime = parseTimestamp(incomingSelectedAt)
-
-    if (existingSelectedTime || incomingSelectedTime) {
-      if (existingSelectedTime > incomingSelectedTime) {
-        return {
-          ...incomingRow,
-          selected: existingSelected,
-          ...(existingSelectedAt ? { selectedUpdatedAt: existingSelectedAt } : {}),
-        }
-      }
-      return {
-        ...incomingRow,
-        selected: incomingSelected,
-        ...(incomingSelectedAt ? { selectedUpdatedAt: incomingSelectedAt } : {}),
-      }
-    }
-
-    if (existingSelected && !incomingSelected) {
-      return { ...incomingRow, selected: true }
-    }
-    return incomingRow
+    mergedRows.push(existingRow && mergeSameKey ? mergeSameKey(existingRow, incomingRow) : incomingRow)
   })
+
+  existingRows.forEach((existingRow) => {
+    const id = safeText(existingRow?.id)
+    const key = rowMergeKey(existingRow)
+    if ((id && deletedIds.has(id)) || (key && (incomingKeys.has(key) || removedKeys.has(key)))) return
+    mergedRows.push(existingRow)
+  })
+
+  return mergedRows
+}
+
+function mergeTerminationActiveRows(
+  existingRows: any[],
+  incomingRows: any[],
+  deletedMap: Record<string, string> = {},
+  removedRows: any[] = [],
+) {
+  return mergeTerminationRowsPreservingExisting(
+    existingRows,
+    incomingRows,
+    deletedMap,
+    removedRows,
+    mergeTerminationActiveRow,
+  )
 }
 
 function normalizeDeletedRowMap(value: any) {
@@ -435,6 +493,10 @@ function mergeTerminationState(existingTermination: any, incomingTermination: an
         existingSheetById.get(safeText(incomingSheet?.id)) ||
         existingSheets[index] ||
         null
+      const incomingItems = Array.isArray(incomingSheet?.items) ? incomingSheet.items : []
+      const incomingHoldItems = Array.isArray(incomingSheet?.holdItems) ? incomingSheet.holdItems : []
+      const incomingConfirmedItems = Array.isArray(incomingSheet?.confirmedItems) ? incomingSheet.confirmedItems : []
+      const incomingReleasedHoldItems = Array.isArray(incomingSheet?.releasedHoldItems) ? incomingSheet.releasedHoldItems : []
       if (!existingSheet) {
         return {
           ...incomingSheet,
@@ -446,21 +508,62 @@ function mergeTerminationState(existingTermination: any, incomingTermination: an
             : {}),
         }
       }
+      const existingItems = Array.isArray(existingSheet?.items) ? existingSheet.items : []
+      const existingHoldItems = Array.isArray(existingSheet?.holdItems) ? existingSheet.holdItems : []
+      const existingConfirmedItems = Array.isArray(existingSheet?.confirmedItems) ? existingSheet.confirmedItems : []
+      const existingReleasedHoldItems = Array.isArray(existingSheet?.releasedHoldItems) ? existingSheet.releasedHoldItems : []
       return {
         ...incomingSheet,
         ...(Array.isArray(incomingSheet?.items)
           ? {
               items: filterDeletedRows(
                 mergeTerminationActiveRows(
-                  Array.isArray(existingSheet?.items) ? existingSheet.items : [],
-                  incomingSheet.items,
+                  existingItems,
+                  incomingItems,
+                  deletedItemIds,
+                  [...existingConfirmedItems, ...incomingConfirmedItems],
                 ),
                 deletedItemIds,
               ),
             }
           : {}),
         ...(Array.isArray(incomingSheet?.holdItems)
-          ? { holdItems: filterDeletedRows(incomingSheet.holdItems, deletedHoldIds) }
+          ? {
+              holdItems: filterDeletedRows(
+                mergeTerminationRowsPreservingExisting(
+                  existingHoldItems,
+                  incomingHoldItems,
+                  deletedHoldIds,
+                  [
+                    ...existingReleasedHoldItems,
+                    ...incomingReleasedHoldItems,
+                    ...existingItems,
+                    ...incomingItems,
+                  ],
+                ),
+                deletedHoldIds,
+              ),
+            }
+          : {}),
+        ...(Array.isArray(incomingSheet?.confirmedItems)
+          ? {
+              confirmedItems: mergeTerminationRowsPreservingExisting(
+                existingConfirmedItems,
+                incomingConfirmedItems,
+                {},
+                [...existingItems, ...incomingItems],
+              ),
+            }
+          : {}),
+        ...(Array.isArray(incomingSheet?.releasedHoldItems)
+          ? {
+              releasedHoldItems: mergeTerminationRowsPreservingExisting(
+                existingReleasedHoldItems,
+                incomingReleasedHoldItems,
+                {},
+                [...existingHoldItems, ...incomingHoldItems, ...existingItems, ...incomingItems],
+              ),
+            }
           : {}),
       }
     }),
