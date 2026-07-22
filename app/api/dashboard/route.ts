@@ -636,7 +636,7 @@ function mergeTerminationState(existingTermination: any, incomingTermination: an
                 existingConfirmedItems,
                 incomingConfirmedItems,
                 {},
-                [...existingItems, ...incomingItems],
+                incomingItems,
               ),
             }
           : {}),
@@ -646,7 +646,7 @@ function mergeTerminationState(existingTermination: any, incomingTermination: an
                 existingReleasedHoldItems,
                 incomingReleasedHoldItems,
                 {},
-                [...existingHoldItems, ...incomingHoldItems, ...existingItems, ...incomingItems],
+                [...incomingHoldItems, ...incomingItems],
               ),
             }
           : {}),
