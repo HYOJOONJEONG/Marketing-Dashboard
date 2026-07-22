@@ -468,6 +468,91 @@ function filterDeletedRows(rows: any[], deletedMap: Record<string, string>) {
   return rows.filter((row) => !deletedIds.has(safeText(row?.id)))
 }
 
+function collectTerminationActiveRowsByKey(termination: any) {
+  const rowsByKey = new Map<string, any>()
+  const sheets = Array.isArray(termination?.sheets) ? termination.sheets : []
+  sheets.forEach((sheet: any) => {
+    const rows = Array.isArray(sheet?.items) ? sheet.items : []
+    rows.forEach((row: any) => {
+      const key = rowMergeKey(row)
+      if (key) rowsByKey.set(key, row)
+    })
+  })
+  return rowsByKey
+}
+
+function getTerminationSelectionChanges(existingTermination: any, nextTermination: any) {
+  const existingRows = collectTerminationActiveRowsByKey(existingTermination)
+  const changes: Array<{
+    key: string
+    checked: boolean
+    customerId: string
+    companyName: string
+    manager: string
+  }> = []
+  const nextSheets = Array.isArray(nextTermination?.sheets) ? nextTermination.sheets : []
+  nextSheets.forEach((sheet: any) => {
+    const nextRows = Array.isArray(sheet?.items) ? sheet.items : []
+    nextRows.forEach((row: any) => {
+      const key = rowMergeKey(row)
+      if (!key) return
+      const existingRow = existingRows.get(key)
+      if (!existingRow) return
+      const beforeChecked = Boolean(existingRow?.selected)
+      const afterChecked = Boolean(row?.selected)
+      if (beforeChecked === afterChecked) return
+      changes.push({
+        key,
+        checked: afterChecked,
+        customerId: normalizeContractIdCode(row?.customerId || row?.idCode),
+        companyName: safeText(row?.companyName),
+        manager: safeText(row?.manager),
+      })
+    })
+  })
+  return changes
+}
+
+function annotateTerminationSelectionChanges(data: any, existingTermination: any, user: any) {
+  const changes = getTerminationSelectionChanges(existingTermination, data?.termination)
+  if (!changes.length || !data?.termination || !Array.isArray(data.termination?.sheets)) return data
+  const changedKeys = new Set(changes.map((change) => change.key))
+  return {
+    ...data,
+    termination: {
+      ...data.termination,
+      sheets: data.termination.sheets.map((sheet: any) => ({
+        ...sheet,
+        items: Array.isArray(sheet?.items)
+          ? sheet.items.map((row: any) => {
+              const key = rowMergeKey(row)
+              if (!key || !changedKeys.has(key)) return row
+              return {
+                ...row,
+                selectedUpdatedBy: user?.name || "",
+                selectedUpdatedByUserId: user?.id || "",
+              }
+            })
+          : sheet?.items,
+      })),
+    },
+  }
+}
+
+function describeTerminationSelectionChanges(existingTermination: any, nextTermination: any) {
+  const changes = getTerminationSelectionChanges(existingTermination, nextTermination)
+  if (!changes.length) return ""
+  const label = changes
+    .slice(0, 5)
+    .map((change) => {
+      const target = [change.customerId, change.companyName].filter(Boolean).join(" ")
+      const suffix = change.manager ? ` / 담당 ${change.manager}` : ""
+      return `${target || change.key} ${change.checked ? "체크" : "체크 해제"}${suffix}`
+    })
+    .join(", ")
+  return `해지리스트 체크 변경: ${label}${changes.length > 5 ? ` 외 ${changes.length - 5}건` : ""}`
+}
+
 function mergeTerminationState(existingTermination: any, incomingTermination: any) {
   if (!incomingTermination || typeof incomingTermination !== "object" || Array.isArray(incomingTermination)) {
     return incomingTermination
@@ -590,6 +675,9 @@ function inferDashboardPageKey(changedKeys: DashboardStateSliceKey[]) {
 
 function describeDashboardPut(changedKeys: DashboardStateSliceKey[], existingData: any, incomingBody: any) {
   if (changedKeys.includes("termination")) {
+    const selectionChangeDetail = describeTerminationSelectionChanges(existingData?.termination, incomingBody?.termination)
+    if (selectionChangeDetail) return selectionChangeDetail
+
     const beforeHold = countTerminationRows(existingData?.termination, "holdItems")
     const afterHold = countTerminationRows(incomingBody?.termination, "holdItems")
     const beforeReleased = countTerminationRows(existingData?.termination, "releasedHoldItems")
@@ -945,9 +1033,14 @@ export async function PUT(request: Request) {
       }
     }
 
+    const activitySourceData = existingDataForActivity || existingDataForMerge || EMPTY_DASHBOARD
+    const correctedNextBody = annotateTerminationSelectionChanges(
+      applyTerminationIdCorrections(nextBody).data,
+      activitySourceData?.termination,
+      session.user,
+    )
     const activityPageKey = inferDashboardPageKey(changedKeys)
-    const activityDetail = describeDashboardPut(changedKeys, existingDataForActivity || existingDataForMerge || EMPTY_DASHBOARD, incomingBody)
-    const correctedNextBody = applyTerminationIdCorrections(nextBody).data
+    const activityDetail = describeDashboardPut(changedKeys, activitySourceData, correctedNextBody)
 
     await writeDashboardState(correctedNextBody, {
       menuLabel: "Dashboard",
