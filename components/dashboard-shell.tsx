@@ -2856,6 +2856,21 @@ function buildTypeAnalysisTerminationAudit(confirmedItems: any[], terminationRec
   }
 }
 
+function getConfirmedTerminationDuplicateIdSet(rows: any[]) {
+  const idCounts = new Map<string, number>()
+  ;(Array.isArray(rows) ? rows : []).forEach((row: any) => {
+    const idCode = normalizeCustomerIdentifier(row?.customerId || row?.idCode)
+    if (!idCode) return
+    idCounts.set(idCode, (idCounts.get(idCode) || 0) + 1)
+  })
+
+  return new Set(
+    Array.from(idCounts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([idCode]) => idCode),
+  )
+}
+
 function pickConfirmedTerminationItemsForAudit(sheets: any[], selectedSheet: any) {
   const selectedRows = Array.isArray(selectedSheet?.confirmedItems) ? selectedSheet.confirmedItems : []
   const largestRows = (Array.isArray(sheets) ? sheets : [])
@@ -4709,6 +4724,10 @@ export function DashboardShell({
           ? sortByKey(selectedSheet?.confirmedItems || [], confirmedTerminationSort.key, confirmedTerminationSort.dir)
           : [],
       [selectedSheet, confirmedTerminationSort, isTerminationView],
+    )
+    const confirmedTerminationDuplicateIds = useMemo(
+      () => getConfirmedTerminationDuplicateIdSet(confirmedTerminationItems),
+      [confirmedTerminationItems],
     )
     const releasedHoldItems = useMemo(
       () => (isTerminationView ? sortByKey(selectedSheet?.releasedHoldItems || [], holdSort.key, holdSort.dir) : []),
@@ -6946,6 +6965,39 @@ export function DashboardShell({
     persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
   }
 
+  async function handleDeleteConfirmedTerminationRow(rowId: string) {
+    if (!selectedSheet) return
+    if (!window.confirm("이 해지확정 건을 확정리스트에서 삭제할까요? 해지리스트로 복구하지 않고 확정리스트에서만 제거됩니다.")) return
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet) return
+    const deletedConfirmedItemIds = {
+      ...(latestTermination.deletedConfirmedItemIds || {}),
+      [rowId]: new Date().toISOString(),
+    }
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            confirmedItems: (sheet.confirmedItems || [])
+              .filter((row: any) => row.id !== rowId)
+              .map((row: any, index: number) => ({ ...row, no: index + 1 })),
+          }
+        : sheet,
+    )
+    try {
+      await persistTerminationData(
+        {
+          ...latestData,
+          termination: { ...latestTermination, deletedConfirmedItemIds, currentSheetId: latestSheet.id, sheets: nextSheets },
+        },
+        { throwOnError: true },
+      )
+      setSelectedConfirmedIds((prev) => prev.filter((id) => id !== rowId))
+    } catch {
+      // persist() already restores the previous state and alerts the user on immediate save failures.
+    }
+  }
+
   function updateTerminationDraft(field: string, value: string) {
     if (terminationCreateStatus !== "idle") setTerminationCreateStatus("idle")
     setTerminationDraft((prev: any) => ({ ...prev, [field]: field === "customerId" ? String(value || "").trim().toUpperCase() : value }))
@@ -7197,6 +7249,43 @@ export function DashboardShell({
     )
     persistTerminationData({ ...latestData, termination: { ...latestTermination, currentSheetId: latestSheet.id, sheets: nextSheets } })
     setSelectedConfirmedIds([])
+  }
+
+  async function handleBulkDeleteConfirmed() {
+    const { latestData, latestTermination, latestSheet } = getLatestTerminationContext()
+    if (!latestSheet || selectedConfirmedIds.length === 0) return
+    if (!window.confirm(`선택한 해지확정 ${selectedConfirmedIds.length}건을 확정리스트에서 삭제할까요? 해지리스트로 복구하지 않고 확정리스트에서만 제거됩니다.`)) return
+    const selectedSet = new Set(selectedConfirmedIds)
+    const deletedAt = new Date().toISOString()
+    const deletedConfirmedItemIds = {
+      ...(latestTermination.deletedConfirmedItemIds || {}),
+      ...selectedConfirmedIds.reduce((acc: Record<string, string>, id) => {
+        acc[id] = deletedAt
+        return acc
+      }, {}),
+    }
+    const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
+      sheet.id === latestSheet.id
+        ? {
+            ...sheet,
+            confirmedItems: (sheet.confirmedItems || [])
+              .filter((row: any) => !selectedSet.has(row.id))
+              .map((row: any, index: number) => ({ ...row, no: index + 1 })),
+          }
+        : sheet,
+    )
+    try {
+      await persistTerminationData(
+        {
+          ...latestData,
+          termination: { ...latestTermination, deletedConfirmedItemIds, currentSheetId: latestSheet.id, sheets: nextSheets },
+        },
+        { throwOnError: true },
+      )
+      setSelectedConfirmedIds([])
+    } catch {
+      // persist() already restores the previous state and alerts the user on immediate save failures.
+    }
   }
 
   function handleBulkRestoreReleased() {
@@ -11635,18 +11724,32 @@ export function DashboardShell({
                 <div className={`${cardClass} overflow-hidden p-0 ${showTerminationArchive ? "" : "hidden"}`}>
                   <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                     <div className="text-[17px] font-bold text-slate-900">해지확정 리스트</div>
-                    <button
-                      type="button"
-                      onClick={handleBulkRestoreConfirmed}
-                      disabled={selectedConfirmedIds.length === 0}
-                      className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
-                        selectedConfirmedIds.length === 0
-                          ? "border border-slate-200 bg-slate-100 text-slate-400"
-                          : "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                      }`}
-                    >
-                      선택 복구
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleBulkRestoreConfirmed}
+                        disabled={selectedConfirmedIds.length === 0}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
+                          selectedConfirmedIds.length === 0
+                            ? "border border-slate-200 bg-slate-100 text-slate-400"
+                            : "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                        }`}
+                      >
+                        선택 복구
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleBulkDeleteConfirmed}
+                        disabled={selectedConfirmedIds.length === 0}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
+                          selectedConfirmedIds.length === 0
+                            ? "border border-slate-200 bg-slate-100 text-slate-400"
+                            : "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                        }`}
+                      >
+                        선택 삭제
+                      </button>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                   <table className={`${tableClass} min-w-full`}>
@@ -11701,8 +11804,18 @@ export function DashboardShell({
                           </td>
                         </tr>
                       ) : (
-                        confirmedTerminationItems.map((row: any, index: number) => (
-                          <tr key={row.id} className="bg-rose-50">
+                        confirmedTerminationItems.map((row: any, index: number) => {
+                          const duplicateId = normalizeCustomerIdentifier(row.customerId || row.idCode)
+                          const isDuplicateConfirmed = duplicateId && confirmedTerminationDuplicateIds.has(duplicateId)
+                          return (
+                          <tr
+                            key={row.id}
+                            className={
+                              isDuplicateConfirmed
+                                ? "bg-rose-50/90 ring-1 ring-inset ring-rose-100"
+                                : "bg-white hover:bg-slate-50"
+                            }
+                          >
                             <td className={`${tdClass} text-center`}>
                               <input
                                 type="checkbox"
@@ -11718,7 +11831,18 @@ export function DashboardShell({
                             <td className={`${tdClass} text-center tabular-nums`}>{index + 1}</td>
                             <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.receivedDate)}</td>
                             <td className={tdClass}>{getTerminationManagerFallback(row) || "-"}</td>
-                            <td className={tdClass}>{row.customerId}</td>
+                            <td className={tdClass}>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className={isDuplicateConfirmed ? "rounded-md bg-rose-100 px-1.5 py-0.5 font-bold text-rose-700" : ""}>
+                                  {row.customerId}
+                                </span>
+                                {isDuplicateConfirmed ? (
+                                  <span className="rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                    중복
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
                             <td className={`${tdClass} whitespace-nowrap`}>{row.companyName}</td>
                             <td className={`${tdClass} whitespace-nowrap`}>{row.departmentName}</td>
                             <td className={tdClass}>{row.reason}</td>
@@ -11726,6 +11850,7 @@ export function DashboardShell({
                             <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.reflectedDate)}</td>
                             <td className={`${tdClass} text-right tabular-nums`}>{row.penalty ? formatNumber(row.penalty) : ""}</td>
                             <td className={`${tdClass} text-center`}>
+                              <div className="flex items-center justify-center gap-1.5">
                               <button
                                 type="button"
                                 onClick={() => restoreTerminationConfirmed(row.id)}
@@ -11733,9 +11858,18 @@ export function DashboardShell({
                               >
                                 복구
                               </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteConfirmedTerminationRow(row.id)}
+                                className="rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 whitespace-nowrap hover:bg-rose-50"
+                              >
+                                삭제
+                              </button>
+                              </div>
                             </td>
                           </tr>
-                        ))
+                          )
+                        })
                       )}
                     </tbody>
                   </table>
