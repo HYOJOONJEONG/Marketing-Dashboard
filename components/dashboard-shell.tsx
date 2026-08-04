@@ -2843,6 +2843,26 @@ function buildTypeAnalysisTerminationAudit(confirmedItems: any[], terminationRec
   }
 }
 
+function buildConfirmedTerminationFromTypeAnalysisRecord(record: any, index: number) {
+  return {
+    id: `confirmed-from-type-${record?.id || record?.sourceId || record?.idCode || index}-${Date.now()}`,
+    no: index + 1,
+    selected: true,
+    receivedDate: normalizeDate(record?.sourceDate || record?.receivedDate || record?.date || ""),
+    manager: String(record?.recommender || record?.manager || "").trim(),
+    customerId: normalizeCustomerIdentifier(record?.idCode || record?.customerId),
+    companyName: String(record?.companyName || "").trim(),
+    departmentName: String(record?.departmentName || "").trim(),
+    reason: String(record?.reason || "").trim(),
+    terminationDate: normalizeDate(record?.terminationDate || record?.date || ""),
+    penalty: toNumber(record?.penalty),
+    note: String(record?.note || "").trim(),
+    reflectedDate: normalizeDate(record?.reflectedDate || record?.date || getTypeAnalysisReflectionDateLabel()),
+    restoredFrom: "type-analysis",
+    restoredAt: new Date().toISOString(),
+  }
+}
+
 function normalizeAdditionalSalesRows(rows: any[]) {
   const list = Array.isArray(rows) ? rows : []
   if (!list.length) return [{ idCode: "", company: "", amount: "", content: "", note: "", kind: "manual" }]
@@ -8168,6 +8188,80 @@ export function DashboardShell({
     }
   }
 
+  async function handleRestoreMissingConfirmedTerminations() {
+    if (isSavingDashboard) return
+    const confirmed = typeAnalysisTerminationAudit.confirmedCount
+    const typeCount = typeAnalysisTerminationAudit.typeCount
+    const extra = typeAnalysisTerminationAudit.extraCount
+    if (extra <= 0) {
+      setTypeAnalysisSaveMessage("복원할 해지확정 누락 항목이 없습니다.")
+      return
+    }
+    const ok = window.confirm(
+      `유형분석 해지 ${typeCount}건 중 해지확정리스트에 없는 후보 ${extra}건을 복원합니다.\n현재 해지확정 ${confirmed}건입니다. 진행할까요?`,
+    )
+    if (!ok) return
+
+    setIsSavingDashboard(true)
+    setTypeAnalysisSaveMessage("해지확정 누락 복원 중...")
+    try {
+      const latestData = pendingDataRef.current || data
+      const sheets = Array.isArray(latestData?.termination?.sheets) ? latestData.termination.sheets : []
+      if (!sheets.length) throw new Error("termination sheet missing")
+      const targetSheetIndex = Math.max(
+        0,
+        sheets.findIndex((sheet: any) => sheet.id === latestData?.termination?.currentSheetId),
+      )
+      const targetSheet = sheets[targetSheetIndex] || sheets[0]
+      const confirmedItems = Array.isArray(targetSheet?.confirmedItems) ? targetSheet.confirmedItems : []
+      const baseTypeAnalysis = normalizeTypeAnalysisState(
+        latestData?.typeAnalysis,
+        latestData?.weeklyReport?.manualSummary?.totalContracts,
+        confirmedItems,
+      )
+      const typeRows = Array.isArray(baseTypeAnalysis?.terminationType?.records)
+        ? baseTypeAnalysis.terminationType.records
+        : []
+      const existingKeys = new Set(
+        confirmedItems
+          .map((row: any) => getTypeAnalysisTerminationCompareKey(row))
+          .filter(Boolean),
+      )
+      const additions: any[] = []
+      typeRows.forEach((row: any) => {
+        const key = getTypeAnalysisTerminationCompareKey(row)
+        if (!key || existingKeys.has(key)) return
+        existingKeys.add(key)
+        additions.push(buildConfirmedTerminationFromTypeAnalysisRecord(row, confirmedItems.length + additions.length))
+      })
+      if (!additions.length) {
+        setTypeAnalysisSaveMessage("복원할 해지확정 누락 항목이 없습니다.")
+        return
+      }
+      const nextSheets = sheets.map((sheet: any, index: number) => {
+        if (index !== targetSheetIndex) return sheet
+        return {
+          ...sheet,
+          confirmedItems: [...confirmedItems, ...additions].map((row: any, rowIndex: number) => ({ ...row, no: rowIndex + 1 })),
+        }
+      })
+      const nextData = {
+        ...latestData,
+        termination: {
+          ...(latestData?.termination || {}),
+          currentSheetId: targetSheet?.id || latestData?.termination?.currentSheetId,
+          sheets: nextSheets,
+        },
+      }
+      await persist(nextData, { immediate: true, updatedViews: ["termination"] })
+      setTypeAnalysisSaveMessage(`${formatManualSaveTime()} 해지확정 ${additions.length}건 복원 완료`)
+    } catch {
+      setTypeAnalysisSaveMessage("해지확정 누락 복원 실패. 잠시 후 다시 시도해주세요.")
+    } finally {
+      setIsSavingDashboard(false)
+    }
+  }
+
   async function handleTypeAnalysisSave() {
     if (isSavingDashboard) return
     setIsSavingDashboard(true)
@@ -10373,6 +10467,7 @@ export function DashboardShell({
               onMoveRecord={handleTypeAnalysisMoveRecord}
               onUpdateRecord={handleTypeAnalysisUpdateRecord}
               onDeleteRecord={handleTypeAnalysisDeleteRecord}
+              onRestoreMissingTerminations={handleRestoreMissingConfirmedTerminations}
               terminationAudit={typeAnalysisTerminationAudit}
             />
           )}

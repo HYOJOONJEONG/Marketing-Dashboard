@@ -39,6 +39,7 @@ type Props = {
     kind: "new" | "termination",
     record: any,
   ) => void | Promise<void>
+  onRestoreMissingTerminations?: () => void | Promise<void>
   terminationAudit?: {
     confirmedCount: number
     typeCount: number
@@ -615,7 +616,13 @@ function DeleteRecordButton({
   )
 }
 
-function TerminationAuditBanner({ audit }: { audit?: Props["terminationAudit"] }) {
+function TerminationAuditBanner({
+  audit,
+  onRestoreMissing,
+}: {
+  audit?: Props["terminationAudit"]
+  onRestoreMissing?: Props["onRestoreMissingTerminations"]
+}) {
   if (!audit) return null
   const isMismatch = audit.confirmedCount !== audit.typeCount || audit.extraCount > 0 || audit.missingCount > 0 || audit.duplicateCount > 0
   const toneClass = isMismatch
@@ -628,14 +635,25 @@ function TerminationAuditBanner({ audit }: { audit?: Props["terminationAudit"] }
   ].filter(Boolean).join(" · ")
   return (
     <div className={`rounded-2xl border px-4 py-3 text-[12px] font-semibold ${toneClass}`}>
-      <div className="flex flex-wrap items-center gap-2">
-        <span>해지확정 {formatNumber(audit.confirmedCount)}건</span>
-        <span className="text-current/50">/</span>
-        <span>유형분석 해지 {formatNumber(audit.typeCount)}건</span>
-        <span className="text-current/50">/</span>
-        <span>유형분석 초과 {formatNumber(audit.extraCount)}건</span>
-        <span>누락 {formatNumber(audit.missingCount)}건</span>
-        <span>중복 {formatNumber(audit.duplicateCount)}건</span>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span>해지확정 {formatNumber(audit.confirmedCount)}건</span>
+          <span className="text-current/50">/</span>
+          <span>유형분석 해지 {formatNumber(audit.typeCount)}건</span>
+          <span className="text-current/50">/</span>
+          <span>유형분석 초과 {formatNumber(audit.extraCount)}건</span>
+          <span>누락 {formatNumber(audit.missingCount)}건</span>
+          <span>중복 {formatNumber(audit.duplicateCount)}건</span>
+        </div>
+        {audit.extraCount > 0 && onRestoreMissing ? (
+          <button
+            type="button"
+            onClick={onRestoreMissing}
+            className="inline-flex h-8 shrink-0 items-center rounded-lg border border-rose-200 bg-white px-3 text-[11px] font-bold text-rose-700 shadow-sm transition hover:bg-rose-50"
+          >
+            해지확정 누락 복원
+          </button>
+        ) : null}
       </div>
       {sample ? <div className="mt-1 text-[11px] font-medium text-current/75">{sample}</div> : null}
     </div>
@@ -1964,6 +1982,7 @@ export function TypeAnalysisDashboard({
   onMoveRecord,
   onUpdateRecord,
   onDeleteRecord,
+  onRestoreMissingTerminations,
   terminationAudit,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("summary")
@@ -2479,7 +2498,7 @@ export function TypeAnalysisDashboard({
                 { label: "누적", value: cleanCumulativeLabel(data?.areaNetGrowth?.cumulativeNetLabel) || "-", tone: "slate" },
                 ]}
               />
-              <TerminationAuditBanner audit={terminationAudit} />
+              <TerminationAuditBanner audit={terminationAudit} onRestoreMissing={onRestoreMissingTerminations} />
 
             <div className="grid gap-4 xl:grid-cols-2">
               <CompactMetricBand title="업무성격" tone="blue" fit items={summaryWorkMetrics} />
