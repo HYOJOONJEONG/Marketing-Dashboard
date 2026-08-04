@@ -46,9 +46,11 @@ type Props = {
     extraCount: number
     missingCount: number
     duplicateCount: number
+    confirmedDuplicateCount?: number
     sampleExtraIds: string[]
     sampleMissingIds: string[]
     sampleDuplicateIds: string[]
+    sampleConfirmedDuplicateIds?: string[]
   }
 }
 
@@ -624,7 +626,9 @@ function TerminationAuditBanner({
   onRestoreMissing?: Props["onRestoreMissingTerminations"]
 }) {
   if (!audit) return null
-  const isMismatch = audit.confirmedCount !== audit.typeCount || audit.extraCount > 0 || audit.missingCount > 0 || audit.duplicateCount > 0
+  const confirmedDuplicateCount = audit.confirmedDuplicateCount || 0
+  const confirmedDuplicateIds = audit.sampleConfirmedDuplicateIds || []
+  const isMismatch = audit.confirmedCount !== audit.typeCount || audit.extraCount > 0 || audit.missingCount > 0 || audit.duplicateCount > 0 || confirmedDuplicateCount > 0
   const toneClass = isMismatch
     ? "border-rose-200 bg-rose-50 text-rose-800"
     : "border-emerald-200 bg-emerald-50 text-emerald-800"
@@ -632,6 +636,7 @@ function TerminationAuditBanner({
     audit.sampleExtraIds.length ? `유형분석만 있음: ${audit.sampleExtraIds.join(", ")}` : "",
     audit.sampleMissingIds.length ? `확정리스트만 있음: ${audit.sampleMissingIds.join(", ")}` : "",
     audit.sampleDuplicateIds.length ? `중복 의심: ${audit.sampleDuplicateIds.join(", ")}` : "",
+    confirmedDuplicateIds.length ? `해지확정 중복 ID: ${confirmedDuplicateIds.join(", ")}` : "",
   ].filter(Boolean).join(" · ")
   return (
     <div className={`rounded-2xl border px-4 py-3 text-[12px] font-semibold ${toneClass}`}>
@@ -643,7 +648,8 @@ function TerminationAuditBanner({
           <span className="text-current/50">/</span>
           <span>유형분석 초과 {formatNumber(audit.extraCount)}건</span>
           <span>누락 {formatNumber(audit.missingCount)}건</span>
-          <span>중복 {formatNumber(audit.duplicateCount)}건</span>
+          <span>유형분석 중복 {formatNumber(audit.duplicateCount)}건</span>
+          <span>확정 중복 {formatNumber(confirmedDuplicateCount)}건</span>
         </div>
         {audit.extraCount > 0 && onRestoreMissing ? (
           <button

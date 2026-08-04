@@ -2789,6 +2789,7 @@ function buildTypeAnalysisTerminationAudit(confirmedItems: any[], terminationRec
   const confirmedRows = Array.isArray(confirmedItems) ? confirmedItems : []
   const typeRows = Array.isArray(terminationRecords) ? terminationRecords : []
   const confirmedCounts = new Map<string, number>()
+  const confirmedIdCounts = new Map<string, number>()
   const typeCounts = new Map<string, number>()
   const labelByKey = new Map<string, string>()
 
@@ -2797,6 +2798,8 @@ function buildTypeAnalysisTerminationAudit(confirmedItems: any[], terminationRec
     if (!key) return
     confirmedCounts.set(key, (confirmedCounts.get(key) || 0) + 1)
     if (!labelByKey.has(key)) labelByKey.set(key, getTypeAnalysisAuditLabel(row))
+    const idCode = normalizeCustomerIdentifier(row?.customerId || row?.idCode)
+    if (idCode) confirmedIdCounts.set(idCode, (confirmedIdCounts.get(idCode) || 0) + 1)
   })
   typeRows.forEach((row: any) => {
     const key = getTypeAnalysisTerminationCompareKey(row)
@@ -2809,9 +2812,11 @@ function buildTypeAnalysisTerminationAudit(confirmedItems: any[], terminationRec
   const extraIds: string[] = []
   const missingIds: string[] = []
   const duplicateIds: string[] = []
+  const confirmedDuplicateIds: string[] = []
   let extraCount = 0
   let missingCount = 0
   let duplicateCount = 0
+  let confirmedDuplicateCount = 0
 
   keys.forEach((key) => {
     const confirmedCount = confirmedCounts.get(key) || 0
@@ -2831,16 +2836,33 @@ function buildTypeAnalysisTerminationAudit(confirmedItems: any[], terminationRec
     }
   })
 
+  confirmedIdCounts.forEach((count, idCode) => {
+    if (count <= 1) return
+    confirmedDuplicateCount += count - 1
+    confirmedDuplicateIds.push(idCode)
+  })
+
   return {
     confirmedCount: confirmedRows.length,
     typeCount: typeRows.length,
     extraCount,
     missingCount,
     duplicateCount,
+    confirmedDuplicateCount,
     sampleExtraIds: extraIds.slice(0, 6),
     sampleMissingIds: missingIds.slice(0, 6),
     sampleDuplicateIds: duplicateIds.slice(0, 6),
+    sampleConfirmedDuplicateIds: confirmedDuplicateIds.slice(0, 8),
   }
+}
+
+function pickConfirmedTerminationItemsForAudit(sheets: any[], selectedSheet: any) {
+  const selectedRows = Array.isArray(selectedSheet?.confirmedItems) ? selectedSheet.confirmedItems : []
+  const largestRows = (Array.isArray(sheets) ? sheets : [])
+    .map((sheet: any) => (Array.isArray(sheet?.confirmedItems) ? sheet.confirmedItems : []))
+    .filter((rows: any[]) => rows.length > 0)
+    .sort((a: any[], b: any[]) => b.length - a.length)[0]
+  return largestRows && largestRows.length > selectedRows.length ? largestRows : selectedRows
 }
 
 function buildConfirmedTerminationFromTypeAnalysisRecord(record: any, index: number) {
@@ -3999,7 +4021,10 @@ export function DashboardShell({
   }, [view, collectionTab])
   const includedContracts = useMemo(() => contracts.filter((row: any) => row.includedInWeekly), [contracts])
   const typeAnalysisTotalContracts = data?.weeklyReport?.manualSummary?.totalContracts
-  const typeAnalysisConfirmedItems = selectedSheet?.confirmedItems || []
+  const typeAnalysisConfirmedItems = useMemo(
+    () => pickConfirmedTerminationItemsForAudit(termination.sheets || [], selectedSheet),
+    [termination.sheets, selectedSheet],
+  )
   const typeAnalysis = useMemo(
     () => normalizeTypeAnalysisState(data?.typeAnalysis, typeAnalysisTotalContracts, typeAnalysisConfirmedItems),
     [data?.typeAnalysis, typeAnalysisTotalContracts, typeAnalysisConfirmedItems],
