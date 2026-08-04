@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Check, FileText, Pencil, RefreshCw, Save, X } from "lucide-react"
+import { Check, FileText, Pencil, RefreshCw, Save, Trash2, X } from "lucide-react"
 
 type TabKey = "summary" | "new" | "termination" | "area" | "personal"
 
@@ -35,6 +35,20 @@ type Props = {
     record: any,
     patch: Record<string, any>,
   ) => void | Promise<void>
+  onDeleteRecord?: (
+    kind: "new" | "termination",
+    record: any,
+  ) => void | Promise<void>
+  terminationAudit?: {
+    confirmedCount: number
+    typeCount: number
+    extraCount: number
+    missingCount: number
+    duplicateCount: number
+    sampleExtraIds: string[]
+    sampleMissingIds: string[]
+    sampleDuplicateIds: string[]
+  }
 }
 
 type ReportColumn = {
@@ -577,6 +591,53 @@ function EditActionButtons({
       >
         <X className="h-3.5 w-3.5" />
       </button>
+    </div>
+  )
+}
+
+function DeleteRecordButton({
+  label,
+  onDelete,
+}: {
+  label: string
+  onDelete?: () => void
+}) {
+  if (!onDelete) return null
+  return (
+    <button
+      type="button"
+      onClick={onDelete}
+      className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-rose-200 bg-white px-2 text-[11px] font-bold text-rose-600 transition hover:bg-rose-50"
+    >
+      <Trash2 className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  )
+}
+
+function TerminationAuditBanner({ audit }: { audit?: Props["terminationAudit"] }) {
+  if (!audit) return null
+  const isMismatch = audit.confirmedCount !== audit.typeCount || audit.extraCount > 0 || audit.missingCount > 0 || audit.duplicateCount > 0
+  const toneClass = isMismatch
+    ? "border-rose-200 bg-rose-50 text-rose-800"
+    : "border-emerald-200 bg-emerald-50 text-emerald-800"
+  const sample = [
+    audit.sampleExtraIds.length ? `유형분석만 있음: ${audit.sampleExtraIds.join(", ")}` : "",
+    audit.sampleMissingIds.length ? `확정리스트만 있음: ${audit.sampleMissingIds.join(", ")}` : "",
+    audit.sampleDuplicateIds.length ? `중복 의심: ${audit.sampleDuplicateIds.join(", ")}` : "",
+  ].filter(Boolean).join(" · ")
+  return (
+    <div className={`rounded-2xl border px-4 py-3 text-[12px] font-semibold ${toneClass}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span>해지확정 {formatNumber(audit.confirmedCount)}건</span>
+        <span className="text-current/50">/</span>
+        <span>유형분석 해지 {formatNumber(audit.typeCount)}건</span>
+        <span className="text-current/50">/</span>
+        <span>유형분석 초과 {formatNumber(audit.extraCount)}건</span>
+        <span>누락 {formatNumber(audit.missingCount)}건</span>
+        <span>중복 {formatNumber(audit.duplicateCount)}건</span>
+      </div>
+      {sample ? <div className="mt-1 text-[11px] font-medium text-current/75">{sample}</div> : null}
     </div>
   )
 }
@@ -1162,6 +1223,7 @@ function GroupedNewRecordsTable({
   industryOptions,
   onMoveRecord,
   onUpdateRecord,
+  onDeleteRecord,
   sort,
   onSort,
 }: {
@@ -1169,6 +1231,7 @@ function GroupedNewRecordsTable({
   industryOptions: string[]
   onMoveRecord?: Props["onMoveRecord"]
   onUpdateRecord?: Props["onUpdateRecord"]
+  onDeleteRecord?: Props["onDeleteRecord"]
   sort?: TableSortState | null
   onSort?: (key: string) => void
 }) {
@@ -1221,6 +1284,10 @@ function GroupedNewRecordsTable({
                   const saveEdit = () => {
                     onUpdateRecord?.("new", row, draft)
                     cancelEdit()
+                  }
+                  const deleteRecord = () => {
+                    if (!window.confirm(`${row?.idCode || row?.companyName || "선택 행"}을(를) 유형분석 상세목록에서 삭제할까요?`)) return
+                    onDeleteRecord?.("new", row)
                   }
                   return (
                   <tr key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`} className={`border-b border-slate-100 ${isEditing ? "bg-blue-50/60" : "hover:bg-blue-50/30"}`}>
@@ -1281,6 +1348,7 @@ function GroupedNewRecordsTable({
                               수정
                             </button>
                           ) : null}
+                          <DeleteRecordButton label="삭제" onDelete={onDeleteRecord ? deleteRecord : undefined} />
                         </div>
                       )}
                     </td>
@@ -1430,6 +1498,7 @@ function GroupedTerminationRecordsTable({
   industryOptions,
   onMoveRecord,
   onUpdateRecord,
+  onDeleteRecord,
   sort,
   onSort,
 }: {
@@ -1437,6 +1506,7 @@ function GroupedTerminationRecordsTable({
   industryOptions: string[]
   onMoveRecord?: Props["onMoveRecord"]
   onUpdateRecord?: Props["onUpdateRecord"]
+  onDeleteRecord?: Props["onDeleteRecord"]
   sort?: TableSortState | null
   onSort?: (key: string) => void
 }) {
@@ -1489,6 +1559,10 @@ function GroupedTerminationRecordsTable({
                   const saveEdit = () => {
                     onUpdateRecord?.("termination", row, draft)
                     cancelEdit()
+                  }
+                  const deleteRecord = () => {
+                    if (!window.confirm(`${row?.idCode || row?.companyName || "선택 행"}을(를) 유형분석 해지 상세목록에서 삭제할까요?`)) return
+                    onDeleteRecord?.("termination", row)
                   }
                   return (
                   <tr key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`} className={`border-b border-slate-100 ${isEditing ? "bg-rose-50/60" : "hover:bg-rose-50/30"}`}>
@@ -1547,6 +1621,7 @@ function GroupedTerminationRecordsTable({
                               수정
                             </button>
                           ) : null}
+                          <DeleteRecordButton label="삭제" onDelete={onDeleteRecord ? deleteRecord : undefined} />
                         </div>
                       )}
                     </td>
@@ -1888,6 +1963,8 @@ export function TypeAnalysisDashboard({
   onSave,
   onMoveRecord,
   onUpdateRecord,
+  onDeleteRecord,
+  terminationAudit,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("summary")
   const [newIndustrySort, setNewIndustrySort] = useState<TableSortState | null>(null)
@@ -2394,14 +2471,15 @@ export function TypeAnalysisDashboard({
             tone="slate"
           />
           <div className="space-y-4 p-5">
-            <SimpleKpiGrid
-              items={[
-                { label: "신규/대체", value: `${formatNumber(newTotal)}건`, tone: "blue", sub: `신규 ${formatNumber(pureNewTotal)} · 대체 ${formatNumber(replacementTotal)}` },
+              <SimpleKpiGrid
+                items={[
+                  { label: "신규/대체", value: `${formatNumber(newTotal)}건`, tone: "blue", sub: `신규 ${formatNumber(pureNewTotal)} · 대체 ${formatNumber(replacementTotal)}` },
                 { label: "해지", value: `${formatNumber(terminationTotal)}건`, tone: "rose" },
                 { label: "순증", value: `${formatNumber(netTotal)}건`, tone: "emerald" },
                 { label: "누적", value: cleanCumulativeLabel(data?.areaNetGrowth?.cumulativeNetLabel) || "-", tone: "slate" },
-              ]}
-            />
+                ]}
+              />
+              <TerminationAuditBanner audit={terminationAudit} />
 
             <div className="grid gap-4 xl:grid-cols-2">
               <CompactMetricBand title="업무성격" tone="blue" fit items={summaryWorkMetrics} />
@@ -2445,6 +2523,7 @@ export function TypeAnalysisDashboard({
             industryOptions={industryMoveOptions}
             onMoveRecord={onMoveRecord}
             onUpdateRecord={onUpdateRecord}
+            onDeleteRecord={onDeleteRecord}
             sort={newDetailSort}
             onSort={(key) => setNewDetailSort((current) => nextSortState(current, key))}
           />
@@ -2467,6 +2546,7 @@ export function TypeAnalysisDashboard({
             industryOptions={industryMoveOptions}
             onMoveRecord={onMoveRecord}
             onUpdateRecord={onUpdateRecord}
+            onDeleteRecord={onDeleteRecord}
             sort={terminationDetailSort}
             onSort={(key) => setTerminationDetailSort((current) => nextSortState(current, key))}
           />

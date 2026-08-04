@@ -2779,6 +2779,70 @@ function mergeTypeAnalysisRecords(existingRecords: any[], incomingRecords: any[]
   }))
 }
 
+function getTypeAnalysisAuditLabel(record: any) {
+  return normalizeCustomerIdentifier(record?.idCode || record?.customerId) ||
+    String(record?.companyName || record?.id || record?.sourceId || "").trim() ||
+    "ID없음"
+}
+
+function buildTypeAnalysisTerminationAudit(confirmedItems: any[], terminationRecords: any[]) {
+  const confirmedRows = (Array.isArray(confirmedItems) ? confirmedItems : []).filter((item: any) => item?.selected !== false)
+  const typeRows = Array.isArray(terminationRecords) ? terminationRecords : []
+  const confirmedCounts = new Map<string, number>()
+  const typeCounts = new Map<string, number>()
+  const labelByKey = new Map<string, string>()
+
+  confirmedRows.forEach((row: any) => {
+    const key = getTypeAnalysisTerminationCompareKey(row)
+    if (!key) return
+    confirmedCounts.set(key, (confirmedCounts.get(key) || 0) + 1)
+    if (!labelByKey.has(key)) labelByKey.set(key, getTypeAnalysisAuditLabel(row))
+  })
+  typeRows.forEach((row: any) => {
+    const key = getTypeAnalysisTerminationCompareKey(row)
+    if (!key) return
+    typeCounts.set(key, (typeCounts.get(key) || 0) + 1)
+    if (!labelByKey.has(key)) labelByKey.set(key, getTypeAnalysisAuditLabel(row))
+  })
+
+  const keys = new Set([...confirmedCounts.keys(), ...typeCounts.keys()])
+  const extraIds: string[] = []
+  const missingIds: string[] = []
+  const duplicateIds: string[] = []
+  let extraCount = 0
+  let missingCount = 0
+  let duplicateCount = 0
+
+  keys.forEach((key) => {
+    const confirmedCount = confirmedCounts.get(key) || 0
+    const typeCount = typeCounts.get(key) || 0
+    const label = labelByKey.get(key) || key
+    if (typeCount > confirmedCount) {
+      extraCount += typeCount - confirmedCount
+      extraIds.push(label)
+    }
+    if (confirmedCount > typeCount) {
+      missingCount += confirmedCount - typeCount
+      missingIds.push(label)
+    }
+    if (typeCount > 1) {
+      duplicateCount += typeCount - 1
+      duplicateIds.push(label)
+    }
+  })
+
+  return {
+    confirmedCount: confirmedRows.length,
+    typeCount: typeRows.length,
+    extraCount,
+    missingCount,
+    duplicateCount,
+    sampleExtraIds: extraIds.slice(0, 6),
+    sampleMissingIds: missingIds.slice(0, 6),
+    sampleDuplicateIds: duplicateIds.slice(0, 6),
+  }
+}
+
 function normalizeAdditionalSalesRows(rows: any[]) {
   const list = Array.isArray(rows) ? rows : []
   if (!list.length) return [{ idCode: "", company: "", amount: "", content: "", note: "", kind: "manual" }]
@@ -3919,6 +3983,10 @@ export function DashboardShell({
   const typeAnalysis = useMemo(
     () => normalizeTypeAnalysisState(data?.typeAnalysis, typeAnalysisTotalContracts, typeAnalysisConfirmedItems),
     [data?.typeAnalysis, typeAnalysisTotalContracts, typeAnalysisConfirmedItems],
+  )
+  const typeAnalysisTerminationAudit = useMemo(
+    () => buildTypeAnalysisTerminationAudit(typeAnalysisConfirmedItems, typeAnalysis?.terminationType?.records || []),
+    [typeAnalysisConfirmedItems, typeAnalysis?.terminationType?.records],
   )
   const typeAnalysisNewDetailIndustryOptions = useMemo(
     () => buildTypeAnalysisNewDetailIndustryOptions(),
@@ -8006,6 +8074,100 @@ export function DashboardShell({
     }
   }
 
+  async function handleTypeAnalysisDeleteRecord(
+    kind: "new" | "termination",
+    record: any,
+  ) {
+    if (isSavingDashboard) return
+    setIsSavingDashboard(true)
+    setTypeAnalysisSaveMessage("삭제 저장 중...")
+    try {
+      const latestData = pendingDataRef.current || data
+      const totalContractsOverride = latestData?.weeklyReport?.manualSummary?.totalContracts
+      const latestConfirmedItems =
+        (latestData?.termination?.sheets || []).find((sheet: any) => sheet.id === latestData?.termination?.currentSheetId)?.confirmedItems ||
+        latestData?.termination?.sheets?.[0]?.confirmedItems ||
+        []
+      const baseTypeAnalysis = normalizeTypeAnalysisState(latestData?.typeAnalysis, totalContractsOverride, latestConfirmedItems)
+      const recordKey = getTypeAnalysisRecordMergeKey(kind, record)
+      const recordNo = Number(record?.no)
+
+      const removeOneRecord = (rows: any[]) => {
+        let removed = false
+        const sourceRows = Array.isArray(rows) ? rows : []
+        const filtered = sourceRows.filter((row: any) => {
+          if (removed) return true
+          if (getTypeAnalysisRecordMergeKey(kind, row) !== recordKey) return true
+          if (Number.isFinite(recordNo) && recordNo > 0 && Number(row?.no) !== recordNo) return true
+          removed = true
+          return false
+        })
+        if (removed) return filtered
+        return sourceRows.filter((row: any, index: number) => {
+          if (removed) return true
+          if (getTypeAnalysisRecordMergeKey(kind, row) !== recordKey) return true
+          removed = true
+          return false
+        })
+      }
+
+      const nextNewRecords = kind === "new"
+        ? removeOneRecord(baseTypeAnalysis.newReplacement?.records || [])
+        : [...(baseTypeAnalysis.newReplacement?.records || [])]
+      const nextTerminationRecords = kind === "termination"
+        ? removeOneRecord(baseTypeAnalysis.terminationType?.records || [])
+        : [...(baseTypeAnalysis.terminationType?.records || [])]
+      const nextWeeklySnapshots = (baseTypeAnalysis.weeklySnapshots || []).map((snapshot: any) => ({
+        ...snapshot,
+        newRecords: kind === "new" ? removeOneRecord(snapshot?.newRecords || []) : snapshot?.newRecords || [],
+        terminationRecords: kind === "termination" ? removeOneRecord(snapshot?.terminationRecords || []) : snapshot?.terminationRecords || [],
+      }))
+      const reflectedAsOf =
+        baseTypeAnalysis.newReplacement?.asOf ||
+        baseTypeAnalysis.terminationType?.asOf ||
+        `${getTypeAnalysisReflectionDateLabel()} 기준`
+      const nextTypeAnalysis = {
+        ...baseTypeAnalysis,
+        updatedAt: new Date().toISOString(),
+        newReplacement: buildTypeAnalysisNewReplacementState(
+          baseTypeAnalysis.newReplacement,
+          nextNewRecords,
+          reflectedAsOf,
+        ),
+        terminationType: buildTypeAnalysisTerminationState(
+          baseTypeAnalysis.terminationType,
+          nextTerminationRecords,
+          reflectedAsOf,
+        ),
+        areaNetGrowth: buildTypeAnalysisAreaNetGrowthState(
+          baseTypeAnalysis.areaNetGrowth,
+          nextNewRecords,
+          nextTerminationRecords,
+          reflectedAsOf,
+          totalContractsOverride,
+        ),
+        personalPerformance: buildTypeAnalysisPersonalPerformanceState(
+          baseTypeAnalysis.personalPerformance,
+          nextNewRecords,
+          reflectedAsOf,
+        ),
+        weeklySnapshots: nextWeeklySnapshots,
+      }
+      await persist(
+        {
+          ...latestData,
+          typeAnalysis: nextTypeAnalysis,
+        },
+        { immediate: true, updatedViews: ["type-analysis"] },
+      )
+      setTypeAnalysisSaveMessage(`${formatManualSaveTime()} 삭제 저장 완료`)
+    } catch {
+      setTypeAnalysisSaveMessage("삭제 저장 실패. 잠시 후 다시 시도해주세요.")
+    } finally {
+      setIsSavingDashboard(false)
+    }
+  }
+
   async function handleTypeAnalysisSave() {
     if (isSavingDashboard) return
     setIsSavingDashboard(true)
@@ -10210,6 +10372,8 @@ export function DashboardShell({
               areaMoveOptions={[...TYPE_ANALYSIS_AREA_LABELS]}
               onMoveRecord={handleTypeAnalysisMoveRecord}
               onUpdateRecord={handleTypeAnalysisUpdateRecord}
+              onDeleteRecord={handleTypeAnalysisDeleteRecord}
+              terminationAudit={typeAnalysisTerminationAudit}
             />
           )}
 
