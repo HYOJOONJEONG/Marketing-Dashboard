@@ -775,6 +775,105 @@ function isBusanUniversityTerminationRow(row: any) {
   )
 }
 
+const TERMINATION_CONFIRMED_RESTORE_DATE = "2026.07.30"
+
+function normalizeDashboardCompareText(value: unknown) {
+  return safeText(value).replace(/\s+/g, "").toUpperCase()
+}
+
+function terminationConfirmedCompareKey(row: any) {
+  const idCode = normalizeContractIdCode(row?.customerId || row?.idCode)
+  const companyName = normalizeDashboardCompareText(row?.companyName)
+  const departmentName = normalizeDashboardCompareText(row?.departmentName)
+  if (!idCode && !companyName) return ""
+  return `${idCode}|${companyName}|${departmentName}`
+}
+
+function isRestoreTargetTerminationRecord(record: any) {
+  return [
+    record?.reflectedDate,
+    record?.date,
+    record?.sourceDate,
+    record?.receivedDate,
+    record?.terminationDate,
+  ].some((value) => normalizeDashboardDate(value) === TERMINATION_CONFIRMED_RESTORE_DATE)
+}
+
+function buildConfirmedTerminationFromTypeRecord(record: any, index: number) {
+  const idCode = normalizeContractIdCode(record?.idCode || record?.customerId)
+  const companyName = safeText(record?.companyName)
+  const departmentName = safeText(record?.departmentName)
+  const receivedDate = normalizeDashboardDate(record?.sourceDate || record?.receivedDate || record?.date || TERMINATION_CONFIRMED_RESTORE_DATE)
+  const terminationDate = normalizeDashboardDate(record?.terminationDate || record?.date || "")
+  return {
+    id: `confirmed-restored-20260730-${idCode || index}`,
+    no: index + 1,
+    selected: true,
+    receivedDate,
+    manager: safeText(record?.recommender || record?.manager),
+    customerId: idCode,
+    companyName,
+    departmentName,
+    reason: safeText(record?.reason),
+    terminationDate,
+    penalty: record?.penalty ?? 0,
+    note: safeText(record?.note),
+    reflectedDate: TERMINATION_CONFIRMED_RESTORE_DATE,
+    restoredFrom: "type-analysis",
+    restoredAt: new Date().toISOString(),
+  }
+}
+
+function restoreJuly30ConfirmedTerminationsFromTypeAnalysis(data: any) {
+  if (!data || typeof data !== "object" || !Array.isArray(data?.termination?.sheets)) {
+    return { data, changed: false, restoredCount: 0 }
+  }
+  const records = Array.isArray(data?.typeAnalysis?.terminationType?.records)
+    ? data.typeAnalysis.terminationType.records.filter(isRestoreTargetTerminationRecord)
+    : []
+  if (!records.length) return { data, changed: false, restoredCount: 0 }
+
+  const currentSheetId = safeText(data?.termination?.currentSheetId)
+  let restoredCount = 0
+  const sheets = data.termination.sheets.map((sheet: any, sheetIndex: number) => {
+    const isTargetSheet = currentSheetId ? safeText(sheet?.id) === currentSheetId : sheetIndex === 0
+    if (!isTargetSheet) return sheet
+
+    const confirmedItems = Array.isArray(sheet?.confirmedItems) ? sheet.confirmedItems : []
+    const existingKeys = new Set(
+      confirmedItems
+        .map((row: any) => terminationConfirmedCompareKey(row))
+        .filter(Boolean),
+    )
+    const additions: any[] = []
+    records.forEach((record: any) => {
+      const key = terminationConfirmedCompareKey(record)
+      if (!key || existingKeys.has(key)) return
+      existingKeys.add(key)
+      additions.push(buildConfirmedTerminationFromTypeRecord(record, confirmedItems.length + additions.length))
+    })
+    if (!additions.length) return sheet
+    restoredCount = additions.length
+    return {
+      ...sheet,
+      confirmedItems: [...confirmedItems, ...additions].map((row: any, index: number) => ({ ...row, no: index + 1 })),
+    }
+  })
+
+  if (!restoredCount) return { data, changed: false, restoredCount: 0 }
+  return {
+    data: {
+      ...data,
+      termination: {
+        ...data.termination,
+        sheets,
+      },
+    },
+    changed: true,
+    restoredCount,
+  }
+}
+
 function applyTerminationIdCorrections(data: any) {
   if (!data || typeof data !== "object" || !Array.isArray(data?.termination?.sheets)) {
     return { data, changed: false }
@@ -814,9 +913,11 @@ function applyTerminationIdCorrections(data: any) {
 
 async function ensureDashboardDataCorrections(data: any) {
   const terminationCorrected = applyTerminationIdCorrections(data)
-  const manualCorrected = restoreWeeklyReportFromHistoryIfNeeded(terminationCorrected.data)
+  const july30Restored = restoreJuly30ConfirmedTerminationsFromTypeAnalysis(terminationCorrected.data)
+  const manualCorrected = restoreWeeklyReportFromHistoryIfNeeded(july30Restored.data)
   const changedKeys: DashboardStateSliceKey[] = []
   if (terminationCorrected.changed) changedKeys.push("termination")
+  if (july30Restored.changed) changedKeys.push("termination")
   if (manualCorrected.changed) changedKeys.push("weeklyReport", "ui")
   if (!changedKeys.length) return manualCorrected.data
   await writeDashboardState(
@@ -825,9 +926,11 @@ async function ensureDashboardDataCorrections(data: any) {
       menuLabel: "Dashboard",
       changeLabel: manualCorrected.changed
         ? "수동입력 최신 히스토리 보호 복구"
+        : july30Restored.changed
+          ? `2026.07.30 해지확정 ${july30Restored.restoredCount}건 복원`
         : "해지확정 부산대 고객번호 E150214 수정",
     },
-    changedKeys,
+    Array.from(new Set(changedKeys)) as DashboardStateSliceKey[],
   )
   return manualCorrected.data
 }
