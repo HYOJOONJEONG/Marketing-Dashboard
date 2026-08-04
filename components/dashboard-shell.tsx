@@ -2786,7 +2786,7 @@ function getTypeAnalysisAuditLabel(record: any) {
 }
 
 function buildTypeAnalysisTerminationAudit(confirmedItems: any[], terminationRecords: any[]) {
-  const confirmedRows = (Array.isArray(confirmedItems) ? confirmedItems : []).filter((item: any) => item?.selected !== false)
+  const confirmedRows = Array.isArray(confirmedItems) ? confirmedItems : []
   const typeRows = Array.isArray(terminationRecords) ? terminationRecords : []
   const confirmedCounts = new Map<string, number>()
   const typeCounts = new Map<string, number>()
