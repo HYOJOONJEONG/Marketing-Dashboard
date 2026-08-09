@@ -684,6 +684,32 @@ function TerminationAuditBanner({
   )
 }
 
+function DuplicateIdNotice({
+  title,
+  duplicateIdCodes,
+}: {
+  title: string
+  duplicateIdCodes: Set<string>
+}) {
+  if (!duplicateIdCodes.size) {
+    return (
+      <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[12px] font-semibold text-emerald-700">
+        {title} 중복 ID 없음
+      </div>
+    )
+  }
+  const ids = Array.from(duplicateIdCodes).slice(0, 12)
+  return (
+    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-semibold text-rose-800">
+      <div className="flex flex-wrap items-center gap-2">
+        <span>{title} 중복 ID {formatNumber(duplicateIdCodes.size)}개</span>
+        <span className="text-rose-400">/</span>
+        <span className="font-medium text-rose-700">{ids.join(", ")}{duplicateIdCodes.size > ids.length ? ` 외 ${duplicateIdCodes.size - ids.length}개` : ""}</span>
+      </div>
+    </div>
+  )
+}
+
 function MoveSelect({
   value,
   options,
@@ -2560,7 +2586,6 @@ export function TypeAnalysisDashboard({
                 { label: "누적", value: cleanCumulativeLabel(data?.areaNetGrowth?.cumulativeNetLabel) || "-", tone: "slate" },
                 ]}
               />
-              <TerminationAuditBanner audit={terminationAudit} onRestoreMissing={onRestoreMissingTerminations} />
 
             <div className="grid gap-4 xl:grid-cols-2">
               <CompactMetricBand title="업무성격" tone="blue" fit items={summaryWorkMetrics} />
@@ -2590,6 +2615,7 @@ export function TypeAnalysisDashboard({
 
       {tab === "new" ? (
         <div className="space-y-4">
+          <DuplicateIdNotice title="신규/대체" duplicateIdCodes={duplicateNewIdCodes} />
           <NewReplacementExcelSummary
             year={currentYear}
             asOf={data?.newReplacement?.asOf || sourceTitle(data)}
@@ -2614,6 +2640,8 @@ export function TypeAnalysisDashboard({
 
       {tab === "termination" ? (
         <div className="space-y-4">
+          <DuplicateIdNotice title="해지" duplicateIdCodes={duplicateTerminationIdCodes} />
+          <TerminationAuditBanner audit={terminationAudit} onRestoreMissing={onRestoreMissingTerminations} />
           <TerminationMatrixTable
             year={currentYear}
             asOf={data?.terminationType?.asOf || sourceTitle(data)}

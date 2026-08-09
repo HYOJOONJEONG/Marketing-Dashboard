@@ -8349,12 +8349,16 @@ export function DashboardShell({
       const latestData = pendingDataRef.current || data
       const sheets = Array.isArray(latestData?.termination?.sheets) ? latestData.termination.sheets : []
       if (!sheets.length) throw new Error("termination sheet missing")
-      const targetSheetIndex = Math.max(
-        0,
-        sheets.findIndex((sheet: any) => sheet.id === latestData?.termination?.currentSheetId),
-      )
+      const currentSheetIndex = sheets.findIndex((sheet: any) => sheet.id === latestData?.termination?.currentSheetId)
+      const largestConfirmedSheetIndex = sheets.reduce((bestIndex: number, sheet: any, index: number) => {
+        const bestCount = Array.isArray(sheets[bestIndex]?.confirmedItems) ? sheets[bestIndex].confirmedItems.length : 0
+        const count = Array.isArray(sheet?.confirmedItems) ? sheet.confirmedItems.length : 0
+        return count > bestCount ? index : bestIndex
+      }, Math.max(0, currentSheetIndex))
+      const targetSheetIndex = largestConfirmedSheetIndex >= 0 ? largestConfirmedSheetIndex : Math.max(0, currentSheetIndex)
       const targetSheet = sheets[targetSheetIndex] || sheets[0]
       const confirmedItems = Array.isArray(targetSheet?.confirmedItems) ? targetSheet.confirmedItems : []
+      const deletedConfirmedKeys = latestData?.termination?.deletedConfirmedItemKeys || {}
       const baseTypeAnalysis = normalizeTypeAnalysisState(
         latestData?.typeAnalysis,
         latestData?.weeklyReport?.manualSummary?.totalContracts,
@@ -8371,7 +8375,7 @@ export function DashboardShell({
       const additions: any[] = []
       typeRows.forEach((row: any) => {
         const key = getTypeAnalysisTerminationCompareKey(row)
-        if (!key || existingKeys.has(key)) return
+        if (!key || existingKeys.has(key) || deletedConfirmedKeys[key]) return
         existingKeys.add(key)
         additions.push(buildConfirmedTerminationFromTypeAnalysisRecord(row, confirmedItems.length + additions.length))
       })
