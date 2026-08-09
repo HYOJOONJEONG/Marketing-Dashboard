@@ -468,6 +468,21 @@ function filterDeletedRows(rows: any[], deletedMap: Record<string, string>) {
   return rows.filter((row) => !deletedIds.has(safeText(row?.id)))
 }
 
+function filterDeletedRowsByIdOrCompareKey(
+  rows: any[],
+  deletedIdMap: Record<string, string>,
+  deletedCompareKeyMap: Record<string, string>,
+) {
+  const deletedIds = new Set(Object.keys(deletedIdMap))
+  const deletedCompareKeys = new Set(Object.keys(deletedCompareKeyMap))
+  if (!deletedIds.size && !deletedCompareKeys.size) return rows
+  return rows.filter((row) => {
+    const rowId = safeText(row?.id)
+    const compareKey = terminationConfirmedCompareKey(row)
+    return !(rowId && deletedIds.has(rowId)) && !(compareKey && deletedCompareKeys.has(compareKey))
+  })
+}
+
 function collectTerminationActiveRowsByKey(termination: any) {
   const rowsByKey = new Map<string, any>()
   const sheets = Array.isArray(termination?.sheets) ? termination.sheets : []
@@ -562,6 +577,8 @@ function mergeTerminationState(existingTermination: any, incomingTermination: an
   const incomingSheets = Array.isArray(incomingTermination?.sheets) ? incomingTermination.sheets : []
   const deletedItemIds = mergeDeletedRowMaps(existingTermination?.deletedItemIds, incomingTermination?.deletedItemIds)
   const deletedHoldIds = mergeDeletedRowMaps(existingTermination?.deletedHoldIds, incomingTermination?.deletedHoldIds)
+  const deletedConfirmedItemIds = mergeDeletedRowMaps(existingTermination?.deletedConfirmedItemIds, incomingTermination?.deletedConfirmedItemIds)
+  const deletedConfirmedItemKeys = mergeDeletedRowMaps(existingTermination?.deletedConfirmedItemKeys, incomingTermination?.deletedConfirmedItemKeys)
   const existingSheetById = new Map<string, any>()
   existingSheets.forEach((sheet: any) => {
     const id = safeText(sheet?.id)
@@ -573,6 +590,8 @@ function mergeTerminationState(existingTermination: any, incomingTermination: an
     ...incomingTermination,
     deletedItemIds,
     deletedHoldIds,
+    deletedConfirmedItemIds,
+    deletedConfirmedItemKeys,
     sheets: incomingSheets.map((incomingSheet: any, index: number) => {
       const existingSheet =
         existingSheetById.get(safeText(incomingSheet?.id)) ||
@@ -590,6 +609,9 @@ function mergeTerminationState(existingTermination: any, incomingTermination: an
             : {}),
           ...(Array.isArray(incomingSheet?.holdItems)
             ? { holdItems: filterDeletedRows(incomingSheet.holdItems, deletedHoldIds) }
+            : {}),
+          ...(Array.isArray(incomingSheet?.confirmedItems)
+            ? { confirmedItems: filterDeletedRowsByIdOrCompareKey(incomingSheet.confirmedItems, deletedConfirmedItemIds, deletedConfirmedItemKeys) }
             : {}),
         }
       }
@@ -632,11 +654,15 @@ function mergeTerminationState(existingTermination: any, incomingTermination: an
           : {}),
         ...(Array.isArray(incomingSheet?.confirmedItems)
           ? {
-              confirmedItems: mergeTerminationRowsPreservingExisting(
-                existingConfirmedItems,
-                incomingConfirmedItems,
-                {},
-                incomingItems,
+              confirmedItems: filterDeletedRowsByIdOrCompareKey(
+                mergeTerminationRowsPreservingExisting(
+                  existingConfirmedItems,
+                  incomingConfirmedItems,
+                  deletedConfirmedItemIds,
+                  incomingItems,
+                ),
+                deletedConfirmedItemIds,
+                deletedConfirmedItemKeys,
               ),
             }
           : {}),
@@ -834,6 +860,7 @@ function restoreJuly30ConfirmedTerminationsFromTypeAnalysis(data: any) {
   if (!records.length) return { data, changed: false, restoredCount: 0 }
 
   const currentSheetId = safeText(data?.termination?.currentSheetId)
+  const deletedConfirmedKeys = normalizeDeletedRowMap(data?.termination?.deletedConfirmedItemKeys)
   let restoredCount = 0
   const sheets = data.termination.sheets.map((sheet: any, sheetIndex: number) => {
     const isTargetSheet = currentSheetId ? safeText(sheet?.id) === currentSheetId : sheetIndex === 0
@@ -848,7 +875,7 @@ function restoreJuly30ConfirmedTerminationsFromTypeAnalysis(data: any) {
     const additions: any[] = []
     records.forEach((record: any) => {
       const key = terminationConfirmedCompareKey(record)
-      if (!key || existingKeys.has(key)) return
+      if (!key || existingKeys.has(key) || deletedConfirmedKeys[key]) return
       existingKeys.add(key)
       additions.push(buildConfirmedTerminationFromTypeRecord(record, confirmedItems.length + additions.length))
     })

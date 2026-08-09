@@ -166,6 +166,24 @@ function getRecordDateLabel(row: any) {
   return compactDate(row?.date || row?.reflectedDate || row?.createdAt || "")
 }
 
+function normalizeRecordIdCode(value: unknown) {
+  return String(value ?? "").trim().toUpperCase()
+}
+
+function getDuplicateIdCodeSet(records: any[]) {
+  const counts = new Map<string, number>()
+  ;(Array.isArray(records) ? records : []).forEach((row: any) => {
+    const idCode = normalizeRecordIdCode(row?.idCode || row?.customerId)
+    if (!idCode) return
+    counts.set(idCode, (counts.get(idCode) || 0) + 1)
+  })
+  return new Set(
+    Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([idCode]) => idCode),
+  )
+}
+
 function dateSortValue(value: unknown) {
   const digits = String(value || "").replace(/\D/g, "")
   if (digits.length >= 8) return Number(digits.slice(0, 8))
@@ -1245,6 +1263,7 @@ function NewReplacementExcelSummary({
 function GroupedNewRecordsTable({
   groups,
   industryOptions,
+  duplicateIdCodes,
   onMoveRecord,
   onUpdateRecord,
   onDeleteRecord,
@@ -1253,6 +1272,7 @@ function GroupedNewRecordsTable({
 }: {
   groups: Array<{ label: string; rows: any[] }>
   industryOptions: string[]
+  duplicateIdCodes?: Set<string>
   onMoveRecord?: Props["onMoveRecord"]
   onUpdateRecord?: Props["onUpdateRecord"]
   onDeleteRecord?: Props["onDeleteRecord"]
@@ -1270,7 +1290,7 @@ function GroupedNewRecordsTable({
         상세 목록 {formatNumber(totalCount)}건
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1280px] border-collapse text-[12px]">
+        <table className="w-full min-w-[1420px] border-collapse text-[12px]">
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
               <SortableHeader label="NO" sortKey="no" sort={sort || null} onSort={onSort} align="center" className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold" />
@@ -1282,7 +1302,7 @@ function GroupedNewRecordsTable({
               <SortableHeader label="구분" sortKey="replacementType" sort={sort || null} onSort={onSort} className="w-[88px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
               <SortableHeader label="업무성격" sortKey="businessType" sort={sort || null} onSort={onSort} className="w-[82px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
               <SortableHeader label="비고" sortKey="note" sort={sort || null} onSort={onSort} className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <th className="w-[236px] px-2 py-2 text-left font-semibold">수정 / 업종 이동</th>
+              <th className="w-[330px] px-2 py-2 text-left font-semibold">수정 / 업종 이동</th>
             </tr>
           </thead>
           <tbody>
@@ -1297,6 +1317,8 @@ function GroupedNewRecordsTable({
                   const rowNo = ++displayNo
                   const rowKey = editableRecordKey("new", row, index)
                   const isEditing = editingKey === rowKey
+                  const idCode = normalizeRecordIdCode(row?.idCode || row?.customerId)
+                  const isDuplicate = Boolean(idCode && duplicateIdCodes?.has(idCode))
                   const startEdit = () => {
                     setEditingKey(rowKey)
                     setDraft(newRecordDraft(row, group.label))
@@ -1314,13 +1336,27 @@ function GroupedNewRecordsTable({
                     onDeleteRecord?.("new", row)
                   }
                   return (
-                  <tr key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`} className={`border-b border-slate-100 ${isEditing ? "bg-blue-50/60" : "hover:bg-blue-50/30"}`}>
+                  <tr
+                    key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`}
+                    className={`border-b border-slate-100 ${
+                      isDuplicate
+                        ? "bg-rose-50/80 hover:bg-rose-50"
+                        : isEditing
+                          ? "bg-blue-50/60"
+                          : "hover:bg-blue-50/30"
+                    }`}
+                  >
                     <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{rowNo}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 tabular-nums text-slate-600">
                       {isEditing ? <InlineEditInput value={draft.date || ""} onChange={(value) => updateDraft("date", value)} ariaLabel="신규/대체 반영일" /> : row.date}
                     </td>
                     <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">
-                      {isEditing ? <InlineEditInput value={draft.idCode || ""} onChange={(value) => updateDraft("idCode", value)} ariaLabel="신규/대체 ID" /> : row.idCode}
+                      {isEditing ? <InlineEditInput value={draft.idCode || ""} onChange={(value) => updateDraft("idCode", value)} ariaLabel="신규/대체 ID" /> : (
+                        <span className={isDuplicate ? "inline-flex items-center rounded-md bg-rose-100 px-1.5 py-0.5 font-bold text-rose-700" : ""}>
+                          {row.idCode}
+                          {isDuplicate ? <em className="ml-1 rounded-full bg-rose-600 px-1 text-[9px] not-italic text-white">중복</em> : null}
+                        </span>
+                      )}
                     </td>
                     <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">
                       {isEditing ? <InlineEditInput value={draft.companyName || ""} onChange={(value) => updateDraft("companyName", value)} ariaLabel="신규/대체 회사명" /> : row.companyName}
@@ -1353,7 +1389,7 @@ function GroupedNewRecordsTable({
                           <EditActionButtons onSave={saveEdit} onCancel={cancelEdit} />
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex min-w-[300px] items-center gap-1.5">
                           {onMoveRecord ? (
                             <MoveSelect
                               value={String(row?.group || group.label || "").trim()}
@@ -1520,6 +1556,7 @@ function TerminationMatrixTable({
 function GroupedTerminationRecordsTable({
   groups,
   industryOptions,
+  duplicateIdCodes,
   onMoveRecord,
   onUpdateRecord,
   onDeleteRecord,
@@ -1528,6 +1565,7 @@ function GroupedTerminationRecordsTable({
 }: {
   groups: Array<{ label: string; rows: any[] }>
   industryOptions: string[]
+  duplicateIdCodes?: Set<string>
   onMoveRecord?: Props["onMoveRecord"]
   onUpdateRecord?: Props["onUpdateRecord"]
   onDeleteRecord?: Props["onDeleteRecord"]
@@ -1545,7 +1583,7 @@ function GroupedTerminationRecordsTable({
         상세 목록 {formatNumber(totalCount)}건
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1320px] border-collapse text-[12px]">
+        <table className="w-full min-w-[1460px] border-collapse text-[12px]">
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
               <SortableHeader label="NO" sortKey="no" sort={sort || null} onSort={onSort} align="center" className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold" />
@@ -1557,7 +1595,7 @@ function GroupedTerminationRecordsTable({
               <SortableHeader label="해지사유" sortKey="reason" sort={sort || null} onSort={onSort} className="min-w-[140px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
               <SortableHeader label="위약금" sortKey="penalty" sort={sort || null} onSort={onSort} align="right" className="w-[98px] border-r border-slate-200 px-2 py-2 text-right font-semibold" />
               <SortableHeader label="비고" sortKey="note" sort={sort || null} onSort={onSort} className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <th className="w-[236px] px-2 py-2 text-left font-semibold">수정 / 업종 이동</th>
+              <th className="w-[330px] px-2 py-2 text-left font-semibold">수정 / 업종 이동</th>
             </tr>
           </thead>
           <tbody>
@@ -1572,6 +1610,8 @@ function GroupedTerminationRecordsTable({
                   const rowNo = ++displayNo
                   const rowKey = editableRecordKey("termination", row, index)
                   const isEditing = editingKey === rowKey
+                  const idCode = normalizeRecordIdCode(row?.idCode || row?.customerId)
+                  const isDuplicate = Boolean(idCode && duplicateIdCodes?.has(idCode))
                   const startEdit = () => {
                     setEditingKey(rowKey)
                     setDraft(terminationRecordDraft(row, group.label))
@@ -1589,13 +1629,27 @@ function GroupedTerminationRecordsTable({
                     onDeleteRecord?.("termination", row)
                   }
                   return (
-                  <tr key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`} className={`border-b border-slate-100 ${isEditing ? "bg-rose-50/60" : "hover:bg-rose-50/30"}`}>
+                  <tr
+                    key={`${group.label}-${row?.id || row?.sourceId || row?.idCode || index}`}
+                    className={`border-b border-slate-100 ${
+                      isDuplicate
+                        ? "bg-rose-50/80 hover:bg-rose-50"
+                        : isEditing
+                          ? "bg-rose-50/60"
+                          : "hover:bg-rose-50/30"
+                    }`}
+                  >
                     <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{rowNo}</td>
                     <td className="border-r border-slate-100 px-2 py-1.5 tabular-nums text-slate-600">
                       {isEditing ? <InlineEditInput value={draft.date || ""} onChange={(value) => updateDraft("date", value)} ariaLabel="해지 반영일" /> : row.date}
                     </td>
                     <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">
-                      {isEditing ? <InlineEditInput value={draft.idCode || ""} onChange={(value) => updateDraft("idCode", value)} ariaLabel="해지 ID" /> : row.idCode}
+                      {isEditing ? <InlineEditInput value={draft.idCode || ""} onChange={(value) => updateDraft("idCode", value)} ariaLabel="해지 ID" /> : (
+                        <span className={isDuplicate ? "inline-flex items-center rounded-md bg-rose-100 px-1.5 py-0.5 font-bold text-rose-700" : ""}>
+                          {row.idCode}
+                          {isDuplicate ? <em className="ml-1 rounded-full bg-rose-600 px-1 text-[9px] not-italic text-white">중복</em> : null}
+                        </span>
+                      )}
                     </td>
                     <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">
                       {isEditing ? <InlineEditInput value={draft.companyName || ""} onChange={(value) => updateDraft("companyName", value)} ariaLabel="해지 회사명" /> : row.companyName}
@@ -1626,7 +1680,7 @@ function GroupedTerminationRecordsTable({
                           <EditActionButtons onSave={saveEdit} onCancel={cancelEdit} />
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex min-w-[300px] items-center gap-1.5">
                           {onMoveRecord ? (
                             <MoveSelect
                               value={String(row?.group || group.label || "").trim()}
@@ -2040,6 +2094,7 @@ export function TypeAnalysisDashboard({
     () => sortTableRows(newRecords, newDetailSort),
     [newRecords, newDetailSort],
   )
+  const duplicateNewIdCodes = useMemo(() => getDuplicateIdCodeSet(newRecords), [newRecords])
   const groupedNewRecords = useMemo(() => {
     const buckets = new Map<string, any[]>()
     filteredNewRecords.forEach((row: any) => {
@@ -2058,6 +2113,7 @@ export function TypeAnalysisDashboard({
     () => sortTableRows(terminationRecords, terminationDetailSort),
     [terminationRecords, terminationDetailSort],
   )
+  const duplicateTerminationIdCodes = useMemo(() => getDuplicateIdCodeSet(terminationRecords), [terminationRecords])
   const groupedTerminationRecords = useMemo(() => {
     const buckets = new Map<string, any[]>()
     filteredTerminationRecords.forEach((row: any) => {
@@ -2546,6 +2602,7 @@ export function TypeAnalysisDashboard({
           <GroupedNewRecordsTable
             groups={groupedNewRecords}
             industryOptions={industryMoveOptions}
+            duplicateIdCodes={duplicateNewIdCodes}
             onMoveRecord={onMoveRecord}
             onUpdateRecord={onUpdateRecord}
             onDeleteRecord={onDeleteRecord}
@@ -2569,6 +2626,7 @@ export function TypeAnalysisDashboard({
           <GroupedTerminationRecordsTable
             groups={groupedTerminationRecords}
             industryOptions={industryMoveOptions}
+            duplicateIdCodes={duplicateTerminationIdCodes}
             onMoveRecord={onMoveRecord}
             onUpdateRecord={onUpdateRecord}
             onDeleteRecord={onDeleteRecord}

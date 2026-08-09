@@ -6974,6 +6974,12 @@ export function DashboardShell({
       ...(latestTermination.deletedConfirmedItemIds || {}),
       [rowId]: new Date().toISOString(),
     }
+    const targetRow = (latestSheet.confirmedItems || []).find((row: any) => row.id === rowId)
+    const targetKey = getTypeAnalysisTerminationCompareKey(targetRow)
+    const deletedConfirmedItemKeys = {
+      ...(latestTermination.deletedConfirmedItemKeys || {}),
+      ...(targetKey ? { [targetKey]: deletedConfirmedItemIds[rowId] } : {}),
+    }
     const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
       sheet.id === latestSheet.id
         ? {
@@ -6988,7 +6994,13 @@ export function DashboardShell({
       await persistTerminationData(
         {
           ...latestData,
-          termination: { ...latestTermination, deletedConfirmedItemIds, currentSheetId: latestSheet.id, sheets: nextSheets },
+          termination: {
+            ...latestTermination,
+            deletedConfirmedItemIds,
+            deletedConfirmedItemKeys,
+            currentSheetId: latestSheet.id,
+            sheets: nextSheets,
+          },
         },
         { throwOnError: true },
       )
@@ -7264,6 +7276,15 @@ export function DashboardShell({
         return acc
       }, {}),
     }
+    const deletedConfirmedItemKeys = {
+      ...(latestTermination.deletedConfirmedItemKeys || {}),
+      ...(latestSheet.confirmedItems || []).reduce((acc: Record<string, string>, row: any) => {
+        if (!selectedSet.has(row.id)) return acc
+        const key = getTypeAnalysisTerminationCompareKey(row)
+        if (key) acc[key] = deletedAt
+        return acc
+      }, {}),
+    }
     const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
       sheet.id === latestSheet.id
         ? {
@@ -7278,7 +7299,13 @@ export function DashboardShell({
       await persistTerminationData(
         {
           ...latestData,
-          termination: { ...latestTermination, deletedConfirmedItemIds, currentSheetId: latestSheet.id, sheets: nextSheets },
+          termination: {
+            ...latestTermination,
+            deletedConfirmedItemIds,
+            deletedConfirmedItemKeys,
+            currentSheetId: latestSheet.id,
+            sheets: nextSheets,
+          },
         },
         { throwOnError: true },
       )
