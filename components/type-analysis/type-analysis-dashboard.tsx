@@ -628,7 +628,7 @@ function DeleteRecordButton({
     <button
       type="button"
       onClick={onDelete}
-      className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-rose-200 bg-white px-2 text-[11px] font-bold text-rose-600 transition hover:bg-rose-50"
+      className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-rose-200 bg-white px-1.5 text-[11px] font-bold text-rose-600 transition hover:bg-rose-50"
     >
       <Trash2 className="h-3.5 w-3.5" />
       {label}
@@ -699,7 +699,7 @@ function MoveSelect({
   if (!items.length) return <span className="text-slate-300">-</span>
   return (
     <select
-      className="h-7 w-full min-w-[150px] rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+      className="h-7 w-full rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
       value={value || items[0]}
       onChange={(event) => {
         const nextValue = event.target.value
@@ -1289,20 +1289,20 @@ function GroupedNewRecordsTable({
       <div className="border-b border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-900">
         상세 목록 {formatNumber(totalCount)}건
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1420px] border-collapse text-[12px]">
+      <div className="overflow-hidden">
+        <table className="w-full table-fixed border-collapse text-[11px]">
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
-              <SortableHeader label="NO" sortKey="no" sort={sort || null} onSort={onSort} align="center" className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold" />
-              <SortableHeader label="반영일" sortKey="date" sort={sort || null} onSort={onSort} className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="ID" sortKey="idCode" sort={sort || null} onSort={onSort} className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="회사명" sortKey="companyName" sort={sort || null} onSort={onSort} className="min-w-[170px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="부서" sortKey="departmentName" sort={sort || null} onSort={onSort} className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="권유자" sortKey="recommender" sort={sort || null} onSort={onSort} className="w-[86px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="구분" sortKey="replacementType" sort={sort || null} onSort={onSort} className="w-[88px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="업무성격" sortKey="businessType" sort={sort || null} onSort={onSort} className="w-[82px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="비고" sortKey="note" sort={sort || null} onSort={onSort} className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <th className="w-[330px] px-2 py-2 text-left font-semibold">수정 / 업종 이동</th>
+              <SortableHeader label="NO" sortKey="no" sort={sort || null} onSort={onSort} align="center" className="w-[4%] border-r border-slate-200 px-1.5 py-2 text-center font-semibold" />
+              <SortableHeader label="반영일" sortKey="date" sort={sort || null} onSort={onSort} className="w-[7%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="ID" sortKey="idCode" sort={sort || null} onSort={onSort} className="w-[7%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="회사명" sortKey="companyName" sort={sort || null} onSort={onSort} className="w-[14%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="부서" sortKey="departmentName" sort={sort || null} onSort={onSort} className="w-[12%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="권유자" sortKey="recommender" sort={sort || null} onSort={onSort} className="w-[6%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="구분" sortKey="replacementType" sort={sort || null} onSort={onSort} className="w-[7%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="업무" sortKey="businessType" sort={sort || null} onSort={onSort} className="w-[6%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="비고" sortKey="note" sort={sort || null} onSort={onSort} className="w-[13%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <th className="w-[24%] px-1.5 py-2 text-left font-semibold">수정 / 업종 이동</th>
             </tr>
           </thead>
           <tbody>
@@ -1346,11 +1346,11 @@ function GroupedNewRecordsTable({
                           : "hover:bg-blue-50/30"
                     }`}
                   >
-                    <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{rowNo}</td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 tabular-nums text-slate-600">
+                    <td className="border-r border-slate-100 px-1.5 py-1.5 text-center tabular-nums text-slate-600">{rowNo}</td>
+                    <td className="border-r border-slate-100 px-1.5 py-1.5 tabular-nums text-slate-600">
                       {isEditing ? <InlineEditInput value={draft.date || ""} onChange={(value) => updateDraft("date", value)} ariaLabel="신규/대체 반영일" /> : row.date}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">
+                    <td className="border-r border-slate-100 px-1.5 py-1.5 font-medium text-slate-900">
                       {isEditing ? <InlineEditInput value={draft.idCode || ""} onChange={(value) => updateDraft("idCode", value)} ariaLabel="신규/대체 ID" /> : (
                         <span className={isDuplicate ? "inline-flex items-center rounded-md bg-rose-100 px-1.5 py-0.5 font-bold text-rose-700" : ""}>
                           {row.idCode}
@@ -1358,29 +1358,29 @@ function GroupedNewRecordsTable({
                         </span>
                       )}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">
+                    <td className="truncate border-r border-slate-100 px-1.5 py-1.5 font-medium text-slate-900" title={String(row.companyName || "")}>
                       {isEditing ? <InlineEditInput value={draft.companyName || ""} onChange={(value) => updateDraft("companyName", value)} ariaLabel="신규/대체 회사명" /> : row.companyName}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">
+                    <td className="truncate border-r border-slate-100 px-1.5 py-1.5 text-slate-600" title={String(row.departmentName || "")}>
                       {isEditing ? <InlineEditInput value={draft.departmentName || ""} onChange={(value) => updateDraft("departmentName", value)} ariaLabel="신규/대체 부서" /> : row.departmentName}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">
+                    <td className="truncate border-r border-slate-100 px-1.5 py-1.5 text-slate-600" title={String(row.recommender || "")}>
                       {isEditing ? <InlineEditInput value={draft.recommender || ""} onChange={(value) => updateDraft("recommender", value)} ariaLabel="신규/대체 권유자" /> : row.recommender}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-700">
+                    <td className="truncate border-r border-slate-100 px-1.5 py-1.5 font-medium text-slate-700" title={String(row.replacementType || "신규")}>
                       {isEditing ? (
                         <InlineEditSelect value={draft.replacementType || "신규"} options={NEW_REPLACEMENT_TYPE_OPTIONS} onChange={(value) => updateDraft("replacementType", value)} ariaLabel="신규/대체 구분" />
                       ) : row.replacementType || "신규"}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-700">
+                    <td className="truncate border-r border-slate-100 px-1.5 py-1.5 font-medium text-slate-700" title={String(row.businessType || "기타")}>
                       {isEditing ? (
                         <InlineEditSelect value={draft.businessType || "기타"} options={NEW_BUSINESS_TYPE_OPTIONS} onChange={(value) => updateDraft("businessType", value)} ariaLabel="신규/대체 업무성격" />
                       ) : row.businessType || "기타"}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">
+                    <td className="truncate border-r border-slate-100 px-1.5 py-1.5 text-slate-600" title={String(row.note || "")}>
                       {isEditing ? <InlineEditInput value={draft.note || ""} onChange={(value) => updateDraft("note", value)} ariaLabel="신규/대체 비고" /> : row.note}
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1.5 py-1.5">
                       {isEditing ? (
                         <div className="flex flex-col gap-1.5">
                           <div className="min-w-0">
@@ -1389,7 +1389,7 @@ function GroupedNewRecordsTable({
                           <EditActionButtons onSave={saveEdit} onCancel={cancelEdit} />
                         </div>
                       ) : (
-                        <div className="flex min-w-[300px] items-center gap-1.5">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1">
                           {onMoveRecord ? (
                             <MoveSelect
                               value={String(row?.group || group.label || "").trim()}
@@ -1582,20 +1582,20 @@ function GroupedTerminationRecordsTable({
       <div className="border-b border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-900">
         상세 목록 {formatNumber(totalCount)}건
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1460px] border-collapse text-[12px]">
+      <div className="overflow-hidden">
+        <table className="w-full table-fixed border-collapse text-[11px]">
           <thead>
             <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
-              <SortableHeader label="NO" sortKey="no" sort={sort || null} onSort={onSort} align="center" className="w-[56px] border-r border-slate-200 px-2 py-2 text-center font-semibold" />
-              <SortableHeader label="반영일" sortKey="date" sort={sort || null} onSort={onSort} className="w-[92px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="ID" sortKey="idCode" sort={sort || null} onSort={onSort} className="w-[96px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="회사명" sortKey="companyName" sort={sort || null} onSort={onSort} className="min-w-[170px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="부서" sortKey="departmentName" sort={sort || null} onSort={onSort} className="min-w-[150px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="담당자" sortKey="recommender" sort={sort || null} onSort={onSort} className="w-[86px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="해지사유" sortKey="reason" sort={sort || null} onSort={onSort} className="min-w-[140px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <SortableHeader label="위약금" sortKey="penalty" sort={sort || null} onSort={onSort} align="right" className="w-[98px] border-r border-slate-200 px-2 py-2 text-right font-semibold" />
-              <SortableHeader label="비고" sortKey="note" sort={sort || null} onSort={onSort} className="min-w-[180px] border-r border-slate-200 px-2 py-2 text-left font-semibold" />
-              <th className="w-[330px] px-2 py-2 text-left font-semibold">수정 / 업종 이동</th>
+              <SortableHeader label="NO" sortKey="no" sort={sort || null} onSort={onSort} align="center" className="w-[4%] border-r border-slate-200 px-1.5 py-2 text-center font-semibold" />
+              <SortableHeader label="반영일" sortKey="date" sort={sort || null} onSort={onSort} className="w-[7%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="ID" sortKey="idCode" sort={sort || null} onSort={onSort} className="w-[7%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="회사명" sortKey="companyName" sort={sort || null} onSort={onSort} className="w-[14%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="부서" sortKey="departmentName" sort={sort || null} onSort={onSort} className="w-[12%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="담당자" sortKey="recommender" sort={sort || null} onSort={onSort} className="w-[6%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="해지사유" sortKey="reason" sort={sort || null} onSort={onSort} className="w-[10%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <SortableHeader label="위약금" sortKey="penalty" sort={sort || null} onSort={onSort} align="right" className="w-[6%] border-r border-slate-200 px-1.5 py-2 text-right font-semibold" />
+              <SortableHeader label="비고" sortKey="note" sort={sort || null} onSort={onSort} className="w-[12%] border-r border-slate-200 px-1.5 py-2 text-left font-semibold" />
+              <th className="w-[22%] px-1.5 py-2 text-left font-semibold">수정 / 업종 이동</th>
             </tr>
           </thead>
           <tbody>
@@ -1639,11 +1639,11 @@ function GroupedTerminationRecordsTable({
                           : "hover:bg-rose-50/30"
                     }`}
                   >
-                    <td className="border-r border-slate-100 px-2 py-1.5 text-center tabular-nums text-slate-600">{rowNo}</td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 tabular-nums text-slate-600">
+                    <td className="border-r border-slate-100 px-1.5 py-1.5 text-center tabular-nums text-slate-600">{rowNo}</td>
+                    <td className="border-r border-slate-100 px-1.5 py-1.5 tabular-nums text-slate-600">
                       {isEditing ? <InlineEditInput value={draft.date || ""} onChange={(value) => updateDraft("date", value)} ariaLabel="해지 반영일" /> : row.date}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">
+                    <td className="border-r border-slate-100 px-1.5 py-1.5 font-medium text-slate-900">
                       {isEditing ? <InlineEditInput value={draft.idCode || ""} onChange={(value) => updateDraft("idCode", value)} ariaLabel="해지 ID" /> : (
                         <span className={isDuplicate ? "inline-flex items-center rounded-md bg-rose-100 px-1.5 py-0.5 font-bold text-rose-700" : ""}>
                           {row.idCode}
@@ -1651,27 +1651,27 @@ function GroupedTerminationRecordsTable({
                         </span>
                       )}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-900">
+                    <td className="truncate border-r border-slate-100 px-1.5 py-1.5 font-medium text-slate-900" title={String(row.companyName || "")}>
                       {isEditing ? <InlineEditInput value={draft.companyName || ""} onChange={(value) => updateDraft("companyName", value)} ariaLabel="해지 회사명" /> : row.companyName}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">
+                    <td className="truncate border-r border-slate-100 px-1.5 py-1.5 text-slate-600" title={String(row.departmentName || "")}>
                       {isEditing ? <InlineEditInput value={draft.departmentName || ""} onChange={(value) => updateDraft("departmentName", value)} ariaLabel="해지 부서" /> : row.departmentName}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">
+                    <td className="truncate border-r border-slate-100 px-1.5 py-1.5 text-slate-600" title={String(row.recommender || "")}>
                       {isEditing ? <InlineEditInput value={draft.recommender || ""} onChange={(value) => updateDraft("recommender", value)} ariaLabel="해지 담당자" /> : row.recommender}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 font-medium text-slate-700">
+                    <td className="truncate border-r border-slate-100 px-1.5 py-1.5 font-medium text-slate-700" title={String(row.reason || "")}>
                       {isEditing ? (
                         <InlineEditSelect value={draft.reason || "계약만료"} options={TERMINATION_REASON_OPTIONS} onChange={(value) => updateDraft("reason", value)} ariaLabel="해지 사유" />
                       ) : row.reason}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 text-right tabular-nums text-slate-600">
+                    <td className="border-r border-slate-100 px-1.5 py-1.5 text-right tabular-nums text-slate-600">
                       {isEditing ? <InlineEditInput value={draft.penalty || ""} onChange={(value) => updateDraft("penalty", value)} ariaLabel="해지 위약금" /> : formatNumber(row.penalty)}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-1.5 text-slate-600">
+                    <td className="truncate border-r border-slate-100 px-1.5 py-1.5 text-slate-600" title={String(row.note || "")}>
                       {isEditing ? <InlineEditInput value={draft.note || ""} onChange={(value) => updateDraft("note", value)} ariaLabel="해지 비고" /> : row.note}
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1.5 py-1.5">
                       {isEditing ? (
                         <div className="flex flex-col gap-1.5">
                           <div className="min-w-0">
@@ -1680,7 +1680,7 @@ function GroupedTerminationRecordsTable({
                           <EditActionButtons onSave={saveEdit} onCancel={cancelEdit} />
                         </div>
                       ) : (
-                        <div className="flex min-w-[300px] items-center gap-1.5">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1">
                           {onMoveRecord ? (
                             <MoveSelect
                               value={String(row?.group || group.label || "").trim()}
