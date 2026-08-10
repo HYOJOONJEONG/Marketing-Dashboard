@@ -8358,7 +8358,7 @@ export function DashboardShell({
       const targetSheetIndex = largestConfirmedSheetIndex >= 0 ? largestConfirmedSheetIndex : Math.max(0, currentSheetIndex)
       const targetSheet = sheets[targetSheetIndex] || sheets[0]
       const confirmedItems = Array.isArray(targetSheet?.confirmedItems) ? targetSheet.confirmedItems : []
-      const deletedConfirmedKeys = latestData?.termination?.deletedConfirmedItemKeys || {}
+      const deletedConfirmedKeys = { ...(latestData?.termination?.deletedConfirmedItemKeys || {}) }
       const baseTypeAnalysis = normalizeTypeAnalysisState(
         latestData?.typeAnalysis,
         latestData?.weeklyReport?.manualSummary?.totalContracts,
@@ -8373,10 +8373,12 @@ export function DashboardShell({
           .filter(Boolean),
       )
       const additions: any[] = []
+      const restoredKeys: string[] = []
       typeRows.forEach((row: any) => {
         const key = getTypeAnalysisTerminationCompareKey(row)
-        if (!key || existingKeys.has(key) || deletedConfirmedKeys[key]) return
+        if (!key || existingKeys.has(key)) return
         existingKeys.add(key)
+        restoredKeys.push(key)
         additions.push(buildConfirmedTerminationFromTypeAnalysisRecord(row, confirmedItems.length + additions.length))
       })
       if (!additions.length) {
@@ -8395,10 +8397,14 @@ export function DashboardShell({
         termination: {
           ...(latestData?.termination || {}),
           currentSheetId: targetSheet?.id || latestData?.termination?.currentSheetId,
+          deletedConfirmedItemKeys: restoredKeys.reduce((next: Record<string, any>, key) => {
+            delete next[key]
+            return next
+          }, deletedConfirmedKeys),
           sheets: nextSheets,
         },
       }
-      await persist(nextData, { immediate: true, updatedViews: ["termination"] })
+      await persist(nextData, { immediate: true, updatedViews: ["termination", "type-analysis"] })
       setTypeAnalysisSaveMessage(`${formatManualSaveTime()} 해지확정 ${additions.length}건 복원 완료`)
     } catch {
       setTypeAnalysisSaveMessage("해지확정 누락 복원 실패. 잠시 후 다시 시도해주세요.")
