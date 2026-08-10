@@ -483,6 +483,35 @@ function filterDeletedRowsByIdOrCompareKey(
   })
 }
 
+function clearRestoredConfirmedDeletionMaps(
+  incomingSheets: any[],
+  deletedIdMap: Record<string, string>,
+  deletedCompareKeyMap: Record<string, string>,
+) {
+  const restoredIds = new Set<string>()
+  const restoredCompareKeys = new Set<string>()
+  incomingSheets.forEach((sheet: any) => {
+    const rows = Array.isArray(sheet?.confirmedItems) ? sheet.confirmedItems : []
+    rows.forEach((row: any) => {
+      const rowId = safeText(row?.id)
+      const compareKey = terminationConfirmedCompareKey(row)
+      if (rowId) restoredIds.add(rowId)
+      if (compareKey) restoredCompareKeys.add(compareKey)
+    })
+  })
+  if (!restoredIds.size && !restoredCompareKeys.size) {
+    return { deletedIdMap, deletedCompareKeyMap }
+  }
+  return {
+    deletedIdMap: Object.fromEntries(
+      Object.entries(deletedIdMap).filter(([id]) => !restoredIds.has(id)),
+    ),
+    deletedCompareKeyMap: Object.fromEntries(
+      Object.entries(deletedCompareKeyMap).filter(([key]) => !restoredCompareKeys.has(key)),
+    ),
+  }
+}
+
 function collectTerminationActiveRowsByKey(termination: any) {
   const rowsByKey = new Map<string, any>()
   const sheets = Array.isArray(termination?.sheets) ? termination.sheets : []
@@ -577,8 +606,12 @@ function mergeTerminationState(existingTermination: any, incomingTermination: an
   const incomingSheets = Array.isArray(incomingTermination?.sheets) ? incomingTermination.sheets : []
   const deletedItemIds = mergeDeletedRowMaps(existingTermination?.deletedItemIds, incomingTermination?.deletedItemIds)
   const deletedHoldIds = mergeDeletedRowMaps(existingTermination?.deletedHoldIds, incomingTermination?.deletedHoldIds)
-  const deletedConfirmedItemIds = mergeDeletedRowMaps(existingTermination?.deletedConfirmedItemIds, incomingTermination?.deletedConfirmedItemIds)
-  const deletedConfirmedItemKeys = mergeDeletedRowMaps(existingTermination?.deletedConfirmedItemKeys, incomingTermination?.deletedConfirmedItemKeys)
+  const mergedDeletedConfirmedItemIds = mergeDeletedRowMaps(existingTermination?.deletedConfirmedItemIds, incomingTermination?.deletedConfirmedItemIds)
+  const mergedDeletedConfirmedItemKeys = mergeDeletedRowMaps(existingTermination?.deletedConfirmedItemKeys, incomingTermination?.deletedConfirmedItemKeys)
+  const {
+    deletedIdMap: deletedConfirmedItemIds,
+    deletedCompareKeyMap: deletedConfirmedItemKeys,
+  } = clearRestoredConfirmedDeletionMaps(incomingSheets, mergedDeletedConfirmedItemIds, mergedDeletedConfirmedItemKeys)
   const existingSheetById = new Map<string, any>()
   existingSheets.forEach((sheet: any) => {
     const id = safeText(sheet?.id)
