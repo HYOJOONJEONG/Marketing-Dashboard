@@ -5896,6 +5896,78 @@ export function DashboardShell({
     })
   }
 
+  function handleRestoreCollectionToContract(rowId: string) {
+    if (collectionTab !== "integrated") return
+    if (!canCreateContracts) {
+      window.alert("신규계약 등록 권한이 없습니다.")
+      return
+    }
+    const sourceRow = (collection.integrated || []).find((row: any) => row.id === rowId)
+    if (!sourceRow) return
+    if (!String(sourceRow.companyName || "").trim() || !String(sourceRow.idCode || "").trim()) {
+      window.alert("회사명과 ID가 있어야 신규계약 리스트로 복원할 수 있습니다.")
+      return
+    }
+    if (!window.confirm("이 항목을 계약서통합관리에서 제거하고 신규계약 리스트로 복원할까요?")) return
+
+    startTransition(async () => {
+      try {
+        const latestResponse = await fetch("/api/dashboard", { cache: "no-store" }).catch(() => null)
+        const latestData = latestResponse?.ok ? await latestResponse.json().catch(() => null) : null
+        const sourceData = latestData && typeof latestData === "object" ? latestData : pendingDataRef.current || data
+        const sourceCollection = sourceData?.collection || collection
+        const sourceContracts = Array.isArray(sourceData?.contracts) ? sourceData.contracts : contracts
+        const normalizedId = normalizeCustomerIdentifier(sourceRow.idCode)
+        const duplicate = normalizedId
+          ? sourceContracts.some((row: any) => normalizeCustomerIdentifier(row?.idCode) === normalizedId)
+          : false
+        if (duplicate) {
+          window.alert("중복된 ID가 존재합니다.")
+          return
+        }
+        const restoredContract = {
+          id: `c${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          registrationDate: getSeoulTodayKey(),
+          companyName: String(sourceRow.companyName || "").trim(),
+          departmentName: String(sourceRow.departmentName || "").trim(),
+          idCode: String(sourceRow.idCode || "").trim(),
+          industry: String(sourceRow.industry || "국내증권").trim() || "국내증권",
+          contractMonth: String(sourceRow.claimMonth || "").trim(),
+          documentStatus: String(sourceRow.status || "미회수").trim() || "미회수",
+          replacementType: "신규",
+          includedInWeekly: false,
+          recommender: currentUser?.name || "",
+          note: "계약서통합관리에서 복원",
+          restoredFromCollectionId: rowId,
+        }
+        const nextCollectionRows = (sourceCollection.integrated || []).filter((row: any) => row.id !== rowId)
+        const nextData = {
+          ...sourceData,
+          contracts: [restoredContract, ...sourceContracts],
+          collection: {
+            ...sourceCollection,
+            integrated: nextCollectionRows,
+            yearFilter: collectionYearFilter,
+            statusFilter: collectionStatusFilter,
+            sort: collectionSort,
+          },
+        }
+        await persist(nextData, {
+          immediate: true,
+          updatedViews: ["contracts", "weekly-selection", "collection"],
+        })
+        setEditingCollectionId(null)
+        setEditingCollectionDraft({})
+        setContractSort({ key: "registrationDate", dir: "desc" })
+        flashRecentRow(setRecentContractId, restoredContract.id)
+        window.alert("신규계약 리스트로 복원했습니다.")
+      } catch (error) {
+        console.error("Failed to restore collection row to contracts.", error)
+        window.alert("신규계약 리스트 복원에 실패했습니다. 잠시 후 다시 시도해주세요.")
+      }
+    })
+  }
+
   function startCollectionEdit(row: any) {
     setEditingCollectionId(row.id)
     setEditingCollectionDraft({
@@ -11326,6 +11398,15 @@ export function DashboardShell({
                                   >
                                     삭제
                                   </button>
+                                  {collectionTab === "integrated" ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRestoreCollectionToContract(row.id)}
+                                      className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                                    >
+                                      신규계약 복원
+                                    </button>
+                                  ) : null}
                                   <button
                                     type="button"
                                     onClick={() => {
