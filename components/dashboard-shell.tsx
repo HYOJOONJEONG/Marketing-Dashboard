@@ -11307,54 +11307,18 @@ export function DashboardShell({
                       {sortedCollectionRows.map((row: any, index: number) => {
                         const editing = editingCollectionId === row.id
                         return (
-                          <tr key={row.id}>
-                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>{index + 1}</td>
-                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
-                              {editing ? <input className="h-9 w-20 rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.year || ""} onChange={(e)=>updateEditingCollectionDraft("year", e.target.value)} /> : row.year}
-                            </td>
-                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""} whitespace-nowrap`}>
-                              {editing ? <input className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.companyName || ""} onChange={(e)=>updateEditingCollectionDraft("companyName", e.target.value)} /> : row.companyName}
-                            </td>
-                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""} whitespace-nowrap`}>
-                              {editing ? <input className="h-9 w-full min-w-[140px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.departmentName || ""} onChange={(e)=>updateEditingCollectionDraft("departmentName", e.target.value)} /> : row.departmentName}
-                            </td>
-                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
-                              {editing ? <input className="h-9 w-full min-w-[100px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.idCode || ""} onChange={(e)=>updateEditingCollectionDraft("idCode", e.target.value)} /> : row.idCode}
-                            </td>
-                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
-                              {editing ? <input className="h-9 w-full min-w-[100px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.industry || ""} onChange={(e)=>updateEditingCollectionDraft("industry", e.target.value)} /> : row.industry}
-                            </td>
-                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
-                              {editing ? <input className="h-9 w-full min-w-[90px] rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.claimMonth || ""} onChange={(e)=>updateEditingCollectionDraft("claimMonth", e.target.value)} /> : row.claimMonth}
-                            </td>
-                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
-                              {editing ? (
-                                <input
-                                  value={editingCollectionDraft.receiptDate || ""}
-                                  onChange={(e) => updateEditingCollectionDraft("receiptDate", e.target.value)}
-                                  placeholder="YYYY.MM.DD"
-                                  className="h-9 w-28 rounded-xl border border-slate-200 px-3 text-[12px] font-medium text-slate-700 outline-none focus:border-blue-400"
-                                />
-                              ) : (
-                                row.receiptDate || ""
-                              )}
-                            </td>
-                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
-                              {editing ? (
-                                <input
-                                  value={editingCollectionDraft.reflectedDate || ""}
-                                  onChange={(e) => updateEditingCollectionDraft("reflectedDate", e.target.value)}
-                                  placeholder="YYYY.MM.DD"
-                                  className="h-9 w-28 rounded-xl border border-slate-200 px-3 text-[12px] font-medium text-slate-700 outline-none focus:border-blue-400"
-                                />
-                              ) : (
-                                row.reflectedDate || ""
-                              )}
-                            </td>
-                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
-                              {editing ? (
-                                renderStatusBadge(row.status)
-                              ) : (
+                          <React.Fragment key={row.id}>
+                            <tr className={editing ? "bg-blue-50/40" : undefined}>
+                              <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>{index + 1}</td>
+                              <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>{row.year}</td>
+                              <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""} whitespace-nowrap`}>{row.companyName}</td>
+                              <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""} whitespace-nowrap`}>{row.departmentName}</td>
+                              <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>{row.idCode}</td>
+                              <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>{row.industry}</td>
+                              <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>{row.claimMonth}</td>
+                              <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>{row.receiptDate || ""}</td>
+                              <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>{row.reflectedDate || ""}</td>
+                              <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
                                 <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 p-0.5">
                                   <button
                                     type="button"
@@ -11379,56 +11343,113 @@ export function DashboardShell({
                                     미회수
                                   </button>
                                 </div>
-                              )}
-                            </td>
-                            <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
-                              {editing ? (
-                                <div className="flex items-center gap-2 whitespace-nowrap">
+                              </td>
+                              <td className={`${tdClass} ${collectionYearFilter === "all" ? "px-2 py-2 text-[12px]" : ""}`}>
+                                {editing ? (
+                                  <span className="inline-flex rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700">수정중</span>
+                                ) : (
                                   <button
                                     type="button"
-                                    onClick={() => handleCollectionUpdate(row.id)}
-                                    className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white"
+                                    onClick={() => startCollectionEdit(row)}
+                                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
                                   >
-                                    수정완료
+                                    수정
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCollectionDelete(row.id)}
-                                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
-                                  >
-                                    삭제
-                                  </button>
-                                  {collectionTab === "integrated" ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRestoreCollectionToContract(row.id)}
-                                      className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
-                                    >
-                                      신규계약 복원
-                                    </button>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingCollectionId(null)
-                                      setEditingCollectionDraft({})
-                                    }}
-                                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
-                                  >
-                                    취소
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => startCollectionEdit(row)}
-                                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
-                                >
-                                  수정
-                                </button>
-                              )}
-                            </td>
-                          </tr>
+                                )}
+                              </td>
+                            </tr>
+                            {editing ? (
+                              <tr>
+                                <td colSpan={collectionTableColumns.length} className="border-b border-slate-200 bg-blue-50/30 px-4 py-4">
+                                  <div className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
+                                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                      <div>
+                                        <div className="text-[14px] font-bold text-slate-900">계약서 정보 수정</div>
+                                        <div className="mt-1 text-[12px] font-medium text-slate-500">입력칸은 아래에서 수정하고 저장하면 테이블에 반영됩니다.</div>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCollectionUpdate(row.id)}
+                                          className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white"
+                                        >
+                                          수정완료
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCollectionDelete(row.id)}
+                                          className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+                                        >
+                                          삭제
+                                        </button>
+                                        {collectionTab === "integrated" ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRestoreCollectionToContract(row.id)}
+                                            className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                                          >
+                                            신규계약 복원
+                                          </button>
+                                        ) : null}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingCollectionId(null)
+                                            setEditingCollectionDraft({})
+                                          }}
+                                          className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                                        >
+                                          취소
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
+                                      <label className="space-y-1 text-[12px] font-semibold text-slate-600">
+                                        <span>연도</span>
+                                        <input className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.year || ""} onChange={(e)=>updateEditingCollectionDraft("year", e.target.value)} />
+                                      </label>
+                                      <label className="space-y-1 text-[12px] font-semibold text-slate-600 md:col-span-2">
+                                        <span>회사명</span>
+                                        <input className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.companyName || ""} onChange={(e)=>updateEditingCollectionDraft("companyName", e.target.value)} />
+                                      </label>
+                                      <label className="space-y-1 text-[12px] font-semibold text-slate-600 md:col-span-2">
+                                        <span>부서명</span>
+                                        <input className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.departmentName || ""} onChange={(e)=>updateEditingCollectionDraft("departmentName", e.target.value)} />
+                                      </label>
+                                      <label className="space-y-1 text-[12px] font-semibold text-slate-600">
+                                        <span>ID</span>
+                                        <input className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.idCode || ""} onChange={(e)=>updateEditingCollectionDraft("idCode", e.target.value)} />
+                                      </label>
+                                      <label className="space-y-1 text-[12px] font-semibold text-slate-600">
+                                        <span>업종</span>
+                                        <input className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.industry || ""} onChange={(e)=>updateEditingCollectionDraft("industry", e.target.value)} />
+                                      </label>
+                                      <label className="space-y-1 text-[12px] font-semibold text-slate-600">
+                                        <span>청구월</span>
+                                        <input className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[13px]" value={editingCollectionDraft.claimMonth || ""} onChange={(e)=>updateEditingCollectionDraft("claimMonth", e.target.value)} />
+                                      </label>
+                                      <label className="space-y-1 text-[12px] font-semibold text-slate-600">
+                                        <span>회수일</span>
+                                        <input value={editingCollectionDraft.receiptDate || ""} onChange={(e) => updateEditingCollectionDraft("receiptDate", e.target.value)} placeholder="YYYY.MM.DD" className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[12px] font-medium text-slate-700 outline-none focus:border-blue-400" />
+                                      </label>
+                                      <label className="space-y-1 text-[12px] font-semibold text-slate-600">
+                                        <span>반영일</span>
+                                        <input value={editingCollectionDraft.reflectedDate || ""} onChange={(e) => updateEditingCollectionDraft("reflectedDate", e.target.value)} placeholder="YYYY.MM.DD" className="h-9 w-full rounded-xl border border-slate-200 px-3 text-[12px] font-medium text-slate-700 outline-none focus:border-blue-400" />
+                                      </label>
+                                      <label className="space-y-1 text-[12px] font-semibold text-slate-600">
+                                        <span>상태</span>
+                                        <select className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px]" value={editingCollectionDraft.status || "미정"} onChange={(e)=>updateEditingCollectionDraft("status", e.target.value)}>
+                                          <option value="회수">회수</option>
+                                          <option value="미회수">미회수</option>
+                                          <option value="미정">미정</option>
+                                        </select>
+                                      </label>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
+                          </React.Fragment>
                         )
                       })}
                     </tbody>
