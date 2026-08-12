@@ -661,7 +661,7 @@ function mergeTerminationState(existingTermination: any, incomingTermination: an
                   existingItems,
                   incomingItems,
                   deletedItemIds,
-                  [...existingConfirmedItems, ...incomingConfirmedItems],
+                  incomingConfirmedItems,
                 ),
                 deletedItemIds,
               ),
