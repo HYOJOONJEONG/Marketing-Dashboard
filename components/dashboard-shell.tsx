@@ -3842,7 +3842,7 @@ export function DashboardShell({
 
   const [terminationEntryMode, setTerminationEntryMode] = useState<"termination" | "hold">("termination")
   const [terminationDraft, setTerminationDraft] = useState<any>({
-    receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
+    receivedDate: toInputDate(getSeoulTodayKey()),
     manager: currentUser?.name || "",
     customerId: "",
     companyName: "",
@@ -3853,7 +3853,7 @@ export function DashboardShell({
     penalty: "",
   })
   const [holdDraft, setHoldDraft] = useState<any>({
-    receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
+    receivedDate: toInputDate(getSeoulTodayKey()),
     manager: currentUser?.name || "",
     customerId: "",
     companyName: "",
@@ -4466,7 +4466,7 @@ export function DashboardShell({
         if (dateDiff !== 0) return dateDiff
         return String(b.savedAt || "").localeCompare(String(a.savedAt || ""), "ko")
       })
-    const fallbackDate = normalizeDate(weeklyReport?.baseDate || new Date().toISOString().slice(0, 10))
+    const fallbackDate = normalizeDate(weeklyReport?.baseDate || getSeoulTodayKey())
     return {
       title: String(raw.title || `${currentYear}년 고객업무팀 계약서 전달 리스트`),
       deliveredDate: String(raw.deliveredDate || fallbackDate),
@@ -5692,8 +5692,8 @@ export function DashboardShell({
         const sourceData = latestData && typeof latestData === "object" ? latestData : data
         const sourceCollection = sourceData?.collection || collection
         const sourceContracts = Array.isArray(sourceData?.contracts) ? sourceData.contracts : contracts
-        const baseDate = normalizeDate(weeklyReport?.baseDate || new Date().toISOString().slice(0, 10))
-        const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
+        const baseDate = normalizeDate(weeklyReport?.baseDate || getSeoulTodayKey())
+        const reflectedDate = normalizeDate(getSeoulTodayKey())
         const existingRows = sourceCollection.integrated || []
         const existingKeys = new Set(
           existingRows.map((row: any) => `${row.idCode || ""}|${row.claimMonth || ""}|${row.companyName || ""}`),
@@ -6030,7 +6030,7 @@ export function DashboardShell({
             status: nextStatus,
             receiptDate:
               nextStatus === "회수"
-                ? row.receiptDate || normalizeDate(new Date().toISOString().slice(0, 10))
+                ? row.receiptDate || normalizeDate(getSeoulTodayKey())
                 : "",
           }
         : row,
@@ -6998,7 +6998,7 @@ export function DashboardShell({
         return manager ? { ...mergedRow, manager } : mergedRow
       })
     if (!selectedItems.length) return
-    const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
+    const reflectedDate = normalizeDate(getSeoulTodayKey())
     const selectedSet = new Set(selectedItems.map((row: any) => row.id))
     const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
       sheet.id === latestSheet.id
@@ -7094,7 +7094,7 @@ export function DashboardShell({
 
   function resetTerminationDraft() {
     setTerminationDraft({
-      receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
+      receivedDate: toInputDate(getSeoulTodayKey()),
       manager: currentUser?.name || "",
       customerId: "",
       companyName: "",
@@ -7108,7 +7108,7 @@ export function DashboardShell({
 
   function resetHoldDraft() {
     setHoldDraft({
-      receivedDate: toInputDate(new Date().toISOString().slice(0, 10)),
+      receivedDate: toInputDate(getSeoulTodayKey()),
       manager: currentUser?.name || "",
       customerId: "",
       companyName: "",
@@ -7654,7 +7654,7 @@ export function DashboardShell({
             ...sheet,
             holdItems: (sheet.holdItems || []).filter((item: any) => item.id !== rowId),
             releasedHoldItems: [
-              { ...row, reflectedDate: normalizeDate(new Date().toISOString().slice(0, 10)) },
+              { ...row, reflectedDate: normalizeDate(getSeoulTodayKey()) },
               ...(sheet.releasedHoldItems || []),
             ],
           }
@@ -7675,7 +7675,7 @@ export function DashboardShell({
       .filter((item: any) => selectedSet.has(item.id))
       .map((item: any) => mergeEditingHoldRow(item))
     if (!releaseTargets.length) return
-    const reflectedDate = normalizeDate(new Date().toISOString().slice(0, 10))
+    const reflectedDate = normalizeDate(getSeoulTodayKey())
     const nextSheets = (latestTermination.sheets || []).map((sheet: any) =>
       sheet.id === latestSheet.id
         ? {
