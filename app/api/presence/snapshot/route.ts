@@ -4,14 +4,10 @@ import { resolveRequestSession } from "@/lib/auth/session"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-function encodeEvent(payload: unknown) {
-  return new TextEncoder().encode(`retry: 60000\ndata: ${JSON.stringify(payload)}\n\n`)
-}
-
 export async function GET() {
   const session = await resolveRequestSession()
   if (!session) {
-    return new Response("Unauthorized", { status: 401 })
+    return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 })
   }
 
   const state = await readAuthState()
@@ -27,19 +23,12 @@ export async function GET() {
   const recentActivities = state.activityLogs.slice(0, 12)
   const popupMessages = listUnreadPopupMessages(state, session.user.id)
 
-  return new Response(
-    encodeEvent({
-      onlineUsers,
-      presenceUsers,
-      samePageUsers,
-      recentActivities,
-      popupMessages,
-    }),
-    {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-transform",
-      },
-    },
-  )
+  return Response.json({
+    ok: true,
+    onlineUsers,
+    presenceUsers,
+    samePageUsers,
+    recentActivities,
+    popupMessages,
+  })
 }

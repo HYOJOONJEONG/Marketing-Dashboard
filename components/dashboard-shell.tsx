@@ -110,6 +110,8 @@ type SectionKey = "dailyReport" | "performance" | "termination"
 const LAST_VIEW_SESSION_KEY = "infobiz-last-dashboard-view"
 const PRESENCE_HEARTBEAT_RUSH_INTERVAL_MS = 15 * 1000
 const PRESENCE_HEARTBEAT_DEFAULT_INTERVAL_MS = 45 * 1000
+const PRESENCE_SNAPSHOT_RUSH_INTERVAL_MS = 15 * 1000
+const PRESENCE_SNAPSHOT_DEFAULT_INTERVAL_MS = 45 * 1000
 const DAILY_REPORT_POLL_RUSH_INTERVAL_MS = 5 * 1000
 const DAILY_REPORT_POLL_DEFAULT_INTERVAL_MS = 20 * 1000
 
@@ -129,6 +131,10 @@ function isDailyReportRushHourKst() {
 
 function getPresenceHeartbeatIntervalMs() {
   return isDailyReportRushHourKst() ? PRESENCE_HEARTBEAT_RUSH_INTERVAL_MS : PRESENCE_HEARTBEAT_DEFAULT_INTERVAL_MS
+}
+
+function getPresenceSnapshotIntervalMs() {
+  return isDailyReportRushHourKst() ? PRESENCE_SNAPSHOT_RUSH_INTERVAL_MS : PRESENCE_SNAPSHOT_DEFAULT_INTERVAL_MS
 }
 
 function getDailyReportPollIntervalMs() {
@@ -4105,8 +4111,8 @@ export function DashboardShell({
   useEffect(() => {
     if (!currentUser?.id) return
     let alive = true
-    let eventSource: EventSource | null = null
     let heartbeatTimer: ReturnType<typeof setTimeout> | null = null
+    let snapshotTimer: ReturnType<typeof setTimeout> | null = null
 
     const markActivity = () => {
       if (manualPresenceStatus === "away") return
@@ -4132,27 +4138,19 @@ export function DashboardShell({
       }
     }
 
-    const connect = () => {
-      if (eventSource) return
+    const fetchPresenceSnapshot = async () => {
       if (document.visibilityState === "hidden") return
-      eventSource = new EventSource("/api/presence/stream")
-      eventSource.onmessage = (event) => {
-        if (!alive) return
-        try {
-          const payload = JSON.parse(event.data)
-          setPresenceUsers(Array.isArray(payload?.presenceUsers) ? payload.presenceUsers : [])
-          const nextPopupMessages = Array.isArray(payload?.popupMessages)
-            ? payload.popupMessages.filter((message: PopupMessage) => !dismissedPopupMessageIdsRef.current.has(message.id))
-            : []
-          setPopupMessages(nextPopupMessages)
-        } catch {
-          setPresenceUsers([])
-          setPopupMessages([])
-        }
-      }
-      eventSource.onerror = () => {
-        eventSource?.close()
-        eventSource = null
+      try {
+        const response = await fetch("/api/presence/snapshot", { cache: "no-store" })
+        const payload = await response.json().catch(() => null)
+        if (!alive || !response.ok) return
+        setPresenceUsers(Array.isArray(payload?.presenceUsers) ? payload.presenceUsers : [])
+        const nextPopupMessages = Array.isArray(payload?.popupMessages)
+          ? payload.popupMessages.filter((message: PopupMessage) => !dismissedPopupMessageIdsRef.current.has(message.id))
+          : []
+        setPopupMessages(nextPopupMessages)
+      } catch {
+        // Keep the last known presence state when a short polling request fails.
       }
     }
 
@@ -4164,10 +4162,7 @@ export function DashboardShell({
       if (document.visibilityState === "visible") {
         markActivity()
         void sendHeartbeat()
-        if (!eventSource || eventSource.readyState === EventSource.CLOSED) connect()
-      } else {
-        eventSource?.close()
-        eventSource = null
+        void fetchPresenceSnapshot()
       }
     }
 
@@ -4184,20 +4179,30 @@ export function DashboardShell({
       }, getPresenceHeartbeatIntervalMs())
     }
 
+    const scheduleSnapshot = () => {
+      if (!alive) return
+      snapshotTimer = setTimeout(() => {
+        if (!alive) return
+        if (document.visibilityState !== "hidden") void fetchPresenceSnapshot()
+        scheduleSnapshot()
+      }, getPresenceSnapshotIntervalMs())
+    }
+
     const activityEvents: Array<keyof WindowEventMap> = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"]
     activityEvents.forEach((eventName) => window.addEventListener(eventName, handleActivity, { passive: true }))
     document.addEventListener("visibilitychange", handleVisibilityChange)
 
     void sendHeartbeat()
+    void fetchPresenceSnapshot()
     scheduleHeartbeat()
-    connect()
+    scheduleSnapshot()
 
     return () => {
       alive = false
       activityEvents.forEach((eventName) => window.removeEventListener(eventName, handleActivity))
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       if (heartbeatTimer) clearTimeout(heartbeatTimer)
-      if (eventSource) eventSource.close()
+      if (snapshotTimer) clearTimeout(snapshotTimer)
     }
   }, [currentUser?.id, manualPresenceStatus, view])
 

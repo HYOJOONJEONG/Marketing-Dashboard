@@ -20,6 +20,8 @@ type Props = {
 
 const HEADER_PRESENCE_HEARTBEAT_RUSH_INTERVAL_MS = 15 * 1000
 const HEADER_PRESENCE_HEARTBEAT_DEFAULT_INTERVAL_MS = 45 * 1000
+const HEADER_PRESENCE_SNAPSHOT_RUSH_INTERVAL_MS = 20 * 1000
+const HEADER_PRESENCE_SNAPSHOT_DEFAULT_INTERVAL_MS = 60 * 1000
 
 function getKstHour() {
   const formattedHour = new Intl.DateTimeFormat("en-US", {
@@ -39,6 +41,12 @@ function getHeaderPresenceHeartbeatIntervalMs() {
   return isDailyReportRushHourKst()
     ? HEADER_PRESENCE_HEARTBEAT_RUSH_INTERVAL_MS
     : HEADER_PRESENCE_HEARTBEAT_DEFAULT_INTERVAL_MS
+}
+
+function getHeaderPresenceSnapshotIntervalMs() {
+  return isDailyReportRushHourKst()
+    ? HEADER_PRESENCE_SNAPSHOT_RUSH_INTERVAL_MS
+    : HEADER_PRESENCE_SNAPSHOT_DEFAULT_INTERVAL_MS
 }
 
 export function WorkspaceHeader({ currentPage, currentSection, currentUser, showDashboardButton = false }: Props) {
@@ -115,8 +123,8 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
 
   useEffect(() => {
     let alive = true
-    let eventSource: EventSource | null = null
     let heartbeatTimer: ReturnType<typeof setTimeout> | null = null
+    let snapshotTimer: ReturnType<typeof setTimeout> | null = null
 
     const sendHeartbeat = async () => {
       if (document.visibilityState === "hidden") return
@@ -135,32 +143,22 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
       }
     }
 
-    const connect = () => {
-      if (eventSource) return
+    const fetchPresenceSnapshot = async () => {
       if (document.visibilityState === "hidden") return
-      eventSource = new EventSource("/api/presence/stream")
-      eventSource.onmessage = (event) => {
-        if (!alive) return
-        try {
-          const payload = JSON.parse(event.data)
-          setOnlineUsers(Array.isArray(payload?.onlineUsers) ? payload.onlineUsers : [])
-        } catch {
-          setOnlineUsers([])
-        }
-      }
-      eventSource.onerror = () => {
-        eventSource?.close()
-        eventSource = null
+      try {
+        const response = await fetch("/api/presence/snapshot", { cache: "no-store" })
+        const payload = await response.json().catch(() => null)
+        if (!alive || !response.ok) return
+        setOnlineUsers(Array.isArray(payload?.onlineUsers) ? payload.onlineUsers : [])
+      } catch {
+        // Keep the last known header presence state when polling briefly fails.
       }
     }
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void sendHeartbeat()
-        connect()
-      } else {
-        eventSource?.close()
-        eventSource = null
+        void fetchPresenceSnapshot()
       }
     }
 
@@ -173,16 +171,26 @@ export function WorkspaceHeader({ currentPage, currentSection, currentUser, show
       }, getHeaderPresenceHeartbeatIntervalMs())
     }
 
+    const scheduleSnapshot = () => {
+      if (!alive) return
+      snapshotTimer = setTimeout(() => {
+        if (!alive) return
+        if (document.visibilityState !== "hidden") void fetchPresenceSnapshot()
+        scheduleSnapshot()
+      }, getHeaderPresenceSnapshotIntervalMs())
+    }
+
     document.addEventListener("visibilitychange", handleVisibilityChange)
     void sendHeartbeat()
+    void fetchPresenceSnapshot()
     scheduleHeartbeat()
-    connect()
+    scheduleSnapshot()
 
     return () => {
       alive = false
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       if (heartbeatTimer) clearTimeout(heartbeatTimer)
-      if (eventSource) eventSource.close()
+      if (snapshotTimer) clearTimeout(snapshotTimer)
     }
   }, [currentPage, currentSection])
 
