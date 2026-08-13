@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronDown, Clock3, KeyRound, LogOut, Menu, MessageSquare, UserRound, X } from "lucide-react"
+import { ChevronDown, Clock3, KeyRound, LogOut, Menu, UserRound, X } from "lucide-react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
 import { DailyReportPage } from "./daily-report/daily-report-page"
 import { PersonalDashboard } from "./me/personal-dashboard"
@@ -15,7 +15,7 @@ import {
   createEmptyDailyReportState,
   normalizeDailyReportState,
 } from "@/lib/daily-report"
-import type { PopupMessageRecord, UserTestIdEntry } from "@/lib/auth/model"
+import type { UserTestIdEntry } from "@/lib/auth/model"
 import typeAnalysisSource from "@/data/type-analysis-source.json"
 
 type ViewKey =
@@ -248,15 +248,6 @@ type PresenceUser = {
   currentSection: string
   status: PresenceStatus
   color: { bg: string; text: string; border: string; hex: string }
-}
-
-type PopupMessage = {
-  id: string
-  senderUserId: string
-  senderName: string
-  title: string
-  body: string
-  createdAt: string
 }
 
 function getPresenceDotClass(status: PresenceStatus) {
@@ -3549,7 +3540,6 @@ export function DashboardShell({
   currentUser,
   directoryUsers,
   permissions,
-  personalMessageHistory = [],
   onViewChange,
 }: {
   initialData: any
@@ -3567,7 +3557,6 @@ export function DashboardShell({
   } | null
   directoryUsers: DailyDirectoryUser[]
   permissions?: Record<string, Record<string, boolean>> | null
-  personalMessageHistory?: PopupMessageRecord[]
   onViewChange?: (view: ViewKey) => void
 }) {
   const router = useRouter()
@@ -3592,7 +3581,6 @@ export function DashboardShell({
   const [nextPassword, setNextPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [presenceUsers, setPresenceUsers] = useState<PresenceUser[]>([])
-  const [popupMessages, setPopupMessages] = useState<PopupMessage[]>([])
   const [manualPresenceStatus, setManualPresenceStatus] = useState<"away" | null>(null)
   const [manualDraft, setManualDraft] = useState<any>(() =>
     buildManualDraftFromWeekly(
@@ -3694,7 +3682,6 @@ export function DashboardShell({
   const flushPendingSave = useRef<() => void>(() => {})
   const heartbeatIdRef = useRef(`conn-${Math.random().toString(36).slice(2, 10)}`)
   const lastActivityAtRef = useRef(Date.now())
-  const dismissedPopupMessageIdsRef = useRef<Set<string>>(new Set())
   const hasAccess = (menuKey: string, action: string = "view") =>
     Boolean(permissions?.[menuKey]?.admin || permissions?.[menuKey]?.[action])
   const avatarLabel = String(currentUser?.avatarEmoji || "").trim() || String(currentUser?.name || "").slice(0, 1) || "사"
@@ -3956,9 +3943,8 @@ export function DashboardShell({
         data,
       ),
       industryOptions,
-      messageHistory: personalMessageHistory,
     }
-  }, [currentUser, data, personalMessageHistory])
+  }, [currentUser, data])
 
   const selectedSheet = useMemo(
     () => termination.sheets?.[0] || null,
@@ -4145,10 +4131,6 @@ export function DashboardShell({
         const payload = await response.json().catch(() => null)
         if (!alive || !response.ok) return
         setPresenceUsers(Array.isArray(payload?.presenceUsers) ? payload.presenceUsers : [])
-        const nextPopupMessages = Array.isArray(payload?.popupMessages)
-          ? payload.popupMessages.filter((message: PopupMessage) => !dismissedPopupMessageIdsRef.current.has(message.id))
-          : []
-        setPopupMessages(nextPopupMessages)
       } catch {
         // Keep the last known presence state when a short polling request fails.
       }
@@ -5014,124 +4996,6 @@ export function DashboardShell({
       )
     } finally {
       dailyReportSaveInFlightRef.current = false
-    }
-    void notifyDailyTeamCompletion(nextDailyReportState)
-  }
-
-  async function notifyDailyTeamCompletion(nextDailyReportState: any) {
-    try {
-      await fetch("/api/popup-messages/daily-completion", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          date: dailyReportDate,
-          reports: Array.isArray(nextDailyReportState?.reports) ? nextDailyReportState.reports : [],
-        }),
-      })
-    } catch {
-      // Daily report saves must not fail because a popup notification failed.
-    }
-  }
-
-  async function acknowledgePopupMessage(messageId: string) {
-    dismissedPopupMessageIdsRef.current.add(messageId)
-    if (dismissedPopupMessageIdsRef.current.size > 200) {
-      dismissedPopupMessageIdsRef.current = new Set(Array.from(dismissedPopupMessageIdsRef.current).slice(-100))
-    }
-    setPopupMessages((prev) => prev.filter((message) => message.id !== messageId))
-    try {
-      await fetch("/api/popup-messages", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "read", messageIds: [messageId] }),
-      })
-    } catch {
-      // The next stream tick may show it again if the read marker failed.
-    }
-  }
-
-  async function replyToPopupMessage(message: PopupMessage) {
-    if (!message.senderUserId || message.senderUserId === currentUser?.id) {
-      window.alert("답장을 보낼 대상이 없습니다.")
-      return
-    }
-    const body = window.prompt(`${message.senderName || "보낸 사람"}에게 답장할 내용을 입력해주세요.`)
-    const replyBody = String(body || "").trim()
-    if (!replyBody) return
-    try {
-      const response = await fetch("/api/popup-messages", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          targetUserIds: [message.senderUserId],
-          title: `답장: ${message.title || "업무 알림"}`,
-          body: replyBody,
-        }),
-      })
-      const payload = await response.json().catch(() => null)
-      if (!response.ok || !payload?.ok) {
-        window.alert(payload?.error || "답장을 보내지 못했습니다.")
-        return
-      }
-      await acknowledgePopupMessage(message.id)
-      window.alert("답장을 보냈습니다.")
-    } catch {
-      window.alert("답장을 보내지 못했습니다. 잠시 후 다시 시도해주세요.")
-    }
-  }
-
-  async function sendPopupMessage(targetUserIds: string[], label: string) {
-    const body = window.prompt(`${label}에게 보낼 팝업 메시지를 입력해주세요.`)
-    const message = String(body || "").trim()
-    if (!message) return
-    try {
-      const response = await fetch("/api/popup-messages", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          targetUserIds,
-          title: "업무 알림",
-          body: message,
-        }),
-      })
-      const payload = await response.json().catch(() => null)
-      if (!response.ok || !payload?.ok) {
-        window.alert(payload?.error || "메시지를 보내지 못했습니다.")
-        return
-      }
-      window.alert(`${payload.sent || 0}명에게 팝업 메시지를 보냈습니다.`)
-    } catch {
-      window.alert("메시지를 보내지 못했습니다. 잠시 후 다시 시도해주세요.")
-    }
-  }
-
-  async function sendPopupMessageToAll() {
-    const targets = activePresenceUsers.map((user) => user.userId).filter((userId) => userId && userId !== currentUser?.id)
-    if (!targets.length) {
-      window.alert("메시지를 보낼 접속자가 없습니다.")
-      return
-    }
-    const body = window.prompt("현재 접속자 전체에게 보낼 팝업 메시지를 입력해주세요.")
-    const message = String(body || "").trim()
-    if (!message) return
-    try {
-      const response = await fetch("/api/popup-messages", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          targetUserIds: targets,
-          title: "업무 알림",
-          body: message,
-        }),
-      })
-      const payload = await response.json().catch(() => null)
-      if (!response.ok || !payload?.ok) {
-        window.alert(payload?.error || "메시지를 보내지 못했습니다.")
-        return
-      }
-      window.alert(`${payload.sent || 0}명에게 팝업 메시지를 보냈습니다.`)
-    } catch {
-      window.alert("메시지를 보내지 못했습니다. 잠시 후 다시 시도해주세요.")
     }
   }
 
@@ -9148,51 +9012,6 @@ export function DashboardShell({
 
   return (
     <div className="dashboard-shell min-h-screen bg-[#f6f8fc] text-slate-900">
-      {popupMessages.length > 0 ? (
-        <div className="fixed bottom-4 right-4 z-[70] w-[min(360px,calc(100vw-32px))] space-y-2">
-          {popupMessages.slice(0, 3).map((message) => (
-            <div key={message.id} className="overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-2xl shadow-slate-900/12">
-              <div className="flex items-start gap-3 border-b border-slate-100 bg-blue-50/70 px-4 py-3">
-                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
-                  <MessageSquare className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[14px] font-black text-slate-950">{message.title || "업무 알림"}</div>
-                  <div className="mt-0.5 truncate text-[12px] font-semibold text-blue-700">{message.senderName || "시스템"}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void acknowledgePopupMessage(message.id)}
-                  className="rounded-lg p-1 text-slate-400 transition hover:bg-white hover:text-slate-700"
-                  aria-label="팝업 메시지 닫기"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="px-4 py-3">
-                <div className="whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-700">{message.body}</div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void replyToPopupMessage(message)}
-                    className="h-9 rounded-xl bg-blue-600 text-[13px] font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!message.senderUserId || message.senderUserId === currentUser?.id}
-                  >
-                    답장
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void acknowledgePopupMessage(message.id)}
-                    className="h-9 rounded-xl border border-slate-200 bg-white text-[13px] font-bold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    닫기
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
       <div className="mx-auto flex min-h-screen max-w-[1720px]">
         <button
           type="button"
@@ -9625,15 +9444,6 @@ export function DashboardShell({
                   <div className="flex min-w-0 items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => void sendPopupMessageToAll()}
-                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700 transition hover:bg-blue-100"
-                      aria-label="현재 접속자 전체에게 메시지 보내기"
-                      title="현재 접속자 전체에게 메시지 보내기"
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => setIsPresenceListOpen((prev) => !prev)}
                       className="inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-full bg-slate-50 px-2.5 text-[12px] font-semibold text-slate-500 transition hover:bg-slate-100"
                     >
@@ -9719,17 +9529,6 @@ export function DashboardShell({
                                 {user.currentPage ? <span className="min-w-0 max-w-full truncate">{user.currentPage}</span> : null}
                               </div>
                             </div>
-                            {user.userId !== currentUser?.id ? (
-                              <button
-                                type="button"
-                                onClick={() => void sendPopupMessage([user.userId], user.userName)}
-                                className="mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 transition hover:border-blue-200 hover:bg-blue-50"
-                                aria-label={`${user.userName}에게 메시지 보내기`}
-                                title={`${user.userName}에게 메시지 보내기`}
-                              >
-                                <MessageSquare className="h-4 w-4" />
-                              </button>
-                            ) : null}
                           </div>
                         )
                       })}

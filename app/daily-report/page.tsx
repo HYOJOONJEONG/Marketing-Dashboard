@@ -5,7 +5,6 @@ import { DashboardWorkspace } from "@/components/auth/dashboard-workspace"
 import { buildPermissionIndex, filterContractsForUser } from "@/lib/auth/permissions"
 import { requirePageAuth } from "@/lib/auth/server"
 import { getUserColorToken } from "@/lib/auth/model"
-import type { PopupMessageRecord } from "@/lib/auth/model"
 import { createEmptyDailyReportState, ensureDailyDirectoryUsers, isDailyReportTeam, sortDailyDirectoryUsers } from "@/lib/daily-report"
 import { ensureManualWeeklyRestore } from "@/lib/manual-weekly-restore"
 import { readDashboardState } from "@/lib/shared-db-store"
@@ -103,11 +102,6 @@ export default async function DailyReportPageRoute({
         .filter((user) => isDailyReportTeam(user.teamName)),
     ),
   )
-  const personalMessageHistory = (Array.isArray(auth.state.popupMessages) ? auth.state.popupMessages : [])
-    .filter((message: PopupMessageRecord) => message.recipientUserId === auth.user.id)
-    .sort((a: PopupMessageRecord, b: PopupMessageRecord) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 50)
-
   return (
     <DashboardWorkspace
       initialData={safeData}
@@ -125,7 +119,6 @@ export default async function DailyReportPageRoute({
       }}
       directoryUsers={directoryUsers}
       permissions={permissionIndex as any}
-      personalMessageHistory={personalMessageHistory}
     />
   )
 }

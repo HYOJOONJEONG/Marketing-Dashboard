@@ -1,4 +1,4 @@
-import { listOnlinePresence, listPresenceUsers, listUnreadPopupMessages, readAuthState } from "@/lib/auth/store"
+import { listOnlinePresence, listPresenceUsers, readAuthState } from "@/lib/auth/store"
 import { resolveRequestSession } from "@/lib/auth/session"
 
 export const runtime = "nodejs"
@@ -25,7 +25,6 @@ export async function GET() {
       user.currentPage === currentUserPresence?.currentPage,
   )
   const recentActivities = state.activityLogs.slice(0, 12)
-  const popupMessages = listUnreadPopupMessages(state, session.user.id)
 
   return new Response(
     encodeEvent({
@@ -33,7 +32,6 @@ export async function GET() {
       presenceUsers,
       samePageUsers,
       recentActivities,
-      popupMessages,
     }),
     {
       headers: {

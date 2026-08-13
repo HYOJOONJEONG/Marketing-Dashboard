@@ -3,8 +3,8 @@
 import type { ReactNode } from "react"
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, LogOut, MessageSquare, OctagonAlert, Plus, Save, Trash2, UserRound } from "lucide-react"
-import type { PopupMessageRecord, UserTestIdEntry } from "@/lib/auth/model"
+import { ArrowLeft, ChevronDown, CirclePause, FileSignature, FolderClock, Hash, LogOut, OctagonAlert, Plus, Save, Trash2, UserRound } from "lucide-react"
+import type { UserTestIdEntry } from "@/lib/auth/model"
 
 type ContractCreateResult = {
   data?: any
@@ -31,7 +31,6 @@ type Props = {
     myHoldRows: any[]
     assignedIndustries: string[]
     industryOptions: string[]
-    messageHistory?: PopupMessageRecord[]
   }
   embedded?: boolean
   onContractCreated?: (result: ContractCreateResult) => void
@@ -74,19 +73,6 @@ function formatMonthDisplay(value: unknown, fallback = "-") {
   }
 
   return text
-}
-
-function formatMessageTime(value: unknown) {
-  const date = new Date(String(value || ""))
-  if (Number.isNaN(date.getTime())) return "-"
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date)
 }
 
 function formatSaveTime(value = new Date()) {
@@ -266,8 +252,6 @@ export function PersonalDashboard({ currentUser, data, embedded = false, onContr
   const [bulkCompanyName, setBulkCompanyName] = useState("")
   const [testIdMessage, setTestIdMessage] = useState("")
   const [convertingTestId, setConvertingTestId] = useState<string | null>(null)
-  const [messageHistory, setMessageHistory] = useState<PopupMessageRecord[]>(data.messageHistory || [])
-  const [isMessageBoxOpen, setIsMessageBoxOpen] = useState(false)
   const [isLogoutPending, setIsLogoutPending] = useState(false)
   const incomingTestIdSignature = useMemo(
     () =>
@@ -350,7 +334,6 @@ export function PersonalDashboard({ currentUser, data, embedded = false, onContr
     () => selectedIndustries.slice().sort((a, b) => a.localeCompare(b, "ko")),
     [selectedIndustries],
   )
-  const unreadMessageCount = useMemo(() => messageHistory.filter((message) => !message.readAt).length, [messageHistory])
   const testIdSaveToneClass =
     testIdSaveStatus.phase === "success"
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -589,18 +572,6 @@ export function PersonalDashboard({ currentUser, data, embedded = false, onContr
     }
   }
 
-  const markMessageRead = (messageId: string) => {
-    const now = new Date().toISOString()
-    setMessageHistory((prev) =>
-      prev.map((message) => (message.id === messageId ? { ...message, readAt: message.readAt || now } : message)),
-    )
-    void fetch("/api/popup-messages", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "read", messageIds: [messageId] }),
-    })
-  }
-
   return (
     <div className={embedded ? "bg-transparent" : "min-h-screen bg-[radial-gradient(circle_at_top,#eef6ff_0%,#f8fbff_36%,#f3f6fb_100%)] px-3 py-3 sm:px-4"}>
       <div className={embedded ? "max-w-none" : "mx-auto max-w-[1680px]"}>
@@ -741,81 +712,6 @@ export function PersonalDashboard({ currentUser, data, embedded = false, onContr
                 >
                   {isProfileSaving ? "저장 중..." : "프로필 저장"}
                 </button>
-                <div className="relative col-span-2 justify-self-start sm:col-span-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsIndustryOpen(false)
-                      setIsAvatarOpen(false)
-                      setIsMessageBoxOpen((prev) => !prev)
-                    }}
-                    className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 transition hover:bg-indigo-100 sm:h-9 sm:w-9"
-                    aria-label="내 메시지함"
-                    title="내 메시지함"
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    {unreadMessageCount ? (
-                      <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white">
-                        {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
-                      </span>
-                    ) : null}
-                  </button>
-                  {isMessageBoxOpen ? (
-                    <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-[min(360px,calc(100vw-32px))] rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-[13px] font-black text-slate-950">메시지함</div>
-                          <div className="mt-0.5 text-[11px] font-semibold text-slate-400">미확인 {unreadMessageCount}건</div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setIsMessageBoxOpen(false)}
-                          className="h-7 rounded-lg border border-slate-200 px-2 text-[11px] font-bold text-slate-500 transition hover:bg-slate-50"
-                        >
-                          닫기
-                        </button>
-                      </div>
-                      <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
-                        {messageHistory.length ? (
-                          messageHistory.map((message) => {
-                            const unread = !message.readAt
-                            return (
-                              <div
-                                key={message.id}
-                                className={`rounded-xl border px-3 py-2 ${
-                                  unread ? "border-indigo-200 bg-indigo-50/80" : "border-slate-200 bg-white"
-                                }`}
-                              >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <div className="truncate text-[12px] font-black text-slate-900">{message.title || "업무 알림"}</div>
-                                    <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
-                                      {message.senderName || "시스템"} · {formatMessageTime(message.createdAt)}
-                                    </div>
-                                  </div>
-                                  {unread ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => markMessageRead(message.id)}
-                                      className="h-7 shrink-0 rounded-lg bg-slate-950 px-2 text-[11px] font-bold text-white"
-                                    >
-                                      읽음
-                                    </button>
-                                  ) : null}
-                                </div>
-                                <div className="mt-2 line-clamp-3 whitespace-pre-wrap break-words text-[12px] leading-5 text-slate-700">{message.body}</div>
-                              </div>
-                            )
-                          })
-                        ) : (
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-8 text-center text-[12px] font-semibold text-slate-400">
-                            받은 메시지가 없습니다.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
               </div>
             </div>
             {profileMessage ? <div className="mt-3 text-sm text-slate-500">{profileMessage}</div> : null}
