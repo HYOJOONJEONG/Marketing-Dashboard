@@ -20,6 +20,7 @@ type Props = {
     terminationCount: number
     netCount: number
   }
+  newContractRecords?: any[]
   industryMoveOptions?: string[]
   areaMoveOptions?: string[]
   onImportWeekly: () => void
@@ -182,6 +183,33 @@ function getDuplicateIdCodeSet(records: any[]) {
       .filter(([, count]) => count > 1)
       .map(([idCode]) => idCode),
   )
+}
+
+function getNewReplacementDuplicateIdCodeSet(newRecords: any[], newContractRecords: any[]) {
+  const duplicateIds = getDuplicateIdCodeSet(newRecords)
+  const contractsByIdCode = new Map<string, Set<string>>()
+
+  ;(Array.isArray(newContractRecords) ? newContractRecords : []).forEach((row: any) => {
+    const idCode = normalizeRecordIdCode(row?.idCode || row?.customerId)
+    if (!idCode) return
+    const sourceId = String(row?.id || row?.sourceId || "").trim()
+    const sourceIds = contractsByIdCode.get(idCode) || new Set<string>()
+    sourceIds.add(sourceId || `contract:${contractsByIdCode.size}:${sourceIds.size}`)
+    contractsByIdCode.set(idCode, sourceIds)
+  })
+
+  ;(Array.isArray(newRecords) ? newRecords : []).forEach((row: any) => {
+    const idCode = normalizeRecordIdCode(row?.idCode || row?.customerId)
+    if (!idCode) return
+    const sourceId = String(row?.sourceId || row?.id || "").trim()
+    const contractSourceIds = contractsByIdCode.get(idCode)
+    if (!contractSourceIds) return
+    if (!sourceId || contractSourceIds.size > 1 || !contractSourceIds.has(sourceId)) {
+      duplicateIds.add(idCode)
+    }
+  })
+
+  return duplicateIds
 }
 
 function dateSortValue(value: unknown) {
@@ -2061,6 +2089,7 @@ export function TypeAnalysisDashboard({
   isDirty,
   isSaving,
   saveMessage,
+  newContractRecords = [],
   industryMoveOptions = [],
   areaMoveOptions = [],
   onImportWeekly,
@@ -2120,7 +2149,10 @@ export function TypeAnalysisDashboard({
     () => sortTableRows(newRecords, newDetailSort),
     [newRecords, newDetailSort],
   )
-  const duplicateNewIdCodes = useMemo(() => getDuplicateIdCodeSet(newRecords), [newRecords])
+  const duplicateNewIdCodes = useMemo(
+    () => getNewReplacementDuplicateIdCodeSet(newRecords, newContractRecords),
+    [newRecords, newContractRecords],
+  )
   const groupedNewRecords = useMemo(() => {
     const buckets = new Map<string, any[]>()
     filteredNewRecords.forEach((row: any) => {

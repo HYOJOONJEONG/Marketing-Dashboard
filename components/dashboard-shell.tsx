@@ -10487,6 +10487,7 @@ export function DashboardShell({
               isSaving={isSavingDashboard}
               saveMessage={typeAnalysisSaveMessage}
               weeklyImportSummary={typeAnalysisWeeklyImportSummary}
+              newContractRecords={contracts}
               onImportWeekly={handleTypeAnalysisImportWeekly}
               onSave={handleTypeAnalysisSave}
               industryMoveOptions={[...TYPE_ANALYSIS_INDUSTRY_LABELS]}
