@@ -320,6 +320,52 @@ function normalizeTypeAnalysisIdCorrection(record: any) {
   return record
 }
 
+function buildTypeAnalysisNewReflectionSourceMap(typeAnalysis: any) {
+  const sourceMap = new Map<string, Set<string>>()
+  const records = Array.isArray(typeAnalysis?.newReplacement?.records) ? typeAnalysis.newReplacement.records : []
+  records.forEach((record: any) => {
+    const idCode = normalizeCustomerIdentifier(record?.idCode || record?.customerId)
+    if (!idCode) return
+    const sourceId = normalizeCustomerIdentifier(record?.sourceId)
+    const sourceIds = sourceMap.get(idCode) || new Set<string>()
+    if (sourceId) sourceIds.add(sourceId)
+    sourceMap.set(idCode, sourceIds)
+  })
+  return sourceMap
+}
+
+function buildReflectedContractDuplicateRowIds(contracts: any[], typeAnalysis: any) {
+  const rowIds = new Set<string>()
+  const idBuckets = new Map<string, string[]>()
+  const reflectedSourceMap = buildTypeAnalysisNewReflectionSourceMap(typeAnalysis)
+
+  ;(Array.isArray(contracts) ? contracts : []).forEach((row: any) => {
+    const idCode = normalizeCustomerIdentifier(row?.idCode || row?.customerId)
+    const rowId = normalizeCustomerIdentifier(row?.id)
+    if (!idCode || !rowId) return
+    const bucket = idBuckets.get(idCode) || []
+    bucket.push(rowId)
+    idBuckets.set(idCode, bucket)
+  })
+
+  idBuckets.forEach((bucket) => {
+    if (bucket.length > 1) bucket.forEach((rowId) => rowIds.add(rowId))
+  })
+
+  ;(Array.isArray(contracts) ? contracts : []).forEach((row: any) => {
+    const idCode = normalizeCustomerIdentifier(row?.idCode || row?.customerId)
+    const rowId = normalizeCustomerIdentifier(row?.id)
+    if (!idCode || !rowId) return
+    const reflectedSourceIds = reflectedSourceMap.get(idCode)
+    if (!reflectedSourceIds) return
+    if (reflectedSourceIds.size === 0 || !reflectedSourceIds.has(rowId)) {
+      rowIds.add(rowId)
+    }
+  })
+
+  return rowIds
+}
+
 function matchesSearchQuery(value: unknown, query: string, identifierQuery: string) {
   const text = String(value ?? "").toLowerCase()
   if (query && text.includes(query)) return true
@@ -4035,6 +4081,10 @@ export function DashboardShell({
   const typeAnalysis = useMemo(
     () => normalizeTypeAnalysisState(data?.typeAnalysis, typeAnalysisTotalContracts, typeAnalysisConfirmedItems),
     [data?.typeAnalysis, typeAnalysisTotalContracts, typeAnalysisConfirmedItems],
+  )
+  const reflectedContractDuplicateRowIds = useMemo(
+    () => buildReflectedContractDuplicateRowIds(contracts, typeAnalysis),
+    [contracts, typeAnalysis],
   )
   const typeAnalysisTerminationAudit = useMemo(
     () => buildTypeAnalysisTerminationAudit(typeAnalysisConfirmedItems, typeAnalysis?.terminationType?.records || []),
@@ -10308,8 +10358,15 @@ export function DashboardShell({
                   <tbody>
                     {sortedContracts.map((row: any, index: number) => {
                       const editing = editingContractId === row.id
+                      const reflectedDuplicate = reflectedContractDuplicateRowIds.has(normalizeCustomerIdentifier(row?.id))
+                      const rowClassName = [
+                        reflectedDuplicate ? "bg-rose-50/80 hover:bg-rose-50" : "",
+                        recentContractId === row.id ? "recent-row-flash" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")
                       return (
-                        <tr key={row.id} className={recentContractId === row.id ? "recent-row-flash" : undefined}>
+                        <tr key={row.id} className={rowClassName || undefined}>
                           <td className={`${tdClass} w-[52px] px-2 py-2 text-center text-[12px]`}>{index + 1}</td>
                           <td className={`${tdClass} w-[96px] px-2 py-2 text-[12px] tabular-nums`}>
                             {editing ? (
@@ -10330,7 +10387,20 @@ export function DashboardShell({
                             {editing ? <input className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]" value={editingContractDraft.departmentName || ""} onChange={(e)=>updateEditingContractDraft("departmentName", e.target.value)} /> : <span className="block truncate">{row.departmentName}</span>}
                           </td>
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
-                            {editing ? <input className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]" value={editingContractDraft.idCode || ""} onChange={(e)=>updateEditingContractDraft("idCode", e.target.value)} /> : <span className="block truncate">{row.idCode}</span>}
+                            {editing ? (
+                              <input className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]" value={editingContractDraft.idCode || ""} onChange={(e)=>updateEditingContractDraft("idCode", e.target.value)} />
+                            ) : (
+                              <span className="flex min-w-0 flex-col items-center gap-1">
+                                <span className={`block max-w-full truncate ${reflectedDuplicate ? "rounded-md bg-rose-100 px-1.5 py-0.5 font-bold text-rose-700" : ""}`}>
+                                  {row.idCode}
+                                </span>
+                                {reflectedDuplicate ? (
+                                  <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
+                                    중복/반영
+                                  </span>
+                                ) : null}
+                              </span>
+                            )}
                           </td>
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
                             {editing ? (
