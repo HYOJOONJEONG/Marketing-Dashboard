@@ -1052,6 +1052,14 @@ export async function GET(request: Request) {
           ui: data?.ui || {},
         })
       }
+      const requestedKeys = (url.searchParams.get("keys") || "")
+        .split(",")
+        .map((key) => key.trim())
+        .filter((key): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))
+      if (requestedKeys.length) {
+        const keys = Array.from(new Set([...requestedKeys, "ui" as DashboardStateSliceKey]))
+        return NextResponse.json(pickDashboardReturnData(data, keys, session, permissions))
+      }
       return NextResponse.json(buildDashboardResponse(data, session, permissions))
     }
 
@@ -1069,6 +1077,14 @@ export async function GET(request: Request) {
         paidOptionSourceColumns: fallbackData?.paidOptionSourceColumns || [],
         ui: fallbackData?.ui || {},
       })
+    }
+    const requestedKeys = (url.searchParams.get("keys") || "")
+      .split(",")
+      .map((key) => key.trim())
+      .filter((key): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))
+    if (requestedKeys.length) {
+      const keys = Array.from(new Set([...requestedKeys, "ui" as DashboardStateSliceKey]))
+      return NextResponse.json(pickDashboardReturnData(fallbackData || EMPTY_DASHBOARD, keys, session, permissions))
     }
     return NextResponse.json(buildDashboardResponse(fallbackData || EMPTY_DASHBOARD, session, permissions))
   } catch (error) {

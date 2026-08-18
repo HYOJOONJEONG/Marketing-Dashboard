@@ -45,6 +45,20 @@ const VIEW_STATE_KEYS: Record<ViewKey, string[]> = {
   "my-page": ["ui"],
 }
 
+const DASHBOARD_COLLAB_STATE_KEYS = new Set([
+  "ui",
+  "currentYear",
+  "years",
+  "availableYears",
+  "dailyReport",
+  "weeklyReport",
+  "contracts",
+  "typeAnalysis",
+  "collection",
+  "termination",
+  "paidOptionSourceColumns",
+])
+
 function pickTopLevelState(source: any, keys: string[]) {
   return Object.fromEntries(keys.map((key) => [key, source?.[key]]))
 }
@@ -104,6 +118,26 @@ function mergeDailyReportClientState(currentDailyReport: any, incomingDailyRepor
   }
 }
 
+function mergeDashboardUiClientState(currentUi: any, incomingUi: any) {
+  if (!incomingUi || typeof incomingUi !== "object" || Array.isArray(incomingUi)) return currentUi
+  const currentMenuUpdatedAt =
+    currentUi?.menuUpdatedAt && typeof currentUi.menuUpdatedAt === "object" && !Array.isArray(currentUi.menuUpdatedAt)
+      ? currentUi.menuUpdatedAt
+      : {}
+  const incomingMenuUpdatedAt =
+    incomingUi?.menuUpdatedAt && typeof incomingUi.menuUpdatedAt === "object" && !Array.isArray(incomingUi.menuUpdatedAt)
+      ? incomingUi.menuUpdatedAt
+      : {}
+  return {
+    ...(currentUi || {}),
+    ...incomingUi,
+    menuUpdatedAt: {
+      ...currentMenuUpdatedAt,
+      ...incomingMenuUpdatedAt,
+    },
+  }
+}
+
 type CollectionTabKey = "integrated" | "long-term" | "delivery"
 type SectionKey = "dailyReport" | "performance" | "termination"
 
@@ -114,6 +148,8 @@ const PRESENCE_SNAPSHOT_RUSH_INTERVAL_MS = 15 * 1000
 const PRESENCE_SNAPSHOT_DEFAULT_INTERVAL_MS = 45 * 1000
 const DAILY_REPORT_POLL_RUSH_INTERVAL_MS = 5 * 1000
 const DAILY_REPORT_POLL_DEFAULT_INTERVAL_MS = 20 * 1000
+const DASHBOARD_COLLAB_POLL_RUSH_INTERVAL_MS = 6 * 1000
+const DASHBOARD_COLLAB_POLL_DEFAULT_INTERVAL_MS = 12 * 1000
 
 function getKstHour() {
   const formattedHour = new Intl.DateTimeFormat("en-US", {
@@ -139,6 +175,10 @@ function getPresenceSnapshotIntervalMs() {
 
 function getDailyReportPollIntervalMs() {
   return isDailyReportRushHourKst() ? DAILY_REPORT_POLL_RUSH_INTERVAL_MS : DAILY_REPORT_POLL_DEFAULT_INTERVAL_MS
+}
+
+function getDashboardCollaborativePollIntervalMs() {
+  return isDailyReportRushHourKst() ? DASHBOARD_COLLAB_POLL_RUSH_INTERVAL_MS : DASHBOARD_COLLAB_POLL_DEFAULT_INTERVAL_MS
 }
 
 function isViewKey(value: unknown): value is ViewKey {
@@ -3711,6 +3751,7 @@ export function DashboardShell({
   const isSyncingDeliveryDraftRef = useRef(false)
   const pendingPayloadRef = useRef<string | null>(null)
   const pendingDataRef = useRef<any | null>(null)
+  const latestDataRef = useRef<any>(initialData)
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
   const dailyReportSaveInFlightRef = useRef(false)
   const manualSaveTimerRef = useRef<number | null>(null)
@@ -3728,6 +3769,10 @@ export function DashboardShell({
   const flushPendingSave = useRef<() => void>(() => {})
   const heartbeatIdRef = useRef(`conn-${Math.random().toString(36).slice(2, 10)}`)
   const lastActivityAtRef = useRef(Date.now())
+  useEffect(() => {
+    latestDataRef.current = data
+  }, [data])
+
   const hasAccess = (menuKey: string, action: string = "view") =>
     Boolean(permissions?.[menuKey]?.admin || permissions?.[menuKey]?.[action])
   const avatarLabel = String(currentUser?.avatarEmoji || "").trim() || String(currentUser?.name || "").slice(0, 1) || "사"
@@ -5034,6 +5079,34 @@ export function DashboardShell({
     return savePromise
   }
 
+  function hasDirtyDashboardWork() {
+    return Object.values(dirtyViewsRef.current).some(Boolean) || manualSaveInFlightRef.current || dailyReportSaveInFlightRef.current
+  }
+
+  function hasNewerMenuUpdate(incomingUi: any, currentUi: any, keys: ViewKey[]) {
+    const incomingUpdates = incomingUi?.menuUpdatedAt || {}
+    const currentUpdates = currentUi?.menuUpdatedAt || {}
+    return keys.some((key) => {
+      const incomingTime = Date.parse(String(incomingUpdates?.[key] || ""))
+      const currentTime = Date.parse(String(currentUpdates?.[key] || ""))
+      return Number.isFinite(incomingTime) && incomingTime > (Number.isFinite(currentTime) ? currentTime : 0)
+    })
+  }
+
+  function mergeCollaborativeDashboardSlice(currentData: any, latest: any, stateKeys: string[]) {
+    const nextData = { ...currentData }
+    stateKeys.forEach((key) => {
+      if (key === "ui") return
+      if (Object.prototype.hasOwnProperty.call(latest, key)) {
+        nextData[key] = latest[key]
+      }
+    })
+    if (latest?.ui) {
+      nextData.ui = mergeDashboardUiClientState(currentData?.ui, latest.ui)
+    }
+    return nextData
+  }
+
   async function persistDailyReportState(nextDailyReportState: any) {
     dailyReportSaveInFlightRef.current = true
     try {
@@ -5194,6 +5267,69 @@ export function DashboardShell({
       cancelled = true
       if (timer) window.clearTimeout(timer)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [view])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (view === "daily-report" || view === "admin-page" || view === "my-page" || view === "option-dashboard") return
+
+    const stateKeys = collectStateKeysForViews([view])
+      .filter((key) => DASHBOARD_COLLAB_STATE_KEYS.has(key))
+    const pollViews = [view]
+    if (!stateKeys.length) return
+
+    let cancelled = false
+    let timer: number | null = null
+    let inFlight = false
+
+    const refreshCurrentView = async () => {
+      if (cancelled || inFlight) return
+      if (document.visibilityState === "hidden") return
+      if (hasDirtyDashboardWork()) return
+      inFlight = true
+      try {
+        const uniqueKeys = Array.from(new Set([...stateKeys, "ui"]))
+        const response = await fetch(`/api/dashboard?keys=${encodeURIComponent(uniqueKeys.join(","))}`, { cache: "no-store" })
+        if (!response.ok) return
+        const latest = await response.json()
+        if (cancelled || hasDirtyDashboardWork()) return
+        const currentData = pendingDataRef.current || latestDataRef.current
+        if (!hasNewerMenuUpdate(latest?.ui, currentData?.ui, pollViews)) return
+        const nextData = mergeCollaborativeDashboardSlice(currentData, latest, uniqueKeys)
+        setData(nextData)
+        pendingDataRef.current = nextData
+        scheduleLocalDashboardCache(nextData)
+      } catch {
+        // Other users' updates are refreshed opportunistically; transient network
+        // errors should not interrupt the user's current work.
+      } finally {
+        inFlight = false
+      }
+    }
+
+    const scheduleRefresh = () => {
+      if (cancelled) return
+      timer = window.setTimeout(() => {
+        void refreshCurrentView().finally(scheduleRefresh)
+      }, getDashboardCollaborativePollIntervalMs())
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refreshCurrentView()
+    }
+    const handleFocus = () => {
+      void refreshCurrentView()
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("focus", handleFocus)
+    void refreshCurrentView().finally(scheduleRefresh)
+    return () => {
+      cancelled = true
+      if (timer) window.clearTimeout(timer)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.removeEventListener("focus", handleFocus)
     }
   }, [view])
 
