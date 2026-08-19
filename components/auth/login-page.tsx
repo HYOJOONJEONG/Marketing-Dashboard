@@ -109,7 +109,7 @@ export function LoginPage() {
       setIsRedirecting(false)
       setError(
         loginError instanceof DOMException && loginError.name === "AbortError"
-          ? "로그인 응답이 지연되고 있습니다. 서버 상태를 확인한 뒤 다시 시도해주세요."
+          ? "로그인 확인이 오래 걸리고 있습니다. 잠시 후 6자리 코드를 다시 입력해주세요."
           : "로그인 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
       )
     } finally {

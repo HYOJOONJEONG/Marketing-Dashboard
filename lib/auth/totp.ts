@@ -3,6 +3,7 @@ import crypto from "crypto"
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 const TOTP_STEP_SECONDS = 30
 const TOTP_DIGITS = 6
+const TOTP_ALLOWED_DRIFT_STEPS = 2
 
 function decodeBase32(secret: string) {
   const normalized = String(secret || "")
@@ -75,7 +76,7 @@ export function verifyTotpCode(secret: string | null | undefined, code: string, 
   const normalizedCode = normalizeOtpCode(code)
   if (!secret || normalizedCode.length !== TOTP_DIGITS) return false
   const currentCounter = Math.floor(now / 1000 / TOTP_STEP_SECONDS)
-  for (let offset = -1; offset <= 1; offset += 1) {
+  for (let offset = -TOTP_ALLOWED_DRIFT_STEPS; offset <= TOTP_ALLOWED_DRIFT_STEPS; offset += 1) {
     if (hotp(secret, currentCounter + offset) === normalizedCode) return true
   }
   return false

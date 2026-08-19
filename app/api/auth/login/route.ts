@@ -52,14 +52,16 @@ export async function POST(request: Request) {
 
   const loginId = String(body?.loginId || "").trim()
   const password = String(body?.password || "")
-  const otpCode = String(body?.otpCode || "").trim()
+  const otpCode = String(body?.otpCode || "").replace(/\D/g, "").slice(0, 6)
   const resetTwoFactor = Boolean(body?.resetTwoFactor)
   const requestStartedAt = Date.now()
+  const timing: Record<string, number> = {}
   if (!loginId || !password) {
     return NextResponse.json({ ok: false, error: "이름(ID)과 비밀번호를 입력해주세요." }, { status: 400 })
   }
 
   const result = await validateCredentials(loginId, password)
+  timing.credentialsMs = Date.now() - requestStartedAt
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 401 })
   }
@@ -139,11 +141,20 @@ export async function POST(request: Request) {
       : undefined,
     result.state,
   )
+  timing.sessionMs = Date.now() - requestStartedAt - timing.credentialsMs
+  const elapsedMs = Date.now() - requestStartedAt
+  if (elapsedMs > 2500) {
+    console.warn("Slow auth login", {
+      loginId: result.user.loginId || result.user.name,
+      elapsedMs,
+      ...timing,
+    })
+  }
 
   return NextResponse.json({
     ok: true,
     redirectTo: "/daily-report?view=daily-report",
-    elapsedMs: Date.now() - requestStartedAt,
+    elapsedMs,
     user: {
       id: result.user.id,
       name: result.user.name,
