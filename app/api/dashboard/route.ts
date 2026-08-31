@@ -101,8 +101,8 @@ function dailyReportEntryKey(entry: any) {
   const userName = safeText(entry?.userName)
   const userId = safeText(entry?.userId)
   const id = safeText(entry?.id)
-  if (date && teamName && userName) return `${date}::${teamName}::${userName}`
   if (date && userId) return `${date}::${userId}`
+  if (date && teamName && userName) return `${date}::${teamName}::${userName}`
   return id || `${Date.now()}::${Math.random()}`
 }
 

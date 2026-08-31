@@ -136,6 +136,7 @@ export function normalizeDailyReportState(raw: any, directoryUsers: DailyDirecto
       reports.find(
         (row: any) =>
           safeString(row?.date) === date &&
+          !safeString(row?.userId) &&
           safeString(row?.userName) === user.name &&
           (!safeString(row?.teamName) || safeString(row?.teamName) === user.teamName),
       )

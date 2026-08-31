@@ -495,6 +495,8 @@ export function DailyReportPage({
   async function commitReport(mode: "draft" | "submit") {
     if (!selectedEntry) return
     if (isSavingRef.current) return
+    const canonicalUser = selectedDirectoryUser || currentDirectoryUser
+    if (!canonicalUser) return
     isSavingRef.current = true
     setStatusMessage("")
     setIsSaving(true)
@@ -502,6 +504,14 @@ export function DailyReportPage({
       const now = new Date().toISOString()
         const nextEntry: DailyReportEntry = {
           ...selectedEntry,
+          id: `daily-${currentDate}-${canonicalUser.id}`,
+          date: currentDate,
+          userId: canonicalUser.id,
+          userName: canonicalUser.name,
+          teamId: canonicalUser.teamId,
+          teamName: canonicalUser.teamName,
+          teamOrder: canonicalUser.teamOrder,
+          displayOrder: canonicalUser.displayOrder,
           reportBody: draft.reportBody.trim(),
           plannedTasks: draft.plannedTasks.trim(),
           submittedAt: mode === "submit" ? now : null,
@@ -523,6 +533,8 @@ export function DailyReportPage({
   async function handleCancelSubmission() {
     if (!selectedEntry) return
     if (isSavingRef.current) return
+    const canonicalUser = selectedDirectoryUser || currentDirectoryUser
+    if (!canonicalUser) return
     isSavingRef.current = true
     setStatusMessage("")
     setIsSaving(true)
@@ -530,6 +542,14 @@ export function DailyReportPage({
       const now = new Date().toISOString()
       const nextEntry: DailyReportEntry = {
         ...selectedEntry,
+        id: `daily-${currentDate}-${canonicalUser.id}`,
+        date: currentDate,
+        userId: canonicalUser.id,
+        userName: canonicalUser.name,
+        teamId: canonicalUser.teamId,
+        teamName: canonicalUser.teamName,
+        teamOrder: canonicalUser.teamOrder,
+        displayOrder: canonicalUser.displayOrder,
         submittedAt: null,
         statusOverride: "empty",
         updatedAt: now,

@@ -82,8 +82,8 @@ function dailyEntryKey(entry: any) {
   const userName = safeDailyText(entry?.userName)
   const userId = safeDailyText(entry?.userId)
   const id = safeDailyText(entry?.id)
-  if (date && teamName && userName) return `${date}::${teamName}::${userName}`
   if (date && userId) return `${date}::${userId}`
+  if (date && teamName && userName) return `${date}::${teamName}::${userName}`
   return id || `${Date.now()}::${Math.random()}`
 }
 
