@@ -10363,7 +10363,7 @@ export function DashboardShell({
                       readOnly
                     />
                     <select className="h-10 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-3 text-[14px]" value={contractDraft.replacementType} onChange={(e)=>updateContractDraft("replacementType", e.target.value)}>
-                      {["신규","체크","레피니티브","블룸버그","기타"].map((item) => (
+                      {["신규","체크","마켓포인트","레피니티브","블룸버그","기타"].map((item) => (
                         <option key={item} value={item}>{item}</option>
                       ))}
                     </select>
@@ -10576,7 +10576,7 @@ export function DashboardShell({
                           <td className={`${tdClass} px-2 py-2 text-[12px]`}>
                             {editing ? (
                               <select className="h-8 w-full rounded-lg border border-slate-200 px-2 text-[12px]" value={editingContractDraft.replacementType || row.replacementType || "신규"} onChange={(e)=>updateEditingContractDraft("replacementType", e.target.value)}>
-                                {["신규","체크","레피니티브","블룸버그","기타"].map((item) => <option key={item} value={item}>{item}</option>)}
+                                {["신규","체크","마켓포인트","레피니티브","블룸버그","기타"].map((item) => <option key={item} value={item}>{item}</option>)}
                               </select>
                             ) : <span className="block truncate">{row.replacementType || "신규"}</span>}
                           </td>
