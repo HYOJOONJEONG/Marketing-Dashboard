@@ -544,9 +544,8 @@ async function seedFromFileIfMissing<T>(key: SharedKey, filePath: string): Promi
   }
 }
 
-async function readDashboardSlices<T>(): Promise<T | null> {
+function parseDashboardSlices<T>(rawValues: Map<SharedKey, string | null>): T | null {
   const sliceEntries = Object.entries(DASHBOARD_SLICE_KEYS)
-  const rawValues = await readRawValues(sliceEntries.map(([, storeKey]) => storeKey))
   const entries = sliceEntries.map(([sliceKey, storeKey]) => {
     const parsed = parseJsonValue<unknown>(rawValues.get(storeKey) ?? null)
     return parsed === null ? null : [sliceKey, parsed] as const
@@ -577,9 +576,10 @@ export async function readDashboardStateSlices<T>(
 }
 
 export async function readDashboardState<T>(fallbackFilePath?: string): Promise<T | null> {
-  const raw = await readRawValue(STORE_KEYS.dashboard)
+  const rawValues = await readRawValues([STORE_KEYS.dashboard, ...Object.values(DASHBOARD_SLICE_KEYS)])
+  const raw = rawValues.get(STORE_KEYS.dashboard) ?? null
   const base = parseJsonObject<Record<string, unknown>>(raw)
-  const sliced = await readDashboardSlices<T>()
+  const sliced = parseDashboardSlices<T>(rawValues)
   if (base && sliced && typeof sliced === "object" && !Array.isArray(sliced)) {
     return { ...base, ...(sliced as Record<string, unknown>) } as T
   }

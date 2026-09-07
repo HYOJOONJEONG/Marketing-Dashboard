@@ -1158,6 +1158,7 @@ export async function PUT(request: Request) {
     if (changedKeys.includes("dailyReport") && incomingBody?.dailyReport) {
       const existingData =
         existingDataForMerge ||
+        existingDataForActivity ||
         (await readDashboardState<any>(DATA_PATH)) ||
         (await readDashboardState<any>(FALLBACK_PATH)) ||
         EMPTY_DASHBOARD
@@ -1202,6 +1203,7 @@ export async function PUT(request: Request) {
     if (changedKeys.includes("termination") && incomingBody?.termination) {
       const existingData =
         existingDataForMerge ||
+        existingDataForActivity ||
         (await readDashboardState<any>(DATA_PATH)) ||
         (await readDashboardState<any>(FALLBACK_PATH)) ||
         EMPTY_DASHBOARD

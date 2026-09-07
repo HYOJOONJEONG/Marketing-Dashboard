@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { appendActivityLog, updateAuthState } from "@/lib/auth/store"
 import { getRequestIp, requireApiPermission } from "@/lib/auth/server"
 import { ensureManualWeeklyRestore } from "@/lib/manual-weekly-restore"
-import { readDashboardState, writeDashboardState } from "@/lib/shared-db-store"
+import { readDashboardState, readDashboardStateSlices, writeDashboardState } from "@/lib/shared-db-store"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -113,10 +113,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    let existingData =
-      (await readDashboardState<any>(DATA_PATH)) ||
-      (await readDashboardState<any>(FALLBACK_PATH)) ||
-      EMPTY_DASHBOARD
+    let existingData = await readDashboardStateSlices<any>(["weeklyReport", "ui"])
+    // Older stores can have only some slices migrated; preserve their base values.
+    if (!existingData?.weeklyReport || !existingData?.ui) {
+      existingData =
+        (await readDashboardState<any>(DATA_PATH)) ||
+        (await readDashboardState<any>(FALLBACK_PATH)) ||
+        EMPTY_DASHBOARD
+    }
     existingData = await ensureManualWeeklyRestore(existingData)
 
     const now = new Date().toISOString()
