@@ -4436,6 +4436,7 @@ export function DashboardShell({
     setManualRevenueHeaderEdited(false)
   }, [weeklyReport, contracts, paidOptionSourceColumns])
 
+  const currentMonthKey = getCurrentSeoulMonthKey()
   const contractMonthStats = useMemo(() => {
     if (!isContractsView) return []
     const currentYearNumber = Number(currentYear) || 2026
@@ -4463,11 +4464,8 @@ export function DashboardShell({
           }
         }),
       )
-  }, [contracts, currentYear, isContractsView])
-  const currentMonthKey = useMemo(() => {
-    const now = new Date()
-    return now.getFullYear() * 100 + (now.getMonth() + 1)
-  }, [])
+      .filter((row) => row.count > 0 || row.sortKey >= currentMonthKey)
+  }, [contracts, currentYear, currentMonthKey, isContractsView])
   const contractRecommenderStats = useMemo(() => {
     if (!isContractsView) return []
     const map = new Map<string, number>()
@@ -4496,15 +4494,19 @@ export function DashboardShell({
         return a.label.localeCompare(b.label, "ko")
       })
   }, [contracts, isContractsView])
-  const contractStatsRowCount = useMemo(() => (contractMonthStats.length > 12 ? 3 : 2), [contractMonthStats.length])
-  const contractMonthColumns = contractStatsRowCount === 3 ? 8 : 6
-  const contractRecommenderColumns = contractStatsRowCount === 3 ? 3 : 4
+  const contractMonthColumns = contractMonthStats.length > 12 ? 8 : 6
+  const contractStatsRowCount = Math.max(1, Math.ceil(contractMonthStats.length / contractMonthColumns))
+  const contractRecommenderColumns = contractStatsRowCount >= 3 ? 3 : 4
   const contractMonthRows = useMemo(
     () => buildFixedRowMatrix(contractMonthStats, contractStatsRowCount, contractMonthColumns),
     [contractMonthStats, contractStatsRowCount, contractMonthColumns],
   )
   const contractRecommenderRows = useMemo(
-    () => buildFixedRowMatrix(contractRecommenderStats, contractStatsRowCount, contractRecommenderColumns),
+    () => buildFixedRowMatrix(
+      contractRecommenderStats,
+      Math.max(contractStatsRowCount, Math.ceil(contractRecommenderStats.length / contractRecommenderColumns)),
+      contractRecommenderColumns,
+    ),
     [contractRecommenderStats, contractStatsRowCount, contractRecommenderColumns],
   )
   const collectionRows = useMemo(
