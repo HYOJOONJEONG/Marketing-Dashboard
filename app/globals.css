@@ -238,7 +238,7 @@ tr.recent-row-flash > td {
   text-align: center;
 }
 
-@media (max-width: 720px) {
+@media screen and (max-width: 720px) {
   .mobile-table-viewport {
     max-width: 100%;
   }
@@ -783,6 +783,7 @@ tr.recent-row-flash > td {
 
   .weekly-report-print .print-revenue-kpi-label {
     display: block !important;
+    text-align: center !important;
     font-size: 7px !important;
     font-weight: 700 !important;
     line-height: 1.15 !important;
@@ -792,6 +793,7 @@ tr.recent-row-flash > td {
 
   .weekly-report-print .print-revenue-kpi-value {
     margin-top: 2px !important;
+    text-align: center !important;
     font-size: 9px !important;
     font-weight: 800 !important;
     line-height: 1.18 !important;
