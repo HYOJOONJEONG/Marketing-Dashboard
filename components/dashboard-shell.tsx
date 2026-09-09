@@ -3652,6 +3652,28 @@ export function DashboardShell({
   const isWeeklySelectionView = view === "weekly-selection"
   const isCollectionView = view === "collection"
   const isTerminationView = view === "termination"
+  const [terminationOptionLabels, setTerminationOptionLabels] = useState<Record<string, string[]>>({})
+  const [terminationOptionError, setTerminationOptionError] = useState("")
+  useEffect(() => {
+    if (!isTerminationView) return
+    setTerminationOptionError("")
+    const controller = new AbortController()
+    fetch("/api/options?labelsOnly=1", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("옵션 라벨 조회 실패")
+        return response.json()
+      })
+      .then((payload) => setTerminationOptionLabels(payload.labels || {}))
+      .catch((error) => {
+        if (error.name !== "AbortError") setTerminationOptionError("옵션 라벨을 불러오지 못했습니다. 화면을 다시 열어주세요.")
+      })
+    return () => controller.abort()
+  }, [isTerminationView])
+  function renderTerminationOptionLabel(row: any) {
+    const id = String(row.customerId || row.idCode || "").trim().toUpperCase()
+    const labels = terminationOptionLabels[id] || []
+    return labels.length ? <span className="ml-1 inline-block text-[11px] font-normal text-slate-500">({labels.join(", ")})</span> : null
+  }
   const [collectionTab, setCollectionTab] = useState<CollectionTabKey>(initialCollectionTab)
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({ dailyReport: true, performance: true, termination: true })
   const [isPending, startTransition] = useTransition()
@@ -11481,6 +11503,7 @@ export function DashboardShell({
 
           {view === "termination" && selectedSheet && (
             <div className="space-y-4">
+              {terminationOptionError && <div role="status" className="text-[12px] text-rose-700">{terminationOptionError}</div>}
               <div className={`${cardClass} p-5`}>
                 <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
@@ -11798,7 +11821,7 @@ export function DashboardShell({
                           <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.receivedDate)}</td>
                           <td className={tdClass}>{row.manager}</td>
                           <td className={tdClass}>{row.customerId}</td>
-                          <td className={`${tdClass} whitespace-nowrap`}>{row.companyName}</td>
+                          <td className={`${tdClass} whitespace-normal`}>{row.companyName}{renderTerminationOptionLabel(row)}</td>
                           <td className={`${tdClass} whitespace-nowrap`}>{row.departmentName}</td>
                           <td className={tdClass}>{row.reason}</td>
                           <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.terminationDate)}</td>
@@ -12000,7 +12023,7 @@ export function DashboardShell({
                                 ) : null}
                               </div>
                             </td>
-                            <td className={`${tdClass} whitespace-nowrap`}>{row.companyName}</td>
+                            <td className={`${tdClass} whitespace-normal`}>{row.companyName}{renderTerminationOptionLabel(row)}</td>
                             <td className={`${tdClass} whitespace-nowrap`}>{row.departmentName}</td>
                             <td className={tdClass}>{row.reason}</td>
                             <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.terminationDate)}</td>
@@ -12152,7 +12175,7 @@ export function DashboardShell({
                           <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.receivedDate)}</td>
                           <td className={tdClass}>{row.manager}</td>
                           <td className={tdClass}>{row.customerId}</td>
-                          <td className={`${tdClass} whitespace-nowrap`}>{row.companyName}</td>
+                          <td className={`${tdClass} whitespace-normal`}>{row.companyName}{renderTerminationOptionLabel(row)}</td>
                           <td className={`${tdClass} whitespace-nowrap`}>{row.departmentName}</td>
                           <td className={tdClass}>{row.reason}</td>
                           <td className={`${tdClass} whitespace-nowrap tabular-nums`}>
@@ -12324,7 +12347,7 @@ export function DashboardShell({
                             <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.receivedDate)}</td>
                             <td className={tdClass}>{row.manager}</td>
                             <td className={tdClass}>{row.customerId}</td>
-                            <td className={`${tdClass} whitespace-nowrap`}>{row.companyName}</td>
+                            <td className={`${tdClass} whitespace-normal`}>{row.companyName}{renderTerminationOptionLabel(row)}</td>
                             <td className={`${tdClass} whitespace-nowrap`}>{row.departmentName}</td>
                             <td className={tdClass}>{row.reason}</td>
                             <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{formatMonthLabel(row.startDate)}</td>

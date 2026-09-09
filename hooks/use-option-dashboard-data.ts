@@ -55,7 +55,6 @@ type Params = {
   refreshKey?: number
 }
 
-const CACHE_TTL_MS = 2 * 60 * 1000
 const responseCache = new Map<string, { timestamp: number; data: OptionDashboardResponse }>()
 
 function buildDetailQuery(params: Params) {
@@ -84,18 +83,6 @@ export function useOptionDashboardData(params: Params) {
   useEffect(() => {
     let mounted = true
     const cached = responseCache.get(detailCacheKey)
-    const isFreshCache = cached && Date.now() - cached.timestamp < CACHE_TTL_MS
-    if (isFreshCache) {
-      setData(cached.data)
-      setDataKey(detailCacheKey)
-      setLoading(false)
-      setDetailLoading(false)
-      setError(null)
-      return () => {
-        mounted = false
-      }
-    }
-
     if (cached) {
       setData(cached.data)
       setDataKey(detailCacheKey)

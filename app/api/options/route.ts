@@ -5,6 +5,8 @@ import { requireAnyApiPermission, requireApiPermission } from "@/lib/auth/server
 import { readDashboardState, readOptionsMock, writeOptionsMock } from "@/lib/shared-db-store"
 import seedOptionsMock from "@/data/options-dashboard.mock.json"
 import lmeFreeSeedRecords from "@/data/lme-free-options.seed.json"
+import { buildOptionLabels, filterConfirmedOptions } from "@/lib/option-termination"
+import { readDashboardStateSlices } from "@/lib/shared-db-store"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -88,8 +90,6 @@ const INDEX_EXCLUDED_USER_IDS = new Set([
 const MOCK_PATH = path.join(process.cwd(), "data", "options-dashboard.mock.json")
 const APP_STATE_PATH = path.join(process.cwd(), "data", "app-state.json")
 
-const GET_CACHE_TTL_MS = 12 * 1000
-const getResponseCache = new Map<string, { expiresAt: number; payload: any }>()
 let industryMapCache: { expiresAt: number; value: Map<string, string> } | null = null
 let bundledSofrRecordsCache: any[] | null = null
 let bundledIndexRecordsCache: any[] | null = null
@@ -854,7 +854,6 @@ async function loadAppStateIndustryMap() {
 async function saveMock(payload: any) {
   scrubOptionPrivacyFields(payload)
   await writeOptionsMock(payload)
-  getResponseCache.clear()
   industryMapCache = null
 }
 
@@ -913,7 +912,8 @@ function buildCounts(records: any[], categories: any[]) {
 }
 
 export async function GET(req: Request) {
-  const auth = await requireAnyApiPermission(["optionDashboard", "manualInput", "weeklyReport"], "view")
+  const labelsOnly = new URL(req.url).searchParams.get("labelsOnly") === "1"
+  const auth = await requireAnyApiPermission(labelsOnly ? ["terminationManagement", "optionDashboard"] : ["optionDashboard", "manualInput", "weeklyReport"], "view")
   if (!auth.ok) return auth.response
   const { searchParams } = new URL(req.url)
   const basis = searchParams.get("basis") || "seed"
@@ -924,16 +924,12 @@ export async function GET(req: Request) {
   const search = (searchParams.get("search") || "").toLowerCase()
   const activeOnly = searchParams.get("activeOnly") !== "0"
   const includeRecords = searchParams.get("includeRecords") !== "0"
-  const refresh = searchParams.get("refresh") === "1"
-  const cacheKey = `${basis}|${date}|${categoryFilter}|${statusFilter}|${search}|${activeOnly ? "1" : "0"}|${includeRecords ? "records" : "summary"}`
-
-  const cachedResponse = getResponseCache.get(cacheKey)
-  if (!refresh && cachedResponse && cachedResponse.expiresAt > Date.now()) {
-    return NextResponse.json(cachedResponse.payload)
-  }
 
   try {
     const mock = await loadMock()
+    if (labelsOnly) {
+      return NextResponse.json({ labels: buildOptionLabels(mock.optionRecords || [], CATEGORY_LABELS) })
+    }
     const privacyScrubbed = scrubOptionPrivacyFields(mock)
     const sofrNormalized = normalizeSofrOptionRecords(mock)
     const sofrHydrated = await hydrateSofrFromBundledMockIfNewer(mock)
@@ -950,13 +946,13 @@ export async function GET(req: Request) {
               ? "SOFR 적용 아이디 분리"
             : "옵션 개인정보 필드 정리",
       })
-      getResponseCache.clear()
     }
     const categories = (mock.categories || []).map((cat: any) => ({
       ...cat,
       category_name_ko: cat.category_name_ko || CATEGORY_LABELS[cat.category_code] || cat.category_code,
     }))
-    const optionRecordsRaw = mock.optionRecords || []
+    const dashboard = await readDashboardStateSlices<any>(["termination"], APP_STATE_PATH)
+    const optionRecordsRaw = filterConfirmedOptions(mock.optionRecords || [], dashboard?.termination)
     const computedCounts = buildCounts(optionRecordsRaw, categories)
     const historyCounts = mock.historyCounts || []
     const seedCounts = mock.seedCounts || []
@@ -1031,10 +1027,6 @@ export async function GET(req: Request) {
       views: { v_dashboard_card_counts: [], v_current_active_counts: [] },
     }
 
-    getResponseCache.set(cacheKey, {
-      expiresAt: Date.now() + GET_CACHE_TTL_MS,
-      payload: responsePayload,
-    })
 
     return NextResponse.json(responsePayload)
   } catch (error: any) {
@@ -1194,7 +1186,6 @@ export async function POST(req: Request) {
       menuLabel: "유료 옵션 정보 현황",
       changeLabel: action === "delete" ? "옵션 행 삭제" : "옵션 행 저장",
     })
-    getResponseCache.clear()
     return NextResponse.json({ ok: true })
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error?.message || "저장에 실패했습니다." }, { status: 500 })

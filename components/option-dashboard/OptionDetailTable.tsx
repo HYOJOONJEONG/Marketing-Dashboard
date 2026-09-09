@@ -964,7 +964,10 @@ export function OptionDetailTable({
                               )
                             })()
                           ) : (
-                            <div className={column.valueClass || ""}>{value}</div>
+                            <div className={`${column.valueClass || ""} ${column.key === "company_name" ? "whitespace-normal break-words" : ""}`}>
+                              {value}
+                              {column.key === "company_name" && <span className="ml-1 text-[11px] font-normal text-slate-500">({row.category_name_ko})</span>}
+                            </div>
                           )}
                         </td>
                       )
