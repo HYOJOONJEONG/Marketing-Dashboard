@@ -8565,11 +8565,16 @@ export function DashboardShell({
         pendingDataRef.current = sourceData
         markViewsDirty(["type-analysis"])
       }
-      await commitDashboardData(sourceData, ["type-analysis"])
+      await commitDashboardData(sourceData, ["type-analysis"], { compactUi: true })
       setTypeAnalysisSaveMessage(`${formatManualSaveTime()} 저장 완료`)
-    } catch {
-      setTypeAnalysisSaveMessage("저장 실패. 잠시 후 다시 저장해주세요.")
-      window.alert("신규/대체/해지 유형 분석 저장에 실패했습니다. 잠시 후 다시 시도해주세요.")
+    } catch (error) {
+      const message = error instanceof Error && error.name === "AbortError"
+        ? "저장 응답 시간이 초과되었습니다. 저장 여부를 확인하지 못했습니다. 잠시 후 다시 저장해주세요."
+        : error instanceof Error
+          ? error.message
+          : "잠시 후 다시 저장해주세요."
+      setTypeAnalysisSaveMessage(`저장 확인 실패: ${message}`)
+      window.alert(`신규/대체/해지 유형 분석 저장을 확인하지 못했습니다.\n${message}`)
     } finally {
       setIsSavingDashboard(false)
     }

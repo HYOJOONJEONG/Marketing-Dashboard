@@ -1170,9 +1170,16 @@ export async function PUT(request: Request) {
     }
 
     if (changedKeys.includes("ui") && incomingBody?.ui) {
+      const isTypeAnalysisOnlySave = canWritePartialDirectly &&
+        changedKeys.includes("typeAnalysis") &&
+        changedKeys.every((key: DashboardStateSliceKey) => key === "typeAnalysis" || key === "ui")
+      const existingUiSlice = isTypeAnalysisOnlySave
+        ? await readDashboardStateSlices<any>(["ui"])
+        : null
       const existingData =
         existingDataForMerge ||
         existingDataForActivity ||
+        (existingUiSlice?.ui ? existingUiSlice : null) ||
         (await readDashboardState<any>(DATA_PATH)) ||
         (await readDashboardState<any>(FALLBACK_PATH)) ||
         EMPTY_DASHBOARD
