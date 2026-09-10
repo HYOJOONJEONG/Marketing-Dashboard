@@ -27,10 +27,10 @@ export function filterConfirmedOptions(records: any[], termination: any) {
   })
 }
 
-export function buildOptionLabels(records: any[], labels: Record<string, string>) {
+export function buildOptionLabels(records: any[], labels: Record<string, string>, includeInactive = false) {
   const result: Record<string, string[]> = {}
   for (const row of records) {
-    if (row.category_code === "API" || (row.category_code !== "BOND" && Number(row.is_active) !== 1)) continue
+    if (row.category_code === "API" || (!includeInactive && row.category_code !== "BOND" && Number(row.is_active) !== 1)) continue
     const label = labels[row.category_code] || row.category_name_ko
     if (!label) continue
     for (const id of [...optionCustomerIds(row.user_id), ...optionCustomerIds(row.apply_ids)]) {

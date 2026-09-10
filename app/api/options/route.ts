@@ -928,7 +928,10 @@ export async function GET(req: Request) {
   try {
     const mock = await loadMock()
     if (labelsOnly) {
-      return NextResponse.json({ labels: buildOptionLabels(mock.optionRecords || [], CATEGORY_LABELS) })
+      return NextResponse.json({
+        labels: buildOptionLabels(mock.optionRecords || [], CATEGORY_LABELS),
+        historicalLabels: buildOptionLabels(mock.optionRecords || [], CATEGORY_LABELS, true),
+      })
     }
     const privacyScrubbed = scrubOptionPrivacyFields(mock)
     const sofrNormalized = normalizeSofrOptionRecords(mock)

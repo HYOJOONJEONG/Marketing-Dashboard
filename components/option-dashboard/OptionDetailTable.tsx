@@ -1,4 +1,5 @@
 import React from "react"
+import { OptionBadges } from "./OptionBadges"
 import { OptionRecord, OptionCategory } from "../../hooks/use-option-dashboard-data"
 
 type Props = {
@@ -966,7 +967,7 @@ export function OptionDetailTable({
                           ) : (
                             <div className={`${column.valueClass || ""} ${column.key === "company_name" ? "whitespace-normal break-words" : ""}`}>
                               {value}
-                              {column.key === "company_name" && <span className="ml-1 text-[11px] font-normal text-slate-500">({row.category_name_ko})</span>}
+                              {column.key === "company_name" && <OptionBadges labels={[row.category_name_ko]} />}
                             </div>
                           )}
                         </td>

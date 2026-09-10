@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState, useTransition } from "reac
 import { useRouter } from "next/navigation"
 import { ChevronDown, Clock3, KeyRound, LogOut, Menu, UserRound, X } from "lucide-react"
 import { OptionDashboardPage } from "./option-dashboard/OptionDashboardPage"
+import { OptionBadges } from "./option-dashboard/OptionBadges"
 import { DailyReportPage } from "./daily-report/daily-report-page"
 import { PersonalDashboard } from "./me/personal-dashboard"
 import { AdminConsole } from "./admin/admin-console"
@@ -3653,6 +3654,7 @@ export function DashboardShell({
   const isCollectionView = view === "collection"
   const isTerminationView = view === "termination"
   const [terminationOptionLabels, setTerminationOptionLabels] = useState<Record<string, string[]>>({})
+  const [confirmedOptionLabels, setConfirmedOptionLabels] = useState<Record<string, string[]>>({})
   const [terminationOptionError, setTerminationOptionError] = useState("")
   useEffect(() => {
     if (!isTerminationView) return
@@ -3663,16 +3665,19 @@ export function DashboardShell({
         if (!response.ok) throw new Error("옵션 라벨 조회 실패")
         return response.json()
       })
-      .then((payload) => setTerminationOptionLabels(payload.labels || {}))
+      .then((payload) => {
+        setTerminationOptionLabels(payload.labels || {})
+        setConfirmedOptionLabels(payload.historicalLabels || payload.labels || {})
+      })
       .catch((error) => {
         if (error.name !== "AbortError") setTerminationOptionError("옵션 라벨을 불러오지 못했습니다. 화면을 다시 열어주세요.")
       })
     return () => controller.abort()
   }, [isTerminationView])
-  function renderTerminationOptionLabel(row: any) {
+  function renderTerminationOptionLabel(row: any, confirmed = false) {
     const id = String(row.customerId || row.idCode || "").trim().toUpperCase()
-    const labels = terminationOptionLabels[id] || []
-    return labels.length ? <span className="ml-1 inline-block text-[11px] font-normal text-slate-500">({labels.join(", ")})</span> : null
+    const labels = (confirmed ? confirmedOptionLabels : terminationOptionLabels)[id] || []
+    return <OptionBadges labels={labels} />
   }
   const [collectionTab, setCollectionTab] = useState<CollectionTabKey>(initialCollectionTab)
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({ dailyReport: true, performance: true, termination: true })
@@ -12023,7 +12028,7 @@ export function DashboardShell({
                                 ) : null}
                               </div>
                             </td>
-                            <td className={`${tdClass} whitespace-normal`}>{row.companyName}{renderTerminationOptionLabel(row)}</td>
+                            <td className={`${tdClass} whitespace-normal`}>{row.companyName}{renderTerminationOptionLabel(row, true)}</td>
                             <td className={`${tdClass} whitespace-nowrap`}>{row.departmentName}</td>
                             <td className={tdClass}>{row.reason}</td>
                             <td className={`${tdClass} whitespace-nowrap tabular-nums`}>{normalizeDate(row.terminationDate)}</td>

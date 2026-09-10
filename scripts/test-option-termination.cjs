@@ -45,3 +45,11 @@ test('older archived sheet does not override restored current sheet', () => {
   termination.sheets.push({ id: 'old', confirmedItems: [{ customerId: 'E160279' }] })
   assert.equal(filterConfirmedOptions([bond], termination).length, 1)
 })
+
+test('confirmed list includes inactive option history without changing active labels', () => {
+  const records = [bond, { ...bond, category_code: 'LME', is_active: 0 }, { ...bond, category_code: 'API', is_active: 0 }]
+  const names = { BOND: 'Bond', LME: 'LME', API: 'API' }
+  assert.deepEqual(clean(buildOptionLabels(records, names).E160279), ['Bond'])
+  assert.deepEqual(clean(buildOptionLabels(records, names, true).E160279), ['Bond', 'LME'])
+  assert.equal(buildOptionLabels(records, names, true).E160280, undefined)
+})
