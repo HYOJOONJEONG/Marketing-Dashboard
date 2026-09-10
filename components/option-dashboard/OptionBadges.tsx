@@ -1,10 +1,10 @@
 const optionStyles: Record<string, { color: string }> = {
-  "해외채권": { color: "bg-sky-500 text-slate-950" },
-  "해외지수": { color: "bg-indigo-500 text-white" },
-  "해외종목": { color: "bg-emerald-500 text-slate-950" },
-  LME: { color: "bg-amber-500 text-slate-950" },
-  "전광판": { color: "bg-cyan-500 text-slate-950" },
-  SOFR: { color: "bg-violet-500 text-white" },
+  "해외채권": { color: "bg-sky-100 text-sky-800" },
+  "해외지수": { color: "bg-indigo-100 text-indigo-800" },
+  "해외종목": { color: "bg-emerald-100 text-emerald-800" },
+  LME: { color: "bg-amber-100 text-amber-800" },
+  "전광판": { color: "bg-cyan-100 text-cyan-800" },
+  SOFR: { color: "bg-violet-100 text-violet-800" },
 }
 
 export function OptionBadges({ labels }: { labels: string[] }) {
@@ -18,7 +18,7 @@ export function OptionBadges({ labels }: { labels: string[] }) {
             key={label}
             title={label}
             aria-label={label}
-            className={`inline-flex h-4 min-w-[30px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-1.5 text-[9px] font-semibold leading-none tracking-normal print:[print-color-adjust:exact] ${style?.color || "bg-slate-200 text-slate-900"}`}
+            className={`inline-flex h-4 min-w-[30px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-1.5 text-[9px] font-semibold leading-none tracking-normal print:[print-color-adjust:exact] ${style?.color || "bg-slate-100 text-slate-800"}`}
           >
             {label}
           </span>
