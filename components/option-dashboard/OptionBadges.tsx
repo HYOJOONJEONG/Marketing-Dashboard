@@ -10,7 +10,7 @@ const optionStyles: Record<string, { short: string; color: string }> = {
 export function OptionBadges({ labels }: { labels: string[] }) {
   if (!labels.length) return null
   return (
-    <span className="ml-1 inline-flex max-w-full flex-wrap items-center justify-center gap-1 align-middle">
+    <span className="ml-1 inline-flex max-w-full flex-wrap items-center justify-center gap-0.5 align-middle">
       {[...new Set(labels)].filter(Boolean).map((label) => {
         const style = optionStyles[label]
         return (
@@ -18,7 +18,7 @@ export function OptionBadges({ labels }: { labels: string[] }) {
             key={label}
             title={label}
             aria-label={label}
-            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold leading-none tracking-normal print:[print-color-adjust:exact] ${style?.color || "bg-slate-200 text-slate-900"}`}
+            className={`inline-flex h-4 min-w-[30px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-1.5 text-[9px] font-semibold leading-none tracking-normal print:[print-color-adjust:exact] ${style?.color || "bg-slate-200 text-slate-900"}`}
           >
             {style?.short || label.slice(0, 2)}
           </span>
