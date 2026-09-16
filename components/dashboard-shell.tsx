@@ -5002,7 +5002,7 @@ export function DashboardShell({
   async function commitDashboardData(
     sourceData: any = pendingDataRef.current || data,
     updatedViews: ViewKey[] = [view],
-    options: { stateKeys?: string[]; returnKeys?: string[]; returnMode?: string; payloadData?: Record<string, any>; compactUi?: boolean } = {},
+    options: { stateKeys?: string[]; returnKeys?: string[]; returnMode?: string; payloadData?: Record<string, any>; compactUi?: boolean; deletedContractIds?: string[] } = {},
   ) {
     // Saving one menu must not flush unrelated dirty views. A stale dirty
     // marker from another menu can otherwise expand changedKeys and make a
@@ -5031,6 +5031,7 @@ export function DashboardShell({
     const payload = JSON.stringify({
       partial: true,
       sourceViews: viewsToCommit,
+      deletedContractIds: options.deletedContractIds,
       changedKeys,
       ...(options.returnKeys?.length ? { returnKeys: Array.from(new Set(options.returnKeys)) } : {}),
       ...(options.returnMode ? { returnMode: options.returnMode } : {}),
@@ -5057,6 +5058,7 @@ export function DashboardShell({
       returnMode?: string
       payloadData?: Record<string, any>
       compactUi?: boolean
+      deletedContractIds?: string[]
     } = {},
   ) {
     const now = Date.now()
@@ -5079,6 +5081,7 @@ export function DashboardShell({
         returnMode: options.returnMode,
         payloadData: options.payloadData,
         compactUi: options.compactUi,
+        deletedContractIds: options.deletedContractIds,
       }).catch((error) => {
         const isLatestPending = pendingDataRef.current === nextData
         const shouldRollback = options.rollbackOnFailure !== false
@@ -5756,10 +5759,12 @@ export function DashboardShell({
     const nextContracts = latestContracts.map((row: any) =>
       row.id === contractId ? { ...row, includedInWeekly: !row.includedInWeekly, includedInWeeklyUpdatedAt } : row,
     )
-    persist(
+    void persist(
       { ...latestData, contracts: nextContracts },
       { immediate: true, updatedViews: ["weekly-selection", "weekly-report"] },
-    )
+    ).catch(() => {
+      // persist already reports a failed save and restores the previous selection.
+    })
   }
 
   function handleMoveWeeklySelectionToCollection() {
@@ -5815,6 +5820,7 @@ export function DashboardShell({
         await persist(nextData, {
           immediate: true,
           updatedViews: ["weekly-selection", "contracts", "collection"],
+          deletedContractIds: Array.from(selectedIds) as string[],
         })
         setCollectionTab("integrated")
         setCollectionYearFilter(currentYear)
@@ -5954,7 +5960,7 @@ export function DashboardShell({
     if (!window.confirm("이 계약을 삭제할까요?")) return
     startTransition(async () => {
       const nextContracts = contracts.filter((row: any) => row.id !== contractId)
-      await persist({ ...data, contracts: nextContracts }, { immediate: true, updatedViews: ["contracts"] })
+      await persist({ ...data, contracts: nextContracts }, { immediate: true, updatedViews: ["contracts"], deletedContractIds: [contractId] })
       if (editingContractId === contractId) {
         setEditingContractId(null)
         setEditingContractDraft({})

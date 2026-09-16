@@ -4,6 +4,7 @@ import path from "path"
 import { NextResponse } from "next/server"
 import { redisCommand } from "@/lib/redis-client"
 import { resolveRequestSession } from "@/lib/auth/session"
+import { writeDashboardState } from "@/lib/shared-db-store"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -342,6 +343,16 @@ export async function POST(request: Request) {
 
     const menuLabel = String(body?.menuLabel || "System")
     const changeLabel = String(body?.changeLabel || "Save data")
+
+    if (key === "dashboard_contracts") {
+      const contracts = JSON.parse(value)
+      if (!Array.isArray(contracts)) {
+        return NextResponse.json({ ok: false, error: "Invalid contracts data" }, { status: 400 })
+      }
+      const deletedIds = Array.isArray(body?.deletedContractIds) ? body.deletedContractIds.map(String) : []
+      await writeDashboardState({ contracts }, { menuLabel, changeLabel }, ["contracts"], deletedIds)
+      return NextResponse.json({ ok: true })
+    }
 
     if (persistentStoreConfigured()) {
       const now = new Date().toISOString()

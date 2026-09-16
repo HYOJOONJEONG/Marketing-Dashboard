@@ -6,6 +6,7 @@ import { appendActivityLog, updateAuthState } from "@/lib/auth/store"
 import { resolveRequestSession } from "@/lib/auth/session"
 import { ensureManualWeeklyRestore } from "@/lib/manual-weekly-restore"
 import { readDashboardState, readDashboardStateSlices, writeDashboardState } from "@/lib/shared-db-store"
+import { preserveContractWeeklySelections } from "@/lib/contract-weekly-selection"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -756,7 +757,15 @@ function describeDashboardPut(changedKeys: DashboardStateSliceKey[], existingDat
     return "해지 진행사항 수정 저장"
   }
   if (changedKeys.includes("collection")) return "계약서통합관리 저장"
-  if (changedKeys.includes("contracts")) return "신규계약/주간반영 리스트 저장"
+  if (changedKeys.includes("contracts")) {
+    const before = new Map((existingData?.contracts || []).map((row: any) => [contractMergeKey(row), row]))
+    const changes = (incomingBody?.contracts || []).flatMap((row: any) => {
+      const previous: any = before.get(contractMergeKey(row))
+      if (!previous || Boolean(previous.includedInWeekly) === Boolean(row.includedInWeekly)) return []
+      return [`${safeText(row.idCode || row.id)} ${row.includedInWeekly ? "체크" : "해제"}`]
+    })
+    return changes.length ? `주간반영 선택 저장 요청: ${changes.join(", ")}` : "신규계약/주간반영 리스트 저장"
+  }
   if (changedKeys.includes("typeAnalysis")) return "신규/대체/해지 유형 분석 저장"
   if (changedKeys.includes("dailyReport")) return "데일리 업무일지 저장"
   if (changedKeys.includes("weeklyReport")) return "주간실적보고/수동입력 저장"
@@ -770,50 +779,8 @@ function contractMergeKey(row: any) {
   return idCode ? `idCode:${idCode}` : ""
 }
 
-function mergeContractWeeklySelection(existing: any, incoming: any) {
-  if (!existing) return incoming
-  const existingAt = safeText(existing?.includedInWeeklyUpdatedAt || existing?.weeklySelectionUpdatedAt)
-  const incomingAt = safeText(incoming?.includedInWeeklyUpdatedAt || incoming?.weeklySelectionUpdatedAt)
-  const existingTime = parseTimestamp(existingAt)
-  const incomingTime = parseTimestamp(incomingAt)
-  const existingChecked = Boolean(existing?.includedInWeekly)
-  const incomingChecked = Boolean(incoming?.includedInWeekly)
-
-  if (existingTime || incomingTime) {
-    if (existingTime > incomingTime) {
-      return {
-        ...incoming,
-        includedInWeekly: existingChecked,
-        ...(existingAt ? { includedInWeeklyUpdatedAt: existingAt } : {}),
-      }
-    }
-    return {
-      ...incoming,
-      includedInWeekly: incomingChecked,
-      ...(incomingAt ? { includedInWeeklyUpdatedAt: incomingAt } : {}),
-    }
-  }
-
-  if (existingChecked && !incomingChecked) {
-    return { ...incoming, includedInWeekly: true }
-  }
-  return incoming
-}
-
-function mergeContractRowsPreservingWeeklySelection(existingContracts: any[], incomingContracts: any[]) {
-  const existingByKey = new Map<string, any>()
-  existingContracts.forEach((contract) => {
-    const key = contractMergeKey(contract)
-    if (key) existingByKey.set(key, contract)
-  })
-  return incomingContracts.map((contract) => {
-    const key = contractMergeKey(contract)
-    return mergeContractWeeklySelection(key ? existingByKey.get(key) : null, contract)
-  })
-}
-
 function mergeContractsForScope(existingContracts: any[], incomingContracts: any[], user: any, scope: ReturnType<typeof getContractAccessScope>) {
-  const scopedIncoming = mergeContractRowsPreservingWeeklySelection(existingContracts, incomingContracts)
+  const scopedIncoming = preserveContractWeeklySelections(existingContracts, incomingContracts)
   if (scope === "all") return scopedIncoming
   if (scope === "team") {
     const preserved = existingContracts.filter((contract) => String(contract?.teamId || "") !== user.teamId)
@@ -1148,6 +1115,13 @@ export async function PUT(request: Request) {
         session.user,
         scope,
       )
+      const existingById = new Map((existingData?.contracts || []).map((row: any) => [contractMergeKey(row), row]))
+      for (const row of nextContracts) {
+        const previous: any = existingById.get(contractMergeKey(row))
+        if (previous && Boolean(previous.includedInWeekly) !== Boolean(row.includedInWeekly)) {
+          row.includedInWeeklyUpdatedBy = session.user.id
+        }
+      }
       nextBody = {
         ...existingData,
         ...incomingBody,
@@ -1222,18 +1196,43 @@ export async function PUT(request: Request) {
     }
 
     const activitySourceData = existingDataForActivity || existingDataForMerge || EMPTY_DASHBOARD
+    const deletedContractIds: string[] = Array.isArray(body.deletedContractIds)
+      ? Array.from(new Set<string>(body.deletedContractIds.map(String)))
+      : []
+    if (deletedContractIds.length) {
+      const accessible = filterContractsForUser(activitySourceData.contracts || [], session.user, permissions)
+      const allowedIds = new Set(accessible.map((row: any) => String(row.id)))
+      const movingToCollection = changedKeys.includes("collection") &&
+        hasPermission(permissions, "newContractsList", "edit") &&
+        deletedContractIds.every((id) => {
+          const original = accessible.find((row: any) => String(row.id) === id)
+          return original && incomingBody.collection?.integrated?.some((row: any) =>
+            row.idCode === original.idCode && row.companyName === original.companyName &&
+            row.claimMonth === original.contractMonth)
+        })
+      if (!Array.isArray(incomingBody.contracts) ||
+          incomingBody.contracts.some((row: any) => deletedContractIds.includes(String(row.id))) ||
+          !deletedContractIds.every((id) => allowedIds.has(id)) ||
+          (!hasPermission(permissions, "newContractsList", "delete") && !movingToCollection)) {
+        return NextResponse.json({ ok: false, error: "계약 삭제/이동 권한을 확인해주세요." }, { status: 403 })
+      }
+    }
     const correctedNextBody = annotateTerminationSelectionChanges(
       applyTerminationIdCorrections(nextBody).data,
       activitySourceData?.termination,
       session.user,
     )
     const activityPageKey = inferDashboardPageKey(changedKeys)
-    const activityDetail = describeDashboardPut(changedKeys, activitySourceData, correctedNextBody)
+    const removedCodes = (activitySourceData.contracts || [])
+      .filter((row: any) => deletedContractIds.includes(String(row.id)))
+      .map((row: any) => row.idCode || row.id)
+    const activityDetail = describeDashboardPut(changedKeys, activitySourceData, correctedNextBody) +
+      (removedCodes.length ? ` / ${changedKeys.includes("collection") ? "이동" : "삭제"}: ${removedCodes.join(", ")}` : "")
 
     await writeDashboardState(correctedNextBody, {
       menuLabel: "Dashboard",
-      changeLabel: "Save dashboard state",
-    }, isPartial && changedKeys.length ? changedKeys : undefined)
+      changeLabel: `${session.user.name}: ${activityDetail}`,
+    }, isPartial && changedKeys.length ? changedKeys : undefined, deletedContractIds)
     await updateAuthState((state) => {
       appendActivityLog(state, {
         actorUserId: session.user.id,

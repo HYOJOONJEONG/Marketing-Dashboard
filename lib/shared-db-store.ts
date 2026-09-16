@@ -2,6 +2,7 @@ import crypto from "crypto"
 import fs from "fs/promises"
 import path from "path"
 import { redisCommand } from "@/lib/redis-client"
+import { CONTRACT_SELECTION_CAS, mergeContractSelectionJson, appendContractHistory } from "@/lib/contract-weekly-selection"
 
 const DEFAULT_STORE_PATH = path.join(process.cwd(), "data", "shared-kv-store.json")
 const CENTRAL_DB_API_URL = process.env.CENTRAL_DB_API_URL?.trim() || ""
@@ -37,6 +38,8 @@ const STORE_KEYS = {
   dashboardDailyReport: "dashboard_daily_report",
   dashboardWeeklyReport: "dashboard_weekly_report",
   dashboardContracts: "dashboard_contracts",
+  dashboardContractDeletions: "dashboard_contract_deletions",
+  dashboardContractHistory: "dashboard_contract_history",
   dashboardTypeAnalysis: "dashboard_type_analysis",
   dashboardCollection: "dashboard_collection",
   dashboardTermination: "dashboard_termination",
@@ -390,7 +393,7 @@ async function readRawValues(keys: SharedKey[]) {
   return result
 }
 
-async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta) {
+async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta, deletedContractIds: string[] = []) {
   ensureWritableStoreConfigured()
   const menuLabel = String(meta?.menuLabel || defaultMenuLabelByKey(key))
   const changeLabel = String(meta?.changeLabel || defaultChangeLabelByKey(key))
@@ -430,6 +433,7 @@ async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta)
           actor: CENTRAL_DB_SOURCE,
           menuLabel,
           changeLabel,
+          ...(key === STORE_KEYS.dashboardContracts ? { deletedContractIds } : {}),
         }),
         cache: "no-store",
       })
@@ -467,7 +471,7 @@ async function writeRawValue(key: SharedKey, raw: string, meta?: WriteAuditMeta)
   await writeQueue
 }
 
-async function writeRawValues(entries: Array<readonly [SharedKey, string]>, meta?: WriteAuditMeta) {
+async function writeRawValues(entries: Array<readonly [SharedKey, string]>, meta?: WriteAuditMeta, deletedContractIds: string[] = []) {
   const uniqueEntries = Array.from(
     entries.reduce((map, [key, raw]) => map.set(key, raw), new Map<SharedKey, string>()).entries(),
   )
@@ -483,6 +487,33 @@ async function writeRawValues(entries: Array<readonly [SharedKey, string]>, meta
     )
   }
 
+  const contractsEntry = uniqueEntries.find(([key]) => key === STORE_KEYS.dashboardContracts)
+  if (contractsEntry && !CENTRAL_DB_API_URL && (kvConfigured() || redisConfigured())) {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const snapshot = await readRawValues([STORE_KEYS.dashboardContracts, STORE_KEYS.dashboardContractDeletions, STORE_KEYS.dashboardContractHistory])
+      const current = snapshot.get(STORE_KEYS.dashboardContracts) ?? null
+      const deletedRaw = snapshot.get(STORE_KEYS.dashboardContractDeletions) ?? null
+      const deleted = Array.from(new Set<string>([...JSON.parse(deletedRaw || "[]"), ...deletedContractIds]))
+      const merged = mergeContractSelectionJson(current, contractsEntry[1], deleted)
+      const guardedEntries = [
+        [STORE_KEYS.dashboardContracts, merged] as const,
+        [STORE_KEYS.dashboardContractDeletions, JSON.stringify(deleted)] as const,
+        [STORE_KEYS.dashboardContractHistory, appendContractHistory(
+          snapshot.get(STORE_KEYS.dashboardContractHistory) ?? null, current, merged, meta?.changeLabel || "Save contracts",
+        )] as const,
+        ...uniqueEntries.filter(([key]) => key !== STORE_KEYS.dashboardContracts),
+      ]
+      const command = ["EVAL", CONTRACT_SELECTION_CAS, guardedEntries.length,
+        ...guardedEntries.map(([key]) => kvValueKey(key)), current ?? "", deletedRaw ?? "",
+        ...guardedEntries.map(([, raw]) => raw)]
+      const saved = kvConfigured()
+        ? await kvCommand<number>(command)
+        : await redisCommand<number>(REDIS_URL, command)
+      if (saved === 1) return
+    }
+    throw new Error("다른 사용자가 계약을 수정 중입니다. 잠시 후 다시 저장해주세요.")
+  }
+
   if (kvConfigured() && !CENTRAL_DB_API_URL) {
     await kvPipeline(uniqueEntries.map(([key, raw]) => ["SET", kvValueKey(key), raw]))
     return
@@ -494,14 +525,32 @@ async function writeRawValues(entries: Array<readonly [SharedKey, string]>, meta
   }
 
   if (CENTRAL_DB_API_URL) {
-    await Promise.all(uniqueEntries.map(([key, raw]) => writeRawValue(key, raw, meta)))
+    await Promise.all(uniqueEntries.map(([key, raw]) => writeRawValue(key, raw, meta, deletedContractIds)))
     return
   }
 
-  writeQueue = writeQueue.then(async () => {
+  writeQueue = writeQueue.catch(() => undefined).then(async () => {
     const store = await loadStore()
-    for (const [key, raw] of uniqueEntries) {
+    const deleted = Array.from(new Set<string>([
+      ...JSON.parse(store.kv_store[STORE_KEYS.dashboardContractDeletions]?.value || "[]"), ...deletedContractIds,
+    ]))
+    if (contractsEntry) {
+      store.kv_store[STORE_KEYS.dashboardContractDeletions] = {
+        value: JSON.stringify(deleted), updated_at: new Date().toISOString(),
+      }
+    }
+    for (const [key, incomingRaw] of uniqueEntries) {
+      const raw = key === STORE_KEYS.dashboardContracts
+        ? mergeContractSelectionJson(store.kv_store[key]?.value ?? null, incomingRaw, deleted)
+        : incomingRaw
       const now = new Date().toISOString()
+      if (key === STORE_KEYS.dashboardContracts) {
+        store.kv_store[STORE_KEYS.dashboardContractHistory] = {
+          value: appendContractHistory(store.kv_store[STORE_KEYS.dashboardContractHistory]?.value ?? null,
+            store.kv_store[key]?.value ?? null, raw, meta?.changeLabel || "Save contracts"),
+          updated_at: now,
+        }
+      }
       const menuLabel = String(meta?.menuLabel || defaultMenuLabelByKey(key))
       const changeLabel = String(meta?.changeLabel || defaultChangeLabelByKey(key))
       const prevHash = lastHash(store)
@@ -592,7 +641,7 @@ export async function readDashboardState<T>(fallbackFilePath?: string): Promise<
   return null
 }
 
-export async function writeDashboardState(value: unknown, meta?: WriteAuditMeta, changedKeys?: DashboardTopLevelKey[]) {
+export async function writeDashboardState(value: unknown, meta?: WriteAuditMeta, changedKeys?: DashboardTopLevelKey[], deletedContractIds: string[] = []) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Dashboard state must be a JSON object.")
   }
@@ -604,6 +653,7 @@ export async function writeDashboardState(value: unknown, meta?: WriteAuditMeta,
   await writeRawValues(
     targetKeys.map((key) => [DASHBOARD_SLICE_KEYS[key], JSON.stringify(source[key] ?? null)] as const),
     meta,
+    deletedContractIds,
   )
 }
 
