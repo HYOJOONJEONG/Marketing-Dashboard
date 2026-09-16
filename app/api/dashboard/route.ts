@@ -1,4 +1,5 @@
 import path from "path"
+import { createHash } from "crypto"
 import { NextResponse } from "next/server"
 import { buildPermissionIndex, filterContractsForUser, getContractAccessScope, hasPermission } from "@/lib/auth/permissions"
 import { getRequestIp, requireApiPermission } from "@/lib/auth/server"
@@ -999,6 +1000,18 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url)
     const slice = url.searchParams.get("slice") || ""
+    if (url.searchParams.get("collaborative") === "1") {
+      const keys = Array.from(new Set((url.searchParams.get("keys") || "").split(",")
+        .filter((key): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))))
+      if (!keys.length) return NextResponse.json({ error: "Missing state keys" }, { status: 400 })
+      const state = await readDashboardStateSlices<any>(keys, DATA_PATH)
+      if (!state) return NextResponse.json({ error: "Dashboard unavailable" }, { status: 503 })
+      const payload = pickDashboardReturnData(state, keys, session, permissions)
+      const etag = `"${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}"`
+      const headers = { ETag: etag, "Cache-Control": "private, no-store", Vary: "Cookie" }
+      if (request.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers })
+      return NextResponse.json(payload, { headers })
+    }
     let data = await readDashboardState<any>(DATA_PATH)
     data = await ensureManualWeeklyRestore(data)
     data = await ensureDashboardDataCorrections(data).catch((error) => {
@@ -1056,6 +1069,9 @@ export async function GET(request: Request) {
     return NextResponse.json(buildDashboardResponse(fallbackData || EMPTY_DASHBOARD, session, permissions))
   } catch (error) {
     console.error("Failed to read dashboard state.", error)
+    if (new URL(request.url).searchParams.get("collaborative") === "1") {
+      return NextResponse.json({ error: "Dashboard temporarily unavailable" }, { status: 503 })
+    }
     return NextResponse.json(EMPTY_DASHBOARD)
   }
 }

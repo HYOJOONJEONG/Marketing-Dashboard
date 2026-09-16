@@ -10,6 +10,7 @@ import { PersonalDashboard } from "./me/personal-dashboard"
 import { AdminConsole } from "./admin/admin-console"
 import { TypeAnalysisDashboard } from "./type-analysis/type-analysis-dashboard"
 import { getIndustryGroupLabel } from "@/lib/industry-groups"
+import { dashboardSlicesDiffer, hasProtectedSlice } from "@/lib/dashboard-collaboration"
 import { buildPersonalDashboardData } from "@/lib/personal-dashboard"
 import {
   DailyDirectoryUser,
@@ -5111,18 +5112,21 @@ export function DashboardShell({
     return savePromise
   }
 
-  function hasDirtyDashboardWork() {
-    return Object.values(dirtyViewsRef.current).some(Boolean) || manualSaveInFlightRef.current || dailyReportSaveInFlightRef.current
-  }
+  const collaborativeEditingRef = useRef<string[]>([])
+  collaborativeEditingRef.current = [
+    ...(editingContractId ? ["contracts"] : []),
+    ...(editingCollectionId ? ["collection"] : []),
+    ...(editingTerminationId || editingHoldId ? ["termination"] : []),
+  ]
 
-  function hasNewerMenuUpdate(incomingUi: any, currentUi: any, keys: ViewKey[]) {
-    const incomingUpdates = incomingUi?.menuUpdatedAt || {}
-    const currentUpdates = currentUi?.menuUpdatedAt || {}
-    return keys.some((key) => {
-      const incomingTime = Date.parse(String(incomingUpdates?.[key] || ""))
-      const currentTime = Date.parse(String(currentUpdates?.[key] || ""))
-      return Number.isFinite(incomingTime) && incomingTime > (Number.isFinite(currentTime) ? currentTime : 0)
-    })
+  function hasDirtyDashboardWork(stateKeys: string[]) {
+    const dirtyKeys = collectStateKeysForViews(Object.entries(dirtyViewsRef.current)
+      .filter(([, dirty]) => dirty).map(([key]) => key as ViewKey))
+    return hasProtectedSlice(stateKeys, [
+      ...dirtyKeys, ...collaborativeEditingRef.current,
+      ...(manualSaveInFlightRef.current ? ["weeklyReport"] : []),
+      ...(dailyReportSaveInFlightRef.current ? ["dailyReport"] : []),
+    ])
   }
 
   function mergeCollaborativeDashboardSlice(currentData: any, latest: any, stateKeys: string[]) {
@@ -5308,27 +5312,41 @@ export function DashboardShell({
 
     const stateKeys = collectStateKeysForViews([view])
       .filter((key) => DASHBOARD_COLLAB_STATE_KEYS.has(key))
-    const pollViews = [view]
     if (!stateKeys.length) return
 
     let cancelled = false
     let timer: number | null = null
     let inFlight = false
+    let etag: string | null = null
+    let lastApplied: any = null
+    let controller: AbortController | null = null
 
     const refreshCurrentView = async () => {
       if (cancelled || inFlight) return
       if (document.visibilityState === "hidden") return
-      if (hasDirtyDashboardWork()) return
+      if (hasDirtyDashboardWork(stateKeys) || !navigator.onLine) return
       inFlight = true
+      controller = new AbortController()
+      const timeout = window.setTimeout(() => controller?.abort(), 15000)
+      const baseData = pendingDataRef.current || latestDataRef.current
       try {
         const uniqueKeys = Array.from(new Set([...stateKeys, "ui"]))
-        const response = await fetch(`/api/dashboard?keys=${encodeURIComponent(uniqueKeys.join(","))}`, { cache: "no-store" })
+        const response = await fetch(`/api/dashboard?collaborative=1&keys=${encodeURIComponent(uniqueKeys.join(","))}`, {
+          cache: "no-store", signal: controller.signal,
+          headers: etag && lastApplied === baseData ? { "If-None-Match": etag } : {},
+        })
+        if (response.status === 304) return
         if (!response.ok) return
         const latest = await response.json()
-        if (cancelled || hasDirtyDashboardWork()) return
+        if (cancelled || hasDirtyDashboardWork(stateKeys)) return
         const currentData = pendingDataRef.current || latestDataRef.current
-        if (!hasNewerMenuUpdate(latest?.ui, currentData?.ui, pollViews)) return
+        // A save or edit that began during the request always wins over this response.
+        if (currentData !== baseData) return
+        etag = response.headers.get("etag")
+        lastApplied = currentData
+        if (!dashboardSlicesDiffer(currentData, latest, uniqueKeys)) return
         const nextData = mergeCollaborativeDashboardSlice(currentData, latest, uniqueKeys)
+        lastApplied = nextData
         setData(nextData)
         pendingDataRef.current = nextData
         scheduleLocalDashboardCache(nextData)
@@ -5336,6 +5354,7 @@ export function DashboardShell({
         // Other users' updates are refreshed opportunistically; transient network
         // errors should not interrupt the user's current work.
       } finally {
+        window.clearTimeout(timeout)
         inFlight = false
       }
     }
@@ -5356,12 +5375,15 @@ export function DashboardShell({
 
     document.addEventListener("visibilitychange", handleVisibilityChange)
     window.addEventListener("focus", handleFocus)
+    window.addEventListener("online", handleFocus)
     void refreshCurrentView().finally(scheduleRefresh)
     return () => {
       cancelled = true
+      controller?.abort()
       if (timer) window.clearTimeout(timer)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       window.removeEventListener("focus", handleFocus)
+      window.removeEventListener("online", handleFocus)
     }
   }, [view])
 
