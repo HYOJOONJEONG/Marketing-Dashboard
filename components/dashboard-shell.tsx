@@ -3695,6 +3695,9 @@ export function DashboardShell({
   const [nextPassword, setNextPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [presenceUsers, setPresenceUsers] = useState<PresenceUser[]>([])
+  const [presencePanelTab, setPresencePanelTab] = useState<"people" | "activity">("people")
+  const [dailyActivities, setDailyActivities] = useState<Array<{ id: string; actorName: string; createdAt: string; success: boolean; label: string }>>([])
+  const [activityScope, setActivityScope] = useState("own")
   const [manualPresenceStatus, setManualPresenceStatus] = useState<"away" | null>(null)
   const [manualDraft, setManualDraft] = useState<any>(() =>
     buildManualDraftFromWeekly(
@@ -4254,6 +4257,8 @@ export function DashboardShell({
         const payload = await response.json().catch(() => null)
         if (!alive || !response.ok) return
         setPresenceUsers(Array.isArray(payload?.presenceUsers) ? payload.presenceUsers : [])
+        setDailyActivities(Array.isArray(payload?.dailyActivities) ? payload.dailyActivities : [])
+        setActivityScope(payload?.activityScope === "all" ? "all" : "own")
       } catch {
         // Keep the last known presence state when a short polling request fails.
       }
@@ -9681,10 +9686,20 @@ export function DashboardShell({
 
           {currentUser ? (
             <div className="mt-auto px-1 pt-6">
-              <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+              <div className="flex h-[220px] flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                <div role="tablist" aria-label="접속 및 일간 활동" className="mb-3 grid shrink-0 grid-cols-2 border-b border-slate-100">
+                  {([ ["people", "접속 인원"], ["activity", "활동 로그"] ] as const).map(([key, label]) => (
+                    <button key={key} type="button" role="tab" aria-selected={presencePanelTab === key}
+                      onClick={() => setPresencePanelTab(key)}
+                      className={`min-w-0 border-b-2 pb-2 text-[12px] font-bold ${presencePanelTab === key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div role="tabpanel" aria-label={presencePanelTab === "people" ? "접속 인원" : "활동 로그"} className="min-h-0 flex-1 overflow-y-auto">
+                {presencePanelTab === "people" ? <>
                 <div className="space-y-3">
                   <div className="min-w-0">
-                    <div className="whitespace-nowrap text-[15px] font-black tracking-[-0.03em] text-slate-900">현재 접속 인원</div>
                     <div className="mt-1 text-[12px] font-semibold text-emerald-600">
                       {activePresenceUsers.length}명 접속 중
                     </div>
@@ -9782,6 +9797,19 @@ export function DashboardShell({
                       })}
                     </div>
                   </div>
+                </div>
+                </> : <>
+                  <div className="mb-2 text-[11px] font-semibold text-slate-500">오늘 · {activityScope === "all" ? "전체 활동" : "내 활동"} · 최근 {dailyActivities.length}건</div>
+                  {dailyActivities.length ? dailyActivities.map(activity => (
+                    <div key={activity.id} className="border-b border-slate-100 py-2 last:border-0">
+                      <div className="flex min-w-0 items-center justify-between gap-2 text-[11px]">
+                        <span className="truncate font-bold text-slate-800">{activity.actorName}</span>
+                        <time className="shrink-0 tabular-nums text-slate-400" dateTime={activity.createdAt}>{new Date(activity.createdAt).toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false })}</time>
+                      </div>
+                      <div className={`mt-0.5 break-words text-[12px] ${activity.success ? "text-slate-600" : "text-rose-600"}`}>{activity.label}{activity.success ? "" : " · 실패"}</div>
+                    </div>
+                  )) : <p className="py-5 text-center text-[12px] text-slate-400">오늘 기록된 활동이 없습니다.</p>}
+                </>}
                 </div>
               </div>
             </div>
