@@ -903,63 +903,6 @@ function restoreJuly30ConfirmedTerminationsFromTypeAnalysis(data: any) {
   }
 }
 
-function restoreTypeAnalysisTerminationsFromConfirmed(data: any) {
-  const sheets = Array.isArray(data?.termination?.sheets) ? data.termination.sheets : []
-  const records = Array.isArray(data?.typeAnalysis?.terminationType?.records)
-    ? data.typeAnalysis.terminationType.records
-    : []
-  if (!sheets.length || !data?.typeAnalysis?.terminationType) return { data, changed: false, restoredCount: 0 }
-
-  const currentSheet = sheets.find((sheet: any) => safeText(sheet?.id) === safeText(data?.termination?.currentSheetId))
-  const sheet = currentSheet || sheets.reduce((largest: any, candidate: any) => {
-    const largestCount = Array.isArray(largest?.confirmedItems) ? largest.confirmedItems.length : 0
-    const candidateCount = Array.isArray(candidate?.confirmedItems) ? candidate.confirmedItems.length : 0
-    return candidateCount > largestCount ? candidate : largest
-  }, sheets[0])
-  // confirmedItems is authoritative; selected belongs to the source checklist
-  // and can legitimately remain false after the row has been confirmed.
-  const confirmedItems = Array.isArray(sheet?.confirmedItems) ? sheet.confirmedItems : []
-  const keys = new Set(records.map((row: any) => terminationConfirmedCompareKey(row)).filter(Boolean))
-  const additions = confirmedItems.flatMap((row: any, index: number) => {
-    const key = terminationConfirmedCompareKey(row)
-    if (!key || keys.has(key)) return []
-    keys.add(key)
-    return [{
-      no: records.length + index + 1,
-      date: normalizeDashboardDate(row?.receivedDate || row?.terminationDate || row?.reflectedDate),
-      sourceDate: normalizeDashboardDate(row?.receivedDate),
-      idCode: normalizeContractIdCode(row?.customerId || row?.idCode),
-      companyName: safeText(row?.companyName),
-      departmentName: safeText(row?.departmentName),
-      recommender: safeText(row?.manager),
-      reason: safeText(row?.reason),
-      terminationDate: normalizeDashboardDate(row?.terminationDate),
-      penalty: row?.penalty ?? 0,
-      note: safeText(row?.note),
-      sourceId: safeText(row?.id),
-      restoredFrom: "termination-confirmed",
-      restoredAt: new Date().toISOString(),
-    }]
-  })
-  if (!additions.length) return { data, changed: false, restoredCount: 0 }
-  const nextRecords = [...records, ...additions].map((row: any, index: number) => ({ ...row, no: index + 1 }))
-  return {
-    data: {
-      ...data,
-      typeAnalysis: {
-        ...data.typeAnalysis,
-        updatedAt: new Date().toISOString(),
-        terminationType: {
-          ...data.typeAnalysis.terminationType,
-          records: nextRecords,
-        },
-      },
-    },
-    changed: true,
-    restoredCount: additions.length,
-  }
-}
-
 function applyTerminationIdCorrections(data: any) {
   if (!data || typeof data !== "object" || !Array.isArray(data?.termination?.sheets)) {
     return { data, changed: false }
@@ -1000,12 +943,10 @@ function applyTerminationIdCorrections(data: any) {
 async function ensureDashboardDataCorrections(data: any) {
   const terminationCorrected = applyTerminationIdCorrections(data)
   const july30Restored = restoreJuly30ConfirmedTerminationsFromTypeAnalysis(terminationCorrected.data)
-  const typeAnalysisRestored = restoreTypeAnalysisTerminationsFromConfirmed(july30Restored.data)
-  const manualCorrected = restoreWeeklyReportFromHistoryIfNeeded(typeAnalysisRestored.data)
+  const manualCorrected = restoreWeeklyReportFromHistoryIfNeeded(july30Restored.data)
   const changedKeys: DashboardStateSliceKey[] = []
   if (terminationCorrected.changed) changedKeys.push("termination")
   if (july30Restored.changed) changedKeys.push("termination")
-  if (typeAnalysisRestored.changed) changedKeys.push("typeAnalysis")
   if (manualCorrected.changed) changedKeys.push("weeklyReport", "ui")
   if (!changedKeys.length) return manualCorrected.data
   await writeDashboardState(
@@ -1014,8 +955,6 @@ async function ensureDashboardDataCorrections(data: any) {
       menuLabel: "Dashboard",
       changeLabel: manualCorrected.changed
         ? "수동입력 최신 히스토리 보호 복구"
-        : typeAnalysisRestored.changed
-          ? `유형분석 해지 누락 ${typeAnalysisRestored.restoredCount}건 자동 복원`
         : july30Restored.changed
           ? `2026.07.30 해지확정 ${july30Restored.restoredCount}건 복원`
         : "해지확정 부산대 고객번호 E150214 수정",
@@ -1066,27 +1005,8 @@ export async function GET(request: Request) {
       const keys = Array.from(new Set((url.searchParams.get("keys") || "").split(",")
         .filter((key): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))))
       if (!keys.length) return NextResponse.json({ error: "Missing state keys" }, { status: 400 })
-      const readKeys = keys.includes("typeAnalysis")
-        ? Array.from(new Set([...keys, "termination" as DashboardStateSliceKey]))
-        : keys
-      let state = await readDashboardStateSlices<any>(readKeys, DATA_PATH)
+      const state = await readDashboardStateSlices<any>(keys, DATA_PATH)
       if (!state) return NextResponse.json({ error: "Dashboard unavailable" }, { status: 503 })
-      if (keys.includes("typeAnalysis")) {
-        const corrected = restoreTypeAnalysisTerminationsFromConfirmed(state)
-        state = corrected.data
-        if (corrected.changed) {
-          await writeDashboardState(
-            state,
-            {
-              menuLabel: "Dashboard",
-              changeLabel: `유형분석 해지 누락 ${corrected.restoredCount}건 실시간 자동 복원`,
-            },
-            ["typeAnalysis"],
-          ).catch((error) => {
-            console.error("Failed to persist collaborative type-analysis correction.", error)
-          })
-        }
-      }
       const payload = pickDashboardReturnData(state, keys, session, permissions)
       const etag = `"${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}"`
       const headers = { ETag: etag, "Cache-Control": "private, no-store", Vary: "Cookie" }
@@ -1097,9 +1017,7 @@ export async function GET(request: Request) {
     data = await ensureManualWeeklyRestore(data)
     data = await ensureDashboardDataCorrections(data).catch((error) => {
       console.error("Failed to apply dashboard data corrections.", error)
-      const terminationCorrected = applyTerminationIdCorrections(data).data
-      const july30Restored = restoreJuly30ConfirmedTerminationsFromTypeAnalysis(terminationCorrected).data
-      return restoreTypeAnalysisTerminationsFromConfirmed(july30Restored).data
+      return applyTerminationIdCorrections(data).data
     })
     if (data) {
       if (slice === "dailyReport") {

@@ -1814,9 +1814,7 @@ function buildTypeAnalysisTerminationRecordFromConfirmed(item: any, sourceRecord
 
 function reconcileTypeAnalysisTerminationsWithConfirmed(records: any[], confirmedItems: any[]) {
   const normalizedRecords = normalizeTypeAnalysisTerminationPlacementRecords(records)
-  // Once a row is in confirmedItems it is a confirmed termination. The
-  // original checklist flag may remain false after a move and must not hide it.
-  const confirmedRows = Array.isArray(confirmedItems) ? confirmedItems : []
+  const confirmedRows = (Array.isArray(confirmedItems) ? confirmedItems : []).filter((item: any) => item?.selected !== false)
   if (!confirmedRows.length) return normalizedRecords
 
   const byKey = new Map<string, any>()
