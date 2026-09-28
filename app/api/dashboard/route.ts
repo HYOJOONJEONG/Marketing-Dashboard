@@ -1065,8 +1065,27 @@ export async function GET(request: Request) {
       const keys = Array.from(new Set((url.searchParams.get("keys") || "").split(",")
         .filter((key): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))))
       if (!keys.length) return NextResponse.json({ error: "Missing state keys" }, { status: 400 })
-      const state = await readDashboardStateSlices<any>(keys, DATA_PATH)
+      const readKeys = keys.includes("typeAnalysis")
+        ? Array.from(new Set([...keys, "termination" as DashboardStateSliceKey]))
+        : keys
+      let state = await readDashboardStateSlices<any>(readKeys, DATA_PATH)
       if (!state) return NextResponse.json({ error: "Dashboard unavailable" }, { status: 503 })
+      if (keys.includes("typeAnalysis")) {
+        const corrected = restoreTypeAnalysisTerminationsFromConfirmed(state)
+        state = corrected.data
+        if (corrected.changed) {
+          await writeDashboardState(
+            state,
+            {
+              menuLabel: "Dashboard",
+              changeLabel: `유형분석 해지 누락 ${corrected.restoredCount}건 실시간 자동 복원`,
+            },
+            ["typeAnalysis"],
+          ).catch((error) => {
+            console.error("Failed to persist collaborative type-analysis correction.", error)
+          })
+        }
+      }
       const payload = pickDashboardReturnData(state, keys, session, permissions)
       const etag = `"${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}"`
       const headers = { ETag: etag, "Cache-Control": "private, no-store", Vary: "Cookie" }
@@ -1077,7 +1096,9 @@ export async function GET(request: Request) {
     data = await ensureManualWeeklyRestore(data)
     data = await ensureDashboardDataCorrections(data).catch((error) => {
       console.error("Failed to apply dashboard data corrections.", error)
-      return applyTerminationIdCorrections(data).data
+      const terminationCorrected = applyTerminationIdCorrections(data).data
+      const july30Restored = restoreJuly30ConfirmedTerminationsFromTypeAnalysis(terminationCorrected).data
+      return restoreTypeAnalysisTerminationsFromConfirmed(july30Restored).data
     })
     if (data) {
       if (slice === "dailyReport") {
