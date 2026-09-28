@@ -5008,7 +5008,7 @@ export function DashboardShell({
   async function commitDashboardData(
     sourceData: any = pendingDataRef.current || data,
     updatedViews: ViewKey[] = [view],
-    options: { stateKeys?: string[]; returnKeys?: string[]; returnMode?: string; payloadData?: Record<string, any>; compactUi?: boolean; deletedContractIds?: string[] } = {},
+    options: { stateKeys?: string[]; returnKeys?: string[]; returnMode?: string; payloadData?: Record<string, any>; compactUi?: boolean; deletedContractIds?: string[]; deletedTypeAnalysisRecordKeys?: string[] } = {},
   ) {
     // Saving one menu must not flush unrelated dirty views. A stale dirty
     // marker from another menu can otherwise expand changedKeys and make a
@@ -5038,6 +5038,7 @@ export function DashboardShell({
       partial: true,
       sourceViews: viewsToCommit,
       deletedContractIds: options.deletedContractIds,
+      deletedTypeAnalysisRecordKeys: options.deletedTypeAnalysisRecordKeys,
       changedKeys,
       ...(options.returnKeys?.length ? { returnKeys: Array.from(new Set(options.returnKeys)) } : {}),
       ...(options.returnMode ? { returnMode: options.returnMode } : {}),
@@ -5065,6 +5066,7 @@ export function DashboardShell({
       payloadData?: Record<string, any>
       compactUi?: boolean
       deletedContractIds?: string[]
+      deletedTypeAnalysisRecordKeys?: string[]
     } = {},
   ) {
     const now = Date.now()
@@ -5088,6 +5090,7 @@ export function DashboardShell({
         payloadData: options.payloadData,
         compactUi: options.compactUi,
         deletedContractIds: options.deletedContractIds,
+        deletedTypeAnalysisRecordKeys: options.deletedTypeAnalysisRecordKeys,
       }).catch((error) => {
         const isLatestPending = pendingDataRef.current === nextData
         const shouldRollback = options.rollbackOnFailure !== false
@@ -8508,7 +8511,11 @@ export function DashboardShell({
           ...latestData,
           typeAnalysis: nextTypeAnalysis,
         },
-        { immediate: true, updatedViews: ["type-analysis"] },
+        {
+          immediate: true,
+          updatedViews: ["type-analysis"],
+          deletedTypeAnalysisRecordKeys: [recordKey],
+        },
       )
       setTypeAnalysisSaveMessage(`${formatManualSaveTime()} 삭제 저장 완료`)
     } catch {

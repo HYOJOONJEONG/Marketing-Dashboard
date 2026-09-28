@@ -7,6 +7,7 @@ import { appendActivityLog, updateAuthState } from "@/lib/auth/store"
 import { resolveRequestSession } from "@/lib/auth/session"
 import { ensureManualWeeklyRestore } from "@/lib/manual-weekly-restore"
 import { readDashboardState, readDashboardStateSlices, writeDashboardState } from "@/lib/shared-db-store"
+import { mergeTypeAnalysisState } from "@/lib/type-analysis-persistence"
 import { preserveContractWeeklySelections } from "@/lib/contract-weekly-selection"
 
 export const runtime = "nodejs"
@@ -902,6 +903,62 @@ function restoreJuly30ConfirmedTerminationsFromTypeAnalysis(data: any) {
   }
 }
 
+function restoreTypeAnalysisTerminationsFromConfirmed(data: any) {
+  const sheets = Array.isArray(data?.termination?.sheets) ? data.termination.sheets : []
+  const records = Array.isArray(data?.typeAnalysis?.terminationType?.records)
+    ? data.typeAnalysis.terminationType.records
+    : []
+  if (!sheets.length || !data?.typeAnalysis?.terminationType) return { data, changed: false, restoredCount: 0 }
+
+  const currentSheet = sheets.find((sheet: any) => safeText(sheet?.id) === safeText(data?.termination?.currentSheetId))
+  const sheet = currentSheet || sheets.reduce((largest: any, candidate: any) => {
+    const largestCount = Array.isArray(largest?.confirmedItems) ? largest.confirmedItems.length : 0
+    const candidateCount = Array.isArray(candidate?.confirmedItems) ? candidate.confirmedItems.length : 0
+    return candidateCount > largestCount ? candidate : largest
+  }, sheets[0])
+  const confirmedItems = (Array.isArray(sheet?.confirmedItems) ? sheet.confirmedItems : [])
+    .filter((row: any) => row?.selected !== false)
+  const keys = new Set(records.map((row: any) => terminationConfirmedCompareKey(row)).filter(Boolean))
+  const additions = confirmedItems.flatMap((row: any, index: number) => {
+    const key = terminationConfirmedCompareKey(row)
+    if (!key || keys.has(key)) return []
+    keys.add(key)
+    return [{
+      no: records.length + index + 1,
+      date: normalizeDashboardDate(row?.receivedDate || row?.terminationDate || row?.reflectedDate),
+      sourceDate: normalizeDashboardDate(row?.receivedDate),
+      idCode: normalizeContractIdCode(row?.customerId || row?.idCode),
+      companyName: safeText(row?.companyName),
+      departmentName: safeText(row?.departmentName),
+      recommender: safeText(row?.manager),
+      reason: safeText(row?.reason),
+      terminationDate: normalizeDashboardDate(row?.terminationDate),
+      penalty: row?.penalty ?? 0,
+      note: safeText(row?.note),
+      sourceId: safeText(row?.id),
+      restoredFrom: "termination-confirmed",
+      restoredAt: new Date().toISOString(),
+    }]
+  })
+  if (!additions.length) return { data, changed: false, restoredCount: 0 }
+  const nextRecords = [...records, ...additions].map((row: any, index: number) => ({ ...row, no: index + 1 }))
+  return {
+    data: {
+      ...data,
+      typeAnalysis: {
+        ...data.typeAnalysis,
+        updatedAt: new Date().toISOString(),
+        terminationType: {
+          ...data.typeAnalysis.terminationType,
+          records: nextRecords,
+        },
+      },
+    },
+    changed: true,
+    restoredCount: additions.length,
+  }
+}
+
 function applyTerminationIdCorrections(data: any) {
   if (!data || typeof data !== "object" || !Array.isArray(data?.termination?.sheets)) {
     return { data, changed: false }
@@ -942,10 +999,12 @@ function applyTerminationIdCorrections(data: any) {
 async function ensureDashboardDataCorrections(data: any) {
   const terminationCorrected = applyTerminationIdCorrections(data)
   const july30Restored = restoreJuly30ConfirmedTerminationsFromTypeAnalysis(terminationCorrected.data)
-  const manualCorrected = restoreWeeklyReportFromHistoryIfNeeded(july30Restored.data)
+  const typeAnalysisRestored = restoreTypeAnalysisTerminationsFromConfirmed(july30Restored.data)
+  const manualCorrected = restoreWeeklyReportFromHistoryIfNeeded(typeAnalysisRestored.data)
   const changedKeys: DashboardStateSliceKey[] = []
   if (terminationCorrected.changed) changedKeys.push("termination")
   if (july30Restored.changed) changedKeys.push("termination")
+  if (typeAnalysisRestored.changed) changedKeys.push("typeAnalysis")
   if (manualCorrected.changed) changedKeys.push("weeklyReport", "ui")
   if (!changedKeys.length) return manualCorrected.data
   await writeDashboardState(
@@ -954,6 +1013,8 @@ async function ensureDashboardDataCorrections(data: any) {
       menuLabel: "Dashboard",
       changeLabel: manualCorrected.changed
         ? "수동입력 최신 히스토리 보호 복구"
+        : typeAnalysisRestored.changed
+          ? `유형분석 해지 누락 ${typeAnalysisRestored.restoredCount}건 자동 복원`
         : july30Restored.changed
           ? `2026.07.30 해지확정 ${july30Restored.restoredCount}건 복원`
         : "해지확정 부산대 고객번호 E150214 수정",
@@ -1110,6 +1171,9 @@ export async function PUT(request: Request) {
     const sourceViews = Array.isArray(body?.sourceViews)
       ? body.sourceViews.map((key: unknown) => String(key || "")).filter(Boolean)
       : []
+    const deletedTypeAnalysisRecordKeys: string[] = Array.isArray(body?.deletedTypeAnalysisRecordKeys)
+      ? Array.from(new Set<string>(body.deletedTypeAnalysisRecordKeys.map(String)))
+      : []
     const isManualWeeklySave = sourceViews.includes("manual-input") || sourceViews.includes("weekly-report")
     const changedKeys =
       requestedChangedKeys.includes("contracts") && requestedChangedKeys.includes("weeklyReport") && !isManualWeeklySave
@@ -1208,6 +1272,18 @@ export async function PUT(request: Request) {
       nextBody = {
         ...nextBody,
         termination: mergeTerminationState(existingData?.termination, incomingBody.termination),
+      }
+    }
+
+    if (changedKeys.includes("typeAnalysis") && incomingBody?.typeAnalysis) {
+      const existingSlices = await readDashboardStateSlices<any>(["typeAnalysis"])
+      nextBody = {
+        ...nextBody,
+        typeAnalysis: mergeTypeAnalysisState(
+          existingSlices?.typeAnalysis,
+          incomingBody.typeAnalysis,
+          deletedTypeAnalysisRecordKeys,
+        ),
       }
     }
 
