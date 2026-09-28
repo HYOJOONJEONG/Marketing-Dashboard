@@ -916,8 +916,9 @@ function restoreTypeAnalysisTerminationsFromConfirmed(data: any) {
     const candidateCount = Array.isArray(candidate?.confirmedItems) ? candidate.confirmedItems.length : 0
     return candidateCount > largestCount ? candidate : largest
   }, sheets[0])
-  const confirmedItems = (Array.isArray(sheet?.confirmedItems) ? sheet.confirmedItems : [])
-    .filter((row: any) => row?.selected !== false)
+  // confirmedItems is authoritative; selected belongs to the source checklist
+  // and can legitimately remain false after the row has been confirmed.
+  const confirmedItems = Array.isArray(sheet?.confirmedItems) ? sheet.confirmedItems : []
   const keys = new Set(records.map((row: any) => terminationConfirmedCompareKey(row)).filter(Boolean))
   const additions = confirmedItems.flatMap((row: any, index: number) => {
     const key = terminationConfirmedCompareKey(row)
