@@ -17,6 +17,13 @@ const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
 const FALLBACK_PATH = path.join(process.cwd(), "api-dashboard-response.json")
 
 const EMPTY_DASHBOARD = { ui: {}, contracts: [], termination: {} }
+const TYPE_ANALYSIS_NEW_CONTRACT_CORRECTION_IDS = new Set([
+  "E260289",
+  "E260288",
+  "E260287",
+  "E260338",
+  "E260362",
+])
 const DASHBOARD_VIEW_KEYS = [
   "dailyReport",
   "weeklyReport",
@@ -84,6 +91,86 @@ function normalizeDashboardDate(value: unknown) {
 
 function safeText(value: unknown) {
   return String(value ?? "").trim()
+}
+
+function getUpcomingThursdayLabel(baseDate = new Date()) {
+  const seoul = new Date(baseDate.toLocaleString("en-US", { timeZone: "Asia/Seoul" }))
+  const daysUntilThursday = (4 - seoul.getDay() + 7) % 7
+  seoul.setDate(seoul.getDate() + daysUntilThursday)
+  const yyyy = seoul.getFullYear()
+  const mm = String(seoul.getMonth() + 1).padStart(2, "0")
+  const dd = String(seoul.getDate()).padStart(2, "0")
+  return `${yyyy}.${mm}.${dd}`
+}
+
+function addRequestedMissingNewContractsToTypeAnalysis(data: any) {
+  const contracts = Array.isArray(data?.contracts) ? data.contracts : []
+  const typeAnalysis = data?.typeAnalysis
+  const records = Array.isArray(typeAnalysis?.newReplacement?.records)
+    ? typeAnalysis.newReplacement.records
+    : []
+  if (!typeAnalysis?.newReplacement || !contracts.length) {
+    return { data, changed: false, addedIds: [] as string[] }
+  }
+
+  const existingIds = new Set(records.map((row: any) => normalizeContractIdCode(row?.idCode || row?.customerId)))
+  const contractById = new Map<string, any>(
+    contracts
+      .map((row: any) => [normalizeContractIdCode(row?.idCode || row?.customerId), row] as [string, any])
+      .filter((entry: [string, any]) => TYPE_ANALYSIS_NEW_CONTRACT_CORRECTION_IDS.has(entry[0])),
+  )
+  const reflectedDate = getUpcomingThursdayLabel()
+  const additions: any[] = []
+  TYPE_ANALYSIS_NEW_CONTRACT_CORRECTION_IDS.forEach((idCode) => {
+    if (existingIds.has(idCode)) return
+    const row = contractById.get(idCode)
+    if (!row) return
+    const industry = safeText(row?.industry)
+    additions.push({
+      no: records.length + additions.length + 1,
+      date: reflectedDate,
+      sourceDate: normalizeDashboardDate(row?.registrationDate || row?.createdAt),
+      idCode,
+      companyName: safeText(row?.companyName),
+      departmentName: safeText(row?.departmentName),
+      recommender: safeText(row?.recommender),
+      industry,
+      businessType: safeText(row?.businessType || row?.workType) || "기타",
+      replacementType: "신규",
+      replacementFlags: {
+        "체크": 0,
+        "마켓포인트": 0,
+        "블룸버그": 0,
+        "로이터": 0,
+        "한경머니·기타": 0,
+        "신규": 1,
+      },
+      note: safeText(row?.note),
+      group: industry,
+      areaGroup: industry,
+      sourceId: safeText(row?.id),
+      correctedAt: new Date().toISOString(),
+    })
+  })
+  if (!additions.length) return { data, changed: false, addedIds: [] as string[] }
+
+  const nextRecords = [...records, ...additions].map((row: any, index: number) => ({ ...row, no: index + 1 }))
+  return {
+    data: {
+      ...data,
+      typeAnalysis: {
+        ...typeAnalysis,
+        updatedAt: new Date().toISOString(),
+        newReplacement: {
+          ...typeAnalysis.newReplacement,
+          asOf: `${reflectedDate}(목) 기준`,
+          records: nextRecords,
+        },
+      },
+    },
+    changed: true,
+    addedIds: additions.map((row) => row.idCode),
+  }
 }
 
 function isOwnedContractForUser(contract: any, user: any) {
@@ -943,10 +1030,12 @@ function applyTerminationIdCorrections(data: any) {
 async function ensureDashboardDataCorrections(data: any) {
   const terminationCorrected = applyTerminationIdCorrections(data)
   const july30Restored = restoreJuly30ConfirmedTerminationsFromTypeAnalysis(terminationCorrected.data)
-  const manualCorrected = restoreWeeklyReportFromHistoryIfNeeded(july30Restored.data)
+  const requestedNewContractsAdded = addRequestedMissingNewContractsToTypeAnalysis(july30Restored.data)
+  const manualCorrected = restoreWeeklyReportFromHistoryIfNeeded(requestedNewContractsAdded.data)
   const changedKeys: DashboardStateSliceKey[] = []
   if (terminationCorrected.changed) changedKeys.push("termination")
   if (july30Restored.changed) changedKeys.push("termination")
+  if (requestedNewContractsAdded.changed) changedKeys.push("typeAnalysis")
   if (manualCorrected.changed) changedKeys.push("weeklyReport", "ui")
   if (!changedKeys.length) return manualCorrected.data
   await writeDashboardState(
@@ -955,6 +1044,8 @@ async function ensureDashboardDataCorrections(data: any) {
       menuLabel: "Dashboard",
       changeLabel: manualCorrected.changed
         ? "수동입력 최신 히스토리 보호 복구"
+        : requestedNewContractsAdded.changed
+          ? `유형분석 신규 누락 ${requestedNewContractsAdded.addedIds.join(", ")} 추가`
         : july30Restored.changed
           ? `2026.07.30 해지확정 ${july30Restored.restoredCount}건 복원`
         : "해지확정 부산대 고객번호 E150214 수정",
@@ -1005,8 +1096,25 @@ export async function GET(request: Request) {
       const keys = Array.from(new Set((url.searchParams.get("keys") || "").split(",")
         .filter((key): key is DashboardStateSliceKey => DASHBOARD_STATE_SLICE_KEYS.includes(key as DashboardStateSliceKey))))
       if (!keys.length) return NextResponse.json({ error: "Missing state keys" }, { status: 400 })
-      const state = await readDashboardStateSlices<any>(keys, DATA_PATH)
+      const readKeys = keys.includes("typeAnalysis")
+        ? Array.from(new Set([...keys, "contracts" as DashboardStateSliceKey]))
+        : keys
+      let state = await readDashboardStateSlices<any>(readKeys, DATA_PATH)
       if (!state) return NextResponse.json({ error: "Dashboard unavailable" }, { status: 503 })
+      if (keys.includes("typeAnalysis")) {
+        const correction = addRequestedMissingNewContractsToTypeAnalysis(state)
+        state = correction.data
+        if (correction.changed) {
+          await writeDashboardState(
+            state,
+            {
+              menuLabel: "Dashboard",
+              changeLabel: `유형분석 신규 누락 ${correction.addedIds.join(", ")} 추가`,
+            },
+            ["typeAnalysis"],
+          )
+        }
+      }
       const payload = pickDashboardReturnData(state, keys, session, permissions)
       const etag = `"${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}"`
       const headers = { ETag: etag, "Cache-Control": "private, no-store", Vary: "Cookie" }
