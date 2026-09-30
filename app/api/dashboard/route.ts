@@ -17,13 +17,16 @@ const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
 const FALLBACK_PATH = path.join(process.cwd(), "api-dashboard-response.json")
 
 const EMPTY_DASHBOARD = { ui: {}, contracts: [], termination: {} }
-const TYPE_ANALYSIS_NEW_CONTRACT_CORRECTION_IDS = new Set([
-  "E260289",
-  "E260288",
-  "E260287",
-  "E260338",
-  "E260362",
-])
+const TYPE_ANALYSIS_NEW_CONTRACT_CORRECTIONS = [
+  { idCode: "E260289", companyName: "우리자산운용", departmentName: "LDI본부", recommender: "조홍희", industry: "자산운용" },
+  { idCode: "E260288", companyName: "우리자산운용", departmentName: "LDI본부", recommender: "조홍희", industry: "자산운용" },
+  { idCode: "E260287", companyName: "우리자산운용", departmentName: "LDI본부", recommender: "조홍희", industry: "자산운용" },
+  { idCode: "E260338", companyName: "대신증권", departmentName: "랩사업부", recommender: "이상철", industry: "국내증권" },
+  { idCode: "E260362", companyName: "메리츠증권", departmentName: "차익전략팀", recommender: "이상철", industry: "국내증권" },
+] as const
+const TYPE_ANALYSIS_NEW_CONTRACT_CORRECTION_IDS = new Set<string>(
+  TYPE_ANALYSIS_NEW_CONTRACT_CORRECTIONS.map((row) => row.idCode),
+)
 const DASHBOARD_VIEW_KEYS = [
   "dailyReport",
   "weeklyReport",
@@ -109,7 +112,7 @@ function addRequestedMissingNewContractsToTypeAnalysis(data: any) {
   const records = Array.isArray(typeAnalysis?.newReplacement?.records)
     ? typeAnalysis.newReplacement.records
     : []
-  if (!typeAnalysis?.newReplacement || !contracts.length) {
+  if (!typeAnalysis?.newReplacement) {
     return { data, changed: false, addedIds: [] as string[] }
   }
 
@@ -121,19 +124,19 @@ function addRequestedMissingNewContractsToTypeAnalysis(data: any) {
   )
   const reflectedDate = getUpcomingThursdayLabel()
   const additions: any[] = []
-  TYPE_ANALYSIS_NEW_CONTRACT_CORRECTION_IDS.forEach((idCode) => {
+  TYPE_ANALYSIS_NEW_CONTRACT_CORRECTIONS.forEach((correction) => {
+    const { idCode } = correction
     if (existingIds.has(idCode)) return
     const row = contractById.get(idCode)
-    if (!row) return
-    const industry = safeText(row?.industry)
+    const industry = safeText(row?.industry || correction.industry)
     additions.push({
       no: records.length + additions.length + 1,
       date: reflectedDate,
-      sourceDate: normalizeDashboardDate(row?.registrationDate || row?.createdAt),
+      sourceDate: normalizeDashboardDate(row?.registrationDate || row?.createdAt || reflectedDate),
       idCode,
-      companyName: safeText(row?.companyName),
-      departmentName: safeText(row?.departmentName),
-      recommender: safeText(row?.recommender),
+      companyName: safeText(row?.companyName || correction.companyName),
+      departmentName: safeText(row?.departmentName || correction.departmentName),
+      recommender: safeText(row?.recommender || correction.recommender),
       industry,
       businessType: safeText(row?.businessType || row?.workType) || "기타",
       replacementType: "신규",
@@ -148,7 +151,7 @@ function addRequestedMissingNewContractsToTypeAnalysis(data: any) {
       note: safeText(row?.note),
       group: industry,
       areaGroup: industry,
-      sourceId: safeText(row?.id),
+      sourceId: safeText(row?.id) || `type-analysis-correction-${idCode}`,
       correctedAt: new Date().toISOString(),
     })
   })
