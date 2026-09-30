@@ -27,6 +27,7 @@ const TYPE_ANALYSIS_NEW_CONTRACT_CORRECTIONS = [
 const TYPE_ANALYSIS_NEW_CONTRACT_CORRECTION_IDS = new Set<string>(
   TYPE_ANALYSIS_NEW_CONTRACT_CORRECTIONS.map((row) => row.idCode),
 )
+const TYPE_ANALYSIS_NEW_CONTRACT_REFLECTED_DATE = "2026.09.16"
 const DASHBOARD_VIEW_KEYS = [
   "dailyReport",
   "weeklyReport",
@@ -123,6 +124,15 @@ function addRequestedMissingNewContractsToTypeAnalysis(data: any) {
       .filter((entry: [string, any]) => TYPE_ANALYSIS_NEW_CONTRACT_CORRECTION_IDS.has(entry[0])),
   )
   const reflectedDate = getUpcomingThursdayLabel()
+  let reflectedDateChanged = false
+  const correctedRecords = records.map((row: any) => {
+    const idCode = normalizeContractIdCode(row?.idCode || row?.customerId)
+    if (!TYPE_ANALYSIS_NEW_CONTRACT_CORRECTION_IDS.has(idCode) || row?.date === TYPE_ANALYSIS_NEW_CONTRACT_REFLECTED_DATE) {
+      return row
+    }
+    reflectedDateChanged = true
+    return { ...row, date: TYPE_ANALYSIS_NEW_CONTRACT_REFLECTED_DATE, correctedAt: new Date().toISOString() }
+  })
   const additions: any[] = []
   TYPE_ANALYSIS_NEW_CONTRACT_CORRECTIONS.forEach((correction) => {
     const { idCode } = correction
@@ -130,8 +140,8 @@ function addRequestedMissingNewContractsToTypeAnalysis(data: any) {
     const row = contractById.get(idCode)
     const industry = safeText(row?.industry || correction.industry)
     additions.push({
-      no: records.length + additions.length + 1,
-      date: reflectedDate,
+      no: correctedRecords.length + additions.length + 1,
+      date: TYPE_ANALYSIS_NEW_CONTRACT_REFLECTED_DATE,
       sourceDate: normalizeDashboardDate(row?.registrationDate || row?.createdAt || reflectedDate),
       idCode,
       companyName: safeText(row?.companyName || correction.companyName),
@@ -155,9 +165,9 @@ function addRequestedMissingNewContractsToTypeAnalysis(data: any) {
       correctedAt: new Date().toISOString(),
     })
   })
-  if (!additions.length) return { data, changed: false, addedIds: [] as string[] }
+  if (!additions.length && !reflectedDateChanged) return { data, changed: false, addedIds: [] as string[] }
 
-  const nextRecords = [...records, ...additions].map((row: any, index: number) => ({ ...row, no: index + 1 }))
+  const nextRecords = [...correctedRecords, ...additions].map((row: any, index: number) => ({ ...row, no: index + 1 }))
   return {
     data: {
       ...data,
