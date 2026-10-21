@@ -145,13 +145,14 @@ export const REPORT_CSS = `
 .report-editor-paper [data-report-field]{cursor:text;border-radius:2px;outline:2px solid transparent;outline-offset:3px;transition:outline-color .12s;}
 .report-editor-paper [data-report-field]:hover{outline-color:#bfdbfe;}
 .report-editor-paper [data-report-field][data-selected=true]{outline-color:#2563eb;background-color:#eff6ff;}
+.report-editor-paper [data-report-field][data-peer=true]{box-shadow:inset 0 0 0 1px #0d9488;}
 @media print{html,body{margin:0;padding:0;background:#fff;}.company-report{width:100%;padding:0!important;} .company-report th,.company-report tr{print-color-adjust:exact;-webkit-print-color-adjust:exact;}[data-report-field]{outline:none!important;}}
 `
 
-export function reportHtml(report: DocumentReport, fragment = false, selected = "") {
+export function reportHtml(report: DocumentReport, fragment = false, selected = "", peers: Record<string, string> = {}) {
   const margin = bounded(report.page?.margin, 10, 30, 18)
   const logoWidth = bounded(report.page?.logoWidth, 80, 220, 145)
-  const attrs = (key: string) => ` data-report-field="${key}"${fragment ? ` tabindex="0"${selected === key ? ' data-selected="true"' : ""}` : ""} style="${escapeHtml(fieldCss(report.fields?.[key]?.style))}"`
+  const attrs = (key: string) => ` data-report-field="${key}"${fragment ? ` tabindex="0"${selected === key ? ' data-selected="true"' : ""}${peers[key] ? ` data-peer="true" title="${escapeHtml(peers[key])} 님 편집 중"` : ""}` : ""} style="${escapeHtml(fieldCss(report.fields?.[key]?.style))}"`
   const text = (key: string, fallback: string) => escapeHtml(fieldText(report, key, fallback))
   const sections = report.sections.map((section, si) => `<section><h2${attrs(`s${si}.heading`)}><span class="section-number">${sectionNumber(si)}.</span>${text(`s${si}.heading`, section.heading)}</h2><div class="report-body">${reportBlocks(section.content).map((block, bi) => {
     const key = `s${si}.b${bi}`

@@ -37,3 +37,4 @@ server.err.log
 ~$*.xlsx
 .vercel
 data/shared-kv-store.json
+data/private-documents/
