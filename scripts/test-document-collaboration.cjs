@@ -25,7 +25,7 @@ function load(file) {
     if (name.startsWith('.')) return load(path.resolve(path.dirname(file), name + '.ts'))
     return require(name)
   }
-  vm.runInNewContext(code, { module, exports: module.exports, require: localRequire, console, Buffer, Uint8Array, Map, Set, Array, Object, Date, Promise, Response, Request, AbortSignal,
+  vm.runInNewContext(code, { module, exports: module.exports, require: localRequire, console, Buffer, Uint8Array, Map, Set, Array, Object, Date, Promise, Response, Request, AbortSignal, URL,
     process: { env: { NODE_ENV: 'test' }, cwd: () => temporary }, setTimeout, clearTimeout }, { filename: file })
   return module.exports
 }

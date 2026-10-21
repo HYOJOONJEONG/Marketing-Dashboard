@@ -28,6 +28,8 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
   selectionRef.current = selection
   const pending = useRef<Uint8Array[]>([])
   const busy = useRef(false)
+  const failures = useRef(0)
+  const retryAfter = useRef(0)
   const creating = useRef(false)
   const creationId = useRef<string | null>(null)
   const connectionId = useRef("")
@@ -79,12 +81,14 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
       updateUndo()
     })
     setStatus(pending.current.length ? "saving" : "saved")
+    failures.current = 0
+    retryAfter.current = 0
     setError("")
     reportCallback.current(report, true)
   }
 
   async function open(id: string) {
-    if (metaRef.current) await syncRef.current()
+    if (metaRef.current && status !== "denied" && !await syncRef.current()) return false
     try {
       const response = await fetch(`/api/documents/${id}`, { cache: "no-store" })
       const json = await response.json()
@@ -99,10 +103,10 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     creating.current = true
     setStatus("saving")
     let id = creationId.current
-    try { id ||= localStorage.getItem(`document-creation:${userId}`) } catch {}
+    try { id ||= sessionStorage.getItem(`document-creation:${userId}`) } catch {}
     id ||= crypto.randomUUID()
     creationId.current = id
-    try { localStorage.setItem(`document-creation:${userId}`, id) } catch {}
+    try { sessionStorage.setItem(`document-creation:${userId}`, id) } catch {}
     try {
       const response = await fetch("/api/documents", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, report }) })
       const json = await response.json()
@@ -111,7 +115,7 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
       attach(json.document, json.role, false)
       if (docRef.current) applyReportChange(docRef.current, latest, reportFromYDoc(docRef.current))
       creationId.current = null
-      try { localStorage.removeItem(`document-creation:${userId}`) } catch {}
+      try { sessionStorage.removeItem(`document-creation:${userId}`) } catch {}
       void list()
       return true
     } catch (error) { setStatus("offline"); setError(error instanceof Error ? error.message : "임시저장에 실패했습니다."); return false }
@@ -121,7 +125,9 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
   syncRef.current = async () => {
     const doc = docRef.current
     const meta = metaRef.current
-    if (!doc || !meta || busy.current || status === "denied") return !pending.current.length
+    if (!doc || !meta) return true
+    if (busy.current || status === "denied") return false
+    if (Date.now() < retryAfter.current) return false
     busy.current = true
     const outgoing = pending.current.splice(0)
     try {
@@ -142,12 +148,16 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
       metaRef.current = next
       setDocument(next)
       setStatus(pending.current.length ? "saving" : "saved")
+      failures.current = 0
+      retryAfter.current = 0
       setError("")
       return !pending.current.length
     } catch (error) {
       if (docRef.current === doc) {
         pending.current.unshift(...outgoing)
         setStatus("offline")
+        failures.current++
+        retryAfter.current = Date.now() + Math.min(30000, 1000 * 2 ** Math.min(failures.current, 5))
         setError(error instanceof Error ? error.message : "연결이 끊겼습니다. 변경 내용은 보관됩니다.")
       }
       return false
@@ -157,7 +167,7 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
   useEffect(() => {
     if (!document?.id) return
     const interval = setInterval(() => { if (!window.document.hidden || pending.current.length) void syncRef.current() }, 2000)
-    const onFocus = () => { void syncRef.current() }
+    const onFocus = () => { retryAfter.current = 0; void syncRef.current() }
     const onLeave = (event: BeforeUnloadEvent) => { if (pending.current.length) { event.preventDefault(); event.returnValue = "" } }
     window.addEventListener("focus", onFocus)
     window.addEventListener("online", onFocus)
@@ -185,11 +195,12 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     } catch (error) { setError(error instanceof Error ? error.message : "초대 권한을 변경하지 못했습니다.") }
   }
   async function detach() {
-    if (metaRef.current) await syncRef.current()
+    if (metaRef.current && status !== "denied" && !await syncRef.current()) return false
     undoRef.current?.destroy(); docRef.current?.destroy()
     docRef.current = null; metaRef.current = null; roleRef.current = null; creationId.current = null; pending.current = []
     setDocument(null); setRole(null); setStatus("local"); setPresence([]); setError("")
+    return true
   }
-  return { document, role, documents, presence, status, error, list, open, create, apply, detach, changeMember, save: () => syncRef.current(), canUndo, canRedo,
+  return { document, role, documents, presence, status, error, list, open, create, apply, detach, changeMember, save: () => { retryAfter.current = 0; return syncRef.current() }, canUndo, canRedo,
     undo: () => undoRef.current?.undo(), redo: () => undoRef.current?.redo() }
 }

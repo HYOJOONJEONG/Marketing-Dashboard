@@ -137,8 +137,7 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
   }
   async function newReport() {
     if (report && !collaboration.document && !await collaboration.create(report)) return
-    if (collaboration.document && !await collaboration.save()) return
-    await collaboration.detach()
+    if (!await collaboration.detach()) return
     setReady(true)
     setSource(""); setTitle("업무 보고서"); setWriter(department || author); setReport(null); setSourceOpen(true); setUndo([]); setRedo([]); setMessage(""); setSelected("title")
   }
@@ -152,6 +151,10 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
       if (!response.ok) throw new Error(json.error)
       setDirectory(json.users)
     } catch { setMessage("초대할 사용자 목록을 불러오지 못했습니다.") }
+  }
+  async function openDocument(id: string) {
+    if (report && !collaboration.document && !await collaboration.create(report)) return
+    if (await collaboration.open(id)) setLibraryOpen(false)
   }
   const peers = collaboration.presence.filter(person => person.userId !== userId)
   const peerFields = Object.fromEntries(peers.map(person => [person.field, person.name]))
@@ -257,7 +260,7 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
     </div>
     <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}><DialogContent className="max-w-xl rounded-lg"><DialogHeader><DialogTitle>내 문서</DialogTitle></DialogHeader>
       <input aria-label="문서 검색" placeholder="문서 제목 검색" className={INPUT} value={search} onChange={event => setSearch(event.target.value)} />
-      <div className="max-h-[55vh] divide-y divide-slate-100 overflow-y-auto">{collaboration.documents.filter(document => document.title.includes(search)).map(document => <button type="button" key={document.id} onClick={async () => { if (collaboration.document && !await collaboration.save()) return; if (await collaboration.open(document.id)) setLibraryOpen(false) }} className="flex w-full items-center gap-3 px-2 py-4 text-left hover:bg-slate-50"><FileText size={20} className="shrink-0 text-blue-500" /><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-slate-800">{document.title}</div><div className="mt-1 text-xs text-slate-400">{document.ownerName} · {new Date(document.updatedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div><span className="shrink-0 text-xs text-slate-500">{document.role === "owner" ? document.shared ? "공유 중" : "비공개" : document.role === "editor" ? "공동 편집" : "열람"}</span></button>)}{!collaboration.documents.length ? <div className="py-10 text-center text-sm text-slate-400">저장된 문서가 없습니다.</div> : null}</div>
+      <div className="max-h-[55vh] divide-y divide-slate-100 overflow-y-auto">{collaboration.documents.filter(document => document.title.includes(search)).map(document => <button type="button" key={document.id} onClick={() => openDocument(document.id)} className="flex w-full items-center gap-3 px-2 py-4 text-left hover:bg-slate-50"><FileText size={20} className="shrink-0 text-blue-500" /><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-slate-800">{document.title}</div><div className="mt-1 text-xs text-slate-400">{document.ownerName} · {new Date(document.updatedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div><span className="shrink-0 text-xs text-slate-500">{document.role === "owner" ? document.shared ? "공유 중" : "비공개" : document.role === "editor" ? "공동 편집" : "열람"}</span></button>)}{!collaboration.documents.length ? <div className="py-10 text-center text-sm text-slate-400">저장된 문서가 없습니다.</div> : null}</div>
     </DialogContent></Dialog>
     <Dialog open={sharingOpen} onOpenChange={setSharingOpen}><DialogContent className="max-w-lg rounded-lg"><DialogHeader><DialogTitle>문서 초대</DialogTitle></DialogHeader>
       <div className="flex items-center gap-2 border-b border-slate-100 pb-4 text-xs text-slate-500"><LockKeyhole size={14} />초대한 계정만 접근할 수 있습니다.</div>
