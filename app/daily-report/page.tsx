@@ -13,6 +13,7 @@ const DATA_PATH = path.join(process.cwd(), "data", "app-state.json")
 const FALLBACK_PATH = path.join(process.cwd(), "api-dashboard-response.json")
 
 const allowedDashboardViews = new Set([
+  "documents",
   "daily-report",
   "weekly-report",
   "contracts",

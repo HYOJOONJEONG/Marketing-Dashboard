@@ -9,6 +9,7 @@ import { DailyReportPage } from "./daily-report/daily-report-page"
 import { PersonalDashboard } from "./me/personal-dashboard"
 import { AdminConsole } from "./admin/admin-console"
 import { TypeAnalysisDashboard } from "./type-analysis/type-analysis-dashboard"
+import { DocumentWorkspace } from "./documents/document-workspace"
 import { getIndustryGroupLabel } from "@/lib/industry-groups"
 import { dashboardSlicesDiffer, hasProtectedSlice } from "@/lib/dashboard-collaboration"
 import { buildPersonalDashboardData } from "@/lib/personal-dashboard"
@@ -21,6 +22,7 @@ import type { UserTestIdEntry } from "@/lib/auth/model"
 import typeAnalysisSource from "@/data/type-analysis-source.json"
 
 type ViewKey =
+  | "documents"
   | "daily-report"
   | "weekly-report"
   | "contracts"
@@ -34,6 +36,7 @@ type ViewKey =
   | "my-page"
 
 const VIEW_STATE_KEYS: Record<ViewKey, string[]> = {
+  documents: [],
   "daily-report": ["dailyReport", "ui"],
   "weekly-report": ["weeklyReport", "currentYear", "years", "availableYears", "paidOptionSourceColumns", "ui"],
   "contracts": ["contracts", "currentYear", "years", "availableYears", "ui"],
@@ -185,6 +188,7 @@ function getDashboardCollaborativePollIntervalMs() {
 
 function isViewKey(value: unknown): value is ViewKey {
   return (
+    value === "documents" ||
     value === "daily-report" ||
     value === "weekly-report" ||
     value === "contracts" ||
@@ -200,6 +204,7 @@ function isViewKey(value: unknown): value is ViewKey {
 }
 
 const viewTitles: Record<ViewKey, string> = {
+  documents: "보고서 작성",
   "daily-report": "업무일지",
   "weekly-report": "주간실적보고",
   contracts: "신규계약 리스트",
@@ -3848,6 +3853,7 @@ export function DashboardShell({
     canViewCollections ? "collection" : null,
     canViewOptionDashboard ? "option-dashboard" : null,
     canViewTermination ? "termination" : null,
+    currentUser ? "documents" : null,
     canViewAdminPage ? "admin-page" : null,
     currentUser ? "my-page" : null,
   ].filter(Boolean) as ViewKey[]
@@ -5316,7 +5322,7 @@ export function DashboardShell({
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    if (view === "daily-report" || view === "admin-page" || view === "my-page" || view === "option-dashboard") return
+    if (view === "documents" || view === "daily-report" || view === "admin-page" || view === "my-page" || view === "option-dashboard") return
 
     const stateKeys = collectStateKeysForViews([view])
       .filter((key) => DASHBOARD_COLLAB_STATE_KEYS.has(key))
@@ -8779,7 +8785,7 @@ export function DashboardShell({
   const currentMenuUpdatedAt = data?.ui?.menuUpdatedAt?.[view]
   const currentViewDirty = Boolean(dirtyViews[view])
   const hasUnsavedChanges = Object.values(dirtyViews).some(Boolean)
-  const showHeaderSave = !["daily-report", "weekly-report", "contracts", "weekly-selection", "type-analysis", "manual-input", "termination", "option-dashboard", "admin-page", "my-page"].includes(view)
+  const showHeaderSave = !["documents", "daily-report", "weekly-report", "contracts", "weekly-selection", "type-analysis", "manual-input", "termination", "option-dashboard", "admin-page", "my-page"].includes(view)
   const manualSaveButtonLabel =
     manualSaveStatus.phase === "saving"
       ? "저장 중..."
@@ -9669,6 +9675,18 @@ export function DashboardShell({
               )}
             </div>
 
+            {currentUser ? (
+              <div>
+                <div className="flex items-center gap-2.5 px-3 py-2.5 text-[15px] font-bold text-slate-900">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />서류 업무
+                </div>
+                <button type="button" onClick={() => { navigateToView("documents"); setIsSidebarOpen(false) }}
+                  className={`mt-2 flex h-11 w-full items-center rounded-2xl px-4 text-left text-[15px] font-semibold ${view === "documents" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"}`}>
+                  보고서 작성
+                </button>
+              </div>
+            ) : null}
+
             {canViewAdminPage ? (
               <div>
                 <div className="mb-2 px-3 text-[12px] font-bold uppercase tracking-[0.16em] text-slate-400">
@@ -9909,6 +9927,7 @@ export function DashboardShell({
             />
           )}
 
+          {view === "documents" && currentUser ? <DocumentWorkspace key={currentUser.id} author={currentUser.name} userId={currentUser.id} department={currentUser.teamName} /> : null}
           {view === "my-page" && currentUser && personalDashboardData ? (
             <PersonalDashboard
               embedded
