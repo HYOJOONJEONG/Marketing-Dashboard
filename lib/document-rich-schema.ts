@@ -4,13 +4,20 @@ import { TextStyle } from "@tiptap/extension-text-style"
 import Color from "@tiptap/extension-color"
 import TextAlign from "@tiptap/extension-text-align"
 import { TableKit } from "@tiptap/extension-table"
-import { REPORT_FONTS } from "./document-report"
+import { REPORT_FONTS, reportTableColors } from "./document-report"
 
 const Format = Extension.create({
   name: "reportFormat",
   addGlobalAttributes() {
     return [
+      { types: ["table"], attributes: {
+        tableTheme: { default: "classic", parseHTML: element => element.getAttribute("data-table-theme") || "classic", renderHTML: attrs => ({ "data-table-theme": ["classic", "striped", "minimal", "dark"].includes(attrs.tableTheme) ? attrs.tableTheme : "classic" }) },
+        tableDensity: { default: "standard", parseHTML: element => element.getAttribute("data-table-density") || "standard", renderHTML: attrs => ({ "data-table-density": ["compact", "standard", "airy"].includes(attrs.tableDensity) ? attrs.tableDensity : "standard" }) },
+        headerColor: { default: null, parseHTML: element => element.style.getPropertyValue("--report-table-header") || null, renderHTML: attrs => /^#[0-9a-f]{6}$/i.test(attrs.headerColor || "") ? { style: reportTableColors({ headerColor: attrs.headerColor }) } : {} },
+        borderColor: { default: null, parseHTML: element => element.style.getPropertyValue("--report-table-border") || null, renderHTML: attrs => /^#[0-9a-f]{6}$/i.test(attrs.borderColor || "") ? { style: `--report-table-border:${attrs.borderColor}` } : {} },
+      } },
       { types: ["paragraph", "heading"], attributes: {
+        documentFont: { default: null, parseHTML: element => element.getAttribute("data-document-font"), renderHTML: attrs => Object.hasOwn(REPORT_FONTS, attrs.documentFont) ? { "data-document-font": attrs.documentFont, style: `font-family:${REPORT_FONTS[attrs.documentFont as keyof typeof REPORT_FONTS].css}` } : {} },
         reportKind: { default: null, parseHTML: element => element.getAttribute("data-report-kind"), renderHTML: attrs => attrs.reportKind ? { "data-report-kind": attrs.reportKind } : {} },
         lineHeight: { default: null, parseHTML: element => parseFloat(element.style.lineHeight) || null, renderHTML: attrs => attrs.lineHeight ? { style: `line-height:${Math.min(3, Math.max(1, Number(attrs.lineHeight)))}` } : {} },
         spaceAfter: { default: null, parseHTML: element => parseFloat(element.style.marginBottom) || null, renderHTML: attrs => attrs.spaceAfter != null ? { style: `margin-bottom:${Math.min(48, Math.max(0, Number(attrs.spaceAfter)))}px` } : {} },

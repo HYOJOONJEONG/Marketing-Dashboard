@@ -178,9 +178,22 @@ export function richReportHtml(node: RichReportNode): string {
   if (!tag) return children
   const a = node.attrs || {}
   const kind = ["title", "subtitle", "heading", "subheading", "body", "meta", "cell"].includes(a.reportKind) ? ` data-report-kind="${a.reportKind}"` : ""
-  const style = fieldCss({ align: a.textAlign, lineHeight: a.lineHeight, spaceAfter: a.spaceAfter, pageBreak: a.pageBreak })
+  const style = fieldCss({ font: a.documentFont, align: a.textAlign, lineHeight: a.lineHeight, spaceAfter: a.spaceAfter, pageBreak: a.pageBreak })
   const span = ["td", "th"].includes(tag) ? ` colspan="${bounded(a.colspan, 1, 20, 1)}" rowspan="${bounded(a.rowspan, 1, 100, 1)}"` : ""
-  return `<${tag}${kind}${span} style="${escapeHtml(style)}">${children || (tag === "p" ? "<br>" : "")}</${tag}>`
+  const tableAttrs = tag === "table" ? ` data-table-theme="${["classic", "striped", "minimal", "dark"].includes(a.tableTheme) ? a.tableTheme : "classic"}" data-table-density="${["compact", "standard", "airy"].includes(a.tableDensity) ? a.tableDensity : "standard"}"` : ""
+  const tableCss = tag === "table" ? `;${reportTableColors(a)}` : ""
+  return `<${tag}${kind}${span}${tableAttrs} style="${escapeHtml(style + tableCss)}">${children || (tag === "p" ? "<br>" : "")}</${tag}>`
+}
+
+export function reportTableColors(attrs: Record<string, any>) {
+  const css: string[] = []
+  if (/^#[0-9a-f]{6}$/i.test(attrs.headerColor || "")) {
+    const color = attrs.headerColor as string
+    const luminance = parseInt(color.slice(1, 3), 16) * 0.299 + parseInt(color.slice(3, 5), 16) * 0.587 + parseInt(color.slice(5, 7), 16) * 0.114
+    css.push(`--report-table-header:${color}`, `--report-table-header-ink:${luminance > 160 ? "#173a4b" : "#ffffff"}`)
+  }
+  if (/^#[0-9a-f]{6}$/i.test(attrs.borderColor || "")) css.push(`--report-table-border:${attrs.borderColor}`)
+  return css.join(";")
 }
 
 export const REPORT_CSS = `
@@ -212,6 +225,16 @@ export const REPORT_CSS = `
 .company-report .tiptap{outline:none;min-height:800px;}
 .company-report .tiptap ::selection{background:#bfdbfe;}
 .company-report .selectedCell{background:#dbeafe;}
+.company-report table[data-table-theme] th{background:var(--report-table-header,#e4f0f6);color:var(--report-table-header-ink,#173a4b);}
+.company-report table[data-table-theme] th *{color:inherit!important;}
+.company-report table[data-table-theme] th,.company-report table[data-table-theme] td{border-color:var(--report-table-border,#b5c6cd);}
+.company-report table[data-table-theme=striped] tr:nth-child(even){background:#edf5fa;}
+.company-report table[data-table-theme=minimal] th,.company-report table[data-table-theme=minimal] td{border-width:0 0 1px;}
+.company-report table[data-table-theme=minimal] th{background:var(--report-table-header,#f1f5f9);border-bottom-width:2px;}
+.company-report table[data-table-theme=dark] th{background:var(--report-table-header,#173a4b);color:var(--report-table-header-ink,#fff);}
+.company-report table[data-table-density=compact] th,.company-report table[data-table-density=compact] td{padding:4px 6px;}
+.company-report table[data-table-density=airy] th,.company-report table[data-table-density=airy] td{padding:14px 12px;}
+.company-report .tiptap[contenteditable=true]{cursor:text;pointer-events:auto;}
 .report-editor-paper [data-report-field]{cursor:text;border-radius:2px;outline:2px solid transparent;outline-offset:3px;transition:outline-color .12s;}
 .report-editor-paper [data-report-field]:hover{outline-color:#bfdbfe;}
 .report-editor-paper [data-report-field][data-selected=true]{outline-color:#2563eb;background-color:#eff6ff;}

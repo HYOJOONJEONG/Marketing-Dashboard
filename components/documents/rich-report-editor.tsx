@@ -9,6 +9,7 @@ import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, Italic, List, L
 import { DocumentReport, legacyReportContent, REPORT_FONTS, RichReportNode } from "@/lib/document-report"
 import { REPORT_LOGO } from "@/lib/document-report-logo"
 import { reportExtensions } from "@/lib/document-rich-schema"
+import { applyWholeReportFont } from "@/lib/document-rich-commands"
 import { NumberControl } from "./number-control"
 
 const TOOL = "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-100 disabled:opacity-30"
@@ -53,7 +54,8 @@ export function RichReportEditor({ report, yDoc, editable, scale, onChange, onSe
   }, [editor, shared, report])
   const state = useEditorState({ editor, selector: ({ editor }) => editor ? {
     kind: editor.getAttributes(editor.isActive("heading") ? "heading" : "paragraph").reportKind || (editor.isActive("heading", { level: 1 }) ? "title" : editor.isActive("heading", { level: 2 }) ? "heading" : editor.isActive("heading", { level: 3 }) ? "subheading" : "body"),
-    text: editor.getAttributes("textStyle"), block: editor.getAttributes(editor.isActive("heading") ? "heading" : "paragraph"),
+    text: editor.getAttributes("textStyle"), block: editor.getAttributes(editor.isActive("heading") ? "heading" : "paragraph"), tableStyle: editor.getAttributes("table"),
+    documentFont: editor.state.doc.firstChild?.attrs.documentFont || "gothic",
     bold: editor.isActive("bold"), italic: editor.isActive("italic"), underline: editor.isActive("underline"),
     bullet: editor.isActive("bulletList"), ordered: editor.isActive("orderedList"), table: editor.isActive("table"), undo: editor.can().undo(), redo: editor.can().redo(),
   } : null })
@@ -61,6 +63,7 @@ export function RichReportEditor({ report, yDoc, editable, scale, onChange, onSe
     if (!editor) return
     const selected = PRESETS.find(item => item.key === key)
     if (!selected || !editable) return
+    const font = state?.documentFont || "gothic"
     // A heading style belongs to its paragraph, while inline formatting remains selection-based.
     const { from, to } = editor.state.selection
     const start = editor.state.doc.resolve(from)
@@ -74,11 +77,11 @@ export function RichReportEditor({ report, yDoc, editable, scale, onChange, onSe
     chain = selected.level ? chain.setHeading({ level: selected.level as 1 | 2 | 3 }) : chain.setParagraph()
     chain.updateAttributes(selected.level ? "heading" : "paragraph", { reportKind: key, lineHeight: key === "title" ? 1.45 : 1.75, spaceAfter: key === "title" ? 24 : 8, pageBreak: false }).setTextAlign(selected.align).run()
     editor.commands.command(({ tr, state }) => {
-      const marks = [state.schema.marks.textStyle.create({ fontSize: selected.size, fontFamily: "gothic", letterSpacing: 0, color: key === "subtitle" || key === "meta" ? "#52636b" : "#172b35" }), ...(["title", "heading", "subheading"].includes(key) ? [state.schema.marks.bold.create()] : [])]
+      const marks = [state.schema.marks.textStyle.create({ fontSize: selected.size, fontFamily: font, letterSpacing: 0, color: key === "subtitle" || key === "meta" ? "#52636b" : "#172b35" }), ...(["title", "heading", "subheading"].includes(key) ? [state.schema.marks.bold.create()] : [])]
       state.doc.nodesBetween(tr.selection.from, tr.selection.to, (node, pos) => {
         if (!node.isTextblock) return
         tr.removeMark(pos + 1, pos + node.nodeSize - 1)
-        tr.addMark(pos + 1, pos + node.nodeSize - 1, state.schema.marks.textStyle.create({ fontSize: selected.size, fontFamily: "gothic", letterSpacing: 0, color: key === "subtitle" || key === "meta" ? "#52636b" : "#172b35" }))
+        tr.addMark(pos + 1, pos + node.nodeSize - 1, state.schema.marks.textStyle.create({ fontSize: selected.size, fontFamily: font, letterSpacing: 0, color: key === "subtitle" || key === "meta" ? "#52636b" : "#172b35" }))
         if (["title", "heading", "subheading"].includes(key)) tr.addMark(pos + 1, pos + node.nodeSize - 1, state.schema.marks.bold.create())
       })
       if (tr.selection.empty) tr.setStoredMarks(marks)
@@ -109,14 +112,21 @@ export function RichReportEditor({ report, yDoc, editable, scale, onChange, onSe
       {button("본문 실행 취소", Undo2, e => e.chain().focus().undo().run(), false, !state?.undo)}
       {button("본문 다시 실행", Redo2, e => e.chain().focus().redo().run(), false, !state?.redo)}
       <div className="flex w-full flex-wrap items-center gap-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+        <label className="flex items-center gap-2">문서 전체 글꼴<select aria-label="문서 전체 글꼴" className={INPUT} value={state?.documentFont || "gothic"} onChange={event => { if (editor) applyWholeReportFont(editor, event.target.value) }}>{Object.entries(REPORT_FONTS).map(([key, font]) => <option key={key} value={key}>{font.label}</option>)}</select></label>
         <label className="flex items-center gap-2">자간<NumberControl label="선택 자간" className={`${INPUT} w-16`} min={0} max={8} step={0.1} value={Number(state?.text.letterSpacing) || 0} onCommit={value => inline({ letterSpacing: value })} /></label>
         <label className="flex items-center gap-2">행간<select aria-label="선택 행간" className={INPUT} value={state?.block.lineHeight || 1.75} onChange={event => block({ lineHeight: Number(event.target.value) })}>{[1, 1.25, 1.45, 1.5, 1.6, 1.75, 2, 2.5, 3].map(value => <option key={value} value={value}>{value}</option>)}</select></label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={Boolean(state?.block.pageBreak)} onChange={event => block({ pageBreak: event.target.checked })} />새 페이지</label>
       </div>
       {tableOpen && <div className="flex w-full flex-wrap gap-2 border-t border-slate-100 pt-2">{[{ label: "표 삽입", action: () => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(), disabled: state?.table }, { label: "행 추가", action: () => editor?.chain().focus().addRowAfter().run(), disabled: !state?.table }, { label: "열 추가", action: () => editor?.chain().focus().addColumnAfter().run(), disabled: !state?.table }, { label: "행 삭제", action: () => editor?.chain().focus().deleteRow().run(), disabled: !state?.table }, { label: "열 삭제", action: () => editor?.chain().focus().deleteColumn().run(), disabled: !state?.table }, { label: "표 삭제", action: () => editor?.chain().focus().deleteTable().run(), disabled: !state?.table }].map(item => <button key={item.label} type="button" disabled={item.disabled} className={`${INPUT} disabled:opacity-30`} onMouseDown={event => event.preventDefault()} onClick={item.action}>{item.label}</button>)}</div>}
+      {(tableOpen || state?.table) && <fieldset disabled={!state?.table} className="flex w-full flex-wrap items-center gap-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500 disabled:opacity-40" aria-label="표 디자인">
+        <label className="flex items-center gap-2">표 디자인<select aria-label="표 디자인 선택" className={INPUT} value={state?.tableStyle.tableTheme || "classic"} onChange={event => editor?.chain().focus().updateAttributes("table", { tableTheme: event.target.value, headerColor: null }).run()}><option value="classic">기본형</option><option value="striped">줄무늬</option><option value="minimal">가로선</option><option value="dark">진한 헤더</option></select></label>
+        <label className="flex items-center gap-2">셀 간격<select aria-label="표 셀 간격" className={INPUT} value={state?.tableStyle.tableDensity || "standard"} onChange={event => editor?.chain().focus().updateAttributes("table", { tableDensity: event.target.value }).run()}><option value="compact">좁게</option><option value="standard">보통</option><option value="airy">넓게</option></select></label>
+        <label className="flex items-center gap-2">헤더색<input type="color" aria-label="표 헤더색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.tableStyle.headerColor || (state?.tableStyle.tableTheme === "dark" ? "#173a4b" : "#e4f0f6")} onChange={event => editor?.chain().focus().updateAttributes("table", { headerColor: event.target.value }).run()} /></label>
+        <label className="flex items-center gap-2">테두리색<input type="color" aria-label="표 테두리색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.tableStyle.borderColor || "#b5c6cd"} onChange={event => editor?.chain().focus().updateAttributes("table", { borderColor: event.target.value }).run()} /></label>
+      </fieldset>}
     </fieldset>
     <div className="report-editor-paper mx-auto bg-white shadow-sm" style={{ width: 794, minHeight: 1123, zoom: scale }}>
-      <article className="company-report" style={{ padding: `${report.page?.margin ?? 18}mm` }}>
+      <article className="company-report" style={{ padding: `${report.page?.margin ?? 18}mm`, fontFamily: REPORT_FONTS[(state?.documentFont || "gothic") as keyof typeof REPORT_FONTS]?.css }}>
         <div className="report-brand"><img className="report-logo" width={report.page?.logoWidth ?? 145} src={REPORT_LOGO} alt="INFOMAX" /></div>
         <EditorContent editor={editor} />
       </article>

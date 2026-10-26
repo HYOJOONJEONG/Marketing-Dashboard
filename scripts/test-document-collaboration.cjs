@@ -50,6 +50,41 @@ function change(doc, field, text, style) {
   collaboration.applyReportChange(doc, next, before)
 }
 async function run() {
+  const { EditorState } = require('node:module').createRequire(require.resolve('@tiptap/core'))('@tiptap/pm/state')
+  const schema = load(path.join(root, 'lib/document-rich-schema.ts')).reportSchema()
+  const commands = load(path.join(root, 'lib/document-rich-commands.ts'))
+  const formatted = reportFunctions.legacyReportContent(reportFunctions.formatDocumentReport('Ⅰ. 표 검증\n본문 수정\n| 항목 | 내용 |\n| A | B |', metadata))
+  let editorState = EditorState.create({ schema, doc: schema.nodeFromJSON(formatted) })
+  const sizes = []
+  editorState.doc.descendants(node => { if (node.isText) sizes.push(node.marks.find(mark => mark.type.name === 'textStyle')?.attrs.fontSize) })
+  const fakeEditor = { isEditable: true, commands: { command: callback => { const tr = editorState.tr; const result = callback({ state: editorState, tr }); editorState = editorState.apply(tr); return result } } }
+  assert.ok(commands.applyWholeReportFont(fakeEditor, 'serif'))
+  let index = 0
+  editorState.doc.descendants(node => {
+    if (node.isTextblock) assert.equal(node.attrs.documentFont, 'serif')
+    if (!node.isText) return
+    const mark = node.marks.find(mark => mark.type.name === 'textStyle')
+    assert.equal(mark.attrs.fontFamily, 'serif')
+    assert.equal(mark.attrs.fontSize, sizes[index++])
+  })
+  assert.ok(!commands.applyWholeReportFont(fakeEditor, 'invalid'))
+  fakeEditor.isEditable = false
+  assert.ok(!commands.applyWholeReportFont(fakeEditor, 'arial'))
+  const richDesign = editorState.doc.toJSON()
+  const table = richDesign.content.find(node => node.type === 'table')
+  table.attrs = { ...table.attrs, tableTheme: 'dark', tableDensity: 'compact', headerColor: '#123456', borderColor: '#654321' }
+  const designed = { ...initial, richText: richDesign }
+  const designDoc = new Y.Doc()
+  collaboration.applyReportChange(designDoc, structuredClone(designed))
+  const designReload = client(collaboration.bytesToBase64(Y.encodeStateAsUpdate(designDoc)))
+  const output = reportFunctions.reportHtml(collaboration.reportFromYDoc(designReload))
+  assert.ok(output.includes('data-table-theme="dark"'))
+  assert.ok(output.includes('data-table-density="compact"'))
+  assert.ok(output.includes('--report-table-header:#123456'))
+  assert.ok(output.includes('--report-table-border:#654321'))
+  assert.ok(output.includes('font-family:Batang'))
+  designDoc.destroy(); designReload.destroy()
+  console.log('PASS: whole-document font changes preserve sizes, table designs survive Yjs reload and PDF HTML export, read-only edits denied.')
   asUser(null)
   assert.equal((await collection.GET(new Request('http://localhost/api/documents'))).status, 401)
   asUser('owner')
