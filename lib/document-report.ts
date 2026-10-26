@@ -182,7 +182,8 @@ export function richReportHtml(node: RichReportNode): string {
   const span = ["td", "th"].includes(tag) ? ` colspan="${bounded(a.colspan, 1, 20, 1)}" rowspan="${bounded(a.rowspan, 1, 100, 1)}"` : ""
   const tableAttrs = tag === "table" ? ` data-table-theme="${["classic", "striped", "minimal", "dark"].includes(a.tableTheme) ? a.tableTheme : "classic"}" data-table-density="${["compact", "standard", "airy"].includes(a.tableDensity) ? a.tableDensity : "standard"}"` : ""
   const tableCss = tag === "table" ? `;${reportTableColors(a)}` : ""
-  return `<${tag}${kind}${span}${tableAttrs} style="${escapeHtml(style + tableCss)}">${children || (tag === "p" ? "<br>" : "")}</${tag}>`
+  const cellCss = ["td", "th"].includes(tag) ? [["backgroundColor", "background-color"], ["cellBorderColor", "border-color"]].map(([key, property]) => /^#[0-9a-f]{6}$/i.test(a[key] || "") ? `;${property}:${a[key]}` : "").join("") : ""
+  return `<${tag}${kind}${span}${tableAttrs} style="${escapeHtml(style + tableCss + cellCss)}">${children || (tag === "p" ? "<br>" : "")}</${tag}>`
 }
 
 export function reportTableColors(attrs: Record<string, any>) {
@@ -226,7 +227,9 @@ export const REPORT_CSS = `
 .company-report .tiptap ::selection{background:#bfdbfe;}
 .company-report .selectedCell{background:#dbeafe;}
 .company-report table[data-table-theme] th{background:var(--report-table-header,#e4f0f6);color:var(--report-table-header-ink,#173a4b);}
-.company-report table[data-table-theme] th *{color:inherit!important;}
+.company-report td,.company-report th{position:relative;}
+.company-report .selectedCell:after{content:"";position:absolute;inset:0;background:rgba(37,99,235,.16);outline:2px solid #2563eb;outline-offset:-2px;pointer-events:none;}
+.report-cell-selection .tiptap td,.report-cell-selection .tiptap th{cursor:cell;user-select:none;}
 .company-report table[data-table-theme] th,.company-report table[data-table-theme] td{border-color:var(--report-table-border,#b5c6cd);}
 .company-report table[data-table-theme=striped] tr:nth-child(even){background:#edf5fa;}
 .company-report table[data-table-theme=minimal] th,.company-report table[data-table-theme=minimal] td{border-width:0 0 1px;}

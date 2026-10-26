@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react"
 import type { Editor } from "@tiptap/core"
 import Collaboration from "@tiptap/extension-collaboration"
@@ -9,7 +10,7 @@ import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, Italic, List, L
 import { DocumentReport, legacyReportContent, REPORT_FONTS, RichReportNode } from "@/lib/document-report"
 import { REPORT_LOGO } from "@/lib/document-report-logo"
 import { reportExtensions } from "@/lib/document-rich-schema"
-import { applyWholeReportFont } from "@/lib/document-rich-commands"
+import { applyReportBlockStyle, applyReportCellStyle, applyReportTextStyle, applyWholeReportFont, ReportEditScope } from "@/lib/document-rich-commands"
 import { NumberControl } from "./number-control"
 
 const TOOL = "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-100 disabled:opacity-30"
@@ -23,38 +24,96 @@ const PRESETS = [
   { key: "meta", label: "작성 정보", level: 0, size: 9, align: "right" },
 ]
 
-export function RichReportEditor({ report, yDoc, editable, scale, onChange, onSelection }: { report: DocumentReport; yDoc?: Y.Doc | null; editable: boolean; scale: number; onChange: (report: DocumentReport) => void; onSelection: (selection: string) => void }) {
+export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChange, onSelection }: { report: DocumentReport; yDoc?: Y.Doc | null; editable: boolean; scale?: number; toolbarTarget?: HTMLElement | null; onChange: (report: DocumentReport) => void; onSelection: (selection: string) => void }) {
   const current = useRef(report)
   current.current = report
   const changed = useRef(onChange)
   changed.current = onChange
   const [tableOpen, setTableOpen] = useState(false)
+  const [scope, setScope] = useState<ReportEditScope>("selection")
+  const [cellMode, setCellMode] = useState(false)
+  const cellModeRef = useRef(false)
+  cellModeRef.current = cellMode
+  const cellDrag = useRef<{ anchor: number; table: Element } | null>(null)
+  const editorRef = useRef<Editor | null>(null)
+  const lastPublished = useRef<RichReportNode | null>(null)
+  const compositionFrame = useRef<number | null>(null)
   const shared = Boolean(yDoc?.getMap("report").get("richInitialized"))
+  function publish(editor: Editor) {
+    if (shared || editor.isDestroyed || editor.view.composing) return
+    const richText = editor.getJSON() as RichReportNode
+    lastPublished.current = richText
+    const title = richText.content?.find(node => node.type === "heading" && node.attrs?.level === 1)?.content?.map(node => node.text || "").join("")
+    changed.current({ ...current.current, richText, ...(title ? { fields: { ...current.current.fields, title: { ...current.current.fields?.title, text: title } } } : {}) })
+  }
   const editor = useEditor({
     immediatelyRender: false,
+    shouldRerenderOnTransaction: false,
     extensions: [...reportExtensions(shared), ...(shared && yDoc ? [Collaboration.configure({ document: yDoc, field: "rich-text" })] : [])],
     content: shared ? undefined : legacyReportContent(report),
     editable,
-    editorProps: { attributes: { "aria-label": "보고서 본문", role: "textbox", "aria-multiline": "true", spellcheck: "false" } },
-    onUpdate({ editor }) {
-      if (!shared) {
-        const richText = editor.getJSON() as RichReportNode
-        const title = richText.content?.find(node => node.type === "heading" && node.attrs?.level === 1)?.content?.map(node => node.text || "").join("")
-        changed.current({ ...current.current, richText, ...(title ? { fields: { ...current.current.fields, title: { ...current.current.fields?.title, text: title } } } : {}) })
-      }
+    editorProps: { attributes: { "aria-label": "보고서 본문", role: "textbox", "aria-multiline": "true", spellcheck: "false" },
+      handleDOMEvents: {
+        mousedown(view, event) {
+          if (!cellModeRef.current || !view.editable || event.button !== 0) return false
+          const cell = (event.target as Element).closest?.("td,th")
+          if (!cell || !view.dom.contains(cell)) return false
+          const resolved = view.state.doc.resolve(view.posAtDOM(cell, 0))
+          for (let depth = resolved.depth; depth > 0; depth--) {
+            if (!["tableCell", "tableHeader"].includes(resolved.node(depth).type.name)) continue
+            const anchor = resolved.before(depth)
+            cellDrag.current = { anchor, table: cell.closest("table")! }
+            event.preventDefault()
+            editorRef.current?.commands.setCellSelection({ anchorCell: anchor })
+            return true
+          }
+          return false
+        },
+        mousemove(view, event) {
+          const drag = cellDrag.current
+          if (!drag || !cellModeRef.current || !event.buttons) return false
+          const cell = (event.target as Element).closest?.("td,th")
+          if (!cell || cell.closest("table") !== drag.table) return false
+          const resolved = view.state.doc.resolve(view.posAtDOM(cell, 0))
+          for (let depth = resolved.depth; depth > 0; depth--) {
+            if (!["tableCell", "tableHeader"].includes(resolved.node(depth).type.name)) continue
+            event.preventDefault()
+            editorRef.current?.commands.setCellSelection({ anchorCell: drag.anchor, headCell: resolved.before(depth) })
+            return true
+          }
+          return false
+        },
+      },
     },
+    onUpdate({ editor }) { publish(editor) },
     onSelectionUpdate({ editor }) { onSelection(`본문 ${editor.state.selection.from}`) },
   }, [yDoc, shared])
+  editorRef.current = editor
   useEffect(() => { editor?.setEditable(editable) }, [editor, editable])
-  // External source conversion and local undo replace content; typing never resets selection.
   useEffect(() => {
-    if (!editor || shared) return
+    const release = () => { cellDrag.current = null }
+    document.addEventListener("mouseup", release)
+    return () => document.removeEventListener("mouseup", release)
+  }, [])
+  useEffect(() => {
+    if (!editor) return
+    const endComposition = () => {
+      if (compositionFrame.current !== null) cancelAnimationFrame(compositionFrame.current)
+      compositionFrame.current = requestAnimationFrame(() => { compositionFrame.current = null; publish(editor) })
+    }
+    editor.view.dom.addEventListener("compositionend", endComposition)
+    return () => { editor.view.dom.removeEventListener("compositionend", endComposition); if (compositionFrame.current !== null) cancelAnimationFrame(compositionFrame.current) }
+  }, [editor, shared])
+  // Only genuinely external content may replace the document; local echoes must preserve its DOM and selection.
+  useEffect(() => {
+    if (!editor || shared || editor.view.composing || report.richText === lastPublished.current) return
     const content = legacyReportContent(report)
-    if (JSON.stringify(editor.getJSON()) !== JSON.stringify(content)) editor.commands.setContent(content, { emitUpdate: false })
+    const next = editor.schema.nodeFromJSON(content)
+    if (!editor.state.doc.eq(next)) editor.commands.setContent(content, { emitUpdate: false })
   }, [editor, shared, report])
   const state = useEditorState({ editor, selector: ({ editor }) => editor ? {
     kind: editor.getAttributes(editor.isActive("heading") ? "heading" : "paragraph").reportKind || (editor.isActive("heading", { level: 1 }) ? "title" : editor.isActive("heading", { level: 2 }) ? "heading" : editor.isActive("heading", { level: 3 }) ? "subheading" : "body"),
-    text: editor.getAttributes("textStyle"), block: editor.getAttributes(editor.isActive("heading") ? "heading" : "paragraph"), tableStyle: editor.getAttributes("table"),
+    text: editor.getAttributes("textStyle"), block: editor.getAttributes(editor.isActive("heading") ? "heading" : "paragraph"), tableStyle: editor.getAttributes("table"), cellStyle: editor.getAttributes(editor.isActive("tableHeader") ? "tableHeader" : "tableCell"),
     documentFont: editor.state.doc.firstChild?.attrs.documentFont || "gothic",
     bold: editor.isActive("bold"), italic: editor.isActive("italic"), underline: editor.isActive("underline"),
     bullet: editor.isActive("bulletList"), ordered: editor.isActive("orderedList"), table: editor.isActive("table"), undo: editor.can().undo(), redo: editor.can().redo(),
@@ -72,13 +131,13 @@ export function RichReportEditor({ report, yDoc, editable, scale, onChange, onSe
       editor.state.doc.nodesBetween(from, to, (node, pos) => { if (nextStart === null && node.isTextblock && pos > from) nextStart = pos + 1 })
       if (nextStart !== null) editor.commands.setTextSelection({ from: nextStart, to })
     }
-    let chain = editor.chain().focus()
+    let chain = editor.chain().focus(undefined, { scrollIntoView: false })
     if ((selected.level || key === "subtitle" || key === "meta") && (editor.isActive("bulletList") || editor.isActive("orderedList"))) chain = chain.liftListItem("listItem")
     chain = selected.level ? chain.setHeading({ level: selected.level as 1 | 2 | 3 }) : chain.setParagraph()
     chain.updateAttributes(selected.level ? "heading" : "paragraph", { reportKind: key, lineHeight: key === "title" ? 1.45 : 1.75, spaceAfter: key === "title" ? 24 : 8, pageBreak: false }).setTextAlign(selected.align).run()
     editor.commands.command(({ tr, state }) => {
       const marks = [state.schema.marks.textStyle.create({ fontSize: selected.size, fontFamily: font, letterSpacing: 0, color: key === "subtitle" || key === "meta" ? "#52636b" : "#172b35" }), ...(["title", "heading", "subheading"].includes(key) ? [state.schema.marks.bold.create()] : [])]
-      state.doc.nodesBetween(tr.selection.from, tr.selection.to, (node, pos) => {
+      for (const range of tr.selection.ranges) state.doc.nodesBetween(range.$from.pos, range.$to.pos, (node, pos) => {
         if (!node.isTextblock) return
         tr.removeMark(pos + 1, pos + node.nodeSize - 1)
         tr.addMark(pos + 1, pos + node.nodeSize - 1, state.schema.marks.textStyle.create({ fontSize: selected.size, fontFamily: font, letterSpacing: 0, color: key === "subtitle" || key === "meta" ? "#52636b" : "#172b35" }))
@@ -87,45 +146,70 @@ export function RichReportEditor({ report, yDoc, editable, scale, onChange, onSe
       if (tr.selection.empty) tr.setStoredMarks(marks)
       return true
     })
-    editor.commands.focus()
+    editor.commands.focus(undefined, { scrollIntoView: false })
   }
-  function inline(attrs: Record<string, any>) { editor?.chain().focus().setMark("textStyle", attrs).run() }
-  function block(attrs: Record<string, any>) { if (editor) editor.chain().focus().updateAttributes(editor.isActive("heading") ? "heading" : "paragraph", attrs).run() }
+  function inline(attrs: Record<string, any>) { if (editor) applyReportTextStyle(editor, attrs, scope) }
+  function block(attrs: Record<string, any>) { if (editor) applyReportBlockStyle(editor, attrs, scope) }
+  function toggleMark(mark: "bold" | "italic" | "underline") {
+    if (!editor || !editable) return
+    if (scope === "selection") { editor.chain().focus(undefined, { scrollIntoView: false }).toggleMark(mark).run(); return }
+    const enabled = !editor.isActive(mark)
+    editor.commands.command(({ tr, state }) => {
+      const type = state.schema.marks[mark]
+      state.doc.descendants((node, pos) => { if (node.isText) { if (enabled) tr.addMark(pos, pos + node.nodeSize, type.create()); else tr.removeMark(pos, pos + node.nodeSize, type) } })
+      return true
+    })
+  }
   function button(label: string, Icon: typeof Bold, action: (editor: Editor) => void, active = false, disabled = false) {
     return <button type="button" title={label} aria-label={label} aria-pressed={active} disabled={!editor || !editable || disabled} className={`${TOOL} ${active ? "!bg-blue-50 !text-blue-700" : ""}`} onMouseDown={event => event.preventDefault()} onClick={() => editor && action(editor)}><Icon size={16} /></button>
   }
-  return <div className="min-w-0">
-    <fieldset disabled={!editable || !editor} className="sticky top-0 z-10 mb-4 flex flex-wrap items-center gap-1.5 rounded-md border border-slate-200 bg-white p-2 shadow-sm disabled:opacity-60" aria-label="선택한 텍스트 서식">
-      <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">문단 서식<select aria-label="문단 서식" title="선택한 문단에 적용할 서식" className={`${INPUT} w-28 font-semibold`} value={state?.kind || "body"} onChange={event => preset(event.target.value)}>{PRESETS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
+  const toolbar = <fieldset disabled={!editable || !editor} className={`flex flex-wrap items-center gap-2 bg-white disabled:opacity-60 ${toolbarTarget ? "border-t border-slate-200 pt-4" : "sticky top-2 z-30 mb-4 rounded-md border border-slate-200 p-2 shadow-md"}`} aria-label="선택한 텍스트 서식">
+      <h2 className="w-full text-sm font-bold text-slate-800">서식 편집</h2>
+      <div role="group" aria-label="서식 적용 범위" className="grid w-full grid-cols-2 gap-1 rounded-md bg-slate-100 p-1">{[{ value: "selection", label: "선택 영역" }, { value: "document", label: "문서 전체" }].map(item => <button key={item.value} type="button" aria-pressed={scope === item.value} onMouseDown={event => event.preventDefault()} onClick={() => setScope(item.value as ReportEditScope)} className={`rounded px-2 py-2 text-xs font-semibold ${scope === item.value ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`}>{item.label}</button>)}</div>
+      <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">문단 서식<select disabled={scope === "document"} aria-label="문단 서식" title="선택한 문단에 적용할 서식" className={`${INPUT} w-28 font-semibold disabled:opacity-40`} value={state?.kind || "body"} onChange={event => preset(event.target.value)}>{PRESETS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
       <select aria-label="선택 글꼴" className={`${INPUT} w-28`} value={state?.text.fontFamily || "gothic"} onChange={event => inline({ fontFamily: event.target.value })}>{Object.entries(REPORT_FONTS).map(([key, font]) => <option key={key} value={key}>{font.label}</option>)}</select>
       <NumberControl label="선택 글자 크기" className={`${INPUT} w-16`} min={7} max={48} step={0.5} value={Number(state?.text.fontSize) || PRESETS.find(item => item.key === state?.kind)?.size || 10.5} onCommit={value => inline({ fontSize: value })} />
-      {button("굵게", Bold, e => e.chain().focus().toggleBold().run(), state?.bold)}
-      {button("기울임", Italic, e => e.chain().focus().toggleItalic().run(), state?.italic)}
-      {button("밑줄", Underline, e => e.chain().focus().toggleUnderline().run(), state?.underline)}
-      <input aria-label="선택 글자색" title="글자색" type="color" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.text.color || "#172b35"} onChange={event => editor?.chain().focus().setColor(event.target.value).run()} />
+      {button("굵게", Bold, () => toggleMark("bold"), state?.bold)}
+      {button("기울임", Italic, () => toggleMark("italic"), state?.italic)}
+      {button("밑줄", Underline, () => toggleMark("underline"), state?.underline)}
+      <input aria-label="선택 글자색" title="글자색" type="color" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.text.color || "#172b35"} onChange={event => inline({ color: event.target.value })} />
       <span className="mx-1 h-5 w-px bg-slate-200" />
-      {([{ value: "left", label: "왼쪽 정렬", Icon: AlignLeft }, { value: "center", label: "가운데 정렬", Icon: AlignCenter }, { value: "right", label: "오른쪽 정렬", Icon: AlignRight }, { value: "justify", label: "양쪽 정렬", Icon: AlignJustify }] as const).map(({ value, label, Icon }) => <span key={value}>{button(label, Icon, e => e.chain().focus().setTextAlign(value).run(), state?.block.textAlign === value)}</span>)}
-      {button("글머리 목록", List, e => e.chain().focus().toggleBulletList().run(), state?.bullet)}
-      {button("번호 목록", ListOrdered, e => e.chain().focus().toggleOrderedList().run(), state?.ordered)}
+      {([{ value: "left", label: "왼쪽 정렬", Icon: AlignLeft }, { value: "center", label: "가운데 정렬", Icon: AlignCenter }, { value: "right", label: "오른쪽 정렬", Icon: AlignRight }, { value: "justify", label: "양쪽 정렬", Icon: AlignJustify }] as const).map(({ value, label, Icon }) => <span key={value}>{button(label, Icon, () => block({ textAlign: value }), state?.block.textAlign === value)}</span>)}
+      {button("글머리 목록", List, e => e.chain().focus(undefined, { scrollIntoView: false }).toggleBulletList().run(), state?.bullet)}
+      {button("번호 목록", ListOrdered, e => e.chain().focus(undefined, { scrollIntoView: false }).toggleOrderedList().run(), state?.ordered)}
       <button type="button" className={TOOL} aria-label="표 편집" title="표 편집" aria-expanded={tableOpen} onMouseDown={event => event.preventDefault()} onClick={() => setTableOpen(value => !value)}><Table size={16} /></button>
-      {button("서식 지우기", RemoveFormatting, e => e.chain().focus().unsetAllMarks().run())}
-      {button("본문 실행 취소", Undo2, e => e.chain().focus().undo().run(), false, !state?.undo)}
-      {button("본문 다시 실행", Redo2, e => e.chain().focus().redo().run(), false, !state?.redo)}
+      {button("서식 지우기", RemoveFormatting, e => {
+        if (scope === "selection") e.chain().focus(undefined, { scrollIntoView: false }).unsetAllMarks().run()
+        else e.commands.command(({ tr, state }) => { tr.removeMark(0, state.doc.content.size); return true })
+      })}
+      {button("본문 실행 취소", Undo2, e => e.chain().focus(undefined, { scrollIntoView: false }).undo().run(), false, !state?.undo)}
+      {button("본문 다시 실행", Redo2, e => e.chain().focus(undefined, { scrollIntoView: false }).redo().run(), false, !state?.redo)}
       <div className="flex w-full flex-wrap items-center gap-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
         <label className="flex items-center gap-2">문서 전체 글꼴<select aria-label="문서 전체 글꼴" className={INPUT} value={state?.documentFont || "gothic"} onChange={event => { if (editor) applyWholeReportFont(editor, event.target.value) }}>{Object.entries(REPORT_FONTS).map(([key, font]) => <option key={key} value={key}>{font.label}</option>)}</select></label>
         <label className="flex items-center gap-2">자간<NumberControl label="선택 자간" className={`${INPUT} w-16`} min={0} max={8} step={0.1} value={Number(state?.text.letterSpacing) || 0} onCommit={value => inline({ letterSpacing: value })} /></label>
         <label className="flex items-center gap-2">행간<select aria-label="선택 행간" className={INPUT} value={state?.block.lineHeight || 1.75} onChange={event => block({ lineHeight: Number(event.target.value) })}>{[1, 1.25, 1.45, 1.5, 1.6, 1.75, 2, 2.5, 3].map(value => <option key={value} value={value}>{value}</option>)}</select></label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={Boolean(state?.block.pageBreak)} onChange={event => block({ pageBreak: event.target.checked })} />새 페이지</label>
       </div>
-      {tableOpen && <div className="flex w-full flex-wrap gap-2 border-t border-slate-100 pt-2">{[{ label: "표 삽입", action: () => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(), disabled: state?.table }, { label: "행 추가", action: () => editor?.chain().focus().addRowAfter().run(), disabled: !state?.table }, { label: "열 추가", action: () => editor?.chain().focus().addColumnAfter().run(), disabled: !state?.table }, { label: "행 삭제", action: () => editor?.chain().focus().deleteRow().run(), disabled: !state?.table }, { label: "열 삭제", action: () => editor?.chain().focus().deleteColumn().run(), disabled: !state?.table }, { label: "표 삭제", action: () => editor?.chain().focus().deleteTable().run(), disabled: !state?.table }].map(item => <button key={item.label} type="button" disabled={item.disabled} className={`${INPUT} disabled:opacity-30`} onMouseDown={event => event.preventDefault()} onClick={item.action}>{item.label}</button>)}</div>}
-      {(tableOpen || state?.table) && <fieldset disabled={!state?.table} className="flex w-full flex-wrap items-center gap-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500 disabled:opacity-40" aria-label="표 디자인">
-        <label className="flex items-center gap-2">표 디자인<select aria-label="표 디자인 선택" className={INPUT} value={state?.tableStyle.tableTheme || "classic"} onChange={event => editor?.chain().focus().updateAttributes("table", { tableTheme: event.target.value, headerColor: null }).run()}><option value="classic">기본형</option><option value="striped">줄무늬</option><option value="minimal">가로선</option><option value="dark">진한 헤더</option></select></label>
-        <label className="flex items-center gap-2">셀 간격<select aria-label="표 셀 간격" className={INPUT} value={state?.tableStyle.tableDensity || "standard"} onChange={event => editor?.chain().focus().updateAttributes("table", { tableDensity: event.target.value }).run()}><option value="compact">좁게</option><option value="standard">보통</option><option value="airy">넓게</option></select></label>
-        <label className="flex items-center gap-2">헤더색<input type="color" aria-label="표 헤더색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.tableStyle.headerColor || (state?.tableStyle.tableTheme === "dark" ? "#173a4b" : "#e4f0f6")} onChange={event => editor?.chain().focus().updateAttributes("table", { headerColor: event.target.value }).run()} /></label>
-        <label className="flex items-center gap-2">테두리색<input type="color" aria-label="표 테두리색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.tableStyle.borderColor || "#b5c6cd"} onChange={event => editor?.chain().focus().updateAttributes("table", { borderColor: event.target.value }).run()} /></label>
+      {tableOpen && <div className="flex w-full flex-wrap gap-2 border-t border-slate-100 pt-2">{[{ label: "표 삽입", action: () => editor?.chain().focus(undefined, { scrollIntoView: false }).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(), disabled: state?.table }, { label: "행 추가", action: () => editor?.chain().focus(undefined, { scrollIntoView: false }).addRowAfter().run(), disabled: !state?.table }, { label: "열 추가", action: () => editor?.chain().focus(undefined, { scrollIntoView: false }).addColumnAfter().run(), disabled: !state?.table }, { label: "행 삭제", action: () => editor?.chain().focus(undefined, { scrollIntoView: false }).deleteRow().run(), disabled: !state?.table }, { label: "열 삭제", action: () => editor?.chain().focus(undefined, { scrollIntoView: false }).deleteColumn().run(), disabled: !state?.table }, { label: "표 삭제", action: () => editor?.chain().focus(undefined, { scrollIntoView: false }).deleteTable().run(), disabled: !state?.table }].map(item => <button key={item.label} type="button" disabled={item.disabled} className={`${INPUT} disabled:opacity-30`} onMouseDown={event => event.preventDefault()} onClick={item.action}>{item.label}</button>)}</div>}
+      {tableOpen && <fieldset disabled={!state?.table} className="flex w-full flex-wrap items-center gap-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500 disabled:opacity-40" aria-label="표 디자인">
+        <div role="group" aria-label="표 선택 방식" className="grid w-full grid-cols-2 gap-1 rounded-md bg-slate-100 p-1">{[{ value: false, label: "글자 선택" }, { value: true, label: "셀 선택" }].map(item => <button key={item.label} type="button" aria-pressed={cellMode === item.value} onMouseDown={event => event.preventDefault()} onClick={() => { cellDrag.current = null; setCellMode(item.value) }} className={`rounded px-2 py-2 text-xs font-semibold ${cellMode === item.value ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`}>{item.label}</button>)}</div>
+        <label className="flex items-center gap-2">셀 배경<input type="color" aria-label="선택 셀 배경색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.cellStyle.backgroundColor || "#ffffff"} onChange={event => { if (editor) applyReportCellStyle(editor, "backgroundColor", event.target.value, scope) }} /></label>
+        <label className="flex items-center gap-2">셀 테두리<input type="color" aria-label="선택 셀 테두리색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.cellStyle.cellBorderColor || "#b5c6cd"} onChange={event => { if (editor) applyReportCellStyle(editor, "cellBorderColor", event.target.value, scope) }} /></label>
+        <label className="flex items-center gap-2">표 전체 디자인<select aria-label="표 디자인 선택" className={INPUT} value={state?.tableStyle.tableTheme || "classic"} onChange={event => editor?.chain().focus(undefined, { scrollIntoView: false }).updateAttributes("table", { tableTheme: event.target.value, headerColor: null }).run()}><option value="classic">기본형</option><option value="striped">줄무늬</option><option value="minimal">가로선</option><option value="dark">진한 헤더</option></select></label>
+        <label className="flex items-center gap-2">셀 간격<select aria-label="표 셀 간격" className={INPUT} value={state?.tableStyle.tableDensity || "standard"} onChange={event => editor?.chain().focus(undefined, { scrollIntoView: false }).updateAttributes("table", { tableDensity: event.target.value }).run()}><option value="compact">좁게</option><option value="standard">보통</option><option value="airy">넓게</option></select></label>
+        <label className="flex items-center gap-2">헤더색<input type="color" aria-label="표 헤더색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.tableStyle.headerColor || (state?.tableStyle.tableTheme === "dark" ? "#173a4b" : "#e4f0f6")} onChange={event => editor?.chain().focus(undefined, { scrollIntoView: false }).updateAttributes("table", { headerColor: event.target.value }).run()} /></label>
+        <label className="flex items-center gap-2">테두리색<input type="color" aria-label="표 테두리색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.tableStyle.borderColor || "#b5c6cd"} onChange={event => editor?.chain().focus(undefined, { scrollIntoView: false }).updateAttributes("table", { borderColor: event.target.value }).run()} /></label>
       </fieldset>}
     </fieldset>
-    <div className="report-editor-paper mx-auto bg-white shadow-sm" style={{ width: 794, minHeight: 1123, zoom: scale }}>
+  return <div className={`min-w-0 ${cellMode ? "report-cell-selection" : ""}`}>
+    {toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar}
+    <div className="report-editor-paper mx-auto w-full max-w-[794px] bg-white shadow-sm" style={{ minHeight: 1123 }} onMouseDown={event => {
+      if (!editor || !editable || event.button !== 0 || !(event.target instanceof Element) || event.target.closest(".tiptap,.report-brand")) return
+      const bounds = editor.view.dom.getBoundingClientRect()
+      const position = editor.view.posAtCoords({ left: Math.max(bounds.left + 1, Math.min(bounds.right - 1, event.clientX)), top: Math.max(bounds.top + 1, Math.min(bounds.bottom - 1, event.clientY)) })
+      event.preventDefault()
+      editor.chain().focus(undefined, { scrollIntoView: false }).setTextSelection(position?.pos ?? editor.state.doc.content.size).run()
+    }}>
       <article className="company-report" style={{ padding: `${report.page?.margin ?? 18}mm`, fontFamily: REPORT_FONTS[(state?.documentFont || "gothic") as keyof typeof REPORT_FONTS]?.css }}>
         <div className="report-brand"><img className="report-logo" width={report.page?.logoWidth ?? 145} src={REPORT_LOGO} alt="INFOMAX" /></div>
         <EditorContent editor={editor} />

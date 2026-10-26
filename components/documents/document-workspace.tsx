@@ -22,14 +22,13 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
   const [sourceOpen, setSourceOpen] = useState(false)
   const [undo, setUndo] = useState<DocumentReport[]>([])
   const [redo, setRedo] = useState<DocumentReport[]>([])
-  const [scale, setScale] = useState(1)
+  const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [sharingOpen, setSharingOpen] = useState(false)
   const [directory, setDirectory] = useState<Array<{ id: string; name: string; title: string; teamName: string }>>([])
   const [inviteId, setInviteId] = useState("")
   const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("editor")
   const [search, setSearch] = useState("")
-  const stageRef = useRef<HTMLDivElement>(null)
   const sourceChanged = useRef(false)
   const draftKey = `document-report-draft:${userId}`
   const collaboration = useDocumentCollaboration(userId, selected, (next, opened) => {
@@ -73,13 +72,6 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
     catch { setMessage("임시 보관 공간이 부족합니다. 파일로 내려받아 주세요.") }
   }, [source, title, date, writer, report, draftKey, ready, collaboration.document?.id])
 
-  useEffect(() => {
-    const stage = stageRef.current
-    if (!stage) return
-    const observer = new ResizeObserver(([entry]) => setScale(Math.min(1, Math.max(0.2, entry.contentRect.width / 794))))
-    observer.observe(stage)
-    return () => observer.disconnect()
-  }, [])
 
   useEffect(() => {
     if (!sourceChanged.current || !ready || !source.trim() || collaboration.document) return
@@ -213,19 +205,20 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
     </div>
     {collaboration.error ? <div role="alert" className="mb-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{collaboration.error}</div> : null}
     {message && !collaboration.document ? <div className="mb-3 text-xs text-slate-500">{message}</div> : null}
-    <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
-      <div ref={stageRef} className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-[#e9edf0] px-4 py-6">
-        {report ? <RichReportEditor key={collaboration.document?.id || "local"} report={report} yDoc={collaboration.yDoc} editable={canEdit} scale={scale} onChange={commit} onSelection={setSelected} />
+    <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="min-w-0 overflow-visible rounded-lg border border-slate-200 bg-[#e9edf0] px-4 py-6">
+        {report ? <RichReportEditor key={collaboration.document?.id || "local"} report={report} yDoc={collaboration.yDoc} editable={canEdit} toolbarTarget={toolbarTarget} onChange={commit} onSelection={setSelected} />
           : <div className="flex min-h-[500px] flex-col items-center justify-center gap-3 text-slate-400"><FileText size={40} strokeWidth={1} /><span className="text-sm">작성된 보고서가 없습니다.</span></div>}
       </div>
 
-      <aside className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm xl:sticky xl:top-4" aria-label="보고서 서식 편집">
+      <aside className="min-w-0 space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-3 lg:max-h-[calc(100dvh-24px)] lg:overflow-y-auto" aria-label="보고서 서식 편집">
         <div className="mb-4 flex items-center justify-between"><h2 className="text-sm font-bold text-slate-800">용지 설정</h2></div>
         {peers.some(person => person.field === selected) ? <div className="mb-4 rounded-md bg-emerald-50 px-2 py-1.5 text-xs text-emerald-700">{peers.filter(person => person.field === selected).map(person => person.name).join(", ")} 님 편집 중</div> : null}
         <fieldset disabled={!report || !canEdit} className="mt-5 space-y-4 border-t border-slate-100 pt-4 disabled:opacity-40"><legend className="pt-4 text-xs font-bold text-slate-700">용지</legend>
           <label className="block text-xs font-semibold text-slate-500">여백 {report?.page?.margin ?? 18}mm<input type="range" aria-label="용지 여백" min={10} max={30} value={report?.page?.margin ?? 18} onChange={e => report && commit({ ...report, page: { ...report.page, margin: Number(e.target.value) } })} className="mt-2 block w-full accent-blue-600" /></label>
           <label className="block text-xs font-semibold text-slate-500">로고 크기 {report?.page?.logoWidth ?? 145}px<input type="range" aria-label="로고 크기" min={80} max={220} value={report?.page?.logoWidth ?? 145} onChange={e => report && commit({ ...report, page: { ...report.page, logoWidth: Number(e.target.value) } })} className="mt-2 block w-full accent-blue-600" /></label>
         </fieldset>
+        <div ref={setToolbarTarget} />
       </aside>
     </div>
     <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}><DialogContent className="max-w-xl rounded-lg"><DialogHeader><DialogTitle>내 문서</DialogTitle></DialogHeader>

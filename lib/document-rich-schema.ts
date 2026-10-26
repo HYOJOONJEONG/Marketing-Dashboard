@@ -10,6 +10,10 @@ const Format = Extension.create({
   name: "reportFormat",
   addGlobalAttributes() {
     return [
+      { types: ["tableCell", "tableHeader"], attributes: {
+        backgroundColor: { default: null, parseHTML: element => element.getAttribute("data-cell-background"), renderHTML: attrs => /^#[0-9a-f]{6}$/i.test(attrs.backgroundColor || "") ? { "data-cell-background": attrs.backgroundColor, style: `background-color:${attrs.backgroundColor}` } : {} },
+        cellBorderColor: { default: null, parseHTML: element => element.getAttribute("data-cell-border"), renderHTML: attrs => /^#[0-9a-f]{6}$/i.test(attrs.cellBorderColor || "") ? { "data-cell-border": attrs.cellBorderColor, style: `border-color:${attrs.cellBorderColor}` } : {} },
+      } },
       { types: ["table"], attributes: {
         tableTheme: { default: "classic", parseHTML: element => element.getAttribute("data-table-theme") || "classic", renderHTML: attrs => ({ "data-table-theme": ["classic", "striped", "minimal", "dark"].includes(attrs.tableTheme) ? attrs.tableTheme : "classic" }) },
         tableDensity: { default: "standard", parseHTML: element => element.getAttribute("data-table-density") || "standard", renderHTML: attrs => ({ "data-table-density": ["compact", "standard", "airy"].includes(attrs.tableDensity) ? attrs.tableDensity : "standard" }) },
