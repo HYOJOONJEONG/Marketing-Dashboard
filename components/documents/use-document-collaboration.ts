@@ -57,7 +57,12 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     if (mergeLocal && nextRole !== "viewer") {
       try {
         const local = localStorage.getItem(key(row.id))
-        if (local) { Y.applyUpdate(doc, base64ToBytes(local), "recovery"); pending.current.push(Y.encodeStateAsUpdate(doc)) }
+        if (local) {
+          const serverVector = Y.encodeStateVector(doc)
+          Y.applyUpdate(doc, base64ToBytes(local), "recovery")
+          const difference = Y.encodeStateAsUpdate(doc, serverVector)
+          if (difference.length > 2) pending.current.push(difference)
+        }
       } catch { setError("임시 보관 내용을 복구하지 못했습니다.") }
     }
     const report = reportFromYDoc(doc)
@@ -90,15 +95,20 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
   async function open(id: string) {
     if (metaRef.current && status !== "denied" && !await syncRef.current()) return false
     try {
-      const response = await fetch(`/api/documents/${id}`, { cache: "no-store" })
+      const response = await fetch(`/api/documents/${id}?encoding=gzip`, { cache: "no-store" })
       const json = await response.json()
       if (!response.ok) throw new Error(json.error)
       if (json.role !== "viewer") {
+        const existing = new Y.Doc()
+        let initialized: boolean
+        try { Y.applyUpdate(existing, base64ToBytes(json.document.state)); initialized = Boolean(existing.getMap("report").get("richInitialized")) }
+        finally { existing.destroy() }
+        if (initialized) { attach(json.document, json.role); return true }
         let recovery: string | null = null
-        try { recovery = localStorage.getItem(key(id)) } catch {}
-        const initialized = await fetch(`/api/documents/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "initialize", ...(recovery ? { update: recovery } : {}) }) })
-        const migrated = await initialized.json()
-        if (!initialized.ok) throw new Error(migrated.error)
+        try { const cached = localStorage.getItem(key(id)); if (cached) recovery = bytesToBase64(base64ToBytes(cached)) } catch {}
+        const initialization = await fetch(`/api/documents/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "initialize", encoding: "gzip", ...(recovery ? { update: recovery } : {}) }) })
+        const migrated = await initialization.json()
+        if (!initialization.ok) throw new Error(migrated.error)
         attach(migrated.document, migrated.role)
         return true
       }
@@ -117,7 +127,7 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     creationId.current = id
     try { sessionStorage.setItem(`document-creation:${userId}`, id) } catch {}
     try {
-      const response = await fetch("/api/documents", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, report }) })
+      const response = await fetch("/api/documents", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, reportData: bytesToBase64(new TextEncoder().encode(JSON.stringify(report))), encoding: "gzip" }) })
       const json = await response.json()
       if (!response.ok) throw new Error(json.error)
       const latest = latestReport.current || report
@@ -140,7 +150,7 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     busy.current = true
     const outgoing = pending.current.splice(0)
     try {
-      const response = await fetch(`/api/documents/${meta.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "sync", vector: bytesToBase64(Y.encodeStateVector(doc)), ...(outgoing.length ? { update: bytesToBase64(Y.mergeUpdates(outgoing)) } : {}), field: selectionRef.current, connectionId: connectionId.current }), signal: AbortSignal.timeout(12000) })
+      const response = await fetch(`/api/documents/${meta.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "sync", encoding: "gzip", vector: bytesToBase64(Y.encodeStateVector(doc)), ...(outgoing.length ? { update: bytesToBase64(Y.mergeUpdates(outgoing)) } : {}), field: selectionRef.current, connectionId: connectionId.current }), signal: AbortSignal.timeout(12000) })
       const json = await response.json()
       if (docRef.current !== doc) return true
       if (response.status === 403 || response.status === 401) {

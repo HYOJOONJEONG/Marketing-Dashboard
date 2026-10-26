@@ -2,6 +2,8 @@ import * as Y from "yjs"
 import { DocumentReport, legacyReportContent, reportFields, RichReportNode, validRichContent } from "./document-report"
 import { prosemirrorJSONToYXmlFragment, yXmlFragmentToProsemirrorJSON } from "@tiptap/y-tiptap"
 import { reportSchema } from "./document-rich-schema"
+import { DOCUMENT_CONTENT_LIMIT } from "./document-codec"
+export { base64ToBytes, bytesToBase64 } from "./document-codec"
 
 export function initializeRichDocument(doc: Y.Doc) {
   if (doc.getMap("report").get("richInitialized")) return false
@@ -13,16 +15,6 @@ export function initializeRichDocument(doc: Y.Doc) {
   return true
 }
 
-export function bytesToBase64(bytes: Uint8Array) {
-  if (typeof Buffer !== "undefined") return Buffer.from(bytes).toString("base64")
-  let binary = ""
-  for (const byte of bytes) binary += String.fromCharCode(byte)
-  return btoa(binary)
-}
-export function base64ToBytes(value: string) {
-  if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(value, "base64"))
-  return Uint8Array.from(atob(value), character => character.charCodeAt(0))
-}
 
 function updateText(text: Y.Text, value: string) {
   const before = text.toString()
@@ -113,5 +105,5 @@ export function validateReport(report: unknown): report is DocumentReport {
   const value = report as DocumentReport
   return typeof value.title === "string" && value.title.length <= 1000 && typeof value.author === "string" && typeof value.date === "string" &&
     Array.isArray(value.sections) && value.sections.length <= 200 && value.sections.every(section => typeof section.heading === "string" && typeof section.content === "string") &&
-    (!value.richText || value.richText.type === "doc" && validRichContent(value.richText)) && JSON.stringify(value).length <= 500000
+    (!value.richText || value.richText.type === "doc" && validRichContent(value.richText)) && JSON.stringify(value).length <= DOCUMENT_CONTENT_LIMIT
 }

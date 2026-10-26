@@ -25,8 +25,8 @@ function load(file) {
     if (name.startsWith('.')) return load(path.resolve(path.dirname(file), name + '.ts'))
     return require(name)
   }
-  vm.runInNewContext(code, { module, exports: module.exports, require: localRequire, console, Buffer, Uint8Array, Map, Set, Array, Object, Date, Promise, Response, Request, AbortSignal, URL,
-    process: { env: { NODE_ENV: 'test' }, cwd: () => temporary }, setTimeout, clearTimeout }, { filename: file })
+  vm.runInNewContext(code, { module, exports: module.exports, require: localRequire, console, Buffer, Uint8Array, Map, Set, Array, Object, JSON, Date, Promise, Response, Request, AbortSignal, URL,
+    process: { env: { NODE_ENV: 'test' }, cwd: () => temporary }, TextEncoder, TextDecoder, setTimeout, clearTimeout }, { filename: file })
   return module.exports
 }
 const collaboration = load(path.join(root, 'lib/document-collaboration.ts'))
@@ -88,6 +88,35 @@ async function run() {
   asUser(null)
   assert.equal((await collection.GET(new Request('http://localhost/api/documents'))).status, 401)
   asUser('owner')
+  const codec = load(path.join(root, 'lib/document-codec.ts'))
+  const text = '내용 저장 검증 '.repeat(100)
+  const large = { ...metadata, sections: [], richText: { type: 'doc', content: Array.from({ length: 500 }, (_, index) => ({ type: 'paragraph', attrs: { documentFont: 'serif' }, content: [{ type: 'text', text: `${index} ${text}`, marks: [{ type: 'textStyle', attrs: { fontFamily: 'serif', fontSize: 12 } }] }] })) } }
+  const reportData = codec.bytesToBase64(new TextEncoder().encode(JSON.stringify(large)))
+  assert.ok(reportData.startsWith('gz:'))
+  const largeResponse = await collection.POST(post({ reportData, encoding: 'gzip' }))
+  assert.equal(largeResponse.status, 201)
+  const largeSaved = (await largeResponse.json()).document
+  assert.ok(largeSaved.state.startsWith('gz:'))
+  const largeDoc = client(largeSaved.state)
+  const previousLimitPayload = codec.bytesToPlainBase64(Y.encodeStateAsUpdate(largeDoc))
+  assert.ok(previousLimitPayload.length > 900000, 'Reproduce a snapshot larger than the old request limit')
+  largeDoc.getXmlFragment('rich-text').get(0).get(0).insert(0, '추가 저장 ')
+  const largeUpdate = codec.bytesToBase64(Y.encodeStateAsUpdate(largeDoc))
+  assert.ok(largeUpdate.length < previousLimitPayload.length / 10)
+  assert.equal((await detail.POST(post({ action: 'sync', encoding: 'gzip', update: largeUpdate }), context(largeSaved.id))).status, 200)
+  const largeReload = (await (await detail.GET(new Request('http://localhost/?encoding=gzip'), context(largeSaved.id))).json()).document
+  const loaded = client(largeReload.state)
+  assert.ok(reportFunctions.reportPlainText(collaboration.reportFromYDoc(loaded)).startsWith('추가 저장 '))
+  const legacy = (await (await detail.GET(new Request('http://localhost/'), context(largeSaved.id))).json()).document
+  assert.ok(!legacy.state.startsWith('gz:'), 'Existing clients must still receive legacy base64')
+  assert.equal(codec.bytesToPlainBase64(codec.base64ToBytes(largeReload.state)), legacy.state)
+  const vector = Y.encodeStateVector(loaded)
+  Y.applyUpdate(loaded, Y.encodeStateAsUpdate(largeDoc))
+  assert.ok(Y.encodeStateAsUpdate(loaded, vector).length <= 2, 'Reopening a saved document has no outgoing full snapshot')
+  assert.throws(() => codec.base64ToBytes('gz:AA=='))
+  assert.throws(() => codec.bytesToBase64(new Uint8Array(codec.DOCUMENT_UPDATE_LIMIT + 1)))
+  largeDoc.destroy(); loaded.destroy()
+  console.log('PASS: oversized snapshot recovery, compressed create/sync/storage, content-preserving reload, legacy clients, and bounded decoding.')
   const createdResponse = await collection.POST(post({ report: initial }))
   assert.equal(createdResponse.status, 201)
   const created = (await createdResponse.json()).document

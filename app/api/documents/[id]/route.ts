@@ -3,13 +3,14 @@ import { NextResponse } from "next/server"
 import { resolveRequestSession } from "@/lib/auth/session"
 import { documentStorage, updateStoredDocument, validDocumentId } from "@/lib/document-store"
 import { base64ToBytes, bytesToBase64, documentRole, initializeRichDocument, reportFromYDoc, StoredDocument, validateReport } from "@/lib/document-collaboration"
+import { bytesToPlainBase64, compatibleDocument, DOCUMENT_REQUEST_LIMIT, DOCUMENT_STATE_LIMIT } from "@/lib/document-codec"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 const headers = { "Cache-Control": "private, no-store" }
 type Context = { params: Promise<{ id: string }> }
 
-export async function GET(_request: Request, context: Context) {
+export async function GET(request: Request, context: Context) {
   const session = await resolveRequestSession()
   if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401, headers })
   const { id } = await context.params
@@ -19,7 +20,7 @@ export async function GET(_request: Request, context: Context) {
     const document: StoredDocument | null = raw ? JSON.parse(raw) : null
     const role = document && documentRole(document, session.user.id)
     if (!document || !role) return NextResponse.json({ error: "문서를 찾을 수 없거나 초대받지 않은 문서입니다." }, { status: 404, headers })
-    return NextResponse.json({ document, role }, { headers })
+    return NextResponse.json({ document: compatibleDocument(document, new URL(request.url).searchParams.get("encoding")), role }, { headers })
   } catch {
     return NextResponse.json({ error: "문서를 불러오지 못했습니다." }, { status: 503, headers })
   }
@@ -32,7 +33,7 @@ export async function POST(request: Request, context: Context) {
   if (!validDocumentId(id)) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404, headers })
   try {
     const body = await request.json()
-    if (JSON.stringify(body).length > 900000) return NextResponse.json({ error: "저장 요청이 너무 큽니다." }, { status: 413, headers })
+    if (new TextEncoder().encode(JSON.stringify(body)).length > DOCUMENT_REQUEST_LIMIT) return NextResponse.json({ error: "문서 저장 데이터 용량 한도를 초과했습니다. 파일로 내려받아 보관해주세요." }, { status: 413, headers })
     let denied = false
     const document = await updateStoredDocument(id, current => {
       const role = current && documentRole(current, session.user.id)
@@ -48,7 +49,7 @@ export async function POST(request: Request, context: Context) {
           }
           if (!initializeRichDocument(doc)) return null
           const state = bytesToBase64(Y.encodeStateAsUpdate(doc))
-          if (state.length > 1100000) throw new Error("문서 용량 한도를 초과했습니다.")
+          if (state.length > DOCUMENT_STATE_LIMIT) throw new Error("문서 용량 한도를 초과했습니다.")
           return { ...current, state, version: current.version + 1 }
         } finally { doc.destroy() }
       }
@@ -76,7 +77,7 @@ export async function POST(request: Request, context: Context) {
           if (!validateReport(report)) throw new Error("문서 내용이 올바르지 않습니다.")
           title = report.fields?.title?.text || report.title
           state = bytesToBase64(Y.encodeStateAsUpdate(doc))
-          if (state.length > 1100000) throw new Error("문서 용량 한도를 초과했습니다.")
+          if (state.length > DOCUMENT_STATE_LIMIT) throw new Error("문서 용량 한도를 초과했습니다.")
         } finally { doc.destroy() }
       }
       const now = Date.now()
@@ -89,12 +90,13 @@ export async function POST(request: Request, context: Context) {
     })
     if (denied || !document) return NextResponse.json({ error: "이 문서에 접근하거나 수정할 권한이 없습니다." }, { status: 403, headers })
     if (body.action === "members") return NextResponse.json({ members: document.members }, { headers })
-    if (body.action === "initialize") return NextResponse.json({ document, role: documentRole(document, session.user.id) }, { headers })
+    if (body.action === "initialize") return NextResponse.json({ document: compatibleDocument(document, body.encoding), role: documentRole(document, session.user.id) }, { headers })
     const doc = new Y.Doc()
     let update: string
     try {
       Y.applyUpdate(doc, base64ToBytes(document.state))
-      update = bytesToBase64(Y.encodeStateAsUpdate(doc, typeof body.vector === "string" ? base64ToBytes(body.vector) : undefined))
+      const difference = Y.encodeStateAsUpdate(doc, typeof body.vector === "string" ? base64ToBytes(body.vector) : undefined)
+      update = body.encoding === "gzip" ? bytesToBase64(difference) : bytesToPlainBase64(difference)
     } finally { doc.destroy() }
     return NextResponse.json({ update, version: document.version, updatedAt: document.updatedAt, members: document.members, role: documentRole(document, session.user.id), presence: document.presence.filter(person => Date.now() - person.seenAt < 30000) }, { headers })
   } catch {
