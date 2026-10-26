@@ -21,10 +21,12 @@ export type ReportStyle = {
 }
 export type ReportField = { text?: string; style?: ReportStyle }
 export type ReportSection = { heading: string; content: string }
+export type RichReportNode = { type: string; text?: string; attrs?: Record<string, any>; marks?: Array<{ type: string; attrs?: Record<string, any> }>; content?: RichReportNode[] }
 export type DocumentReport = {
   title: string; date: string; author: string; sections: ReportSection[]
   fields?: Record<string, ReportField>
   page?: { margin?: number; logoWidth?: number }
+  richText?: RichReportNode
 }
 export type ReportBlock = { type: "paragraph" | "subheading" | "item"; text: string } | { type: "table"; rows: string[][] }
 export type SelectableField = { key: string; label: string; text: string; kind: "title" | "heading" | "subheading" | "body" | "cell" | "meta" }
@@ -120,6 +122,67 @@ function escapeHtml(text: string) {
   return String(text).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!)
 }
 
+export function legacyReportContent(report: DocumentReport): RichReportNode {
+  if (report.richText) return report.richText
+  const block = (key: string, text: string, kind: SelectableField["kind"], type = "paragraph", attrs: Record<string, any> = {}): RichReportNode => {
+    const style = { ...defaultFieldStyle(kind), ...report.fields?.[key]?.style }
+    const value = fieldText(report, key, text)
+    return { type, attrs: { ...attrs, reportKind: kind, textAlign: style.align, lineHeight: style.lineHeight, spaceAfter: style.spaceAfter, pageBreak: style.pageBreak || false }, content: value ? [{ type: "text", text: value, marks: [{ type: "textStyle", attrs: { fontFamily: style.font, fontSize: style.size, letterSpacing: style.spacing, color: style.color } }, ...(style.bold ? [{ type: "bold" }] : []), ...(style.italic ? [{ type: "italic" }] : []), ...(style.underline ? [{ type: "underline" }] : [])] }] : [] }
+  }
+  const content = [block("title", report.title, "title", "heading", { level: 1 }), block("author", report.author, "meta"), block("date", report.date, "meta")]
+  report.sections.forEach((section, si) => {
+    const heading = block(`s${si}.heading`, section.heading, "heading", "heading", { level: 2 })
+    if (heading.content?.[0]?.text) heading.content[0].text = `${sectionNumber(si)}. ${heading.content[0].text}`
+    content.push(heading)
+    reportBlocks(section.content).forEach((item, bi) => {
+      const key = `s${si}.b${bi}`
+      if (item.type === "table") {
+        const width = Math.max(...item.rows.map(row => row.length))
+        content.push({ type: "table", content: item.rows.map((row, ri) => ({ type: "tableRow", content: Array.from({ length: width }, (_, ci) => ({ type: ri === 0 ? "tableHeader" : "tableCell", content: [block(`${key}.r${ri}.c${ci}`, row[ci] || "", "cell")] })) })) })
+      } else if (item.type === "item") content.push({ type: "bulletList", content: [{ type: "listItem", content: [block(key, item.text, "body")] }] })
+      else content.push(block(key, item.text, item.type === "subheading" ? "subheading" : "body", item.type === "subheading" ? "heading" : "paragraph", item.type === "subheading" ? { level: 3 } : {}))
+    })
+  })
+  content.push({ type: "paragraph", content: [] })
+  return { type: "doc", content }
+}
+
+export function validRichContent(value: unknown, depth = 0): value is RichReportNode {
+  if (!value || typeof value !== "object" || depth > 30) return false
+  const node = value as RichReportNode
+  const types = ["doc", "paragraph", "heading", "text", "hardBreak", "bulletList", "orderedList", "listItem", "blockquote", "horizontalRule", "codeBlock", "table", "tableRow", "tableHeader", "tableCell"]
+  return types.includes(node.type) && (node.text === undefined || typeof node.text === "string") &&
+    (!node.attrs || typeof node.attrs === "object") && (!node.marks || Array.isArray(node.marks) && node.marks.every(mark => ["textStyle", "bold", "italic", "underline", "strike", "code"].includes(mark.type))) &&
+    (!node.content || Array.isArray(node.content) && node.content.length <= 10000 && node.content.every(child => validRichContent(child, depth + 1)))
+}
+
+export function richReportHtml(node: RichReportNode): string {
+  if (node.type === "text") {
+    let html = escapeHtml(node.text || "")
+    for (const mark of node.marks || []) {
+      const tags: Record<string, string> = { bold: "strong", italic: "em", underline: "u", strike: "s", code: "code" }
+      if (tags[mark.type]) html = `<${tags[mark.type]}>${html}</${tags[mark.type]}>`
+      if (mark.type === "textStyle") {
+        const a = mark.attrs || {}
+        html = `<span style="${escapeHtml(fieldCss({ font: a.fontFamily, size: a.fontSize, spacing: a.letterSpacing, color: a.color }))}">${html}</span>`
+      }
+    }
+    return html
+  }
+  const children = (node.content || []).map(richReportHtml).join("")
+  if (node.type === "doc") return children
+  if (node.type === "hardBreak") return "<br>"
+  if (node.type === "horizontalRule") return "<hr>"
+  const tags: Record<string, string> = { paragraph: "p", bulletList: "ul", orderedList: "ol", listItem: "li", blockquote: "blockquote", codeBlock: "pre", table: "table", tableRow: "tr", tableHeader: "th", tableCell: "td" }
+  const tag = node.type === "heading" ? `h${bounded(node.attrs?.level, 1, 3, 2)}` : tags[node.type]
+  if (!tag) return children
+  const a = node.attrs || {}
+  const kind = ["title", "subtitle", "heading", "subheading", "body", "meta", "cell"].includes(a.reportKind) ? ` data-report-kind="${a.reportKind}"` : ""
+  const style = fieldCss({ align: a.textAlign, lineHeight: a.lineHeight, spaceAfter: a.spaceAfter, pageBreak: a.pageBreak })
+  const span = ["td", "th"].includes(tag) ? ` colspan="${bounded(a.colspan, 1, 20, 1)}" rowspan="${bounded(a.rowspan, 1, 100, 1)}"` : ""
+  return `<${tag}${kind}${span} style="${escapeHtml(style)}">${children || (tag === "p" ? "<br>" : "")}</${tag}>`
+}
+
 export const REPORT_CSS = `
 .company-report{box-sizing:border-box;background:#fff;color:#172b35;font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:10.5pt;line-height:1.75;letter-spacing:0;overflow-wrap:anywhere;word-break:normal;}
 .company-report *{box-sizing:border-box;}
@@ -142,6 +205,13 @@ export const REPORT_CSS = `
 .company-report tbody tr:nth-child(even){background:#f7fafc;}
 .company-report thead{display:table-header-group;}
 .company-report tr{break-inside:avoid;}
+.company-report [data-report-kind=subtitle]{font-size:13pt;text-align:center;color:#52636b;margin:0 0 22px;}
+.company-report [data-report-kind=meta]{font-size:9pt;text-align:right;color:#52636b;}
+.company-report ul,.company-report ol{padding-left:24px;margin:6px 0 12px;}
+.company-report ul{list-style:disc;}.company-report ol{list-style:decimal;}
+.company-report .tiptap{outline:none;min-height:800px;}
+.company-report .tiptap ::selection{background:#bfdbfe;}
+.company-report .selectedCell{background:#dbeafe;}
 .report-editor-paper [data-report-field]{cursor:text;border-radius:2px;outline:2px solid transparent;outline-offset:3px;transition:outline-color .12s;}
 .report-editor-paper [data-report-field]:hover{outline-color:#bfdbfe;}
 .report-editor-paper [data-report-field][data-selected=true]{outline-color:#2563eb;background-color:#eff6ff;}
@@ -168,11 +238,16 @@ export function reportHtml(report: DocumentReport, fragment = false, selected = 
     const tag = block.type === "subheading" ? "h3" : "p"
     return `<${tag}${block.type === "item" ? ' class="report-item"' : ""}${attrs(key)}>${text(key, block.text)}</${tag}>`
   }).join("")}</div></section>`).join("")
-  const article = `<article class="company-report" style="padding:${margin}mm"><header class="report-header"><div class="report-brand"><img class="report-logo" width="${logoWidth}" src="${REPORT_LOGO}" alt="INFOMAX"></div><h1${attrs("title")}>${text("title", report.title)}</h1><div class="report-meta"><div class="report-author"${attrs("author")}>작성 : ${text("author", report.author)}</div><div class="report-date"${attrs("date")}>${text("date", report.date)}</div></div></header>${sections}</article>`
+  const brand = `<div class="report-brand"><img class="report-logo" width="${logoWidth}" src="${REPORT_LOGO}" alt="INFOMAX"></div>`
+  const article = report.richText ? `<article class="company-report" style="padding:${margin}mm">${brand}${richReportHtml(report.richText)}</article>` : `<article class="company-report" style="padding:${margin}mm"><header class="report-header">${brand}<h1${attrs("title")}>${text("title", report.title)}</h1><div class="report-meta"><div class="report-author"${attrs("author")}>작성 : ${text("author", report.author)}</div><div class="report-date"${attrs("date")}>${text("date", report.date)}</div></div></header>${sections}</article>`
   return fragment ? article : `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${text("title", report.title)}</title><style>${REPORT_CSS}\n@page{size:A4;margin:${margin}mm;}</style></head><body>${article}</body></html>`
 }
 
 export function reportPlainText(report: DocumentReport) {
+  if (report.richText) {
+    const plain = (node: RichReportNode): string => node.text || (node.type === "hardBreak" ? "\n" : (node.content || []).map(plain).join(["paragraph", "heading", "text"].includes(node.type) ? "" : "\n"))
+    return plain(report.richText)
+  }
   return [fieldText(report, "title", report.title), `작성일: ${fieldText(report, "date", report.date)}`, `작성: ${fieldText(report, "author", report.author)}`,
     ...report.sections.flatMap((section, si) => ["", `${sectionNumber(si)}. ${fieldText(report, `s${si}.heading`, section.heading)}`,
       ...reportBlocks(section.content).map((block, bi) => {

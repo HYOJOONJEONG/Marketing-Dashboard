@@ -1,5 +1,17 @@
 import * as Y from "yjs"
-import { DocumentReport, reportFields } from "./document-report"
+import { DocumentReport, legacyReportContent, reportFields, RichReportNode, validRichContent } from "./document-report"
+import { prosemirrorJSONToYXmlFragment, yXmlFragmentToProsemirrorJSON } from "@tiptap/y-tiptap"
+import { reportSchema } from "./document-rich-schema"
+
+export function initializeRichDocument(doc: Y.Doc) {
+  if (doc.getMap("report").get("richInitialized")) return false
+  const content = legacyReportContent(reportFromYDoc(doc))
+  doc.transact(() => {
+    prosemirrorJSONToYXmlFragment(reportSchema(), content, doc.getXmlFragment("rich-text"))
+    doc.getMap("report").set("richInitialized", true)
+  }, "local")
+  return true
+}
 
 export function bytesToBase64(bytes: Uint8Array) {
   if (typeof Buffer !== "undefined") return Buffer.from(bytes).toString("base64")
@@ -27,6 +39,12 @@ export function applyReportChange(doc: Y.Doc, next: DocumentReport, previous?: D
   const previousKeys = new Set(previous ? reportFields(previous).map(field => field.key) : [])
   doc.transact(() => {
     const root = doc.getMap<any>("report")
+    if (next.richText && JSON.stringify(next.richText) !== JSON.stringify(previous?.richText)) {
+      prosemirrorJSONToYXmlFragment(reportSchema(), next.richText, doc.getXmlFragment("rich-text"))
+      root.set("richInitialized", true)
+    } else if (previous?.richText && !next.richText) {
+      prosemirrorJSONToYXmlFragment(reportSchema(), legacyReportContent(next), doc.getXmlFragment("rich-text"))
+    }
     for (const key of ["title", "date", "author"] as const) {
       if (!previous || next[key] !== previous[key]) updateText(doc.getText(key), next[key])
     }
@@ -70,6 +88,13 @@ export function reportFromYDoc(doc: Y.Doc): DocumentReport {
     for (const [key, value] of styles.entries()) if (key.startsWith(`${field.key}/`)) style[key.slice(field.key.length + 1)] = value
     report.fields![field.key] = { text: text.toString(), style }
   }
+  if (root.get("richInitialized")) {
+    const richText = yXmlFragmentToProsemirrorJSON(doc.getXmlFragment("rich-text")) as RichReportNode
+    report.richText = richText
+    const heading = richText.content?.find(node => node.type === "heading" && node.attrs?.level === 1)
+    const title = heading?.content?.map(node => node.text || "").join("")
+    if (title) report.fields!.title = { ...report.fields!.title, text: title }
+  }
   return report
 }
 
@@ -88,5 +113,5 @@ export function validateReport(report: unknown): report is DocumentReport {
   const value = report as DocumentReport
   return typeof value.title === "string" && value.title.length <= 1000 && typeof value.author === "string" && typeof value.date === "string" &&
     Array.isArray(value.sections) && value.sections.length <= 200 && value.sections.every(section => typeof section.heading === "string" && typeof section.content === "string") &&
-    JSON.stringify(value).length <= 500000
+    (!value.richText || value.richText.type === "doc" && validRichContent(value.richText)) && JSON.stringify(value).length <= 500000
 }

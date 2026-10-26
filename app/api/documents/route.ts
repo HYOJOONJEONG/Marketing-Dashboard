@@ -3,7 +3,7 @@ import * as Y from "yjs"
 import { NextResponse } from "next/server"
 import { resolveRequestSession } from "@/lib/auth/session"
 import { documentStorage, updateStoredDocument } from "@/lib/document-store"
-import { applyReportChange, bytesToBase64, documentRole, StoredDocument, validateReport } from "@/lib/document-collaboration"
+import { applyReportChange, bytesToBase64, documentRole, initializeRichDocument, StoredDocument, validateReport } from "@/lib/document-collaboration"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -34,6 +34,7 @@ export async function POST(request: Request) {
     const id = typeof body.id === "string" && /^[a-f0-9-]{36}$/.test(body.id) ? body.id : crypto.randomUUID()
     const doc = new Y.Doc()
     applyReportChange(doc, body.report)
+    initializeRichDocument(doc)
     const state = bytesToBase64(Y.encodeStateAsUpdate(doc))
     doc.destroy()
     const now = new Date().toISOString()

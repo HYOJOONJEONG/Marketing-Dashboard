@@ -2,7 +2,7 @@ import * as Y from "yjs"
 import { NextResponse } from "next/server"
 import { resolveRequestSession } from "@/lib/auth/session"
 import { documentStorage, updateStoredDocument, validDocumentId } from "@/lib/document-store"
-import { base64ToBytes, bytesToBase64, documentRole, reportFromYDoc, StoredDocument, validateReport } from "@/lib/document-collaboration"
+import { base64ToBytes, bytesToBase64, documentRole, initializeRichDocument, reportFromYDoc, StoredDocument, validateReport } from "@/lib/document-collaboration"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -37,6 +37,21 @@ export async function POST(request: Request, context: Context) {
     const document = await updateStoredDocument(id, current => {
       const role = current && documentRole(current, session.user.id)
       if (!current || !role) { denied = true; return null }
+      if (body.action === "initialize") {
+        if (role === "viewer") { denied = true; return null }
+        const doc = new Y.Doc()
+        try {
+          Y.applyUpdate(doc, base64ToBytes(current.state))
+          if (!doc.getMap("report").get("richInitialized") && typeof body.update === "string") {
+            Y.applyUpdate(doc, base64ToBytes(body.update))
+            if (!validateReport(reportFromYDoc(doc))) throw new Error("문서 내용을 확인해주세요.")
+          }
+          if (!initializeRichDocument(doc)) return null
+          const state = bytesToBase64(Y.encodeStateAsUpdate(doc))
+          if (state.length > 1100000) throw new Error("문서 용량 한도를 초과했습니다.")
+          return { ...current, state, version: current.version + 1 }
+        } finally { doc.destroy() }
+      }
       if (body.action === "members") {
         if (role !== "owner") { denied = true; return null }
         const user = session.state.users.find(user => user.id === body.userId && user.active && !user.deletedAt)
@@ -74,6 +89,7 @@ export async function POST(request: Request, context: Context) {
     })
     if (denied || !document) return NextResponse.json({ error: "이 문서에 접근하거나 수정할 권한이 없습니다." }, { status: 403, headers })
     if (body.action === "members") return NextResponse.json({ members: document.members }, { headers })
+    if (body.action === "initialize") return NextResponse.json({ document, role: documentRole(document, session.user.id) }, { headers })
     const doc = new Y.Doc()
     let update: string
     try {

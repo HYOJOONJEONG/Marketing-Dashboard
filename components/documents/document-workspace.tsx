@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowRight, Bold, Check, Cloud, CloudOff, Copy, Download, FileText, FolderOpen, Italic, Loader2, LockKeyhole, PanelLeftClose, PanelLeftOpen, Plus, Printer, Redo2, RotateCcw, Save, Underline, Undo2, Users } from "lucide-react"
-import { DocumentReport, ReportStyle, defaultFieldStyle, fieldText, formatDocumentReport, reportFields, reportHtml, reportPlainText, REPORT_CSS, REPORT_FONTS } from "@/lib/document-report"
-import { NumberControl } from "./number-control"
+import { useEffect, useRef, useState } from "react"
+import { ArrowRight, Cloud, CloudOff, Copy, Download, FileText, FolderOpen, Loader2, LockKeyhole, PanelLeftClose, PanelLeftOpen, Plus, Printer, Redo2, Save, Undo2, Users } from "lucide-react"
+import { DocumentReport, fieldText, formatDocumentReport, reportHtml, reportPlainText, REPORT_CSS } from "@/lib/document-report"
+import { RichReportEditor } from "./rich-report-editor"
 import { useDocumentCollaboration } from "./use-document-collaboration"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
@@ -19,7 +19,7 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
   const [selected, setSelected] = useState("title")
   const [message, setMessage] = useState("")
   const [ready, setReady] = useState(false)
-  const [sourceOpen, setSourceOpen] = useState(true)
+  const [sourceOpen, setSourceOpen] = useState(false)
   const [undo, setUndo] = useState<DocumentReport[]>([])
   const [redo, setRedo] = useState<DocumentReport[]>([])
   const [scale, setScale] = useState(1)
@@ -63,6 +63,7 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
         }
       }
     } catch { setMessage("임시 문서를 불러오지 못했습니다.") }
+    setReport(previous => previous || formatDocumentReport("", { title, date, author: writer }))
     setReady(true)
   }, [draftKey])
 
@@ -84,7 +85,7 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
     if (!sourceChanged.current || !ready || !source.trim() || collaboration.document) return
     const timer = setTimeout(() => {
       // Existing edits are only replaced by the explicit apply action.
-      if (!report?.fields || !Object.keys(report.fields).length) {
+      if (!report?.richText && (!report?.fields || !Object.keys(report.fields).length)) {
         sourceChanged.current = false
         setReport(formatDocumentReport(source, { title, date, author: writer }))
       }
@@ -92,9 +93,6 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
     return () => clearTimeout(timer)
   }, [source, title, date, writer, ready, report, collaboration.document?.id])
 
-  const fields = useMemo(() => report ? reportFields(report) : [], [report])
-  const field = fields.find(item => item.key === selected)
-  const style: ReportStyle = { ...defaultFieldStyle(field?.kind || "body"), ...(selected.includes(".r0.") ? { bold: true } : {}), ...report?.fields?.[selected]?.style }
 
   function commit(next: DocumentReport) {
     if (!canEdit) return
@@ -103,14 +101,6 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
     setRedo([])
     setReport(next)
     setMessage("이 브라우저에 임시 보관됨")
-  }
-  function changeStyle(patch: ReportStyle) {
-    if (!report || !field) return
-    commit({ ...report, fields: { ...report.fields, [selected]: { ...report.fields?.[selected], style: { ...report.fields?.[selected]?.style, ...patch } } } })
-  }
-  function setFieldText(value: string) {
-    if (!report || !field) return
-    commit({ ...report, fields: { ...report.fields, [selected]: { ...report.fields?.[selected], text: value } } })
   }
   function travel(direction: "undo" | "redo") {
     if (collaboration.document) { if (direction === "undo") collaboration.undo(); else collaboration.redo(); return }
@@ -139,7 +129,7 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
     if (report && !collaboration.document && !await collaboration.create(report)) return
     if (!await collaboration.detach()) return
     setReady(true)
-    setSource(""); setTitle("업무 보고서"); setWriter(department || author); setReport(null); setSourceOpen(true); setUndo([]); setRedo([]); setMessage(""); setSelected("title")
+    setSource(""); setTitle("업무 보고서"); setWriter(department || author); setReport(formatDocumentReport("", { title: "업무 보고서", date, author: department || author })); setSourceOpen(false); setUndo([]); setRedo([]); setMessage(""); setSelected("title")
   }
   async function openSharing() {
     if (!report) return
@@ -157,7 +147,6 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
     if (await collaboration.open(id)) setLibraryOpen(false)
   }
   const peers = collaboration.presence.filter(person => person.userId !== userId)
-  const peerFields = Object.fromEntries(peers.map(person => [person.field, person.name]))
   const statusLabel = collaboration.document
     ? ({ local: "브라우저 임시 보관", saving: "서버 저장 중", saved: "서버 저장 완료", offline: "연결 끊김 · 재시도 중", denied: "권한 확인 필요" })[collaboration.status]
     : "비공개 · 브라우저 임시 보관"
@@ -186,10 +175,6 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
     if (!report) return
     try { await navigator.clipboard.writeText(reportPlainText(report)); setMessage("수정된 보고서 내용을 복사했습니다.") }
     catch { setMessage("복사하지 못했습니다. 다운로드를 이용해주세요.") }
-  }
-  function selectField(target: EventTarget) {
-    const element = target instanceof Element ? target.closest<HTMLElement>("[data-report-field]") : null
-    if (element?.dataset.reportField) setSelected(element.dataset.reportField)
   }
 
   return <div className="document-workspace min-w-0">
@@ -230,28 +215,13 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
     {message && !collaboration.document ? <div className="mb-3 text-xs text-slate-500">{message}</div> : null}
     <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
       <div ref={stageRef} className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-[#e9edf0] px-4 py-6">
-        {report ? <div className="report-editor-paper mx-auto bg-white shadow-sm" style={{ width: 794, minHeight: 1123, zoom: scale }}
-          onClick={e => selectField(e.target)} onFocus={e => selectField(e.target)}
-          dangerouslySetInnerHTML={{ __html: reportHtml(report, true, selected, peerFields) }} />
+        {report ? <RichReportEditor key={collaboration.document?.id || "local"} report={report} yDoc={collaboration.yDoc} editable={canEdit} scale={scale} onChange={commit} onSelection={setSelected} />
           : <div className="flex min-h-[500px] flex-col items-center justify-center gap-3 text-slate-400"><FileText size={40} strokeWidth={1} /><span className="text-sm">작성된 보고서가 없습니다.</span></div>}
       </div>
 
       <aside className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm xl:sticky xl:top-4" aria-label="보고서 서식 편집">
-        <div className="mb-4 flex items-center justify-between"><h2 className="text-sm font-bold text-slate-800">{field?.label || "서식"}</h2><button type="button" className="text-slate-400 hover:text-slate-700 disabled:opacity-30" title="선택 항목 서식 초기화" aria-label="선택 항목 서식 초기화" disabled={!field} onClick={() => { if (!report) return; commit({ ...report, fields: { ...report.fields, [selected]: { ...report.fields?.[selected], style: {} } } }) }}><RotateCcw size={15} /></button></div>
+        <div className="mb-4 flex items-center justify-between"><h2 className="text-sm font-bold text-slate-800">용지 설정</h2></div>
         {peers.some(person => person.field === selected) ? <div className="mb-4 rounded-md bg-emerald-50 px-2 py-1.5 text-xs text-emerald-700">{peers.filter(person => person.field === selected).map(person => person.name).join(", ")} 님 편집 중</div> : null}
-        <fieldset disabled={!field || !canEdit} className="space-y-4 disabled:opacity-40">
-          <label className="block text-xs font-semibold text-slate-500">내용<textarea aria-label="선택 항목 내용" className={`${INPUT} mt-1 h-24 resize-y py-2 font-normal leading-6`} value={report && field ? fieldText(report, selected, field.text) : ""} onChange={e => setFieldText(e.target.value)} /></label>
-          <label className="block text-xs font-semibold text-slate-500">글꼴<select className={`${INPUT} mt-1`} value={style.font} onChange={e => changeStyle({ font: e.target.value as ReportStyle["font"] })}>{Object.entries(REPORT_FONTS).map(([key, font]) => <option key={key} value={key}>{font.label}</option>)}</select></label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="text-xs font-semibold text-slate-500">크기 (pt)<NumberControl key={`${selected}-size`} label="글자 크기" min={7} max={48} step={0.5} value={style.size!} className={`${INPUT} mt-1`} onCommit={value => changeStyle({ size: value })} /></label>
-            <label className="text-xs font-semibold text-slate-500">자간 (px)<NumberControl key={`${selected}-spacing`} label="자간" min={0} max={8} step={0.1} value={style.spacing!} className={`${INPUT} mt-1`} onCommit={value => changeStyle({ spacing: value })} /></label>
-          </div>
-          <div className="flex flex-wrap gap-1.5">{[{ label: "굵게", property: "bold", Icon: Bold }, { label: "기울임", property: "italic", Icon: Italic }, { label: "밑줄", property: "underline", Icon: Underline }].map(({ label, property, Icon }) => <button key={property} type="button" title={label} aria-label={label} aria-pressed={Boolean(style[property as keyof ReportStyle])} onClick={() => changeStyle({ [property]: !style[property as keyof ReportStyle] })} className={`${TOOL} ${style[property as keyof ReportStyle] ? "!border-blue-300 !bg-blue-50 !text-blue-700" : ""}`}><Icon size={15} /></button>)}<label title="글자색" className="flex h-9 items-center gap-2 pl-1"><input aria-label="글자색" type="color" className="h-7 w-7 cursor-pointer border-0 bg-transparent p-0" value={style.color} onChange={e => changeStyle({ color: e.target.value })} /></label></div>
-          <div className="flex gap-1" role="group" aria-label="정렬">{[{ value: "left", label: "왼쪽 정렬", Icon: AlignLeft }, { value: "center", label: "가운데 정렬", Icon: AlignCenter }, { value: "right", label: "오른쪽 정렬", Icon: AlignRight }, { value: "justify", label: "양쪽 정렬", Icon: AlignJustify }].map(({ value, label, Icon }) => <button key={value} type="button" title={label} aria-label={label} aria-pressed={style.align === value} onClick={() => changeStyle({ align: value as ReportStyle["align"] })} className={`${TOOL} ${style.align === value ? "!border-blue-300 !bg-blue-50 !text-blue-700" : ""}`}><Icon size={15} /></button>)}</div>
-          <label className="block text-xs font-semibold text-slate-500">행간 {style.lineHeight}<input type="range" aria-label="행간" min={1} max={3} step={0.05} value={style.lineHeight} onChange={e => changeStyle({ lineHeight: Number(e.target.value) })} className="mt-2 block w-full accent-blue-600" /></label>
-          <label className="block text-xs font-semibold text-slate-500">문단 아래 간격 {style.spaceAfter}px<input type="range" aria-label="문단 아래 간격" min={0} max={48} value={style.spaceAfter} onChange={e => changeStyle({ spaceAfter: Number(e.target.value) })} className="mt-2 block w-full accent-blue-600" /></label>
-          {field?.kind !== "cell" && <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" className="accent-blue-600" checked={Boolean(style.pageBreak)} onChange={e => changeStyle({ pageBreak: e.target.checked })} />PDF에서 새 페이지로 시작</label>}
-        </fieldset>
         <fieldset disabled={!report || !canEdit} className="mt-5 space-y-4 border-t border-slate-100 pt-4 disabled:opacity-40"><legend className="pt-4 text-xs font-bold text-slate-700">용지</legend>
           <label className="block text-xs font-semibold text-slate-500">여백 {report?.page?.margin ?? 18}mm<input type="range" aria-label="용지 여백" min={10} max={30} value={report?.page?.margin ?? 18} onChange={e => report && commit({ ...report, page: { ...report.page, margin: Number(e.target.value) } })} className="mt-2 block w-full accent-blue-600" /></label>
           <label className="block text-xs font-semibold text-slate-500">로고 크기 {report?.page?.logoWidth ?? 145}px<input type="range" aria-label="로고 크기" min={80} max={220} value={report?.page?.logoWidth ?? 145} onChange={e => report && commit({ ...report, page: { ...report.page, logoWidth: Number(e.target.value) } })} className="mt-2 block w-full accent-blue-600" /></label>

@@ -9,7 +9,8 @@ import { DailyReportPage } from "./daily-report/daily-report-page"
 import { PersonalDashboard } from "./me/personal-dashboard"
 import { AdminConsole } from "./admin/admin-console"
 import { TypeAnalysisDashboard } from "./type-analysis/type-analysis-dashboard"
-import { DocumentWorkspace } from "./documents/document-workspace"
+import dynamic from "next/dynamic"
+
 import { getIndustryGroupLabel } from "@/lib/industry-groups"
 import { dashboardSlicesDiffer, hasProtectedSlice } from "@/lib/dashboard-collaboration"
 import { buildPersonalDashboardData } from "@/lib/personal-dashboard"
@@ -20,6 +21,8 @@ import {
 } from "@/lib/daily-report"
 import type { UserTestIdEntry } from "@/lib/auth/model"
 import typeAnalysisSource from "@/data/type-analysis-source.json"
+
+const DocumentWorkspace = dynamic(() => import("./documents/document-workspace").then(module => module.DocumentWorkspace), { ssr: false })
 
 type ViewKey =
   | "documents"

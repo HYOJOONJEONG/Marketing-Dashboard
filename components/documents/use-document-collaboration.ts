@@ -93,6 +93,15 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
       const response = await fetch(`/api/documents/${id}`, { cache: "no-store" })
       const json = await response.json()
       if (!response.ok) throw new Error(json.error)
+      if (json.role !== "viewer") {
+        let recovery: string | null = null
+        try { recovery = localStorage.getItem(key(id)) } catch {}
+        const initialized = await fetch(`/api/documents/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "initialize", ...(recovery ? { update: recovery } : {}) }) })
+        const migrated = await initialized.json()
+        if (!initialized.ok) throw new Error(migrated.error)
+        attach(migrated.document, migrated.role)
+        return true
+      }
       attach(json.document, json.role)
       return true
     } catch (error) { setError(error instanceof Error ? error.message : "문서를 열지 못했습니다."); return false }
@@ -201,6 +210,6 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     setDocument(null); setRole(null); setStatus("local"); setPresence([]); setError("")
     return true
   }
-  return { document, role, documents, presence, status, error, list, open, create, apply, detach, changeMember, save: () => { retryAfter.current = 0; return syncRef.current() }, canUndo, canRedo,
+  return { yDoc: docRef.current, document, role, documents, presence, status, error, list, open, create, apply, detach, changeMember, save: () => { retryAfter.current = 0; return syncRef.current() }, canUndo, canRedo,
     undo: () => undoRef.current?.undo(), redo: () => undoRef.current?.redo() }
 }
