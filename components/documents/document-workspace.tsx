@@ -127,8 +127,8 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
   }
   async function saveDraft() {
     if (!report) return
-    if (collaboration.document) await collaboration.save()
-    else await collaboration.create(report)
+    const saved = collaboration.document ? await collaboration.save() : await collaboration.create(report)
+    if (saved) setMessage("임시저장을 완료했습니다.")
   }
   async function newReport() {
     if (report && !collaboration.document && !await collaboration.create(report)) return
@@ -153,7 +153,7 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
   }
   const peers = collaboration.presence.filter(person => person.userId !== userId)
   const statusLabel = collaboration.document
-    ? ({ local: "브라우저 임시 보관", saving: "서버 저장 중", saved: "서버 저장 완료", offline: "연결 끊김 · 재시도 중", denied: "권한 확인 필요" })[collaboration.status]
+    ? ({ local: "브라우저 임시 보관", unsaved: "저장 전 변경 있음 · 브라우저에 보관", saving: "서버 저장 중", saved: "서버 저장 완료", offline: "저장 실패 · 변경 내용은 브라우저에 보관", denied: "권한 확인 필요" })[collaboration.status]
     : "비공개 · 브라우저 임시 보관"
   function download() {
     if (!report) return
@@ -217,7 +217,7 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
       <div className="flex items-center gap-1.5">{Array.from(new Map(collaboration.presence.map(person => [person.userId, person])).values()).map(person => <span key={person.userId} title={`${person.name}${person.userId === userId ? " (나)" : " · 접속 중"}`} className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold ${person.userId === userId ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>{person.name.slice(-2)}</span>)}</div>
     </div>
     {collaboration.error ? <div role="alert" className="mb-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{collaboration.error}</div> : null}
-    {message && !collaboration.document ? <div className="mb-3 text-xs text-slate-500">{message}</div> : null}
+    {message ? <div className="mb-3 text-xs text-slate-500">{message}</div> : null}
     <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0 overflow-visible rounded-lg border border-slate-200 bg-[#e9edf0] px-4 py-6">
         {report ? <RichReportEditor key={collaboration.document?.id || "local"} report={report} yDoc={collaboration.yDoc} editable={canEdit} toolbarTarget={toolbarTarget} onChange={commit} onSelection={setSelected} />

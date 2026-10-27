@@ -15,7 +15,7 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
   const [listWarning, setListWarning] = useState("")
   const listRequest = useRef(0)
   const [presence, setPresence] = useState<DocumentPresence[]>([])
-  const [status, setStatus] = useState<"local" | "saving" | "saved" | "offline" | "denied">("local")
+  const [status, setStatus] = useState<"local" | "unsaved" | "saving" | "saved" | "offline" | "denied">("local")
   const [error, setError] = useState("")
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
@@ -36,7 +36,7 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
   const creating = useRef(false)
   const creationId = useRef<string | null>(null)
   const connectionId = useRef("")
-  const syncRef = useRef<() => Promise<boolean>>(async () => true)
+  const syncRef = useRef<(pushLocal?: boolean, reportFailure?: boolean) => Promise<boolean>>(async () => true)
   const cacheTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flushCache = useRef<() => void>(() => {})
   const key = (id: string) => `document-crdt:${userId}:${id}`
@@ -110,12 +110,12 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     flushCache.current = flushSnapshot
     window.addEventListener("pagehide", flushSnapshot)
     doc.on("update", (update, origin) => {
-      if (origin !== "remote") { pending.current.push(update); setStatus("saving") }
+      if (origin !== "remote") { pending.current.push(update); setStatus("unsaved") }
       if (cacheTimer.current) clearTimeout(cacheTimer.current)
       cacheTimer.current = setTimeout(flushSnapshot, 350)
       updateUndo()
     })
-    setStatus(pending.current.length ? "saving" : "saved")
+    setStatus(pending.current.length ? "unsaved" : "saved")
     failures.current = 0
     retryAfter.current = 0
     setError("")
@@ -123,7 +123,10 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
   }
 
   async function open(id: string) {
-    if (metaRef.current && status !== "denied" && !await syncRef.current()) return false
+    if (metaRef.current && pending.current.length) {
+      setError("저장되지 않은 변경 내용이 있습니다. 임시저장을 완료한 뒤 문서를 여세요.")
+      return false
+    }
     try {
       const response = await fetch(`/api/documents/${id}?encoding=gzip`, { cache: "no-store" })
       const json = await response.json()
@@ -171,16 +174,21 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     finally { creating.current = false }
   }
 
-  syncRef.current = async () => {
+  syncRef.current = async (pushLocal = false, reportFailure = false) => {
     const doc = docRef.current
     const meta = metaRef.current
     if (!doc || !meta) return true
-    if (busy.current || status === "denied") return false
-    if (Date.now() < retryAfter.current) return false
+    if (status === "denied") return false
+    if (busy.current && !pushLocal) return false
+    while (busy.current) await new Promise(resolve => setTimeout(resolve, 40))
+    if (docRef.current !== doc || metaRef.current?.id !== meta.id) return false
+    if (pushLocal && Date.now() < retryAfter.current) return false
     busy.current = true
-    const outgoing = pending.current.splice(0)
+    const outgoing = pushLocal ? pending.current.splice(0) : []
     try {
-      const response = await fetch(`/api/documents/${meta.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "sync", encoding: "gzip", vector: bytesToBase64(Y.encodeStateVector(doc)), ...(outgoing.length ? { update: bytesToBase64(Y.mergeUpdates(outgoing)) } : {}), field: selectionRef.current, connectionId: connectionId.current }), signal: AbortSignal.timeout(12000) })
+      const response = pushLocal
+        ? await fetch(`/api/documents/${meta.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "sync", encoding: "gzip", vector: bytesToBase64(Y.encodeStateVector(doc)), ...(outgoing.length ? { update: bytesToBase64(Y.mergeUpdates(outgoing)) } : {}), field: selectionRef.current, connectionId: connectionId.current }), signal: AbortSignal.timeout(12000) })
+        : await fetch(`/api/documents/${meta.id}?encoding=gzip`, { cache: "no-store", signal: AbortSignal.timeout(12000) })
       const json = await response.json()
       if (docRef.current !== doc) return true
       if (response.status === 403 || response.status === 401) {
@@ -189,25 +197,46 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
         return false
       }
       if (!response.ok) throw new Error(json.error)
-      Y.applyUpdate(doc, base64ToBytes(json.update), "remote")
-      setPresence(json.presence)
+      let members = json.members
+      let updatedAt = json.updatedAt
+      let version = json.version
+      let nextPresence = json.presence
+      if (pushLocal) {
+        Y.applyUpdate(doc, base64ToBytes(json.update), "remote")
+      } else {
+        const remote = new Y.Doc()
+        try {
+          Y.applyUpdate(remote, base64ToBytes(json.document.state))
+          const difference = Y.encodeStateAsUpdate(remote, Y.encodeStateVector(doc))
+          if (difference.length > 2) Y.applyUpdate(doc, difference, "remote")
+        } finally { remote.destroy() }
+        members = json.document.members
+        updatedAt = json.document.updatedAt
+        version = json.document.version
+        nextPresence = json.document.presence.filter((person: DocumentPresence) => Date.now() - person.seenAt < 30000)
+      }
+      setPresence(nextPresence || [])
       setRole(json.role)
       roleRef.current = json.role
-      const next = { ...meta, members: json.members, updatedAt: json.updatedAt, version: json.version }
+      const next = { ...meta, members, updatedAt, version }
       metaRef.current = next
       setDocument(next)
-      setStatus(pending.current.length ? "saving" : "saved")
+      setStatus(pending.current.length ? "unsaved" : "saved")
       failures.current = 0
       retryAfter.current = 0
       setError("")
       return !pending.current.length
     } catch (error) {
       if (docRef.current === doc) {
-        pending.current.unshift(...outgoing)
-        setStatus("offline")
-        failures.current++
-        retryAfter.current = Date.now() + Math.min(30000, 1000 * 2 ** Math.min(failures.current, 5))
-        setError(error instanceof Error ? error.message : "연결이 끊겼습니다. 변경 내용은 보관됩니다.")
+        if (pushLocal) {
+          pending.current.unshift(...outgoing)
+          setStatus("offline")
+          failures.current++
+          retryAfter.current = Date.now() + Math.min(30000, 1000 * 2 ** Math.min(failures.current, 5))
+          setError(error instanceof Error ? error.message : "저장하지 못했습니다. 변경 내용은 브라우저에 보관되어 있습니다.")
+        } else if (reportFailure) {
+          setError(error instanceof Error ? error.message : "문서를 확인하지 못했습니다.")
+        }
       }
       return false
     } finally { busy.current = false }
@@ -215,8 +244,8 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
 
   useEffect(() => {
     if (!document?.id) return
-    const interval = setInterval(() => { if (!window.document.hidden || pending.current.length) void syncRef.current() }, 2000)
-    const onFocus = () => { retryAfter.current = 0; void syncRef.current() }
+    const interval = setInterval(() => { if (!window.document.hidden) void syncRef.current(false) }, 5000)
+    const onFocus = () => { void syncRef.current(false) }
     const onLeave = (event: BeforeUnloadEvent) => { if (pending.current.length) { event.preventDefault(); event.returnValue = "" } }
     window.addEventListener("focus", onFocus)
     window.addEventListener("online", onFocus)
@@ -244,12 +273,15 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     } catch (error) { setError(error instanceof Error ? error.message : "초대 권한을 변경하지 못했습니다.") }
   }
   async function detach() {
-    if (metaRef.current && status !== "denied" && !await syncRef.current()) return false
+    if (pending.current.length) {
+      setError("저장되지 않은 변경 내용이 있습니다. 임시저장을 완료한 뒤 이동하세요.")
+      return false
+    }
     undoRef.current?.destroy(); docRef.current?.destroy()
     docRef.current = null; metaRef.current = null; roleRef.current = null; creationId.current = null; pending.current = []
     setDocument(null); setRole(null); setStatus("local"); setPresence([]); setError("")
     return true
   }
-  return { yDoc: docRef.current, document, role, documents, listStatus, listError, listWarning, presence, status, error, list, open, create, apply, detach, changeMember, save: () => { retryAfter.current = 0; return syncRef.current() }, canUndo, canRedo,
+  return { yDoc: docRef.current, document, role, documents, listStatus, listError, listWarning, presence, status, error, list, open, create, apply, detach, changeMember, save: () => { retryAfter.current = 0; return syncRef.current(true, true) }, canUndo, canRedo,
     undo: () => undoRef.current?.undo(), redo: () => undoRef.current?.redo() }
 }

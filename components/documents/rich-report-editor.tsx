@@ -318,6 +318,7 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
       } catch { /* Keep the editor usable if it is being replaced during a click. */ }
     }} onClick={event => {
       if (!editor || editor.isDestroyed || !editable || !(event.target instanceof Element) || !event.target.closest(".tiptap")) return
+      if (event.target.closest("td,th")) return
       const selection = editor.state.selection
       if (!selection.empty) return
       try {
