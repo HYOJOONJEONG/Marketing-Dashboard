@@ -4,13 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import * as Y from "yjs"
 import type { DocumentReport } from "@/lib/document-report"
 import { applyReportChange, base64ToBytes, bytesToBase64, DocumentMember, DocumentPresence, reportFromYDoc, StoredDocument } from "@/lib/document-collaboration"
-
-export type DocumentSummary = { id: string; title: string; ownerName: string; updatedAt: string; shared: boolean; role: "owner" | "editor" | "viewer" }
+import type { DocumentSummary } from "@/lib/document-library"
 
 export function useDocumentCollaboration(userId: string, selection: string, onReport: (report: DocumentReport | null, opened?: boolean) => void, currentReport: DocumentReport | null) {
   const [document, setDocument] = useState<StoredDocument | null>(null)
   const [role, setRole] = useState<"owner" | "editor" | "viewer" | null>(null)
   const [documents, setDocuments] = useState<DocumentSummary[]>([])
+  const [listStatus, setListStatus] = useState<"idle" | "loading" | "ready" | "error">("idle")
+  const [listError, setListError] = useState("")
+  const [listWarning, setListWarning] = useState("")
+  const listRequest = useRef(0)
   const [presence, setPresence] = useState<DocumentPresence[]>([])
   const [status, setStatus] = useState<"local" | "saving" | "saved" | "offline" | "denied">("local")
   const [error, setError] = useState("")
@@ -37,12 +40,23 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
   const key = (id: string) => `document-crdt:${userId}:${id}`
 
   const list = useCallback(async () => {
+    const request = ++listRequest.current
+    setListStatus("loading")
+    setListError("")
     try {
-      const response = await fetch("/api/documents", { cache: "no-store" })
+      const response = await fetch("/api/documents", { cache: "no-store", signal: AbortSignal.timeout(12000) })
       const json = await response.json()
       if (!response.ok) throw new Error(json.error)
+      if (!Array.isArray(json.documents)) throw new Error("문서 목록 응답을 확인할 수 없습니다.")
+      if (request !== listRequest.current) return
       setDocuments(json.documents)
-    } catch (error) { setError(error instanceof Error ? error.message : "문서 목록을 불러오지 못했습니다.") }
+      setListWarning(json.unavailableCount ? "일부 문서의 목록 정보를 확인하지 못했습니다. 원본 문서는 삭제되지 않았습니다." : "")
+      setListStatus("ready")
+    } catch {
+      if (request !== listRequest.current) return
+      setListError("문서 목록을 불러오지 못했습니다. 다시 시도해주세요.")
+      setListStatus("error")
+    }
   }, [])
 
   useEffect(() => { connectionId.current = crypto.randomUUID(); void list() }, [list])
@@ -220,6 +234,6 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     setDocument(null); setRole(null); setStatus("local"); setPresence([]); setError("")
     return true
   }
-  return { yDoc: docRef.current, document, role, documents, presence, status, error, list, open, create, apply, detach, changeMember, save: () => { retryAfter.current = 0; return syncRef.current() }, canUndo, canRedo,
+  return { yDoc: docRef.current, document, role, documents, listStatus, listError, listWarning, presence, status, error, list, open, create, apply, detach, changeMember, save: () => { retryAfter.current = 0; return syncRef.current() }, canUndo, canRedo,
     undo: () => undoRef.current?.undo(), redo: () => undoRef.current?.redo() }
 }

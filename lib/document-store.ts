@@ -3,8 +3,9 @@ import fs from "fs/promises"
 import path from "path"
 import { redisCommand } from "./redis-client"
 import type { StoredDocument } from "./document-collaboration"
+import { documentMetadata } from "./document-library"
 
-type StorageCommand = { action: "read"; id: string } | { action: "list"; userId: string } | { action: "cas"; id: string; expected: string | null; value: StoredDocument }
+type StorageCommand = { action: "read"; id: string } | { action: "list"; userId: string; metadataOnly?: boolean } | { action: "cas"; id: string; expected: string | null; value: StoredDocument }
 const PREFIX = "infobiz:private-documents:"
 const DIRECTORY = path.join(process.cwd(), "data", "private-documents")
 const queues = new Map<string, Promise<unknown>>()
@@ -22,8 +23,27 @@ if old then
   end
 end
 redis.call('SET', KEYS[1], ARGV[2])
+redis.call('SET', ARGV[3]..'meta:'..next.id, ARGV[4])
 for id,_ in pairs(users) do redis.call('SADD', ARGV[3]..'user:'..id, next.id) end
 return 1
+`
+const LIST_METADATA = `
+local ids=redis.call('SMEMBERS', KEYS[1])
+local rows={}
+for _,id in ipairs(ids) do
+  local meta=redis.call('GET', ARGV[1]..'meta:'..id)
+  if meta then table.insert(rows,meta)
+  else
+    local raw=redis.call('GET', ARGV[1]..id)
+    if raw then
+      local ok,row=pcall(cjson.decode,raw)
+      if ok and type(row)=='table' then
+        table.insert(rows,cjson.encode({id=row.id,ownerId=row.ownerId,ownerName=row.ownerName,title=row.title,members=row.members,createdAt=row.createdAt,updatedAt=row.updatedAt}))
+      else table.insert(rows,'{}') end
+    end
+  end
+end
+return rows
 `
 
 async function redis<T>(command: Array<string | number>): Promise<T> {
@@ -54,16 +74,20 @@ export async function documentStorage(command: StorageCommand, direct = false): 
     if (command.action === "cas" && (process.env.SHARED_DB_READ_ONLY === "1" || (process.env.NODE_ENV !== "production" && process.env.SHARED_DB_ALLOW_REMOTE_WRITE_FROM_LOCAL !== "1"))) throw new Error("문서 저장소가 읽기 전용입니다.")
     if (command.action === "read") return redis(["GET", `${PREFIX}${command.id}`])
     if (command.action === "list") {
+      if (command.metadataOnly) return redis(["EVAL", LIST_METADATA, 1, `${PREFIX}user:${command.userId}`, PREFIX])
       const ids = await redis<string[]>(["SMEMBERS", `${PREFIX}user:${command.userId}`])
       return ids.length ? redis(["MGET", ...ids.map(id => `${PREFIX}${id}`)]) : []
     }
-    return Boolean(await redis(["EVAL", CAS, 1, `${PREFIX}${command.id}`, command.expected || "", JSON.stringify(command.value), PREFIX]))
+    return Boolean(await redis(["EVAL", CAS, 1, `${PREFIX}${command.id}`, command.expected || "", JSON.stringify(command.value), PREFIX, JSON.stringify(documentMetadata(command.value))]))
   }
   if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") throw new Error("문서용 영구 저장소가 설정되지 않았습니다.")
   await fs.mkdir(DIRECTORY, { recursive: true })
   if (command.action === "list") {
     const names = (await fs.readdir(DIRECTORY)).filter(name => name.endsWith(".json"))
-    return Promise.all(names.map(name => fs.readFile(path.join(DIRECTORY, name), "utf8")))
+    return Promise.all(names.map(async name => {
+      const raw = await fs.readFile(path.join(DIRECTORY, name), "utf8")
+      return command.metadataOnly ? JSON.stringify(documentMetadata(raw)) : raw
+    }))
   }
   const file = path.join(DIRECTORY, `${command.id}.json`)
   if (command.action === "read") return fs.readFile(file, "utf8").catch(error => { if (error.code === "ENOENT") return null; throw error })

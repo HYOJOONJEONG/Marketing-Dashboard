@@ -3,8 +3,9 @@ import * as Y from "yjs"
 import { NextResponse } from "next/server"
 import { resolveRequestSession } from "@/lib/auth/session"
 import { documentStorage, updateStoredDocument } from "@/lib/document-store"
-import { applyReportChange, bytesToBase64, documentRole, initializeRichDocument, StoredDocument, validateReport } from "@/lib/document-collaboration"
+import { applyReportChange, bytesToBase64, initializeRichDocument, validateReport } from "@/lib/document-collaboration"
 import { base64ToBytes, compatibleDocument, DOCUMENT_REQUEST_LIMIT, DOCUMENT_STATE_LIMIT } from "@/lib/document-codec"
+import { buildDocumentLibrary } from "@/lib/document-library"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -17,11 +18,11 @@ export async function GET(request: Request) {
     if (new URL(request.url).searchParams.get("directory") === "1") {
       return NextResponse.json({ users: session.state.users.filter(user => user.active && !user.deletedAt).map(user => ({ id: user.id, name: user.name, title: user.title || "", teamName: session.state.teams.find(team => team.id === user.teamId)?.name || "" })) }, { headers })
     }
-    const rows = await documentStorage({ action: "list", userId: session.user.id }) as Array<string | null>
-    const documents = rows.filter(Boolean).map(raw => JSON.parse(raw!) as StoredDocument).filter(row => documentRole(row, session.user.id)).map(row => ({ id: row.id, title: row.title, ownerName: row.ownerName, role: documentRole(row, session.user.id), updatedAt: row.updatedAt, shared: row.members.length > 0 }))
-    documents.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    return NextResponse.json({ documents }, { headers })
-  } catch {
+    const rows = await documentStorage({ action: "list", userId: session.user.id, metadataOnly: true }) as Array<string | null>
+    if (!Array.isArray(rows)) throw new Error("Invalid document list response")
+    return NextResponse.json(buildDocumentLibrary(rows, session.user.id), { headers })
+  } catch (error) {
+    console.error("[documents:list]", error instanceof Error ? error.message : "Unknown storage error")
     return NextResponse.json({ error: "문서 목록을 불러오지 못했습니다." }, { status: 503, headers })
   }
 }
