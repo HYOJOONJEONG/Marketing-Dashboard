@@ -6,7 +6,7 @@ import { EditorContent, useEditor, useEditorState } from "@tiptap/react"
 import type { Editor } from "@tiptap/core"
 import Collaboration from "@tiptap/extension-collaboration"
 import type * as Y from "yjs"
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, Italic, List, ListOrdered, Redo2, RemoveFormatting, Table, Underline, Undo2 } from "lucide-react"
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, ImagePlus, Italic, List, ListOrdered, Redo2, RemoveFormatting, Table, Underline, Undo2 } from "lucide-react"
 import { DocumentReport, legacyReportContent, REPORT_FONTS, RichReportNode } from "@/lib/document-report"
 import { REPORT_LOGO } from "@/lib/document-report-logo"
 import { reportExtensions } from "@/lib/document-rich-schema"
@@ -24,12 +24,44 @@ const PRESETS = [
   { key: "meta", label: "작성 정보", level: 0, size: 9, align: "right" },
 ]
 
+async function prepareReportImage(file: File): Promise<string> {
+  if (!file.type.startsWith("image/") || file.size > 20 * 1024 * 1024) throw new Error("이미지 파일은 20MB 이하로 선택해주세요.")
+  const bitmap = await createImageBitmap(file)
+  try {
+    let ratio = Math.min(1, 1600 / bitmap.width, 2000 / bitmap.height)
+    const canvas = document.createElement("canvas")
+    const context = canvas.getContext("2d")
+    if (!context) throw new Error("이미지를 처리하지 못했습니다.")
+    let blob: Blob | null = null
+    for (let attempt = 0; attempt < 7; attempt++) {
+      canvas.width = Math.max(1, Math.round(bitmap.width * ratio))
+      canvas.height = Math.max(1, Math.round(bitmap.height * ratio))
+      context.fillStyle = "#ffffff"
+      context.fillRect(0, 0, canvas.width, canvas.height)
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+      blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", Math.max(0.58, 0.82 - attempt * 0.04)))
+      if (!blob) throw new Error("이미지를 변환하지 못했습니다.")
+      if (blob.size <= 900000) break
+      ratio *= 0.82
+    }
+    if (!blob || blob.size > 900000) throw new Error("사진 용량을 줄이지 못했습니다. 다른 사진을 선택해주세요.")
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("이미지를 읽지 못했습니다."))
+      reader.onerror = () => reject(new Error("이미지를 읽지 못했습니다."))
+      reader.readAsDataURL(blob)
+    })
+  } finally { bitmap.close() }
+}
+
 export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChange, onSelection }: { report: DocumentReport; yDoc?: Y.Doc | null; editable: boolean; scale?: number; toolbarTarget?: HTMLElement | null; onChange: (report: DocumentReport) => void; onSelection: (selection: string) => void }) {
   const current = useRef(report)
   current.current = report
   const changed = useRef(onChange)
   changed.current = onChange
   const [tableOpen, setTableOpen] = useState(false)
+  const [imageError, setImageError] = useState("")
+  const imageInput = useRef<HTMLInputElement>(null)
   const [scope, setScope] = useState<ReportEditScope>("selection")
   const [cellMode, setCellMode] = useState(false)
   const cellModeRef = useRef(false)
@@ -52,7 +84,7 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     extensions: [...reportExtensions(shared), ...(shared && yDoc ? [Collaboration.configure({ document: yDoc, field: "rich-text" })] : [])],
     content: shared ? undefined : legacyReportContent(report),
     editable,
-    editorProps: { attributes: { "aria-label": "보고서 본문", role: "textbox", "aria-multiline": "true", spellcheck: "false" },
+    editorProps: { attributes: { "aria-label": "보고서 본문", role: "textbox", "aria-multiline": "true", tabindex: "0", spellcheck: "false" },
       handleDOMEvents: {
         mousedown(view, event) {
           if (!cellModeRef.current || !view.editable || event.button !== 0) return false
@@ -89,29 +121,31 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     onSelectionUpdate({ editor }) { onSelection(`본문 ${editor.state.selection.from}`) },
   }, [yDoc, shared])
   editorRef.current = editor
-  useEffect(() => { editor?.setEditable(editable) }, [editor, editable])
+  useEffect(() => { if (editor && !editor.isDestroyed) editor.setEditable(editable) }, [editor, editable])
   useEffect(() => {
     const release = () => { cellDrag.current = null }
     document.addEventListener("mouseup", release)
     return () => document.removeEventListener("mouseup", release)
   }, [])
   useEffect(() => {
-    if (!editor) return
+    if (!editor || editor.isDestroyed) return
+    // The editor can be destroyed before React runs this effect's cleanup.
+    const editorDOM = editor.view.dom
     const endComposition = () => {
       if (compositionFrame.current !== null) cancelAnimationFrame(compositionFrame.current)
       compositionFrame.current = requestAnimationFrame(() => { compositionFrame.current = null; publish(editor) })
     }
-    editor.view.dom.addEventListener("compositionend", endComposition)
-    return () => { editor.view.dom.removeEventListener("compositionend", endComposition); if (compositionFrame.current !== null) cancelAnimationFrame(compositionFrame.current) }
+    editorDOM.addEventListener("compositionend", endComposition)
+    return () => { editorDOM.removeEventListener("compositionend", endComposition); if (compositionFrame.current !== null) { cancelAnimationFrame(compositionFrame.current); compositionFrame.current = null } }
   }, [editor, shared])
   // Only genuinely external content may replace the document; local echoes must preserve its DOM and selection.
   useEffect(() => {
-    if (!editor || shared || editor.view.composing || report.richText === lastPublished.current) return
+    if (!editor || editor.isDestroyed || shared || editor.view.composing || report.richText === lastPublished.current) return
     const content = legacyReportContent(report)
     const next = editor.schema.nodeFromJSON(content)
     if (!editor.state.doc.eq(next)) editor.commands.setContent(content, { emitUpdate: false })
   }, [editor, shared, report])
-  const state = useEditorState({ editor, selector: ({ editor }) => editor ? {
+  const state = useEditorState({ editor, selector: ({ editor }) => editor && !editor.isDestroyed ? {
     kind: editor.getAttributes(editor.isActive("heading") ? "heading" : "paragraph").reportKind || (editor.isActive("heading", { level: 1 }) ? "title" : editor.isActive("heading", { level: 2 }) ? "heading" : editor.isActive("heading", { level: 3 }) ? "subheading" : "body"),
     text: editor.getAttributes("textStyle"), block: editor.getAttributes(editor.isActive("heading") ? "heading" : "paragraph"), tableStyle: editor.getAttributes("table"), cellStyle: editor.getAttributes(editor.isActive("tableHeader") ? "tableHeader" : "tableCell"),
     documentFont: editor.state.doc.firstChild?.attrs.documentFont || "gothic",
@@ -149,6 +183,16 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     editor.commands.focus(undefined, { scrollIntoView: false })
   }
   function inline(attrs: Record<string, any>) { if (editor) applyReportTextStyle(editor, attrs, scope) }
+  async function addImage(file?: File) {
+    if (!file || !editor || editor.isDestroyed) return
+    try {
+      const src = await prepareReportImage(file)
+      if (editor.isDestroyed) return
+      editor.chain().focus(undefined, { scrollIntoView: false }).insertContent({ type: "reportImage", attrs: { src, alt: file.name.replace(/\.[^.]+$/, "").slice(0, 200) || "보고서 이미지", width: 640, align: "center" } }).run()
+      setImageError("")
+    } catch (error) { setImageError(error instanceof Error ? error.message : "이미지를 첨부하지 못했습니다.") }
+    if (imageInput.current) imageInput.current.value = ""
+  }
   function block(attrs: Record<string, any>) { if (editor) applyReportBlockStyle(editor, attrs, scope) }
   function toggleMark(mark: "bold" | "italic" | "underline") {
     if (!editor || !editable) return
@@ -177,6 +221,9 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
       {([{ value: "left", label: "왼쪽 정렬", Icon: AlignLeft }, { value: "center", label: "가운데 정렬", Icon: AlignCenter }, { value: "right", label: "오른쪽 정렬", Icon: AlignRight }, { value: "justify", label: "양쪽 정렬", Icon: AlignJustify }] as const).map(({ value, label, Icon }) => <span key={value}>{button(label, Icon, () => block({ textAlign: value }), state?.block.textAlign === value)}</span>)}
       {button("글머리 목록", List, e => e.chain().focus(undefined, { scrollIntoView: false }).toggleBulletList().run(), state?.bullet)}
       {button("번호 목록", ListOrdered, e => e.chain().focus(undefined, { scrollIntoView: false }).toggleOrderedList().run(), state?.ordered)}
+      <button type="button" className={TOOL} aria-label="사진 첨부" title="사진 첨부" disabled={!editor || !editable} onMouseDown={event => event.preventDefault()} onClick={() => imageInput.current?.click()}><ImagePlus size={16} /></button>
+      <input ref={imageInput} type="file" accept="image/*" className="sr-only" aria-label="첨부할 사진" onChange={event => { void addImage(event.target.files?.[0]) }} />
+      {imageError && <span role="status" className="w-full text-xs text-rose-600">{imageError}</span>}
       <button type="button" className={TOOL} aria-label="표 편집" title="표 편집" aria-expanded={tableOpen} onMouseDown={event => event.preventDefault()} onClick={() => setTableOpen(value => !value)}><Table size={16} /></button>
       {button("서식 지우기", RemoveFormatting, e => {
         if (scope === "selection") e.chain().focus(undefined, { scrollIntoView: false }).unsetAllMarks().run()
@@ -203,12 +250,16 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     </fieldset>
   return <div className={`min-w-0 ${cellMode ? "report-cell-selection" : ""}`}>
     {toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar}
-    <div className="report-editor-paper mx-auto w-full max-w-[794px] bg-white shadow-sm" style={{ minHeight: 1123 }} onMouseDown={event => {
-      if (!editor || !editable || event.button !== 0 || !(event.target instanceof Element) || event.target.closest(".tiptap,.report-brand")) return
-      const bounds = editor.view.dom.getBoundingClientRect()
-      const position = editor.view.posAtCoords({ left: Math.max(bounds.left + 1, Math.min(bounds.right - 1, event.clientX)), top: Math.max(bounds.top + 1, Math.min(bounds.bottom - 1, event.clientY)) })
-      event.preventDefault()
-      editor.chain().focus(undefined, { scrollIntoView: false }).setTextSelection(position?.pos ?? editor.state.doc.content.size).run()
+    <div className="report-editor-paper mx-auto w-full max-w-[794px] bg-white shadow-sm" style={{ minHeight: 1123 }} onMouseDownCapture={event => {
+      if (!editor || editor.isDestroyed || !editable || !(event.target instanceof Element) || !event.target.closest(".tiptap")) return
+      try { if (document.activeElement !== editor.view.dom) editor.view.focus() } catch { /* The editor may be switching documents. */ }
+    }} onMouseDown={event => {
+      if (!editor || editor.isDestroyed || !editable || event.button !== 0 || !(event.target instanceof Element) || event.target.closest(".tiptap,.report-brand")) return
+      try {
+        const bounds = editor.view.dom.getBoundingClientRect()
+        const position = editor.view.posAtCoords({ left: Math.max(bounds.left + 1, Math.min(bounds.right - 1, event.clientX)), top: Math.max(bounds.top + 1, Math.min(bounds.bottom - 1, event.clientY)) })
+        if (position) { event.preventDefault(); editor.chain().focus(undefined, { scrollIntoView: false }).setTextSelection(position.pos).run() }
+      } catch { /* Keep the editor usable if it is being replaced during a click. */ }
     }}>
       <article className="company-report" style={{ padding: `${report.page?.margin ?? 18}mm`, fontFamily: REPORT_FONTS[(state?.documentFont || "gothic") as keyof typeof REPORT_FONTS]?.css }}>
         <div className="report-brand"><img className="report-logo" width={report.page?.logoWidth ?? 145} src={REPORT_LOGO} alt="INFOMAX" /></div>

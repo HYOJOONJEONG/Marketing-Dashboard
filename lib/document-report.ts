@@ -150,7 +150,8 @@ export function legacyReportContent(report: DocumentReport): RichReportNode {
 export function validRichContent(value: unknown, depth = 0): value is RichReportNode {
   if (!value || typeof value !== "object" || depth > 30) return false
   const node = value as RichReportNode
-  const types = ["doc", "paragraph", "heading", "text", "hardBreak", "bulletList", "orderedList", "listItem", "blockquote", "horizontalRule", "codeBlock", "table", "tableRow", "tableHeader", "tableCell"]
+  const types = ["doc", "paragraph", "heading", "text", "hardBreak", "bulletList", "orderedList", "listItem", "blockquote", "horizontalRule", "codeBlock", "table", "tableRow", "tableHeader", "tableCell", "reportImage"]
+  if (node.type === "reportImage") return typeof node.attrs?.src === "string" && node.attrs.src.length <= 1250000 && /^data:image\/(?:jpeg|png|webp);base64,[a-z\d+/]+=*$/i.test(node.attrs.src) && (node.attrs.width === undefined || Number.isFinite(node.attrs.width) && node.attrs.width >= 80 && node.attrs.width <= 1200)
   return types.includes(node.type) && (node.text === undefined || typeof node.text === "string") &&
     (!node.attrs || typeof node.attrs === "object") && (!node.marks || Array.isArray(node.marks) && node.marks.every(mark => ["textStyle", "bold", "italic", "underline", "strike", "code"].includes(mark.type))) &&
     (!node.content || Array.isArray(node.content) && node.content.length <= 10000 && node.content.every(child => validRichContent(child, depth + 1)))
@@ -173,6 +174,13 @@ export function richReportHtml(node: RichReportNode): string {
   if (node.type === "doc") return children
   if (node.type === "hardBreak") return "<br>"
   if (node.type === "horizontalRule") return "<hr>"
+  if (node.type === "reportImage") {
+    const src = typeof node.attrs?.src === "string" && node.attrs.src.length <= 1250000 && /^data:image\/(?:jpeg|png|webp);base64,[a-z\d+/]+=*$/i.test(node.attrs.src) ? node.attrs.src : ""
+    const width = bounded(node.attrs?.width, 80, 1200, 640)
+    const align = ["left", "center", "right"].includes(node.attrs?.align) ? node.attrs.align : "center"
+    const margin = align === "left" ? "0 auto 0 0" : align === "right" ? "0 0 0 auto" : "0 auto"
+    return `<img data-report-image="true" src="${escapeHtml(src)}" alt="${escapeHtml(String(node.attrs?.alt || "보고서 이미지").slice(0, 200))}" style="display:block;max-width:100%;height:auto;width:${width}px;margin:${margin}">`
+  }
   const tags: Record<string, string> = { paragraph: "p", bulletList: "ul", orderedList: "ol", listItem: "li", blockquote: "blockquote", codeBlock: "pre", table: "table", tableRow: "tr", tableHeader: "th", tableCell: "td" }
   const tag = node.type === "heading" ? `h${bounded(node.attrs?.level, 1, 3, 2)}` : tags[node.type]
   if (!tag) return children
@@ -238,6 +246,7 @@ export const REPORT_CSS = `
 .company-report table[data-table-density=compact] th,.company-report table[data-table-density=compact] td{padding:4px 6px;}
 .company-report table[data-table-density=airy] th,.company-report table[data-table-density=airy] td{padding:14px 12px;}
 .company-report .tiptap[contenteditable=true]{cursor:text;pointer-events:auto;}
+.company-report .tiptap img[data-report-image]{max-width:100%;height:auto;}
 .report-editor-paper [data-report-field]{cursor:text;border-radius:2px;outline:2px solid transparent;outline-offset:3px;transition:outline-color .12s;}
 .report-editor-paper [data-report-field]:hover{outline-color:#bfdbfe;}
 .report-editor-paper [data-report-field][data-selected=true]{outline-color:#2563eb;background-color:#eff6ff;}

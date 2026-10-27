@@ -1,4 +1,4 @@
-import { Extension, getSchema } from "@tiptap/core"
+import { Extension, getSchema, Node as TiptapNode } from "@tiptap/core"
 import StarterKit from "@tiptap/starter-kit"
 import { TextStyle } from "@tiptap/extension-text-style"
 import Color from "@tiptap/extension-color"
@@ -36,7 +36,29 @@ const Format = Extension.create({
   },
 })
 
+const ReportImage = TiptapNode.create({
+  name: "reportImage",
+  group: "block",
+  atom: true,
+  draggable: true,
+  addAttributes() {
+    return {
+      src: { default: null },
+      alt: { default: "보고서 이미지" },
+      width: { default: 640 },
+      align: { default: "center" },
+    }
+  },
+  parseHTML() { return [{ tag: "img[data-report-image]" }] },
+  renderHTML({ HTMLAttributes }) {
+    const src = typeof HTMLAttributes.src === "string" && HTMLAttributes.src.length <= 1250000 && /^data:image\/(?:jpeg|png|webp);base64,[a-z\d+/]+=*$/i.test(HTMLAttributes.src) ? HTMLAttributes.src : ""
+    const width = Math.min(1200, Math.max(80, Number(HTMLAttributes.width) || 640))
+    const align = ["left", "center", "right"].includes(HTMLAttributes.align) ? HTMLAttributes.align : "center"
+    return ["img", { "data-report-image": "true", src, alt: String(HTMLAttributes.alt || "보고서 이미지").slice(0, 200), width, style: `display:block;max-width:100%;height:auto;width:${width}px;margin:${align === "left" ? "0 auto 0 0" : align === "right" ? "0 0 0 auto" : "0 auto"}` }]
+  },
+})
+
 export function reportExtensions(collaborative = false) {
-  return [StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false, undoRedo: collaborative ? false : undefined }), TextStyle, Color, TextAlign.configure({ types: ["heading", "paragraph"] }), TableKit.configure({ table: { resizable: false } }), Format]
+  return [StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false, undoRedo: collaborative ? false : undefined }), TextStyle, Color, TextAlign.configure({ types: ["heading", "paragraph"] }), TableKit.configure({ table: { resizable: false } }), ReportImage, Format]
 }
 export function reportSchema() { return getSchema(reportExtensions()) }
