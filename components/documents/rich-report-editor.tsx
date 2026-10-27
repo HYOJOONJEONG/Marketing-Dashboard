@@ -126,7 +126,12 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
       },
     },
     onUpdate({ editor }) { publish(editor) },
-    onSelectionUpdate({ editor }) { onSelection(`본문 ${editor.state.selection.from}`) },
+    onSelectionUpdate({ editor }) {
+      const selection = editor.state.selection
+      if (selection.constructor.name === "TextSelection" && !selection.empty) savedTextSelection.current = { from: selection.from, to: selection.to }
+      else if (!selection.empty || editor.view.hasFocus()) savedTextSelection.current = null
+      onSelection(`본문 ${selection.from}`)
+    },
   }, [yDoc, shared])
   editorRef.current = editor
   useEffect(() => { if (editor && !editor.isDestroyed) editor.setEditable(editable) }, [editor, editable])
@@ -165,12 +170,7 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     if (!editor) return
     const selected = PRESETS.find(item => item.key === key)
     if (!selected || !editable) return
-    const selection = editor.state.selection
-    const saved = savedTextSelection.current
-    if (saved && selection.empty && saved.from < saved.to && saved.to <= editor.state.doc.content.size) {
-      editor.commands.setTextSelection(saved)
-    }
-    savedTextSelection.current = null
+    restoreTextSelection()
     const font = state?.documentFont || "gothic"
     // A heading style belongs to its paragraph, while inline formatting remains selection-based.
     const { from, to } = editor.state.selection
@@ -197,7 +197,12 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     })
     editor.commands.focus(undefined, { scrollIntoView: false })
   }
-  function inline(attrs: Record<string, any>) { if (editor) applyReportTextStyle(editor, attrs, scope) }
+  function restoreTextSelection() {
+    if (!editor || !editor.state.selection.empty) return
+    const saved = savedTextSelection.current
+    if (saved && saved.from < saved.to && saved.to <= editor.state.doc.content.size) editor.commands.setTextSelection(saved)
+  }
+  function inline(attrs: Record<string, any>) { if (editor) { restoreTextSelection(); applyReportTextStyle(editor, attrs, scope) } }
   function applyTableTheme(theme: string) {
     if (!editor) return
     editor.commands.command(({ state, tr }) => {
@@ -225,10 +230,10 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     } catch (error) { setImageError(error instanceof Error ? error.message : "이미지를 첨부하지 못했습니다.") }
     if (imageInput.current) imageInput.current.value = ""
   }
-  function block(attrs: Record<string, any>) { if (editor) applyReportBlockStyle(editor, attrs, scope) }
+  function block(attrs: Record<string, any>) { if (editor) { restoreTextSelection(); applyReportBlockStyle(editor, attrs, scope) } }
   function toggleMark(mark: "bold" | "italic" | "underline") {
     if (!editor || !editable) return
-    if (scope === "selection") { editor.chain().focus(undefined, { scrollIntoView: false }).toggleMark(mark).run(); return }
+    if (scope === "selection") { restoreTextSelection(); editor.chain().focus(undefined, { scrollIntoView: false }).toggleMark(mark).run(); return }
     const enabled = !editor.isActive(mark)
     editor.commands.command(({ tr, state }) => {
       const type = state.schema.marks[mark]
@@ -242,7 +247,7 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
   const toolbar = <fieldset disabled={!editable || !editor} className={`flex flex-wrap items-center gap-2 bg-white disabled:opacity-60 ${toolbarTarget ? "border-t border-slate-200 pt-4" : "sticky top-2 z-30 mb-4 rounded-md border border-slate-200 p-2 shadow-md"}`} aria-label="선택한 텍스트 서식">
       <h2 className="w-full text-sm font-bold text-slate-800">서식 편집</h2>
       <div role="group" aria-label="서식 적용 범위" className="grid w-full grid-cols-2 gap-1 rounded-md bg-slate-100 p-1">{[{ value: "selection", label: "선택 영역" }, { value: "document", label: "문서 전체" }].map(item => <button key={item.value} type="button" aria-pressed={scope === item.value} onMouseDown={event => event.preventDefault()} onClick={() => setScope(item.value as ReportEditScope)} className={`rounded px-2 py-2 text-xs font-semibold ${scope === item.value ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`}>{item.label}</button>)}</div>
-      <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">문단 서식<select disabled={scope === "document"} aria-label="문단 서식" title="선택한 문단에 적용할 서식" className={`${INPUT} w-28 font-semibold disabled:opacity-40`} value={state?.kind || "body"} onMouseDown={() => { const selection = editor?.state.selection; savedTextSelection.current = selection && !selection.empty ? { from: selection.from, to: selection.to } : null }} onChange={event => preset(event.target.value)}>{PRESETS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
+      <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">문단 서식<select disabled={scope === "document"} aria-label="문단 서식" title="선택한 문단에 적용할 서식" className={`${INPUT} w-28 font-semibold disabled:opacity-40`} value={state?.kind || "body"} onMouseDown={() => { const selection = editor?.state.selection; if (selection?.constructor.name === "TextSelection" && !selection.empty) savedTextSelection.current = { from: selection.from, to: selection.to } }} onChange={event => preset(event.target.value)}>{PRESETS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
       <select aria-label="선택 글꼴" className={`${INPUT} w-28`} value={state?.text.fontFamily || "gothic"} onChange={event => inline({ fontFamily: event.target.value })}>{Object.entries(REPORT_FONTS).map(([key, font]) => <option key={key} value={key}>{font.label}</option>)}</select>
       <NumberControl label="선택 글자 크기" className={`${INPUT} w-16`} min={7} max={48} step={0.5} value={Number(state?.text.fontSize) || PRESETS.find(item => item.key === state?.kind)?.size || 10.5} onCommit={value => inline({ fontSize: value })} />
       {button("굵게", Bold, () => toggleMark("bold"), state?.bold)}
