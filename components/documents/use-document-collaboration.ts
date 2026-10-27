@@ -100,7 +100,6 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     const persistSnapshot = () => {
       try { localStorage.setItem(key(row.id), bytesToBase64(Y.encodeStateAsUpdate(doc))) }
       catch { setError("이 브라우저의 보관 공간이 부족합니다. 서버 저장 상태를 확인해주세요.") }
-      reportCallback.current(reportFromYDoc(doc))
     }
     const flushSnapshot = () => {
       if (cacheTimer.current) clearTimeout(cacheTimer.current)
@@ -112,7 +111,7 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     doc.on("update", (update, origin) => {
       if (origin !== "remote") { pending.current.push(update); setStatus("unsaved") }
       if (cacheTimer.current) clearTimeout(cacheTimer.current)
-      cacheTimer.current = setTimeout(flushSnapshot, 350)
+      cacheTimer.current = setTimeout(flushSnapshot, 1200)
       updateUndo()
     })
     setStatus(pending.current.length ? "unsaved" : "saved")
@@ -244,8 +243,8 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
 
   useEffect(() => {
     if (!document?.id) return
-    const interval = setInterval(() => { if (!window.document.hidden) void syncRef.current(false) }, 5000)
-    const onFocus = () => { void syncRef.current(false) }
+    const interval = setInterval(() => { if (!window.document.hidden && !pending.current.length) void syncRef.current(false) }, 15000)
+    const onFocus = () => { if (!pending.current.length) void syncRef.current(false) }
     const onLeave = (event: BeforeUnloadEvent) => { if (pending.current.length) { event.preventDefault(); event.returnValue = "" } }
     window.addEventListener("focus", onFocus)
     window.addEventListener("online", onFocus)

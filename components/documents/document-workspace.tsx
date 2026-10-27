@@ -31,6 +31,7 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
   const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("editor")
   const [search, setSearch] = useState("")
   const sourceChanged = useRef(false)
+  const editorFlush = useRef<() => DocumentReport | null>(() => null)
   const draftKey = `document-report-draft:${userId}`
   const collaboration = useDocumentCollaboration(userId, selected, (next, opened) => {
     setReport(next)
@@ -69,13 +70,15 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
 
   useEffect(() => {
     if (!ready) return
-    const persistDraft = () => {
-      try { localStorage.setItem(draftKey, JSON.stringify(collaboration.document ? { documentId: collaboration.document.id } : { source, title, date, writer, report })) }
+    const persistDraft = (flushEditor = false) => {
+      const latestReport = flushEditor ? editorFlush.current() || report : report
+      try { localStorage.setItem(draftKey, JSON.stringify(collaboration.document ? { documentId: collaboration.document.id } : { source, title, date, writer, report: latestReport })) }
       catch { setMessage("임시 보관 공간이 부족합니다. 파일로 내려받아 주세요.") }
     }
-    const timer = window.setTimeout(persistDraft, 350)
-    window.addEventListener("pagehide", persistDraft)
-    return () => { window.clearTimeout(timer); window.removeEventListener("pagehide", persistDraft) }
+    const timer = window.setTimeout(persistDraft, 1000)
+    const persistOnLeave = () => persistDraft(true)
+    window.addEventListener("pagehide", persistOnLeave)
+    return () => { window.clearTimeout(timer); window.removeEventListener("pagehide", persistOnLeave) }
   }, [source, title, date, writer, report, draftKey, ready, collaboration.document?.id])
 
   useEffect(() => {
@@ -126,8 +129,10 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
     setMessage("공통 보고서 양식을 적용했습니다.")
   }
   async function saveDraft() {
-    if (!report) return
-    const saved = collaboration.document ? await collaboration.save() : await collaboration.create(report)
+    const latestReport = editorFlush.current() || report
+    if (!latestReport) return
+    if (collaboration.document) setReport(latestReport)
+    const saved = collaboration.document ? await collaboration.save() : await collaboration.create(latestReport)
     if (saved) setMessage("임시저장을 완료했습니다.")
   }
   async function newReport() {
@@ -220,7 +225,7 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
     {message ? <div className="mb-3 text-xs text-slate-500">{message}</div> : null}
     <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0 overflow-visible rounded-lg border border-slate-200 bg-[#e9edf0] px-4 py-6">
-        {report ? <RichReportEditor key={collaboration.document?.id || "local"} report={report} yDoc={collaboration.yDoc} editable={canEdit} toolbarTarget={toolbarTarget} onChange={commit} onSelection={setSelected} />
+        {report ? <RichReportEditor key={collaboration.document?.id || "local"} report={report} yDoc={collaboration.yDoc} editable={canEdit} toolbarTarget={toolbarTarget} onChange={commit} onSelection={setSelected} flushRef={editorFlush} />
           : <div className="flex min-h-[500px] flex-col items-center justify-center gap-3 text-slate-400"><FileText size={40} strokeWidth={1} /><span className="text-sm">작성된 보고서가 없습니다.</span></div>}
       </div>
 

@@ -9,6 +9,7 @@ import type * as Y from "yjs"
 import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, ImagePlus, Italic, List, ListOrdered, Redo2, RemoveFormatting, Table, TextCursorInput, Trash2, Underline, Undo2 } from "lucide-react"
 import { NodeSelection, TextSelection } from "@tiptap/pm/state"
 import { DocumentReport, legacyReportContent, REPORT_FONTS, REPORT_TABLE_THEMES, RichReportNode } from "@/lib/document-report"
+import { reportFromYDoc } from "@/lib/document-collaboration"
 import { REPORT_LOGO } from "@/lib/document-report-logo"
 import { reportExtensions } from "@/lib/document-rich-schema"
 import { applyReportBlockStyle, applyReportCellStyle, applyReportTextStyle, applyWholeReportFont, ReportEditScope } from "@/lib/document-rich-commands"
@@ -56,7 +57,7 @@ async function prepareReportImage(file: File): Promise<string> {
   } finally { bitmap.close() }
 }
 
-export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChange, onSelection }: { report: DocumentReport; yDoc?: Y.Doc | null; editable: boolean; scale?: number; toolbarTarget?: HTMLElement | null; onChange: (report: DocumentReport) => void; onSelection: (selection: string) => void }) {
+export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChange, onSelection, flushRef }: { report: DocumentReport; yDoc?: Y.Doc | null; editable: boolean; scale?: number; toolbarTarget?: HTMLElement | null; onChange: (report: DocumentReport) => void; onSelection: (selection: string) => void; flushRef: { current: () => DocumentReport | null } }) {
   const current = useRef(report)
   current.current = report
   const changed = useRef(onChange)
@@ -74,6 +75,7 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
   const savedTextSelection = useRef<{ from: number; to: number } | null>(null)
   const lastPublished = useRef<RichReportNode | null>(null)
   const compositionFrame = useRef<number | null>(null)
+  const publishTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const shared = Boolean(yDoc?.getMap("report").get("richInitialized"))
   function insertCaption(editor: Editor) {
     const { state, view } = editor
@@ -86,12 +88,26 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     view.dispatch(transaction.scrollIntoView())
     view.focus()
   }
-  function publish(editor: Editor) {
-    if (shared || editor.isDestroyed || editor.view.composing) return
+  function publish(editor: Editor): DocumentReport | null {
+    if (editor.isDestroyed || editor.view.composing) return null
+    if (shared && yDoc) {
+      return reportFromYDoc(yDoc)
+    }
     const richText = editor.getJSON() as RichReportNode
     lastPublished.current = richText
     const title = richText.content?.find(node => node.type === "heading" && node.attrs?.level === 1)?.content?.map(node => node.text || "").join("")
-    changed.current({ ...current.current, richText, ...(title ? { fields: { ...current.current.fields, title: { ...current.current.fields?.title, text: title } } } : {}) })
+    const next = { ...current.current, richText, ...(title ? { fields: { ...current.current.fields, title: { ...current.current.fields?.title, text: title } } } : {}) }
+    changed.current(next)
+    return next
+  }
+  function schedulePublish(editor: Editor) {
+    if (shared) return
+    if (publishTimer.current) clearTimeout(publishTimer.current)
+    publishTimer.current = setTimeout(() => { publishTimer.current = null; publish(editor) }, 500)
+  }
+  flushRef.current = () => {
+    if (publishTimer.current) { clearTimeout(publishTimer.current); publishTimer.current = null }
+    return editorRef.current ? publish(editorRef.current) : null
   }
   const editor = useEditor({
     immediatelyRender: false,
@@ -106,6 +122,10 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
         return true
       },
       handleDOMEvents: {
+        blur() {
+          flushRef.current()
+          return false
+        },
         mousedown(view, event) {
           if (!cellModeRef.current || !view.editable || event.button !== 0) return false
           const cell = (event.target as Element).closest?.("td,th")
@@ -143,7 +163,7 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
         return true
       },
     },
-    onUpdate({ editor }) { publish(editor) },
+    onUpdate({ editor }) { schedulePublish(editor) },
     onSelectionUpdate({ editor }) {
       const selection = editor.state.selection
       if (selection.constructor.name === "TextSelection" && !selection.empty) savedTextSelection.current = { from: selection.from, to: selection.to }
@@ -164,10 +184,10 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     const editorDOM = editor.view.dom
     const endComposition = () => {
       if (compositionFrame.current !== null) cancelAnimationFrame(compositionFrame.current)
-      compositionFrame.current = requestAnimationFrame(() => { compositionFrame.current = null; publish(editor) })
+      compositionFrame.current = requestAnimationFrame(() => { compositionFrame.current = null; schedulePublish(editor) })
     }
     editorDOM.addEventListener("compositionend", endComposition)
-    return () => { editorDOM.removeEventListener("compositionend", endComposition); if (compositionFrame.current !== null) { cancelAnimationFrame(compositionFrame.current); compositionFrame.current = null } }
+    return () => { editorDOM.removeEventListener("compositionend", endComposition); if (compositionFrame.current !== null) { cancelAnimationFrame(compositionFrame.current); compositionFrame.current = null }; if (publishTimer.current) { clearTimeout(publishTimer.current); publishTimer.current = null } }
   }, [editor, shared])
   useEffect(() => {
     if (!paragraphStyleOpen) return
