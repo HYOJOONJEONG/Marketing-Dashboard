@@ -15,8 +15,8 @@ const Format = Extension.create({
         cellBorderColor: { default: null, parseHTML: element => element.getAttribute("data-cell-border"), renderHTML: attrs => /^#[0-9a-f]{6}$/i.test(attrs.cellBorderColor || "") ? { "data-cell-border": attrs.cellBorderColor, style: `border-color:${attrs.cellBorderColor}` } : {} },
       } },
       { types: ["table"], attributes: {
-        tableTheme: { default: "classic", parseHTML: element => element.getAttribute("data-table-theme") || "classic", renderHTML: attrs => ({ "data-table-theme": REPORT_TABLE_THEMES.some(theme => theme.value === attrs.tableTheme) ? attrs.tableTheme : "classic" }) },
-        tableDensity: { default: "standard", parseHTML: element => element.getAttribute("data-table-density") || "standard", renderHTML: attrs => ({ "data-table-density": ["compact", "standard", "airy"].includes(attrs.tableDensity) ? attrs.tableDensity : "standard" }) },
+        tableTheme: { default: "research", parseHTML: element => element.getAttribute("data-table-theme") || "research", renderHTML: attrs => ({ "data-table-theme": REPORT_TABLE_THEMES.some(theme => theme.value === attrs.tableTheme) ? attrs.tableTheme : "research" }) },
+        tableDensity: { default: "airy", parseHTML: element => element.getAttribute("data-table-density") || "airy", renderHTML: attrs => ({ "data-table-density": ["compact", "standard", "airy"].includes(attrs.tableDensity) ? attrs.tableDensity : "airy" }) },
         headerColor: { default: null, parseHTML: element => element.style.getPropertyValue("--report-table-header") || null, renderHTML: attrs => /^#[0-9a-f]{6}$/i.test(attrs.headerColor || "") ? { style: reportTableColors({ headerColor: attrs.headerColor }) } : {} },
         borderColor: { default: null, parseHTML: element => element.style.getPropertyValue("--report-table-border") || null, renderHTML: attrs => /^#[0-9a-f]{6}$/i.test(attrs.borderColor || "") ? { style: `--report-table-border:${attrs.borderColor}` } : {} },
       } },

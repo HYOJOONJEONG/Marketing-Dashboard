@@ -21,6 +21,7 @@ export type ReportStyle = {
 }
 
 export const REPORT_TABLE_THEMES = [
+  { value: "research", label: "리서치 리포트" },
   { value: "classic", label: "기본 보고서" },
   { value: "corporate", label: "기업형" },
   { value: "ocean", label: "오션 블루" },
@@ -200,7 +201,7 @@ export function richReportHtml(node: RichReportNode): string {
   const kind = ["title", "subtitle", "heading", "subheading", "body", "meta", "cell"].includes(a.reportKind) ? ` data-report-kind="${a.reportKind}"` : ""
   const style = fieldCss({ font: a.documentFont, align: a.textAlign, lineHeight: a.lineHeight, spaceAfter: a.spaceAfter, pageBreak: a.pageBreak })
   const span = ["td", "th"].includes(tag) ? ` colspan="${bounded(a.colspan, 1, 20, 1)}" rowspan="${bounded(a.rowspan, 1, 100, 1)}"` : ""
-  const tableAttrs = tag === "table" ? ` data-table-theme="${REPORT_TABLE_THEMES.some(theme => theme.value === a.tableTheme) ? a.tableTheme : "classic"}" data-table-density="${["compact", "standard", "airy"].includes(a.tableDensity) ? a.tableDensity : "standard"}"` : ""
+  const tableAttrs = tag === "table" ? ` data-table-theme="${REPORT_TABLE_THEMES.some(theme => theme.value === a.tableTheme) ? a.tableTheme : "research"}" data-table-density="${["compact", "standard", "airy"].includes(a.tableDensity) ? a.tableDensity : "airy"}"` : ""
   const tableCss = tag === "table" ? `;${reportTableColors(a)}` : ""
   const cellCss = ["td", "th"].includes(tag) ? [["backgroundColor", "background-color"], ["cellBorderColor", "border-color"]].map(([key, property]) => /^#[0-9a-f]{6}$/i.test(a[key] || "") ? `;${property}:${a[key]}` : "").join("") : ""
   return `<${tag}${kind}${span}${tableAttrs} style="${escapeHtml(style + tableCss + cellCss)}">${children || (tag === "p" ? "<br>" : "")}</${tag}>`
@@ -234,8 +235,14 @@ export const REPORT_CSS = `
 .company-report .report-item{padding-left:14px;position:relative;}
 .company-report .report-item:before{content:"–";position:absolute;left:0;color:#547987;}
 .company-report table{width:100%;border-collapse:collapse;table-layout:fixed;margin:18px 0;font-size:10pt;}
-.company-report th,.company-report td{border:1px solid #b5c6cd;padding:9px 10px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;white-space:pre-wrap;}
+.company-report th,.company-report td{border:1px solid #b5c6cd;padding:12px 12px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;white-space:pre-wrap;}
 .company-report th{background:#e4f0f6;color:#173a4b;font-weight:700;border-top:2px solid #547987;}
+.company-report table[data-table-theme=research]{border:0;border-top:2px solid #173a4b;border-bottom:1px solid #aeb9c4;}
+.company-report table[data-table-theme=research] th{background:var(--report-table-header,#173a4b);color:var(--report-table-header-ink,#fff);border:0;border-bottom:1px solid #173a4b;padding:13px 12px;font-weight:700;}
+.company-report table[data-table-theme=research] td{background:#fff;color:#172b35;border:0;border-bottom:1px solid #d9e0e6;padding:14px 12px;}
+.company-report table[data-table-theme=research] tr:last-child td{border-bottom:0;}
+.company-report table[data-table-theme=research] tbody tr:nth-child(even){background:#fff;}
+.company-report table[data-table-theme=research] th:first-child,.company-report table[data-table-theme=research] td:first-child{text-align:left;}
 .company-report tbody tr:nth-child(even){background:#f7fafc;}
 .company-report thead{display:table-header-group;}
 .company-report tr{break-inside:avoid;}
