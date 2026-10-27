@@ -68,6 +68,7 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
   cellModeRef.current = cellMode
   const cellDrag = useRef<{ anchor: number; table: Element } | null>(null)
   const editorRef = useRef<Editor | null>(null)
+  const savedTextSelection = useRef<{ from: number; to: number } | null>(null)
   const lastPublished = useRef<RichReportNode | null>(null)
   const compositionFrame = useRef<number | null>(null)
   const shared = Boolean(yDoc?.getMap("report").get("richInitialized"))
@@ -163,6 +164,12 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     if (!editor) return
     const selected = PRESETS.find(item => item.key === key)
     if (!selected || !editable) return
+    const selection = editor.state.selection
+    const saved = savedTextSelection.current
+    if (saved && selection.empty && saved.from < saved.to && saved.to <= editor.state.doc.content.size) {
+      editor.commands.setTextSelection(saved)
+    }
+    savedTextSelection.current = null
     const font = state?.documentFont || "gothic"
     // A heading style belongs to its paragraph, while inline formatting remains selection-based.
     const { from, to } = editor.state.selection
@@ -217,7 +224,7 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
   const toolbar = <fieldset disabled={!editable || !editor} className={`flex flex-wrap items-center gap-2 bg-white disabled:opacity-60 ${toolbarTarget ? "border-t border-slate-200 pt-4" : "sticky top-2 z-30 mb-4 rounded-md border border-slate-200 p-2 shadow-md"}`} aria-label="선택한 텍스트 서식">
       <h2 className="w-full text-sm font-bold text-slate-800">서식 편집</h2>
       <div role="group" aria-label="서식 적용 범위" className="grid w-full grid-cols-2 gap-1 rounded-md bg-slate-100 p-1">{[{ value: "selection", label: "선택 영역" }, { value: "document", label: "문서 전체" }].map(item => <button key={item.value} type="button" aria-pressed={scope === item.value} onMouseDown={event => event.preventDefault()} onClick={() => setScope(item.value as ReportEditScope)} className={`rounded px-2 py-2 text-xs font-semibold ${scope === item.value ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`}>{item.label}</button>)}</div>
-      <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">문단 서식<select disabled={scope === "document"} aria-label="문단 서식" title="선택한 문단에 적용할 서식" className={`${INPUT} w-28 font-semibold disabled:opacity-40`} value={state?.kind || "body"} onChange={event => preset(event.target.value)}>{PRESETS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
+      <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">문단 서식<select disabled={scope === "document"} aria-label="문단 서식" title="선택한 문단에 적용할 서식" className={`${INPUT} w-28 font-semibold disabled:opacity-40`} value={state?.kind || "body"} onMouseDown={() => { const selection = editor?.state.selection; savedTextSelection.current = selection && !selection.empty ? { from: selection.from, to: selection.to } : null }} onChange={event => preset(event.target.value)}>{PRESETS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
       <select aria-label="선택 글꼴" className={`${INPUT} w-28`} value={state?.text.fontFamily || "gothic"} onChange={event => inline({ fontFamily: event.target.value })}>{Object.entries(REPORT_FONTS).map(([key, font]) => <option key={key} value={key}>{font.label}</option>)}</select>
       <NumberControl label="선택 글자 크기" className={`${INPUT} w-16`} min={7} max={48} step={0.5} value={Number(state?.text.fontSize) || PRESETS.find(item => item.key === state?.kind)?.size || 10.5} onCommit={value => inline({ fontSize: value })} />
       {button("굵게", Bold, () => toggleMark("bold"), state?.bold)}
