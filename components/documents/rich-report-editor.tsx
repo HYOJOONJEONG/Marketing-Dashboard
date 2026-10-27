@@ -265,16 +265,23 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     </fieldset>
   return <div className={`min-w-0 ${cellMode ? "report-cell-selection" : ""}`}>
     {toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar}
-    <div className="report-editor-paper mx-auto w-full max-w-[794px] bg-white shadow-sm" style={{ minHeight: 1123 }} onMouseDownCapture={event => {
-      if (!editor || editor.isDestroyed || !editable || !(event.target instanceof Element) || !event.target.closest(".tiptap")) return
-      try { if (document.activeElement !== editor.view.dom) editor.view.focus() } catch { /* The editor may be switching documents. */ }
-    }} onMouseDown={event => {
+    <div className="report-editor-paper mx-auto w-full max-w-[794px] bg-white shadow-sm" style={{ minHeight: 1123 }} onMouseDown={event => {
       if (!editor || editor.isDestroyed || !editable || event.button !== 0 || !(event.target instanceof Element) || event.target.closest(".tiptap,.report-brand")) return
       try {
         const bounds = editor.view.dom.getBoundingClientRect()
         const position = editor.view.posAtCoords({ left: Math.max(bounds.left + 1, Math.min(bounds.right - 1, event.clientX)), top: Math.max(bounds.top + 1, Math.min(bounds.bottom - 1, event.clientY)) })
         if (position) { event.preventDefault(); editor.chain().focus(undefined, { scrollIntoView: false }).setTextSelection(position.pos).run() }
       } catch { /* Keep the editor usable if it is being replaced during a click. */ }
+    }} onClick={event => {
+      if (!editor || editor.isDestroyed || !editable || !(event.target instanceof Element) || !event.target.closest(".tiptap")) return
+      const selection = editor.state.selection
+      if (!selection.empty) return
+      try {
+        const position = editor.view.posAtCoords({ left: event.clientX, top: event.clientY })
+        if (!position) return
+        if (selection.from !== position.pos) editor.commands.setTextSelection(position.pos)
+        editor.view.focus()
+      } catch { /* The editor may be switching documents. */ }
     }}>
       <article className="company-report" style={{ padding: `${report.page?.margin ?? 18}mm`, fontFamily: REPORT_FONTS[(state?.documentFont || "gothic") as keyof typeof REPORT_FONTS]?.css }}>
         <div className="report-brand"><img className="report-logo" width={report.page?.logoWidth ?? 145} src={REPORT_LOGO} alt="INFOMAX" /></div>
