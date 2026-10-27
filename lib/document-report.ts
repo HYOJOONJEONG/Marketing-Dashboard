@@ -19,6 +19,18 @@ export type ReportStyle = {
   spaceAfter?: number
   pageBreak?: boolean
 }
+
+export const REPORT_TABLE_THEMES = [
+  { value: "classic", label: "기본 보고서" },
+  { value: "corporate", label: "기업형" },
+  { value: "ocean", label: "오션 블루" },
+  { value: "teal", label: "민트 포인트" },
+  { value: "forest", label: "포레스트" },
+  { value: "rose", label: "버건디 포인트" },
+  { value: "striped", label: "줄무늬" },
+  { value: "minimal", label: "미니멀 라인" },
+  { value: "dark", label: "다크 헤더" },
+] as const
 export type ReportField = { text?: string; style?: ReportStyle }
 export type ReportSection = { heading: string; content: string }
 export type RichReportNode = { type: string; text?: string; attrs?: Record<string, any>; marks?: Array<{ type: string; attrs?: Record<string, any> }>; content?: RichReportNode[] }
@@ -188,7 +200,7 @@ export function richReportHtml(node: RichReportNode): string {
   const kind = ["title", "subtitle", "heading", "subheading", "body", "meta", "cell"].includes(a.reportKind) ? ` data-report-kind="${a.reportKind}"` : ""
   const style = fieldCss({ font: a.documentFont, align: a.textAlign, lineHeight: a.lineHeight, spaceAfter: a.spaceAfter, pageBreak: a.pageBreak })
   const span = ["td", "th"].includes(tag) ? ` colspan="${bounded(a.colspan, 1, 20, 1)}" rowspan="${bounded(a.rowspan, 1, 100, 1)}"` : ""
-  const tableAttrs = tag === "table" ? ` data-table-theme="${["classic", "striped", "minimal", "dark"].includes(a.tableTheme) ? a.tableTheme : "classic"}" data-table-density="${["compact", "standard", "airy"].includes(a.tableDensity) ? a.tableDensity : "standard"}"` : ""
+  const tableAttrs = tag === "table" ? ` data-table-theme="${REPORT_TABLE_THEMES.some(theme => theme.value === a.tableTheme) ? a.tableTheme : "classic"}" data-table-density="${["compact", "standard", "airy"].includes(a.tableDensity) ? a.tableDensity : "standard"}"` : ""
   const tableCss = tag === "table" ? `;${reportTableColors(a)}` : ""
   const cellCss = ["td", "th"].includes(tag) ? [["backgroundColor", "background-color"], ["cellBorderColor", "border-color"]].map(([key, property]) => /^#[0-9a-f]{6}$/i.test(a[key] || "") ? `;${property}:${a[key]}` : "").join("") : ""
   return `<${tag}${kind}${span}${tableAttrs} style="${escapeHtml(style + tableCss + cellCss)}">${children || (tag === "p" ? "<br>" : "")}</${tag}>`
@@ -240,6 +252,16 @@ export const REPORT_CSS = `
 .report-cell-selection .tiptap td,.report-cell-selection .tiptap th{cursor:cell;user-select:none;}
 .company-report table[data-table-theme] th,.company-report table[data-table-theme] td{border-color:var(--report-table-border,#b5c6cd);}
 .company-report table[data-table-theme=striped] tr:nth-child(even){background:#edf5fa;}
+.company-report table[data-table-theme=corporate] th{background:var(--report-table-header,#1e3a5f);color:var(--report-table-header-ink,#fff);border-top:3px solid #0f766e;}
+.company-report table[data-table-theme=corporate] td:first-child{font-weight:700;color:#1e3a5f;}
+.company-report table[data-table-theme=ocean] th{background:var(--report-table-header,#075985);color:var(--report-table-header-ink,#fff);border-color:#7dd3fc;}
+.company-report table[data-table-theme=ocean] tbody tr:nth-child(even){background:#f0f9ff;}
+.company-report table[data-table-theme=teal] th{background:var(--report-table-header,#0f766e);color:var(--report-table-header-ink,#fff);border-color:#99f6e4;}
+.company-report table[data-table-theme=teal] tbody tr:nth-child(even){background:#f0fdfa;}
+.company-report table[data-table-theme=forest] th{background:var(--report-table-header,#365314);color:var(--report-table-header-ink,#fff);border-color:#bef264;}
+.company-report table[data-table-theme=forest] tbody tr:nth-child(even){background:#f7fee7;}
+.company-report table[data-table-theme=rose] th{background:var(--report-table-header,#881337);color:var(--report-table-header-ink,#fff);border-color:#fda4af;}
+.company-report table[data-table-theme=rose] tbody tr:nth-child(even){background:#fff1f2;}
 .company-report table[data-table-theme=minimal] th,.company-report table[data-table-theme=minimal] td{border-width:0 0 1px;}
 .company-report table[data-table-theme=minimal] th{background:var(--report-table-header,#f1f5f9);border-bottom-width:2px;}
 .company-report table[data-table-theme=dark] th{background:var(--report-table-header,#173a4b);color:var(--report-table-header-ink,#fff);}

@@ -7,7 +7,7 @@ import type { Editor } from "@tiptap/core"
 import Collaboration from "@tiptap/extension-collaboration"
 import type * as Y from "yjs"
 import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, ImagePlus, Italic, List, ListOrdered, Redo2, RemoveFormatting, Table, Trash2, Underline, Undo2 } from "lucide-react"
-import { DocumentReport, legacyReportContent, REPORT_FONTS, RichReportNode } from "@/lib/document-report"
+import { DocumentReport, legacyReportContent, REPORT_FONTS, REPORT_TABLE_THEMES, RichReportNode } from "@/lib/document-report"
 import { REPORT_LOGO } from "@/lib/document-report-logo"
 import { reportExtensions } from "@/lib/document-rich-schema"
 import { applyReportBlockStyle, applyReportCellStyle, applyReportTextStyle, applyWholeReportFont, ReportEditScope } from "@/lib/document-rich-commands"
@@ -23,6 +23,7 @@ const PRESETS = [
   { key: "body", label: "본문", level: 0, size: 10.5, align: "left" },
   { key: "meta", label: "작성 정보", level: 0, size: 9, align: "right" },
 ]
+const TABLE_THEME_SWATCHES: Record<string, string> = { classic: "#e4f0f6", corporate: "#1e3a5f", ocean: "#075985", teal: "#0f766e", forest: "#365314", rose: "#881337", striped: "#547987", minimal: "#f1f5f9", dark: "#173a4b" }
 
 async function prepareReportImage(file: File): Promise<string> {
   if (!file.type.startsWith("image/") || file.size > 20 * 1024 * 1024) throw new Error("이미지 파일은 20MB 이하로 선택해주세요.")
@@ -197,6 +198,23 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     editor.commands.focus(undefined, { scrollIntoView: false })
   }
   function inline(attrs: Record<string, any>) { if (editor) applyReportTextStyle(editor, attrs, scope) }
+  function applyTableTheme(theme: string) {
+    if (!editor) return
+    editor.commands.command(({ state, tr }) => {
+      let tableDepth = state.selection.$from.depth
+      while (tableDepth > 0 && state.selection.$from.node(tableDepth).type.name !== "table") tableDepth--
+      if (!tableDepth) return false
+      const table = state.selection.$from.node(tableDepth)
+      const tablePos = state.selection.$from.before(tableDepth)
+      table.descendants((node, offset) => {
+        if (node.type.name === "tableCell" || node.type.name === "tableHeader") {
+          tr.setNodeMarkup(tablePos + 1 + offset, undefined, { ...node.attrs, backgroundColor: null, cellBorderColor: null })
+        }
+      })
+      tr.setNodeMarkup(tablePos, undefined, { ...table.attrs, tableTheme: theme, headerColor: null, borderColor: null })
+      return true
+    })
+  }
   async function addImage(file?: File) {
     if (!file || !editor || editor.isDestroyed) return
     try {
@@ -257,9 +275,13 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
         <div role="group" aria-label="표 선택 방식" className="grid w-full grid-cols-2 gap-1 rounded-md bg-slate-100 p-1">{[{ value: false, label: "글자 선택" }, { value: true, label: "셀 선택" }].map(item => <button key={item.label} type="button" aria-pressed={cellMode === item.value} onMouseDown={event => event.preventDefault()} onClick={() => { cellDrag.current = null; setCellMode(item.value) }} className={`rounded px-2 py-2 text-xs font-semibold ${cellMode === item.value ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`}>{item.label}</button>)}</div>
         <label className="flex items-center gap-2">셀 배경<input type="color" aria-label="선택 셀 배경색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.cellStyle.backgroundColor || "#ffffff"} onChange={event => { if (editor) applyReportCellStyle(editor, "backgroundColor", event.target.value, scope) }} /></label>
         <label className="flex items-center gap-2">셀 테두리<input type="color" aria-label="선택 셀 테두리색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.cellStyle.cellBorderColor || "#b5c6cd"} onChange={event => { if (editor) applyReportCellStyle(editor, "cellBorderColor", event.target.value, scope) }} /></label>
-        <label className="flex items-center gap-2">표 전체 디자인<select aria-label="표 디자인 선택" className={INPUT} value={state?.tableStyle.tableTheme || "classic"} onChange={event => editor?.chain().focus(undefined, { scrollIntoView: false }).updateAttributes("table", { tableTheme: event.target.value, headerColor: null }).run()}><option value="classic">기본형</option><option value="striped">줄무늬</option><option value="minimal">가로선</option><option value="dark">진한 헤더</option></select></label>
+        <div role="group" aria-label="표 전체 디자인" className="grid w-full grid-cols-3 gap-2 sm:grid-cols-5">
+          {REPORT_TABLE_THEMES.map(theme => <button key={theme.value} type="button" aria-label={`${theme.label} 표 디자인 적용`} aria-pressed={(state?.tableStyle.tableTheme || "classic") === theme.value} title={theme.label} className={`min-w-0 rounded border p-1 text-[10px] font-semibold ${state?.tableStyle.tableTheme === theme.value ? "border-blue-500 bg-blue-50 text-blue-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`} onMouseDown={event => event.preventDefault()} onClick={() => applyTableTheme(theme.value)}>
+            <span className="mb-1 grid overflow-hidden rounded-sm border border-slate-200"><span className="block h-2" style={{ backgroundColor: TABLE_THEME_SWATCHES[theme.value] }} /><span className="block h-1.5 bg-slate-100" /><span className="block h-1.5 bg-white" /></span>{theme.label}
+          </button>)}
+        </div>
         <label className="flex items-center gap-2">셀 간격<select aria-label="표 셀 간격" className={INPUT} value={state?.tableStyle.tableDensity || "standard"} onChange={event => editor?.chain().focus(undefined, { scrollIntoView: false }).updateAttributes("table", { tableDensity: event.target.value }).run()}><option value="compact">좁게</option><option value="standard">보통</option><option value="airy">넓게</option></select></label>
-        <label className="flex items-center gap-2">헤더색<input type="color" aria-label="표 헤더색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.tableStyle.headerColor || (state?.tableStyle.tableTheme === "dark" ? "#173a4b" : "#e4f0f6")} onChange={event => editor?.chain().focus(undefined, { scrollIntoView: false }).updateAttributes("table", { headerColor: event.target.value }).run()} /></label>
+        <label className="flex items-center gap-2">헤더색<input type="color" aria-label="표 헤더색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.tableStyle.headerColor || TABLE_THEME_SWATCHES[state?.tableStyle.tableTheme || "classic"] || "#e4f0f6"} onChange={event => editor?.chain().focus(undefined, { scrollIntoView: false }).updateAttributes("table", { headerColor: event.target.value }).run()} /></label>
         <label className="flex items-center gap-2">테두리색<input type="color" aria-label="표 테두리색" className="h-7 w-7 cursor-pointer border-0 bg-white p-0" value={state?.tableStyle.borderColor || "#b5c6cd"} onChange={event => editor?.chain().focus(undefined, { scrollIntoView: false }).updateAttributes("table", { borderColor: event.target.value }).run()} /></label>
       </fieldset>}
     </fieldset>

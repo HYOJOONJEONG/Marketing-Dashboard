@@ -4,7 +4,7 @@ import { TextStyle } from "@tiptap/extension-text-style"
 import Color from "@tiptap/extension-color"
 import TextAlign from "@tiptap/extension-text-align"
 import { TableKit } from "@tiptap/extension-table"
-import { REPORT_FONTS, reportTableColors } from "./document-report"
+import { REPORT_FONTS, REPORT_TABLE_THEMES, reportTableColors } from "./document-report"
 
 const Format = Extension.create({
   name: "reportFormat",
@@ -15,7 +15,7 @@ const Format = Extension.create({
         cellBorderColor: { default: null, parseHTML: element => element.getAttribute("data-cell-border"), renderHTML: attrs => /^#[0-9a-f]{6}$/i.test(attrs.cellBorderColor || "") ? { "data-cell-border": attrs.cellBorderColor, style: `border-color:${attrs.cellBorderColor}` } : {} },
       } },
       { types: ["table"], attributes: {
-        tableTheme: { default: "classic", parseHTML: element => element.getAttribute("data-table-theme") || "classic", renderHTML: attrs => ({ "data-table-theme": ["classic", "striped", "minimal", "dark"].includes(attrs.tableTheme) ? attrs.tableTheme : "classic" }) },
+        tableTheme: { default: "classic", parseHTML: element => element.getAttribute("data-table-theme") || "classic", renderHTML: attrs => ({ "data-table-theme": REPORT_TABLE_THEMES.some(theme => theme.value === attrs.tableTheme) ? attrs.tableTheme : "classic" }) },
         tableDensity: { default: "standard", parseHTML: element => element.getAttribute("data-table-density") || "standard", renderHTML: attrs => ({ "data-table-density": ["compact", "standard", "airy"].includes(attrs.tableDensity) ? attrs.tableDensity : "standard" }) },
         headerColor: { default: null, parseHTML: element => element.style.getPropertyValue("--report-table-header") || null, renderHTML: attrs => /^#[0-9a-f]{6}$/i.test(attrs.headerColor || "") ? { style: reportTableColors({ headerColor: attrs.headerColor }) } : {} },
         borderColor: { default: null, parseHTML: element => element.style.getPropertyValue("--report-table-border") || null, renderHTML: attrs => /^#[0-9a-f]{6}$/i.test(attrs.borderColor || "") ? { style: `--report-table-border:${attrs.borderColor}` } : {} },
