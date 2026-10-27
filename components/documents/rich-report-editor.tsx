@@ -61,6 +61,7 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
   const changed = useRef(onChange)
   changed.current = onChange
   const [tableOpen, setTableOpen] = useState(false)
+  const [paragraphStyleOpen, setParagraphStyleOpen] = useState(false)
   const [imageError, setImageError] = useState("")
   const imageInput = useRef<HTMLInputElement>(null)
   const [scope, setScope] = useState<ReportEditScope>("selection")
@@ -151,6 +152,14 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     editorDOM.addEventListener("compositionend", endComposition)
     return () => { editorDOM.removeEventListener("compositionend", endComposition); if (compositionFrame.current !== null) { cancelAnimationFrame(compositionFrame.current); compositionFrame.current = null } }
   }, [editor, shared])
+  useEffect(() => {
+    if (!paragraphStyleOpen) return
+    const close = (event: PointerEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest("[data-paragraph-style-menu]")) setParagraphStyleOpen(false)
+    }
+    document.addEventListener("pointerdown", close)
+    return () => document.removeEventListener("pointerdown", close)
+  }, [paragraphStyleOpen])
   // Only genuinely external content may replace the document; local echoes must preserve its DOM and selection.
   useEffect(() => {
     if (!editor || editor.isDestroyed || shared || editor.view.composing || report.richText === lastPublished.current) return
@@ -247,7 +256,15 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
   const toolbar = <fieldset disabled={!editable || !editor} className={`flex flex-wrap items-center gap-2 bg-white disabled:opacity-60 ${toolbarTarget ? "border-t border-slate-200 pt-4" : "sticky top-2 z-30 mb-4 rounded-md border border-slate-200 p-2 shadow-md"}`} aria-label="선택한 텍스트 서식">
       <h2 className="w-full text-sm font-bold text-slate-800">서식 편집</h2>
       <div role="group" aria-label="서식 적용 범위" className="grid w-full grid-cols-2 gap-1 rounded-md bg-slate-100 p-1">{[{ value: "selection", label: "선택 영역" }, { value: "document", label: "문서 전체" }].map(item => <button key={item.value} type="button" aria-pressed={scope === item.value} onMouseDown={event => event.preventDefault()} onClick={() => setScope(item.value as ReportEditScope)} className={`rounded px-2 py-2 text-xs font-semibold ${scope === item.value ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`}>{item.label}</button>)}</div>
-      <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">문단 서식<select disabled={scope === "document"} aria-label="문단 서식" title="선택한 문단에 적용할 서식" className={`${INPUT} w-28 font-semibold disabled:opacity-40`} value={state?.kind || "body"} onMouseDown={() => { const selection = editor?.state.selection; if (selection?.constructor.name === "TextSelection" && !selection.empty) savedTextSelection.current = { from: selection.from, to: selection.to } }} onChange={event => preset(event.target.value)}>{PRESETS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
+      <div data-paragraph-style-menu className="relative flex items-center gap-2 text-xs font-semibold text-slate-500">
+        <span>문단 서식</span>
+        <button type="button" role="combobox" aria-label="문단 서식" aria-haspopup="listbox" aria-expanded={paragraphStyleOpen} disabled={scope === "document" || !editor || !editable} className={`${INPUT} flex w-28 items-center justify-between gap-1 font-semibold disabled:opacity-40`} onMouseDown={event => event.preventDefault()} onKeyDown={event => { if (event.key === "Escape") setParagraphStyleOpen(false); if (event.key === "ArrowDown") setParagraphStyleOpen(true) }} onClick={() => setParagraphStyleOpen(value => !value)}>
+          <span>{PRESETS.find(item => item.key === state?.kind)?.label || "본문"}</span><span aria-hidden="true">▾</span>
+        </button>
+        {paragraphStyleOpen && <div role="listbox" aria-label="문단 서식 선택" className="absolute left-[4.5rem] top-full z-50 mt-1 w-36 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+          {PRESETS.map(item => <button key={item.key} type="button" role="option" aria-selected={state?.kind === item.key} className={`block w-full px-3 py-2 text-left text-xs ${state?.kind === item.key ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-700 hover:bg-slate-50"}`} onMouseDown={event => event.preventDefault()} onClick={() => { preset(item.key); setParagraphStyleOpen(false) }}>{item.label}</button>)}
+        </div>}
+      </div>
       <select aria-label="선택 글꼴" className={`${INPUT} w-28`} value={state?.text.fontFamily || "gothic"} onChange={event => inline({ fontFamily: event.target.value })}>{Object.entries(REPORT_FONTS).map(([key, font]) => <option key={key} value={key}>{font.label}</option>)}</select>
       <NumberControl label="선택 글자 크기" className={`${INPUT} w-16`} min={7} max={48} step={0.5} value={Number(state?.text.fontSize) || PRESETS.find(item => item.key === state?.kind)?.size || 10.5} onCommit={value => inline({ fontSize: value })} />
       {button("굵게", Bold, () => toggleMark("bold"), state?.bold)}
