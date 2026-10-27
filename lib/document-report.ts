@@ -247,6 +247,7 @@ export const REPORT_CSS = `
 .company-report table[data-table-density=airy] th,.company-report table[data-table-density=airy] td{padding:14px 12px;}
 .company-report .tiptap[contenteditable=true]{cursor:text;pointer-events:auto;}
 .company-report .tiptap img[data-report-image]{max-width:100%;height:auto;}
+.company-report .tiptap img[data-report-image].ProseMirror-selectednode{outline:3px solid #2563eb;outline-offset:3px;cursor:move;}
 .report-editor-paper [data-report-field]{cursor:text;border-radius:2px;outline:2px solid transparent;outline-offset:3px;transition:outline-color .12s;}
 .report-editor-paper [data-report-field]:hover{outline-color:#bfdbfe;}
 .report-editor-paper [data-report-field][data-selected=true]{outline-color:#2563eb;background-color:#eff6ff;}

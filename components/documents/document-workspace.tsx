@@ -69,8 +69,13 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
 
   useEffect(() => {
     if (!ready) return
-    try { localStorage.setItem(draftKey, JSON.stringify(collaboration.document ? { documentId: collaboration.document.id } : { source, title, date, writer, report })) }
-    catch { setMessage("임시 보관 공간이 부족합니다. 파일로 내려받아 주세요.") }
+    const persistDraft = () => {
+      try { localStorage.setItem(draftKey, JSON.stringify(collaboration.document ? { documentId: collaboration.document.id } : { source, title, date, writer, report })) }
+      catch { setMessage("임시 보관 공간이 부족합니다. 파일로 내려받아 주세요.") }
+    }
+    const timer = window.setTimeout(persistDraft, 350)
+    window.addEventListener("pagehide", persistDraft)
+    return () => { window.clearTimeout(timer); window.removeEventListener("pagehide", persistDraft) }
   }, [source, title, date, writer, report, draftKey, ready, collaboration.document?.id])
 
   useEffect(() => {

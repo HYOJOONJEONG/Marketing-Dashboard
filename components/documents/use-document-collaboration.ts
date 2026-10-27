@@ -37,6 +37,8 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
   const creationId = useRef<string | null>(null)
   const connectionId = useRef("")
   const syncRef = useRef<() => Promise<boolean>>(async () => true)
+  const cacheTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const flushCache = useRef<() => void>(() => {})
   const key = (id: string) => `document-crdt:${userId}:${id}`
 
   const list = useCallback(async () => {
@@ -60,9 +62,12 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
   }, [])
 
   useEffect(() => { connectionId.current = crypto.randomUUID(); void list() }, [list])
-  useEffect(() => () => { docRef.current?.destroy(); undoRef.current?.destroy() }, [])
+  useEffect(() => () => { if (cacheTimer.current) clearTimeout(cacheTimer.current); flushCache.current(); docRef.current?.destroy(); undoRef.current?.destroy() }, [])
 
   function attach(row: StoredDocument, nextRole: typeof role, mergeLocal = true) {
+    if (cacheTimer.current) clearTimeout(cacheTimer.current)
+    flushCache.current()
+    window.removeEventListener("pagehide", flushCache.current)
     undoRef.current?.destroy()
     docRef.current?.destroy()
     const doc = new Y.Doc()
@@ -92,11 +97,22 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     manager.on("stack-item-popped", updateUndo)
     manager.on("stack-cleared", updateUndo)
     updateUndo()
-    doc.on("update", (update, origin) => {
-      if (origin !== "remote") { pending.current.push(update); setStatus("saving") }
+    const persistSnapshot = () => {
       try { localStorage.setItem(key(row.id), bytesToBase64(Y.encodeStateAsUpdate(doc))) }
       catch { setError("이 브라우저의 보관 공간이 부족합니다. 서버 저장 상태를 확인해주세요.") }
       reportCallback.current(reportFromYDoc(doc))
+    }
+    const flushSnapshot = () => {
+      if (cacheTimer.current) clearTimeout(cacheTimer.current)
+      cacheTimer.current = null
+      persistSnapshot()
+    }
+    flushCache.current = flushSnapshot
+    window.addEventListener("pagehide", flushSnapshot)
+    doc.on("update", (update, origin) => {
+      if (origin !== "remote") { pending.current.push(update); setStatus("saving") }
+      if (cacheTimer.current) clearTimeout(cacheTimer.current)
+      cacheTimer.current = setTimeout(flushSnapshot, 350)
       updateUndo()
     })
     setStatus(pending.current.length ? "saving" : "saved")
