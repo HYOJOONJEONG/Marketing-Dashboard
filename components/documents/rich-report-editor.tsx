@@ -5,7 +5,6 @@ import { createPortal } from "react-dom"
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react"
 import type { Editor } from "@tiptap/core"
 import Collaboration from "@tiptap/extension-collaboration"
-import { NodeSelection } from "@tiptap/pm/state"
 import type * as Y from "yjs"
 import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, ImagePlus, Italic, List, ListOrdered, Redo2, RemoveFormatting, Table, Trash2, Underline, Undo2 } from "lucide-react"
 import { DocumentReport, legacyReportContent, REPORT_FONTS, RichReportNode } from "@/lib/document-report"
@@ -119,8 +118,8 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
       },
       handleClickOn(view, _pos, node, nodePos) {
         if (node.type.name !== "reportImage" || !view.editable) return false
-        view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, nodePos)))
-        view.focus()
+        editorRef.current?.commands.setNodeSelection(nodePos)
+        editorRef.current?.view.focus()
         return true
       },
     },
@@ -156,7 +155,7 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     kind: editor.getAttributes(editor.isActive("heading") ? "heading" : "paragraph").reportKind || (editor.isActive("heading", { level: 1 }) ? "title" : editor.isActive("heading", { level: 2 }) ? "heading" : editor.isActive("heading", { level: 3 }) ? "subheading" : "body"),
     text: editor.getAttributes("textStyle"), block: editor.getAttributes(editor.isActive("heading") ? "heading" : "paragraph"), tableStyle: editor.getAttributes("table"), cellStyle: editor.getAttributes(editor.isActive("tableHeader") ? "tableHeader" : "tableCell"),
     documentFont: editor.state.doc.firstChild?.attrs.documentFont || "gothic",
-    imageSelected: editor.state.selection instanceof NodeSelection && editor.state.selection.node.type.name === "reportImage",
+    imageSelected: editor.state.selection.constructor.name === "NodeSelection" && (editor.state.selection as unknown as { node?: { type?: { name?: string } } }).node?.type?.name === "reportImage",
     bold: editor.isActive("bold"), italic: editor.isActive("italic"), underline: editor.isActive("underline"),
     bullet: editor.isActive("bulletList"), ordered: editor.isActive("orderedList"), table: editor.isActive("table"), undo: editor.can().undo(), redo: editor.can().redo(),
   } : null })
