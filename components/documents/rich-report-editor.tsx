@@ -7,7 +7,6 @@ import type { Editor } from "@tiptap/core"
 import Collaboration from "@tiptap/extension-collaboration"
 import type * as Y from "yjs"
 import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, ImagePlus, Italic, List, ListOrdered, Redo2, RemoveFormatting, Table, TextCursorInput, Trash2, Underline, Undo2 } from "lucide-react"
-import { NodeSelection, TextSelection } from "@tiptap/pm/state"
 import { DocumentReport, legacyReportContent, REPORT_FONTS, REPORT_TABLE_THEMES, RichReportNode } from "@/lib/document-report"
 import { reportFromYDoc } from "@/lib/document-collaboration"
 import { REPORT_LOGO } from "@/lib/document-report-logo"
@@ -79,13 +78,10 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
   const shared = Boolean(yDoc?.getMap("report").get("richInitialized"))
   function insertCaption(editor: Editor) {
     const { state, view } = editor
-    const selection = state.selection
-    if (!(selection instanceof NodeSelection) || selection.node.type.name !== "reportImage") return
+    const selection = state.selection as typeof state.selection & { node?: { type: { name: string }; nodeSize: number } }
+    if (selection.constructor.name !== "NodeSelection" || selection.node?.type.name !== "reportImage") return
     const afterImage = selection.from + selection.node.nodeSize
-    const paragraph = state.schema.nodes.paragraph.create()
-    const transaction = state.tr.insert(afterImage, paragraph)
-    transaction.setSelection(TextSelection.near(transaction.doc.resolve(afterImage + 1), 1))
-    view.dispatch(transaction.scrollIntoView())
+    editor.chain().insertContentAt(afterImage, { type: "paragraph" }).setTextSelection(afterImage + 1).focus(undefined, { scrollIntoView: false }).run()
     view.focus()
   }
   function publish(editor: Editor): DocumentReport | null {
@@ -117,8 +113,10 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     editable,
     editorProps: { attributes: { "aria-label": "보고서 본문", role: "textbox", "aria-multiline": "true", tabindex: "0", spellcheck: "false" },
       handleKeyDown(view, event) {
-        if (event.key !== "Enter" || !(view.state.selection instanceof NodeSelection) || view.state.selection.node.type.name !== "reportImage") return false
-        insertCaption(editorRef.current!)
+        const selection = view.state.selection as typeof view.state.selection & { node?: { type: { name: string } } }
+        if (event.key !== "Enter" || selection.constructor.name !== "NodeSelection" || selection.node?.type.name !== "reportImage") return false
+        const currentEditor = editorRef.current
+        if (currentEditor) insertCaption(currentEditor)
         return true
       },
       handleDOMEvents: {
