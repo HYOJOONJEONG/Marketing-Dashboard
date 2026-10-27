@@ -21,6 +21,7 @@ export type ReportStyle = {
 }
 
 export const REPORT_TABLE_THEMES = [
+  { value: "market", label: "금융 데이터" },
   { value: "research", label: "리서치 리포트" },
   { value: "classic", label: "기본 보고서" },
   { value: "corporate", label: "기업형" },
@@ -258,6 +259,10 @@ export const REPORT_CSS = `
 .company-report .selectedCell:after{content:"";position:absolute;inset:0;background:rgba(37,99,235,.16);outline:2px solid #2563eb;outline-offset:-2px;pointer-events:none;}
 .report-cell-selection .tiptap td,.report-cell-selection .tiptap th{cursor:cell;user-select:none;}
 .company-report table[data-table-theme] th,.company-report table[data-table-theme] td{border-color:var(--report-table-border,#b5c6cd);}
+.company-report table[data-table-theme=market] th{background:#203e8a;color:#fff;border:1px solid #c8cdd5;padding:7px 6px;}
+.company-report table[data-table-theme=market] td{background:#fff;color:#3f4852;border:1px solid #c8cdd5;padding:6px;}
+.company-report table[data-table-theme=market] td:nth-child(2){background:#eef5ff;color:#20447f;font-weight:700;}
+.company-report table[data-table-theme=market] tr:nth-child(even){background:#fff;}
 .company-report table[data-table-theme=striped] tr:nth-child(even){background:#edf5fa;}
 .company-report table[data-table-theme=corporate] th{background:var(--report-table-header,#1e3a5f);color:var(--report-table-header-ink,#fff);border-top:3px solid #0f766e;}
 .company-report table[data-table-theme=corporate] td:first-child{font-weight:700;color:#1e3a5f;}

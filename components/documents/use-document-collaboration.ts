@@ -5,6 +5,7 @@ import * as Y from "yjs"
 import type { DocumentReport } from "@/lib/document-report"
 import { applyReportChange, base64ToBytes, bytesToBase64, DocumentMember, DocumentPresence, reportFromYDoc, StoredDocument } from "@/lib/document-collaboration"
 import type { DocumentSummary } from "@/lib/document-library"
+import { deleteLocalDocument, readLocalDocument, writeLocalDocument } from "@/lib/document-local-store"
 
 export function useDocumentCollaboration(userId: string, selection: string, onReport: (report: DocumentReport | null, opened?: boolean) => void, currentReport: DocumentReport | null) {
   const [document, setDocument] = useState<StoredDocument | null>(null)
@@ -64,7 +65,13 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
   useEffect(() => { connectionId.current = crypto.randomUUID(); void list() }, [list])
   useEffect(() => () => { if (cacheTimer.current) clearTimeout(cacheTimer.current); flushCache.current(); docRef.current?.destroy(); undoRef.current?.destroy() }, [])
 
-  function attach(row: StoredDocument, nextRole: typeof role, mergeLocal = true) {
+  async function attach(row: StoredDocument, nextRole: typeof role, mergeLocal = true) {
+    let localSnapshot: string | null = null
+    let recoveryError = ""
+    if (mergeLocal && nextRole !== "viewer") {
+      try { localSnapshot = await readLocalDocument(key(row.id)) }
+      catch { recoveryError = "브라우저 임시 문서를 읽지 못했습니다. 현재 서버 문서는 그대로 유지됩니다." }
+    }
     if (cacheTimer.current) clearTimeout(cacheTimer.current)
     flushCache.current()
     window.removeEventListener("pagehide", flushCache.current)
@@ -73,16 +80,13 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     const doc = new Y.Doc()
     Y.applyUpdate(doc, base64ToBytes(row.state), "remote")
     pending.current = []
-    if (mergeLocal && nextRole !== "viewer") {
+    if (localSnapshot) {
       try {
-        const local = localStorage.getItem(key(row.id))
-        if (local) {
-          const serverVector = Y.encodeStateVector(doc)
-          Y.applyUpdate(doc, base64ToBytes(local), "recovery")
-          const difference = Y.encodeStateAsUpdate(doc, serverVector)
-          if (difference.length > 2) pending.current.push(difference)
-        }
-      } catch { setError("임시 보관 내용을 복구하지 못했습니다.") }
+        const serverVector = Y.encodeStateVector(doc)
+        Y.applyUpdate(doc, base64ToBytes(localSnapshot), "recovery")
+        const difference = Y.encodeStateAsUpdate(doc, serverVector)
+        if (difference.length > 2) pending.current.push(difference)
+      } catch { recoveryError = "임시 보관 내용을 복구하지 못했습니다." }
     }
     const report = reportFromYDoc(doc)
     docRef.current = doc
@@ -97,14 +101,14 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     manager.on("stack-item-popped", updateUndo)
     manager.on("stack-cleared", updateUndo)
     updateUndo()
-    const persistSnapshot = () => {
-      try { localStorage.setItem(key(row.id), bytesToBase64(Y.encodeStateAsUpdate(doc))) }
-      catch { setError("이 브라우저의 보관 공간이 부족합니다. 서버 저장 상태를 확인해주세요.") }
+    const persistSnapshot = async () => {
+      try { await writeLocalDocument(key(row.id), bytesToBase64(Y.encodeStateAsUpdate(doc))) }
+      catch { setError("브라우저 임시 보관에 실패했습니다. 현재 화면의 내용은 유지 중입니다. 상단 임시저장을 눌러 서버에 저장해주세요.") }
     }
     const flushSnapshot = () => {
       if (cacheTimer.current) clearTimeout(cacheTimer.current)
       cacheTimer.current = null
-      persistSnapshot()
+      void persistSnapshot()
     }
     flushCache.current = flushSnapshot
     window.addEventListener("pagehide", flushSnapshot)
@@ -117,7 +121,7 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
     setStatus(pending.current.length ? "unsaved" : "saved")
     failures.current = 0
     retryAfter.current = 0
-    setError("")
+    setError(recoveryError)
     reportCallback.current(report, true)
   }
 
@@ -135,16 +139,16 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
         let initialized: boolean
         try { Y.applyUpdate(existing, base64ToBytes(json.document.state)); initialized = Boolean(existing.getMap("report").get("richInitialized")) }
         finally { existing.destroy() }
-        if (initialized) { attach(json.document, json.role); return true }
+        if (initialized) { await attach(json.document, json.role); return true }
         let recovery: string | null = null
-        try { const cached = localStorage.getItem(key(id)); if (cached) recovery = bytesToBase64(base64ToBytes(cached)) } catch {}
+        try { const cached = await readLocalDocument(key(id)); if (cached) recovery = bytesToBase64(base64ToBytes(cached)) } catch {}
         const initialization = await fetch(`/api/documents/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "initialize", encoding: "gzip", ...(recovery ? { update: recovery } : {}) }) })
         const migrated = await initialization.json()
         if (!initialization.ok) throw new Error(migrated.error)
-        attach(migrated.document, migrated.role)
+        await attach(migrated.document, migrated.role)
         return true
       }
-      attach(json.document, json.role)
+      await attach(json.document, json.role)
       return true
     } catch (error) { setError(error instanceof Error ? error.message : "문서를 열지 못했습니다."); return false }
   }
@@ -163,7 +167,7 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
       const json = await response.json()
       if (!response.ok) throw new Error(json.error)
       const latest = latestReport.current || report
-      attach(json.document, json.role, false)
+      await attach(json.document, json.role, false)
       if (docRef.current) applyReportChange(docRef.current, latest, reportFromYDoc(docRef.current))
       creationId.current = null
       try { sessionStorage.removeItem(`document-creation:${userId}`) } catch {}
@@ -192,7 +196,7 @@ export function useDocumentCollaboration(userId: string, selection: string, onRe
       if (docRef.current !== doc) return true
       if (response.status === 403 || response.status === 401) {
         setStatus("denied"); setRole(null); roleRef.current = null; setError(json.error || "접근 권한이 없습니다.")
-        if (response.status === 403) { localStorage.removeItem(key(meta.id)); reportCallback.current(null) }
+        if (response.status === 403) { void deleteLocalDocument(key(meta.id)).catch(() => {}); reportCallback.current(null) }
         return false
       }
       if (!response.ok) throw new Error(json.error)

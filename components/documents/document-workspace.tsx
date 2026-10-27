@@ -7,6 +7,7 @@ import { RichReportEditor } from "./rich-report-editor"
 import { documentSavedAt } from "@/lib/document-library"
 import { useDocumentCollaboration } from "./use-document-collaboration"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { readLocalDocument, writeLocalDocument } from "@/lib/document-local-store"
 
 const INPUT = "h-9 w-full min-w-0 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
 const TOOL = "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-30"
@@ -46,37 +47,43 @@ export function DocumentWorkspace({ author, userId, department }: { author: stri
   const canEdit = !collaboration.document || collaboration.role === "owner" || collaboration.role === "editor"
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(draftKey)
-      if (stored) {
-        const draft = JSON.parse(stored)
-        if (typeof draft.documentId === "string") {
-          void collaboration.open(draft.documentId)
-          return
+    let active = true
+    void (async () => {
+      try {
+        const stored = await readLocalDocument(draftKey)
+        if (!active) return
+        if (stored) {
+          const draft = JSON.parse(stored)
+          if (typeof draft.documentId === "string") {
+            void collaboration.open(draft.documentId)
+            return
+          }
+          if (typeof draft.source === "string") setSource(draft.source)
+          if (typeof draft.title === "string") setTitle(draft.title)
+          if (typeof draft.date === "string") setDate(draft.date)
+          if (typeof draft.writer === "string") setWriter(draft.writer)
+          if (draft.report && typeof draft.report.title === "string" && typeof draft.report.author === "string" && typeof draft.report.date === "string" && Array.isArray(draft.report.sections) && draft.report.sections.every((s: any) => typeof s.heading === "string" && typeof s.content === "string")) {
+            setReport(draft.report)
+            setSourceOpen(false)
+          }
         }
-        if (typeof draft.source === "string") setSource(draft.source)
-        if (typeof draft.title === "string") setTitle(draft.title)
-        if (typeof draft.date === "string") setDate(draft.date)
-        if (typeof draft.writer === "string") setWriter(draft.writer)
-        if (draft.report && typeof draft.report.title === "string" && typeof draft.report.author === "string" && typeof draft.report.date === "string" && Array.isArray(draft.report.sections) && draft.report.sections.every((s: any) => typeof s.heading === "string" && typeof s.content === "string")) {
-          setReport(draft.report)
-          setSourceOpen(false)
-        }
-      }
-    } catch { setMessage("임시 문서를 불러오지 못했습니다.") }
-    setReport(previous => previous || formatDocumentReport("", { title, date, author: writer }))
-    setReady(true)
+      } catch { if (active) setMessage("임시 문서를 불러오지 못했습니다.") }
+      if (!active) return
+      setReport(previous => previous || formatDocumentReport("", { title, date, author: writer }))
+      setReady(true)
+    })()
+    return () => { active = false }
   }, [draftKey])
 
   useEffect(() => {
     if (!ready) return
-    const persistDraft = (flushEditor = false) => {
+    const persistDraft = async (flushEditor = false) => {
       const latestReport = flushEditor ? editorFlush.current() || report : report
-      try { localStorage.setItem(draftKey, JSON.stringify(collaboration.document ? { documentId: collaboration.document.id } : { source, title, date, writer, report: latestReport })) }
-      catch { setMessage("임시 보관 공간이 부족합니다. 파일로 내려받아 주세요.") }
+      try { await writeLocalDocument(draftKey, JSON.stringify(collaboration.document ? { documentId: collaboration.document.id } : { source, title, date, writer, report: latestReport })) }
+      catch { setMessage("브라우저 임시 보관에 실패했습니다. 현재 화면의 내용은 유지 중입니다. 상단 임시저장을 눌러 서버에 저장해주세요.") }
     }
-    const timer = window.setTimeout(persistDraft, 1000)
-    const persistOnLeave = () => persistDraft(true)
+    const timer = window.setTimeout(() => { void persistDraft() }, 1000)
+    const persistOnLeave = () => { void persistDraft(true) }
     window.addEventListener("pagehide", persistOnLeave)
     return () => { window.clearTimeout(timer); window.removeEventListener("pagehide", persistOnLeave) }
   }, [source, title, date, writer, report, draftKey, ready, collaboration.document?.id])

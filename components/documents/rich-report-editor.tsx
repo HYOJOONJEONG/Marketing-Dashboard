@@ -24,7 +24,7 @@ const PRESETS = [
   { key: "body", label: "본문", level: 0, size: 10.5, align: "left" },
   { key: "meta", label: "작성 정보", level: 0, size: 9, align: "right" },
 ]
-const TABLE_THEME_SWATCHES: Record<string, string> = { research: "#173a4b", classic: "#e4f0f6", corporate: "#1e3a5f", ocean: "#075985", teal: "#0f766e", forest: "#365314", rose: "#881337", striped: "#547987", minimal: "#f1f5f9", dark: "#173a4b" }
+const TABLE_THEME_SWATCHES: Record<string, string> = { market: "#203e8a", research: "#173a4b", classic: "#e4f0f6", corporate: "#1e3a5f", ocean: "#075985", teal: "#0f766e", forest: "#365314", rose: "#881337", striped: "#547987", minimal: "#f1f5f9", dark: "#173a4b" }
 
 async function prepareReportImage(file: File): Promise<string> {
   if (!file.type.startsWith("image/") || file.size > 20 * 1024 * 1024) throw new Error("이미지 파일은 20MB 이하로 선택해주세요.")
@@ -260,7 +260,7 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
           tr.setNodeMarkup(tablePos + 1 + offset, undefined, { ...node.attrs, backgroundColor: null, cellBorderColor: null })
         }
       })
-      tr.setNodeMarkup(tablePos, undefined, { ...table.attrs, tableTheme: theme, tableDensity: theme === "research" ? "airy" : table.attrs.tableDensity, headerColor: null, borderColor: null })
+      tr.setNodeMarkup(tablePos, undefined, { ...table.attrs, tableTheme: theme, tableDensity: theme === "market" ? "compact" : theme === "research" ? "airy" : table.attrs.tableDensity, headerColor: null, borderColor: null })
       return true
     })
   }
