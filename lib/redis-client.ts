@@ -79,11 +79,23 @@ class RedisSocketClient {
 
   async command<T = RespValue>(parts: Array<string | number>) {
     const run = async () => {
-      try {
-        await this.ensureReady()
-        return await this.writeAndRead<T>(parts, 1)
-      } catch (firstError) {
-        this.reset(firstError instanceof Error ? firstError : new Error(String(firstError)))
+      let ready = false
+      let connectionError: unknown
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await this.ensureReady()
+          ready = true
+          break
+        } catch (error) {
+          connectionError = error
+          this.reset(error instanceof Error ? error : new Error(String(error)))
+          if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 150 * 2 ** attempt))
+        }
+      }
+      if (!ready) throw connectionError instanceof Error ? connectionError : new Error("Redis connection failed")
+      try { return await this.writeAndRead<T>(parts, 1) }
+      catch (error) {
+        this.reset(error instanceof Error ? error : new Error(String(error)))
         await this.ensureReady()
         return this.writeAndRead<T>(parts, 1)
       }

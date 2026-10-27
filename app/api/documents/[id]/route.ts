@@ -99,7 +99,8 @@ export async function POST(request: Request, context: Context) {
       update = body.encoding === "gzip" ? bytesToBase64(difference) : bytesToPlainBase64(difference)
     } finally { doc.destroy() }
     return NextResponse.json({ update, version: document.version, updatedAt: document.updatedAt, members: document.members, role: documentRole(document, session.user.id), presence: document.presence.filter(person => Date.now() - person.seenAt < 30000) }, { headers })
-  } catch {
+  } catch (error) {
+    console.error("[documents:sync]", { id, message: error instanceof Error ? error.message : "Unknown storage error" })
     return NextResponse.json({ error: "동기화하지 못했습니다. 변경 내용을 보관하고 다시 시도합니다." }, { status: 503, headers })
   }
 }

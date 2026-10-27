@@ -6,7 +6,8 @@ import { EditorContent, useEditor, useEditorState } from "@tiptap/react"
 import type { Editor } from "@tiptap/core"
 import Collaboration from "@tiptap/extension-collaboration"
 import type * as Y from "yjs"
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, ImagePlus, Italic, List, ListOrdered, Redo2, RemoveFormatting, Table, Trash2, Underline, Undo2 } from "lucide-react"
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, ImagePlus, Italic, List, ListOrdered, Redo2, RemoveFormatting, Table, TextCursorInput, Trash2, Underline, Undo2 } from "lucide-react"
+import { NodeSelection, TextSelection } from "@tiptap/pm/state"
 import { DocumentReport, legacyReportContent, REPORT_FONTS, REPORT_TABLE_THEMES, RichReportNode } from "@/lib/document-report"
 import { REPORT_LOGO } from "@/lib/document-report-logo"
 import { reportExtensions } from "@/lib/document-rich-schema"
@@ -74,6 +75,17 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
   const lastPublished = useRef<RichReportNode | null>(null)
   const compositionFrame = useRef<number | null>(null)
   const shared = Boolean(yDoc?.getMap("report").get("richInitialized"))
+  function insertCaption(editor: Editor) {
+    const { state, view } = editor
+    const selection = state.selection
+    if (!(selection instanceof NodeSelection) || selection.node.type.name !== "reportImage") return
+    const afterImage = selection.from + selection.node.nodeSize
+    const paragraph = state.schema.nodes.paragraph.create()
+    const transaction = state.tr.insert(afterImage, paragraph)
+    transaction.setSelection(TextSelection.near(transaction.doc.resolve(afterImage + 1), 1))
+    view.dispatch(transaction.scrollIntoView())
+    view.focus()
+  }
   function publish(editor: Editor) {
     if (shared || editor.isDestroyed || editor.view.composing) return
     const richText = editor.getJSON() as RichReportNode
@@ -88,6 +100,11 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
     content: shared ? undefined : legacyReportContent(report),
     editable,
     editorProps: { attributes: { "aria-label": "보고서 본문", role: "textbox", "aria-multiline": "true", tabindex: "0", spellcheck: "false" },
+      handleKeyDown(view, event) {
+        if (event.key !== "Enter" || !(view.state.selection instanceof NodeSelection) || view.state.selection.node.type.name !== "reportImage") return false
+        insertCaption(editorRef.current!)
+        return true
+      },
       handleDOMEvents: {
         mousedown(view, event) {
           if (!cellModeRef.current || !view.editable || event.button !== 0) return false
@@ -276,6 +293,7 @@ export function RichReportEditor({ report, yDoc, editable, toolbarTarget, onChan
       {button("글머리 목록", List, e => e.chain().focus(undefined, { scrollIntoView: false }).toggleBulletList().run(), state?.bullet)}
       {button("번호 목록", ListOrdered, e => e.chain().focus(undefined, { scrollIntoView: false }).toggleOrderedList().run(), state?.ordered)}
       <button type="button" className={TOOL} aria-label="사진 첨부" title="사진 첨부" disabled={!editor || !editable} onMouseDown={event => event.preventDefault()} onClick={() => imageInput.current?.click()}><ImagePlus size={16} /></button>
+      {state?.imageSelected && <button type="button" className={TOOL} aria-label="사진 아래 캡션 입력" title="사진 아래에 캡션 입력" onMouseDown={event => event.preventDefault()} onClick={() => editor && insertCaption(editor)}><TextCursorInput size={16} /></button>}
       {state?.imageSelected && <button type="button" className={`${TOOL} !text-rose-600 hover:!bg-rose-50`} aria-label="선택 사진 삭제" title="선택 사진 삭제" onMouseDown={event => event.preventDefault()} onClick={() => editor?.chain().focus(undefined, { scrollIntoView: false }).deleteSelection().run()}><Trash2 size={16} /></button>}
       <input ref={imageInput} type="file" accept="image/*" className="sr-only" aria-label="첨부할 사진" onChange={event => { void addImage(event.target.files?.[0]) }} />
       {imageError && <span role="status" className="w-full text-xs text-rose-600">{imageError}</span>}
