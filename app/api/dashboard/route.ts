@@ -266,6 +266,32 @@ function mergeDailyReportState(existingDailyReport: any, incomingDailyReport: an
   }
 }
 
+function getCrossUserDailyReportWrites(existingDailyReport: any, incomingDailyReport: any, actorUserId: string) {
+  const existingReports = Array.isArray(existingDailyReport?.reports) ? existingDailyReport.reports : []
+  const incomingReports = Array.isArray(incomingDailyReport?.reports) ? incomingDailyReport.reports : []
+  const existingByKey = new Map(existingReports.map((entry: any) => [dailyReportEntryKey(entry), entry]))
+
+  return incomingReports.flatMap((entry: any) => {
+    const userId = safeText(entry?.userId)
+    const date = safeText(entry?.date)
+    if (!userId || !date || userId === actorUserId) return []
+
+    const existing = existingByKey.get(dailyReportEntryKey(entry))
+    const selected = pickLatestDailyReportEntry(existing, entry)
+    if (existing && ["reportBody", "plannedTasks", "submittedAt", "statusOverride", "updatedAt"].every(
+      (key) => safeText((selected as any)?.[key]) === safeText(existing?.[key]),
+    )) return []
+
+    return [{
+      userId,
+      userName: safeText(entry?.userName) || userId,
+      date,
+      action: safeText(entry?.submittedAt) ? "제출" : "임시저장",
+      isNew: !existing,
+    }]
+  })
+}
+
 function mergeManualSaveHistory(existingHistory: any, incomingHistory: any) {
   const map = new Map<string, any>()
   const addRows = (rows: any) => {
@@ -1244,6 +1270,7 @@ export async function PUT(request: Request) {
     let nextBody = incomingBody
     let existingDataForMerge: any = null
     let existingDataForActivity: any = null
+    let crossUserDailyReportWrites: ReturnType<typeof getCrossUserDailyReportWrites> = []
 
     if (!canWritePartialDirectly) {
       const existingData = (await readDashboardState<any>(DATA_PATH)) || (await readDashboardState<any>(FALLBACK_PATH)) || EMPTY_DASHBOARD
@@ -1278,6 +1305,11 @@ export async function PUT(request: Request) {
         (await readDashboardState<any>(FALLBACK_PATH)) ||
         EMPTY_DASHBOARD
       existingDataForActivity = existingData
+      crossUserDailyReportWrites = getCrossUserDailyReportWrites(
+        existingData?.dailyReport,
+        incomingBody.dailyReport,
+        session.user.id,
+      )
       nextBody = {
         ...nextBody,
         dailyReport: mergeDailyReportState(existingData?.dailyReport, incomingBody.dailyReport),
@@ -1399,6 +1431,27 @@ export async function PUT(request: Request) {
         ipAddress: getRequestIp(request),
         sessionId: session.sessionId,
         success: true,
+      })
+      crossUserDailyReportWrites.forEach((write) => {
+        appendActivityLog(state, {
+          actorUserId: session.user.id,
+          actorName: session.user.name,
+          actionType: "dashboard_put",
+          targetType: "daily_report",
+          targetId: write.userId,
+          pageKey: "dailyReport",
+          beforeValue: "",
+          afterValue: JSON.stringify({
+            detail: `${write.userName} 업무일지를 본인이 아닌 계정에서 ${write.action}했습니다. (${write.isNew ? "신규 작성" : "수정"})`,
+            date: write.date,
+            action: write.action,
+            isNew: write.isNew,
+            crossUser: true,
+          }),
+          ipAddress: getRequestIp(request),
+          sessionId: session.sessionId,
+          success: true,
+        })
       })
     }).catch((error) => {
       console.error("Failed to append dashboard activity log.", error)
